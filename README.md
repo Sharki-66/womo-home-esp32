@@ -10,7 +10,7 @@ Intelligente Steuerung und Überwachung für dein Wohnmobil mit ESP32-S3, LTE-M/
 
 Dieses Projekt kombiniert zwei ESP32-S3 Module für ein leistungsstarkes WoMo-Kontrollsystem:
 
-- **Waveshare ESP32-S3 Touch LCD 7"** - 1024×600 IPS Display & User Interface
+- **Waveshare ESP32-S3 Touch LCD 7"** - 800×480 IPS Display & User Interface
 - **Walter Modem** - LTE-M/NB-IoT, GPS, Sensorenanbindung
 
 ### Hauptfunktionen
