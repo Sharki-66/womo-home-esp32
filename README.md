@@ -15,7 +15,7 @@ Dieses Projekt kombiniert zwei ESP32-S3 Module für ein leistungsstarkes WoMo-Ko
 
 ### Hauptfunktionen
 
-✅ 7" IPS LCD Touch-Display (1024×600)
+✅ 7" IPS LCD Touch-Display (800×480)
 ✅ LTE-M/NB-IoT Konnektivität  
 ✅ GPS/GLONASS Tracking  
 ✅ Klima-Monitoring (Innen/Außen)  
@@ -30,7 +30,7 @@ Dieses Projekt kombiniert zwei ESP32-S3 Module für ein leistungsstarkes WoMo-Ko
 ## 🛠️ Hardware
 
 ### Zentrale Module
-- **Waveshare ESP32-S3 Touch LCD 7"** (1024×600 IPS Display & Touch)
+- **Waveshare ESP32-S3 Touch LCD 7"** (800×480 IPS Display & Touch)
 - **DPTechnics Walter Modem** (ESP32-S3 + Sequans Monarch 2 LTE-M/NB-IoT + GPS)
 
 ### Sensoren
