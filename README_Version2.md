@@ -43,11 +43,9 @@ Dieses Projekt kombiniert zwei ESP32-S3 Module für ein leistungsstarkes WoMo-Ko
 
 ### I2C Infrastructure
 - **PCA9548A** I2C Multiplexer (8 Kanäle)
-- **PCF8575** GPIO Expander (16 Ports für Relais & Aktoren)
 
 ### Stromversorgung
-- Bauer Electronics DC/DC 5V 3A USB-C (Waveshare)
-- DC-DC Buck 12V→5V 3A (Walter)
+- 2 x Bauer Electronics DC/DC 5V 3A USB-C (Waveshare)
 - Multifunktions-Dachantenne (2x LTE + GPS)
 
 📖 **[Detaillierte Hardware-Dokumentation →](docs/hardware/overview.md)**
