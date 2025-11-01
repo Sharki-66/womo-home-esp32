@@ -50,7 +50,8 @@ Dieses Projekt kombiniert zwei ESP32-S3 Module für ein leistungsstarkes WoMo-Ko
 - DC-DC Buck 12V→5V 3A (Walter)
 - Multifunktions-Dachantenne (2x LTE + GPS)
 
-📖 **[Detaillierte Hardware-Dokumentation →](docs/hardware/overview.md)**
+📖 **[Detaillierte Hardware-Dokumentation →](docs/hardware/overview.md)**  
+📖 **[Community Open Hardware Plattformen →](docs/hardware/community-open-hardware-platforms.md)**
 
 ---
 

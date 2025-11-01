@@ -362,7 +362,8 @@ Kabel:
 
 📖 **[Bauteilliste & Einkaufslinks →](components.md)**  
 📖 **[Verkabelung & Schaltplan →](wiring.md)**  
-📖 **[Stromversorgungs-Details →](power-supply.md)**
+📖 **[Stromversorgungs-Details →](power-supply.md)**  
+📖 **[Community Open Hardware Plattformen →](community-open-hardware-platforms.md)**
 
 ---
 
