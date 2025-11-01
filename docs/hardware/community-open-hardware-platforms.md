@@ -491,6 +491,6 @@ Bei der Auswahl einer Hardware-Plattform sollten folgende Kriterien beachtet wer
 
 ---
 
-**Stand:** 2025-11-01  
+**Stand:** 2024-11-01  
 **Version:** 1.0  
 **Autor:** WoMo Home ESP32 Projekt
