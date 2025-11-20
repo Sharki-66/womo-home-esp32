@@ -1,0 +1,6 @@
+dependencies:
+  idf: ">=5.3.2"
+  adithya-187326/bno055:
+    version: "*"
+    # For local development, use the local copy of the component:
+    override_path: "../../../"

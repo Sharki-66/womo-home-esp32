@@ -32,9 +32,12 @@ typedef enum {
 
 // Color definitions for different states
 #define WOMO_COLOR_DAY_NORMAL       lv_color_hex(0x87CEEB)  // Sky Blue (Hellblau)
-#define WOMO_COLOR_NIGHT_NORMAL     lv_color_hex(0x191970)  // Midnight Blue
+#define WOMO_COLOR_NIGHT_NORMAL     lv_color_hex(0x191970)  // Midnight Blue (Dunkelblau)
 #define WOMO_COLOR_SUNRISE          lv_color_hex(0xFF6347)  // Tomato (orange-red)
 #define WOMO_COLOR_SUNSET           lv_color_hex(0xFF8C00)  // Dark Orange
+
+// Civil twilight duration (minutes before/after sun times for smooth transitions)
+#define WOMO_CIVIL_TWILIGHT_MINUTES 24  // Civil twilight: 24 minutes
 
 #define WOMO_COLOR_WARNING          lv_color_hex(0xFFA500)  // Orange
 #define WOMO_COLOR_ERROR            lv_color_hex(0xFF0000)  // Red (helles Rot)
@@ -75,6 +78,16 @@ womo_theme_mode_t womo_theme_update(womo_status_level_t status);
  * @return LVGL color for background
  */
 lv_color_t womo_theme_get_background_color(void);
+
+/**
+ * @brief Get smooth transition color during civil twilight
+ * 
+ * Interpolates between day (hellblau) and night (dunkelblau) colors
+ * during the civil twilight phases (24 minutes before/after sunrise/sunset)
+ * 
+ * @return LVGL color interpolated based on current time within twilight period
+ */
+lv_color_t womo_theme_get_twilight_color(void);
 
 /**
  * @brief Get current theme mode

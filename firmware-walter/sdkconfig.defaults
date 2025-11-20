@@ -1,0 +1,11 @@
+# Enable NAT between STA and SoftAP (consistent with ESP-IDF NAT router example)
+CONFIG_LWIP_IP_FORWARD=y
+CONFIG_LWIP_IPV4_NAPT=y
+
+# Walter Modem compatibility settings (testing dual-core)
+# CONFIG_FREERTOS_UNICORE=y  # Temporarily disabled to test dual-core GPS
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=60
+
+# Debug settings
+CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_DISABLE=y

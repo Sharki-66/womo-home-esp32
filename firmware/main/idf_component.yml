@@ -8,4 +8,4 @@ dependencies:
 
   esp_lcd_touch_gt911: "^1"
 
-  esp-idf-lib/bme680: "^1.0.7"
+  esp-idf-lib/i2cdev: "*"

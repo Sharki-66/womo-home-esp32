@@ -63,11 +63,6 @@ esp_err_t womo_sd_init(void)
     
     // Control CH422G to pull down the CS pin of the SD card
     // TEMPORARILY DISABLED - Testing if this causes display blackout
-    uint8_t write_buf = 0x01;
-    //i2c_master_write_to_device(I2C_MASTER_NUM, CH422G_ADDR_1, &write_buf, 1, 1000 / portTICK_PERIOD_MS);
-    write_buf = 0x0A;
-    //i2c_master_write_to_device(I2C_MASTER_NUM, CH422G_ADDR_2, &write_buf, 1, 1000 / portTICK_PERIOD_MS);
-    
     ESP_LOGI(TAG, "CH422G GPIO expander configuration SKIPPED for testing");
     
     // Options for mounting the filesystem

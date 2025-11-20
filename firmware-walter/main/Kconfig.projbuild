@@ -1,0 +1,306 @@
+menu "Walter configuration"
+
+config WALTER_AP_SSID
+    string "SoftAP SSID"
+    default "WalterHub"
+
+config WALTER_AP_PASSWORD
+    string "SoftAP password"
+    default "WalterPass"
+    help
+        Leave empty to run the hotspot without authentication.
+
+config WALTER_AP_CHANNEL
+    int "SoftAP channel"
+    range 1 13
+    default 6
+
+config WALTER_AP_MAX_CONNECTIONS
+    int "SoftAP max stations"
+    range 1 10
+    default 4
+
+config WALTER_AP_DNS_PRIMARY
+    string "SoftAP primary DNS server"
+    default "8.8.8.8"
+
+config WALTER_AP_DNS_SECONDARY
+    string "SoftAP secondary DNS server"
+    default "1.1.1.1"
+
+config WALTER_SENSOR_I2C_PORT
+    int "Sensor I2C port"
+    range 0 1
+    default 0
+
+config WALTER_SENSOR_I2C_SDA_GPIO
+    int "Sensor I2C SDA GPIO"
+    range 0 48
+    default 8
+
+config WALTER_SENSOR_I2C_SCL_GPIO
+    int "Sensor I2C SCL GPIO"
+    range 0 48
+    default 9
+
+config WALTER_SENSOR_I2C_SPEED_HZ
+    int "Sensor I2C bus speed (Hz)"
+    range 10000 1000000
+    default 400000
+
+config WALTER_ENABLE_NAT
+    bool "Enable NAT between SoftAP and upstream STA"
+    default y
+    select ESP_NETIF_L3_ROUTER
+    select LWIP_IP_FORWARD
+    select LWIP_IPV4_NAPT
+    select LWIP_IPV4_NAPT_SERVER
+    help
+        Turns Walter into a Wi-Fi router: forwards traffic from the SoftAP network
+        to the configured upstream STA network using IPv4 NAT (NAPT).
+
+config WALTER_STA_SSID
+    string "Upstream Wi-Fi SSID"
+    default ""
+
+config WALTER_STA_PASSWORD
+    string "Upstream Wi-Fi password"
+    default ""
+    help
+        Leave empty for open networks.
+
+menu "Walter sensors"
+
+config WALTER_SENSOR_TASK_STACK
+    int "Sensor task stack size"
+    range 2048 16384
+    default 4096
+
+config WALTER_SENSOR_TASK_PRIORITY
+    int "Sensor task priority"
+    range 1 10
+    default 5
+
+config WALTER_SENSOR_POLL_INTERVAL_MS
+    int "Sensor polling interval (ms)"
+    range 100 60000
+    default 1000
+
+config WALTER_ENABLE_BNO055
+    bool "Enable BNO055 IMU"
+    default y
+
+config WALTER_BNO055_I2C_ADDR
+    hex "BNO055 I2C address"
+    default 0x28
+
+config WALTER_ENABLE_BME680
+    bool "Enable BME680 environmental sensors"
+    default y
+
+config WALTER_BME680_SENSOR_COUNT
+    int "Number of BME680 sensors"
+    range 0 2
+    default 1
+
+config WALTER_BME680_ADDR_0
+    hex "BME680 sensor 0 I2C address"
+    default 0x77
+
+config WALTER_BME680_ADDR_1
+    hex "BME680 sensor 1 I2C address"
+    default 0x76
+
+config WALTER_BME680_HEATER_TEMP_C
+    int "BME680 heater target temperature (°C)"
+    range 200 400
+    default 280
+
+config WALTER_BME680_HEATER_DURATION_MS
+    int "BME680 heater duration (ms)"
+    range 50 400
+    default 250
+
+config WALTER_BME680_AMBIENT_TEMP_C
+    int "BME680 ambient temperature (°C)"
+    range 0 60
+    default 25
+
+config WALTER_ENABLE_HX711
+    bool "Enable HX711 load cell ADC"
+    default y
+
+config WALTER_HX711_DOUT_GPIO
+    int "HX711 DOUT GPIO"
+    range 0 48
+    default 4
+
+config WALTER_HX711_SCK_GPIO
+    int "HX711 SCK GPIO"
+    range 0 48
+    default 5
+
+config WALTER_HX711_READY_TIMEOUT_MS
+    int "HX711 ready timeout (ms)"
+    range 10 1000
+    default 200
+
+config WALTER_HX711_GAIN_SETTING
+    int "HX711 gain/channel setting"
+    range 1 3
+    default 1
+    help
+        1 = Channel A gain 128, 2 = Channel B gain 32, 3 = Channel A gain 64.
+
+config WALTER_HX711_AVG_SAMPLES
+    int "HX711 average sample count"
+    range 1 32
+    default 5
+
+config WALTER_HX711_ENABLE_CHANNEL_B
+    bool "Read HX711 channel B in addition to the configured channel"
+    default n
+    depends on WALTER_ENABLE_HX711
+    help
+        When enabled the firmware will sample channel A using the configured gain
+        and afterwards switch to channel B (fixed gain 32) to obtain a second
+        reading. Disable this if only one channel is wired.
+
+config WALTER_ENABLE_RS485
+    bool "Enable RS485 UART" 
+    default y
+
+config WALTER_RS485_UART_PORT
+    int "RS485 UART port number"
+    range 0 2
+    default 1
+    depends on WALTER_ENABLE_RS485
+
+config WALTER_RS485_BAUDRATE
+    int "RS485 baud rate"
+    range 1200 1000000
+    default 115200
+    depends on WALTER_ENABLE_RS485
+
+config WALTER_RS485_TX_GPIO
+    int "RS485 TX GPIO"
+    range 0 48
+    default 17
+    depends on WALTER_ENABLE_RS485
+
+config WALTER_RS485_RX_GPIO
+    int "RS485 RX GPIO"
+    range 0 48
+    default 18
+    depends on WALTER_ENABLE_RS485
+
+config WALTER_RS485_DE_GPIO
+    int "RS485 DE/RE GPIO"
+    range 0 48
+    default 16
+    depends on WALTER_ENABLE_RS485
+
+config WALTER_RS485_BUFFER_SIZE
+    int "RS485 driver buffer size"
+    range 64 4096
+    default 512
+    depends on WALTER_ENABLE_RS485
+
+config WALTER_RS485_READ_TIMEOUT_MS
+    int "RS485 read timeout (ms)"
+    range 1 1000
+    default 50
+    depends on WALTER_ENABLE_RS485
+
+config WALTER_ENABLE_ANALOG
+    bool "Enable analog monitoring (battery & tank)"
+    default y
+
+config WALTER_ANALOG_SAMPLES_PER_READ
+    int "Analog samples per reading"
+    range 1 512
+    default 16
+    depends on WALTER_ENABLE_ANALOG
+
+choice
+    prompt "ADC attenuation for analog channels"
+    default WALTER_ANALOG_ATTEN_DB_11
+    depends on WALTER_ENABLE_ANALOG
+
+config WALTER_ANALOG_ATTEN_DB_0
+    bool "0 dB (0.1 - 1.35 V full scale)"
+
+config WALTER_ANALOG_ATTEN_DB_2_5
+    bool "2.5 dB (up to ~1.5 V)"
+
+config WALTER_ANALOG_ATTEN_DB_6
+    bool "6 dB (up to ~2.2 V)"
+
+config WALTER_ANALOG_ATTEN_DB_11
+    bool "11 dB (up to ~3.3 V)"
+
+endchoice
+
+config WALTER_BATT1_ADC_CHANNEL
+    int "Battery channel 1 (ADC1 CH)"
+    range 0 9
+    default 5
+    depends on WALTER_ENABLE_ANALOG
+
+config WALTER_BATT2_ADC_CHANNEL
+    int "Battery channel 2 (ADC1 CH)"
+    range 0 9
+    default 6
+    depends on WALTER_ENABLE_ANALOG
+
+config WALTER_TANK1_ADC_CHANNEL
+    int "Tank level channel 1 (ADC1 CH)"
+    range 0 9
+    default 9
+    depends on WALTER_ENABLE_ANALOG
+
+config WALTER_TANK2_ADC_CHANNEL
+    int "Tank level channel 2 (ADC1 CH)"
+    range 0 9
+    default 10
+    depends on WALTER_ENABLE_ANALOG
+
+config WALTER_BATTERY_DIVIDER_RHIGH_KOHM
+    int "Battery divider high-side resistor (kOhm)"
+    range 1 1000
+    default 100
+    depends on WALTER_ENABLE_ANALOG
+
+config WALTER_BATTERY_DIVIDER_RLOW_KOHM
+    int "Battery divider low-side resistor (kOhm)"
+    range 1 1000
+    default 15
+    depends on WALTER_ENABLE_ANALOG
+
+config WALTER_TANK_DIVIDER_RHIGH_KOHM
+    int "Tank divider high-side resistor (kOhm)"
+    range 1 1000
+    default 100
+    depends on WALTER_ENABLE_ANALOG
+
+config WALTER_TANK_DIVIDER_RLOW_KOHM
+    int "Tank divider low-side resistor (kOhm)"
+    range 1 1000
+    default 15
+    depends on WALTER_ENABLE_ANALOG
+
+config WALTER_TANK_EMPTY_MV
+    int "Tank sensor empty voltage (mV)"
+    range 0 20000
+    default 0
+    depends on WALTER_ENABLE_ANALOG
+
+config WALTER_TANK_FULL_MV
+    int "Tank sensor full voltage (mV)"
+    range 1000 30000
+    default 3000
+    depends on WALTER_ENABLE_ANALOG
+
+endmenu
+
+endmenu

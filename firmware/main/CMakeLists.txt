@@ -3,9 +3,21 @@ idf_component_register(
         "main.c"
         "time/womo_time.c"
         "gui/womo_theme.c"
+        "gui/womo_locale.c"
+        "gui/womo_gas_bottle.c"
+        "gui/womo_tank.c"
+        "gui/womo_weather.c"
+        "gui/womo_battery.c"
+        "gui/womo_fonts_german.c"
+        "gui/fonts/lv_font_montserrat_12_german.c"
+        "gui/fonts/lv_font_montserrat_14_german.c"
+        "gui/fonts/lv_font_montserrat_16_german.c"
+        "gui/fonts/lv_font_montserrat_20_german.c"
+        "gui/fonts/lv_font_montserrat_24_german.c"
         "network/womo_wifi.c"
+    "network/womo_weather_http.c"
         "storage/womo_sd.c"
-        "sensors/womo_bme680.c"
+        "rs485/womo_rs485_display.c"
         "hardware/lvgl_port.c"
         "hardware/waveshare_rgb_lcd_port.c"
     INCLUDE_DIRS 
@@ -14,12 +26,15 @@ idf_component_register(
         "gui"
         "network"
         "storage"
-        "sensors"
+        "rs485"
         "hardware"
     REQUIRES
         fatfs
         esp_wifi
+    esp_http_client
         nvs_flash
+        json
+        driver
 )
 
 idf_component_get_property(lvgl_lib lvgl__lvgl COMPONENT_LIB)

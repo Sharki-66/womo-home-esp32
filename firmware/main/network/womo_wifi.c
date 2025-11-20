@@ -197,6 +197,28 @@ int8_t womo_wifi_get_rssi(void)
     return -127;
 }
 
+esp_err_t womo_wifi_get_ssid(char *ssid_str, size_t max_len)
+{
+    if (ssid_str == NULL || max_len < 33) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    if (!womo_wifi_is_connected()) {
+        strncpy(ssid_str, "", max_len);
+        return ESP_FAIL;
+    }
+    
+    wifi_ap_record_t ap_info;
+    if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+        strncpy(ssid_str, (char*)ap_info.ssid, max_len - 1);
+        ssid_str[max_len - 1] = '\0';
+        return ESP_OK;
+    }
+    
+    strncpy(ssid_str, "", max_len);
+    return ESP_FAIL;
+}
+
 esp_err_t womo_wifi_get_ip_string(char *ip_str, size_t max_len)
 {
     if (ip_str == NULL || max_len < 16) {

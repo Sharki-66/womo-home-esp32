@@ -78,6 +78,15 @@ bool womo_wifi_is_connected(void);
 int8_t womo_wifi_get_rssi(void);
 
 /**
+ * @brief Get connected WiFi SSID (network name)
+ * 
+ * @param ssid_str Buffer to store SSID string (min 33 bytes)
+ * @param max_len Maximum buffer length
+ * @return ESP_OK if connected and SSID available
+ */
+esp_err_t womo_wifi_get_ssid(char *ssid_str, size_t max_len);
+
+/**
  * @brief Get local IP address
  * 
  * @param ip_str Buffer to store IP string (min 16 bytes)

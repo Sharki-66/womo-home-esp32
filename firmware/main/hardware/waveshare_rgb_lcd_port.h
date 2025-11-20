@@ -4,7 +4,7 @@
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "driver/gpio.h"
-#include "driver/i2c.h"
+#include "driver/i2c_master.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_lcd_panel_ops.h"
@@ -19,6 +19,7 @@
 #define I2C_MASTER_SDA_IO           8       /*!< GPIO number used for I2C master data  */
 #define I2C_MASTER_NUM              0       /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
 #define I2C_MASTER_FREQ_HZ          400000                     /*!< I2C master clock frequency */
+#define CH422G_I2C_FREQ_HZ          100000                     /*!< Slower clock for CH422G to avoid reset-time NACK */
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_TIMEOUT_MS       1000
@@ -64,8 +65,6 @@
 
 #define EXAMPLE_PIN_NUM_TOUCH_RST       (-1)            // -1 if not used
 #define EXAMPLE_PIN_NUM_TOUCH_INT       (-1)            // -1 if not used
-
-static const char *TAG = "womo_display";
 
 bool example_lvgl_lock(int timeout_ms);
 void example_lvgl_unlock(void);
