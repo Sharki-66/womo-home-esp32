@@ -4,13 +4,16 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
 
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
+#include "driver/uart.h"
 
 #include "esp_err.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
@@ -18,6 +21,7 @@
 #include "lwip/ip4_addr.h"
 
 #include "nvs_flash.h"
+#include "nvs.h"
 
 #include "cJSON.h"
 
@@ -25,10 +29,19 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
+
+#if (defined(configGENERATE_RUN_TIME_STATS) && (configGENERATE_RUN_TIME_STATS == 1) && \
+    defined(configUSE_TRACE_FACILITY) && (configUSE_TRACE_FACILITY == 1))
+#define WALTER_HAS_RUNTIME_STATS 1
+#else
+#define WALTER_HAS_RUNTIME_STATS 0
+#endif
 
 #include "womo_analog.h"
 #include "womo_hx711.h"
 #include "womo_rs485.h"
+#include "WalterModem.h"
 
 #if WALTER_ENABLE_BME680
 #include "bme680.h"
@@ -38,7 +51,9 @@
 #include "bno055.h"
 #endif
 
+WalterModem modem;
 static const char *TAG = "walter_main";
+static constexpr size_t WIFI_SSID_MAX_LEN = 32;
 
 static void configure_logging(void)
 {
@@ -48,6 +63,7 @@ static void configure_logging(void)
     esp_log_level_set("womo_hx711", ESP_LOG_INFO);
     esp_log_level_set("womo_rs485", ESP_LOG_INFO);
     esp_log_level_set("womo_gps", ESP_LOG_INFO);
+    esp_log_level_set("lte_tcp", ESP_LOG_INFO);
     esp_log_level_set("WalterModem", ESP_LOG_INFO);
 }
 
@@ -71,7 +87,69 @@ static float clampf(float value, float min_val, float max_val)
     return value;
 }
 
+static float wrap_angle_deg(float angle)
+{
+    while (angle < -180.0f) {
+        angle += 360.0f;
+    }
+    while (angle >= 180.0f) {
+        angle -= 360.0f;
+    }
+    return angle;
+}
+
+static float wrap_angle_0_360(float angle)
+{
+    while (angle < 0.0f) {
+        angle += 360.0f;
+    }
+    while (angle >= 360.0f) {
+        angle -= 360.0f;
+    }
+    return angle;
+}
+
+static bool limit_angle_delta(float &current,
+                              float previous,
+                              float max_step_deg,
+                              bool wrap_to_360)
+{
+    if (max_step_deg <= 0.0f) {
+        return false;
+    }
+
+    float diff = current - previous;
+    while (diff > 180.0f) {
+        diff -= 360.0f;
+    }
+    while (diff < -180.0f) {
+        diff += 360.0f;
+    }
+
+    if (fabsf(diff) <= max_step_deg) {
+        return false;
+    }
+
+    float limited = previous + copysignf(max_step_deg, diff);
+    current = wrap_to_360 ? wrap_angle_0_360(limited) : wrap_angle_deg(limited);
+    return true;
+}
+
 static const char* heading_to_compass(float heading);
+
+#if WALTER_ENABLE_LTE
+static uint8_t lte_signal_strength_percent(float rsrp_dbm)
+{
+    if (!isfinite(rsrp_dbm)) {
+        return 0;
+    }
+    constexpr float kMin = -120.0f;  // very weak
+    constexpr float kMax = -80.0f;   // excellent
+    float pct = ((rsrp_dbm - kMin) / (kMax - kMin)) * 100.0f;
+    pct = clampf(pct, 0.0f, 100.0f);
+    return static_cast<uint8_t>(pct + 0.5f);
+}
+#endif
 
 #if WALTER_ENABLE_BME680 || WALTER_ENABLE_BNO055
 static i2c_master_bus_handle_t s_sensor_i2c_bus = nullptr;
@@ -104,6 +182,143 @@ static esp_err_t ensure_sensor_i2c_bus(void)
              WALTER_SENSOR_I2C_SCL_GPIO,
              static_cast<unsigned long>(WALTER_SENSOR_I2C_SPEED_HZ));
     return ESP_OK;
+}
+#endif
+
+#if WALTER_ENABLE_BNO055
+static constexpr const char *BNO055_NVS_NAMESPACE = "bno055";
+static constexpr const char *BNO055_NVS_KEY = "calib";
+static constexpr uint32_t BNO055_CAL_VERSION = 1;
+
+typedef struct {
+    uint32_t version;
+    sensor_offset_t offsets;
+} bno055_calibration_blob_t;
+
+static bool s_bno055_offset_cache_valid = false;
+static sensor_offset_t s_bno055_cached_offsets = {};
+static bool s_bno055_restore_attempted = false;
+static bool s_bno055_capture_pending = true;
+static int64_t s_bno055_last_log_ts_us = 0;
+
+enum class BnoPersistResult {
+    kNoAction = 0,
+    kSaved,
+    kError,
+};
+
+static esp_err_t bno055_apply_axis_map(bno055_t *imu)
+{
+    if (!imu) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Tatsächliche Montage: Sensor +X nach oben, +Y nach hinten, +Z nach rechts.
+    // Gewünscht (Fahrzeugkoordinaten): X→vorne, Y→links, Z→oben.
+    // Beobachtet: Display-Kippen vorne/hinten beeinflusst Pitch, links/rechts Roll.
+    // Daraus folgt: Fahrzeug X = -Sensor Y, Fahrzeug Y = POSITIVE_Z, Fahrzeug Z = POSITIVE_X.
+    bno055_axes_t axes = {
+        .x = NEGATIVE_Y,
+        .y = POSITIVE_Z,
+        .z = POSITIVE_X,
+    };
+    return bno055_remap_axis(imu, &axes);
+}
+
+static bool bno055_offsets_equal(const sensor_offset_t &lhs, const sensor_offset_t &rhs)
+{
+    return memcmp(&lhs, &rhs, sizeof(sensor_offset_t)) == 0;
+}
+
+static bool bno055_restore_calibration(bno055_t *imu)
+{
+    if (!imu) {
+        return false;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(BNO055_NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        if (err != ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGW(TAG, "BNO055 calibration NVS open failed: %s", esp_err_to_name(err));
+        }
+        return false;
+    }
+
+    bno055_calibration_blob_t blob = {};
+    size_t blob_size = sizeof(blob);
+    err = nvs_get_blob(handle, BNO055_NVS_KEY, &blob, &blob_size);
+    nvs_close(handle);
+    if (err != ESP_OK) {
+        if (err != ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGW(TAG, "BNO055 calibration read failed: %s", esp_err_to_name(err));
+        }
+        return false;
+    }
+
+    if (blob_size != sizeof(blob) || blob.version != BNO055_CAL_VERSION) {
+        ESP_LOGW(TAG,
+                 "BNO055 calibration blob invalid (size=%u, version=%u)",
+                 static_cast<unsigned>(blob_size),
+                 static_cast<unsigned>(blob.version));
+        return false;
+    }
+
+    imu->config.offsets = blob.offsets;
+    if (bno055_set_offsets(imu) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to apply stored BNO055 offsets");
+        return false;
+    }
+
+    (void)bno055_get_calibration_status(imu);
+    s_bno055_cached_offsets = blob.offsets;
+    s_bno055_offset_cache_valid = true;
+    ESP_LOGI(TAG, "BNO055 calibration restored from NVS");
+    return true;
+}
+
+static BnoPersistResult bno055_persist_calibration_if_needed(bno055_t *imu)
+{
+    if (!imu || !imu->config.is_calibrated) {
+        return BnoPersistResult::kNoAction;
+    }
+
+    if (bno055_get_offsets(imu) != ESP_OK) {
+        ESP_LOGW(TAG, "BNO055 get_offsets failed, skip persist");
+        return BnoPersistResult::kError;
+    }
+
+    if (s_bno055_offset_cache_valid && bno055_offsets_equal(s_bno055_cached_offsets, imu->config.offsets)) {
+        return BnoPersistResult::kNoAction;
+    }
+
+    bno055_calibration_blob_t blob = {
+        .version = BNO055_CAL_VERSION,
+        .offsets = imu->config.offsets,
+    };
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(BNO055_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "BNO055 calibration save open failed: %s", esp_err_to_name(err));
+        return BnoPersistResult::kError;
+    }
+
+    err = nvs_set_blob(handle, BNO055_NVS_KEY, &blob, sizeof(blob));
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "BNO055 calibration save failed: %s", esp_err_to_name(err));
+        return BnoPersistResult::kError;
+    }
+
+    s_bno055_cached_offsets = blob.offsets;
+    s_bno055_offset_cache_valid = true;
+    ESP_LOGI(TAG, "BNO055 calibration saved to NVS");
+    return BnoPersistResult::kSaved;
 }
 #endif
 
@@ -471,22 +686,16 @@ static esp_err_t ensure_bno055_device(void)
 static void bno055_task(void *arg)
 {
     (void)arg;
-
-    const TickType_t period = ms_to_ticks(WALTER_BNO055_POLL_INTERVAL_MS);
-    TickType_t last_wake = xTaskGetTickCount();
-
     bno055_t imu = {};
     bool initialised = false;
     bno055_measurement_t last_measurement = {};
-    bool have_last = false;
     int64_t last_timestamp_us = 0;
+    bool have_last = false;
+
+    TickType_t last_wake = xTaskGetTickCount();
+    const TickType_t period = ms_to_ticks(WALTER_BNO055_POLL_INTERVAL_MS);
 
     while (true) {
-        if (ensure_bno055_device() != ESP_OK) {
-            vTaskDelay(ms_to_ticks(2000));
-            continue;
-        }
-
         if (imu.config.slave_handle != s_bno055_device) {
             memset(&imu, 0, sizeof(imu));
             imu.config.slave_handle = s_bno055_device;
@@ -513,9 +722,30 @@ static void bno055_task(void *arg)
                 continue;
             }
 
+            esp_err_t axis_err = bno055_apply_axis_map(&imu);
+            if (axis_err != ESP_OK) {
+                ESP_LOGW(TAG, "BNO055 axis remap failed: %s", esp_err_to_name(axis_err));
+            } else {
+                ESP_LOGI(TAG, "BNO055 axis remap applied (FzgX=-Y, FzgY=+Z, FzgZ=+X)");
+            }
+
             ESP_LOGI(TAG, "BNO055 initialised (mode=NDOF)");
             sensor_state_mark_bno055_configured(WALTER_BNO055_I2C_ADDR);
             initialised = true;
+            if (s_bno055_offset_cache_valid) {
+                imu.config.offsets = s_bno055_cached_offsets;
+                if (bno055_set_offsets(&imu) == ESP_OK) {
+                    (void)bno055_get_calibration_status(&imu);
+                    ESP_LOGI(TAG, "BNO055 calibration re-applied from cache");
+                } else {
+                    ESP_LOGW(TAG, "Failed to re-apply cached BNO055 calibration");
+                }
+            } else if (!s_bno055_restore_attempted) {
+                s_bno055_restore_attempted = true;
+                if (!bno055_restore_calibration(&imu)) {
+                    ESP_LOGI(TAG, "No stored BNO055 calibration found – will persist after calibration");
+                }
+            }
         }
 
         esp_err_t cal_err = bno055_get_calibration_status(&imu);
@@ -530,6 +760,17 @@ static void bno055_task(void *arg)
 
         bool ok = (euler_err == ESP_OK) && (lin_err == ESP_OK) && (grav_err == ESP_OK) && (temp_err == ESP_OK);
 
+        if (imu.config.is_calibrated) {
+            if (s_bno055_capture_pending) {
+                BnoPersistResult persist_result = bno055_persist_calibration_if_needed(&imu);
+                if (persist_result != BnoPersistResult::kError) {
+                    s_bno055_capture_pending = false;
+                }
+            }
+        } else {
+            s_bno055_capture_pending = true;
+        }
+
         bno055_measurement_t measurement = {};
         int64_t now_us = esp_timer_get_time();
         bool publish = false;
@@ -538,8 +779,8 @@ static void bno055_task(void *arg)
 
         if (ok) {
             measurement.yaw_deg = imu.euler_angle.yaw;
-            measurement.pitch_deg = imu.euler_angle.pitch;
-            measurement.roll_deg = imu.euler_angle.roll;
+            measurement.pitch_deg = wrap_angle_deg(imu.euler_angle.pitch - 180.0f);
+            measurement.roll_deg = wrap_angle_deg(imu.euler_angle.roll);
             measurement.linear_accel_mps2[0] = imu.linear_acceleration.x;
             measurement.linear_accel_mps2[1] = imu.linear_acceleration.y;
             measurement.linear_accel_mps2[2] = imu.linear_acceleration.z;
@@ -553,10 +794,36 @@ static void bno055_task(void *arg)
             measurement.calibration_mag = imu.config.calibration.mag;
             measurement.calibrated = imu.config.is_calibrated;
 
+            bool plausibility_adjusted = false;
+            if (have_last && (WALTER_BNO055_MAX_EULER_STEP_DEG > 0.0f)) {
+                plausibility_adjusted |= limit_angle_delta(measurement.yaw_deg,
+                                                          last_measurement.yaw_deg,
+                                                          WALTER_BNO055_MAX_EULER_STEP_DEG,
+                                                          true);
+                plausibility_adjusted |= limit_angle_delta(measurement.pitch_deg,
+                                                          last_measurement.pitch_deg,
+                                                          WALTER_BNO055_MAX_EULER_STEP_DEG,
+                                                          false);
+                plausibility_adjusted |= limit_angle_delta(measurement.roll_deg,
+                                                          last_measurement.roll_deg,
+                                                          WALTER_BNO055_MAX_EULER_STEP_DEG,
+                                                          false);
+                if (plausibility_adjusted) {
+                    ESP_LOGW(TAG,
+                             "BNO055 Euler-Sprung begrenzt (yaw=%.1f°, pitch=%.1f°, roll=%.1f°)",
+                             measurement.yaw_deg,
+                             measurement.pitch_deg,
+                             measurement.roll_deg);
+                }
+            }
+
             last_measurement = measurement;
             last_timestamp_us = now_us;
             have_last = true;
             publish = true;
+            if (plausibility_adjusted) {
+                fallback = true;
+            }
         } else {
             ESP_LOGW(TAG, "BNO055 read failed (Euler=%s, Lin=%s, Grav=%s, Temp=%s)",
                      esp_err_to_name(euler_err),
@@ -577,16 +844,22 @@ static void bno055_task(void *arg)
             sensor_state_publish_bno055(measurement, fallback, publish_ts);
 #if WALTER_SENSOR_LOG_BNO055
             const char *heading_label = heading_to_compass(measurement.yaw_deg);
+            float delta_ms = 0.0f;
+            if (s_bno055_last_log_ts_us > 0 && publish_ts > s_bno055_last_log_ts_us) {
+                delta_ms = (float)(publish_ts - s_bno055_last_log_ts_us) / 1000.0f;
+            }
+            s_bno055_last_log_ts_us = publish_ts;
             ESP_LOGI(TAG,
-                     "BNO055 heading=%.1f° (%s) pitch=%.1f° roll=%.1f° cal=%u/%u/%u/%u%s",
-                     measurement.yaw_deg,
-                     heading_label,
-                     measurement.pitch_deg,
-                     measurement.roll_deg,
+                     "BNO055 dT=%.1f ms cal=%u/%u/%u/%u heading=%.1f° (%s) roll=%.1f° pitch=%.1f°%s",
+                     delta_ms,
                      measurement.calibration_sys,
                      measurement.calibration_gyro,
                      measurement.calibration_accel,
                      measurement.calibration_mag,
+                     measurement.yaw_deg,
+                     heading_label,
+                     measurement.roll_deg,
+                     measurement.pitch_deg,
                      fallback ? " (fallback)" : "");
 #endif
         }
@@ -601,6 +874,25 @@ static esp_netif_t *s_sta_netif = NULL;
 static bool s_nat_enabled = false;
 static bool s_default_route_set = false;
 static std::atomic<bool> s_wifi_sta_connected{false};
+static wifi_config_t s_wifi_ap_config = {};
+static wifi_config_t s_wifi_sta_config = {};
+static bool s_wifi_sta_configured = false;
+static bool s_wifi_driver_started = false;
+static bool s_wifi_ap_active = false;
+static bool s_wifi_sta_active = false;
+static std::atomic<bool> s_wifi_ap_target{true};
+static std::atomic<bool> s_wifi_sta_target{false};
+static SemaphoreHandle_t s_wifi_runtime_mutex = nullptr;
+static bool s_wifi_sta_ip_valid = false;
+static esp_ip4_addr_t s_wifi_sta_ip = {};
+static esp_ip4_addr_t s_wifi_sta_gateway = {};
+static esp_ip4_addr_t s_wifi_sta_netmask = {};
+static bool s_wifi_last_error_valid = false;
+static esp_err_t s_wifi_last_error = ESP_OK;
+static esp_err_t wifi_runtime_apply(bool ap_enable, bool sta_enable);
+static esp_err_t wifi_runtime_apply_targets(void);
+static void sensor_state_publish_wifi_state(void);
+static void wifi_set_last_error(esp_err_t err);
 
 static constexpr gpio_num_t SENSOR_RAIL_GPIO = GPIO_NUM_0;
 
@@ -771,6 +1063,41 @@ typedef struct {
     } bme680[kBme680MaxSensors];
     size_t bme680_active;
 #endif
+#if WALTER_ENABLE_LTE
+    struct {
+        bool registered;
+        bool info_valid;
+        char operator_name[WALTER_MODEM_OPERATOR_MAX_SIZE];
+        uint16_t mcc;
+        uint8_t mnc;
+        uint16_t tac;
+        uint32_t cell_id;
+        float rsrp_dbm;
+        float rsrq_db;
+        float rssi_dbm;
+        uint8_t band;
+        int64_t timestamp_us;
+    } lte;
+#endif
+    struct {
+        bool ap_target;
+        bool sta_target;
+        bool ap_active;
+        bool sta_active;
+        bool sta_connected;
+        bool driver_started;
+        bool nat_enabled;
+        bool default_route_set;
+        bool sta_configured;
+        bool sta_ip_valid;
+        char ap_ssid[WIFI_SSID_MAX_LEN + 1];
+        char sta_ssid[WIFI_SSID_MAX_LEN + 1];
+        esp_ip4_addr_t sta_ip;
+        esp_ip4_addr_t sta_gateway;
+        esp_ip4_addr_t sta_netmask;
+        bool last_error_valid;
+        esp_err_t last_error;
+    } wifi;
 } sensor_shared_state_t;
 
 static sensor_shared_state_t s_sensor_state = {};
@@ -815,6 +1142,83 @@ static void sensor_state_publish_analog(const womo_analog_data_t *analog, int64_
     portEXIT_CRITICAL(&s_sensor_state_mux);
 }
 #endif
+
+#if WALTER_ENABLE_LTE
+static void sensor_state_publish_lte_registration(bool registered)
+{
+    portENTER_CRITICAL(&s_sensor_state_mux);
+    s_sensor_state.lte.registered = registered;
+    if (!registered) {
+        s_sensor_state.lte.info_valid = false;
+    }
+    s_sensor_state.lte.timestamp_us = esp_timer_get_time();
+    portEXIT_CRITICAL(&s_sensor_state_mux);
+}
+
+static void sensor_state_publish_lte_cellinfo(const WalterModemCellInformation &cell)
+{
+    portENTER_CRITICAL(&s_sensor_state_mux);
+    s_sensor_state.lte.registered = true;
+    s_sensor_state.lte.info_valid = true;
+    strncpy(s_sensor_state.lte.operator_name, cell.netName, sizeof(s_sensor_state.lte.operator_name));
+    s_sensor_state.lte.operator_name[sizeof(s_sensor_state.lte.operator_name) - 1] = '\0';
+    s_sensor_state.lte.mcc = cell.cc;
+    s_sensor_state.lte.mnc = cell.nc;
+    s_sensor_state.lte.tac = cell.tac;
+    s_sensor_state.lte.cell_id = cell.cid;
+    s_sensor_state.lte.rsrp_dbm = cell.rsrp;
+    s_sensor_state.lte.rsrq_db = cell.rsrq;
+    s_sensor_state.lte.rssi_dbm = cell.rssi;
+    s_sensor_state.lte.band = cell.band;
+    s_sensor_state.lte.timestamp_us = esp_timer_get_time();
+    portEXIT_CRITICAL(&s_sensor_state_mux);
+}
+#endif
+
+static void sensor_state_publish_wifi_state(void)
+{
+    portENTER_CRITICAL(&s_sensor_state_mux);
+    auto &wifi = s_sensor_state.wifi;
+    wifi.ap_target = s_wifi_ap_target.load();
+    wifi.sta_target = s_wifi_sta_target.load();
+    wifi.ap_active = s_wifi_ap_active;
+    wifi.sta_active = s_wifi_sta_active;
+    wifi.sta_connected = s_wifi_sta_connected.load();
+    wifi.driver_started = s_wifi_driver_started;
+    wifi.nat_enabled = s_nat_enabled;
+    wifi.default_route_set = s_default_route_set;
+    wifi.sta_configured = s_wifi_sta_configured;
+    wifi.sta_ip_valid = s_wifi_sta_ip_valid;
+    if (wifi.sta_ip_valid) {
+        wifi.sta_ip = s_wifi_sta_ip;
+        wifi.sta_gateway = s_wifi_sta_gateway;
+        wifi.sta_netmask = s_wifi_sta_netmask;
+    } else {
+        wifi.sta_ip.addr = 0;
+        wifi.sta_gateway.addr = 0;
+        wifi.sta_netmask.addr = 0;
+    }
+    strlcpy(wifi.ap_ssid,
+            reinterpret_cast<const char *>(s_wifi_ap_config.ap.ssid),
+            sizeof(wifi.ap_ssid));
+    if (s_wifi_sta_configured) {
+        strlcpy(wifi.sta_ssid,
+                reinterpret_cast<const char *>(s_wifi_sta_config.sta.ssid),
+                sizeof(wifi.sta_ssid));
+    } else {
+        wifi.sta_ssid[0] = '\0';
+    }
+    wifi.last_error_valid = s_wifi_last_error_valid;
+    wifi.last_error = s_wifi_last_error;
+    portEXIT_CRITICAL(&s_sensor_state_mux);
+}
+
+static void wifi_set_last_error(esp_err_t err)
+{
+    s_wifi_last_error = err;
+    s_wifi_last_error_valid = (err != ESP_OK);
+    sensor_state_publish_wifi_state();
+}
 
 #if WALTER_ENABLE_BNO055
 static void sensor_state_mark_bno055_configured(uint8_t address)
@@ -943,6 +1347,73 @@ static esp_err_t sensor_subsystem_init(void);
 static void configure_routing_after_connect(void);
 static void configure_softap_dns(void);
 static void enable_switched_3v3(void);
+#if WALTER_ENABLE_RS485
+static esp_err_t command_set_lte_enabled(bool enable);
+static esp_err_t command_set_wifi_ap_enabled(bool enable);
+static esp_err_t command_set_wifi_sta_enabled(bool enable);
+static esp_err_t command_start_wifi_scan(void);
+static esp_err_t command_set_wifi_credentials(const char *ssid, const char *password);
+static void rs485_report_command_result(const char *cmd, esp_err_t err);
+#endif
+static float system_cpu_load_percent(void);
+#if WALTER_HAS_RUNTIME_STATS
+static float system_cpu_load_percent(void)
+{
+    UBaseType_t num_tasks = uxTaskGetNumberOfTasks();
+    if (num_tasks == 0) {
+        return -1.0f;
+    }
+
+    TaskStatus_t *task_states = static_cast<TaskStatus_t *>(pvPortMalloc(num_tasks * sizeof(TaskStatus_t)));
+    if (!task_states) {
+        ESP_LOGW(TAG, "Run-time stats allocation failed");
+        return -1.0f;
+    }
+
+    uint32_t total_runtime = 0;
+    UBaseType_t filled = uxTaskGetSystemState(task_states, num_tasks, &total_runtime);
+    uint64_t idle_runtime = 0;
+
+    for (UBaseType_t i = 0; i < filled; ++i) {
+        const char *name = task_states[i].pcTaskName;
+        if (name != nullptr && strncmp(name, "IDLE", 4) == 0) {
+            idle_runtime += task_states[i].ulRunTimeCounter;
+        }
+    }
+
+    vPortFree(task_states);
+
+    if (total_runtime == 0) {
+        return -1.0f;
+    }
+
+    float idle_ratio = static_cast<float>(idle_runtime) / static_cast<float>(total_runtime);
+    float load_pct = (1.0f - idle_ratio) * 100.0f;
+    if (load_pct < 0.0f) {
+        load_pct = 0.0f;
+    } else if (load_pct > 100.0f) {
+        load_pct = 100.0f;
+    }
+    return load_pct;
+}
+#else
+static float system_cpu_load_percent(void)
+{
+    return -1.0f;
+}
+#endif
+#if WALTER_ENABLE_LTE
+typedef enum {
+    LTE_CMD_ENABLE,
+    LTE_CMD_DISABLE,
+    LTE_CMD_RESTART,
+} lte_runtime_cmd_t;
+
+static QueueHandle_t s_lte_command_queue = nullptr;
+static std::atomic<bool> s_lte_target_enabled{true};
+static std::atomic<bool> s_lte_runtime_active{false};
+static esp_err_t s_lte_last_error = ESP_OK;
+#endif
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
@@ -966,16 +1437,20 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     case WIFI_EVENT_STA_START:
         ESP_LOGI(TAG, "Station interface started");
         s_wifi_sta_connected.store(false);
+        sensor_state_publish_wifi_state();
         break;
     case WIFI_EVENT_STA_CONNECTED:
         ESP_LOGI(TAG, "Connected to upstream AP");
         s_wifi_sta_connected.store(true);
+        sensor_state_publish_wifi_state();
         break;
     case WIFI_EVENT_STA_DISCONNECTED: {
         const wifi_event_sta_disconnected_t *event = (wifi_event_sta_disconnected_t *)event_data;
         ESP_LOGW(TAG, "Disconnected from upstream AP (reason=%d), retrying", event->reason);
         s_wifi_sta_connected.store(false);
         s_default_route_set = false;
+        s_wifi_sta_ip_valid = false;
+        sensor_state_publish_wifi_state();
         esp_wifi_connect();
         break;
     }
@@ -990,7 +1465,12 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
         const ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Upstream IP acquired: " IPSTR, IP2STR(&event->ip_info.ip));
         s_wifi_sta_connected.store(true);
+        s_wifi_sta_ip_valid = true;
+        s_wifi_sta_ip = event->ip_info.ip;
+        s_wifi_sta_gateway = event->ip_info.gw;
+        s_wifi_sta_netmask = event->ip_info.netmask;
         configure_routing_after_connect();
+        sensor_state_publish_wifi_state();
     }
 }
 
@@ -1031,19 +1511,31 @@ static esp_err_t wifi_init_apsta(void)
         }
     }
 
-    wifi_mode_t mode = connect_sta ? WIFI_MODE_APSTA : WIFI_MODE_AP;
-    ESP_ERROR_CHECK(esp_wifi_set_mode(mode));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
-    if (connect_sta) {
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta_config));
+    if (!s_wifi_runtime_mutex) {
+        s_wifi_runtime_mutex = xSemaphoreCreateMutex();
+        if (!s_wifi_runtime_mutex) {
+            ESP_LOGE(TAG, "Failed to create WiFi runtime mutex");
+            return ESP_ERR_NO_MEM;
+        }
     }
 
-    ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_LOGI(TAG, "SoftAP ready, SSID=%s, channel=%u", ap_config.ap.ssid, ap_config.ap.channel);
-
+    s_wifi_ap_config = ap_config;
     if (connect_sta) {
-        ESP_LOGI(TAG, "Connecting to upstream SSID=%s", sta_config.sta.ssid);
-        ESP_ERROR_CHECK(esp_wifi_connect());
+        s_wifi_sta_config = sta_config;
+        s_wifi_sta_configured = true;
+    } else {
+        memset(&s_wifi_sta_config, 0, sizeof(s_wifi_sta_config));
+        s_wifi_sta_configured = false;
+    }
+
+    s_wifi_ap_target.store(true);
+    s_wifi_sta_target.store(connect_sta);
+    sensor_state_publish_wifi_state();
+
+    esp_err_t runtime_err = wifi_runtime_apply_targets();
+    if (runtime_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WiFi runtime state: %s", esp_err_to_name(runtime_err));
+        return runtime_err;
     }
 
 #if WALTER_ENABLE_NAT
@@ -1051,6 +1543,7 @@ static esp_err_t wifi_init_apsta(void)
     ESP_LOGW(TAG, "NAT support disabled in config (WALTER_ENABLE_NAT not set)");
 #endif
 
+    ESP_LOGI(TAG, "WiFi init complete (AP on, STA %s)", connect_sta ? "enabled" : "disabled");
     return ESP_OK;
 }
 
@@ -1150,6 +1643,146 @@ static void configure_routing_after_connect(void)
         }
     }
 #endif
+
+    sensor_state_publish_wifi_state();
+}
+
+static esp_err_t wifi_runtime_apply(bool ap_enable, bool sta_enable)
+{
+    if (!s_wifi_runtime_mutex) {
+        wifi_set_last_error(ESP_ERR_INVALID_STATE);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (ap_enable && s_wifi_ap_config.ap.max_connection == 0) {
+        ESP_LOGW(TAG, "WiFi AP config missing, cannot enable SoftAP");
+        wifi_set_last_error(ESP_ERR_INVALID_STATE);
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (sta_enable && !s_wifi_sta_configured) {
+        ESP_LOGW(TAG, "WiFi STA credentials missing, cannot enable station");
+        wifi_set_last_error(ESP_ERR_INVALID_STATE);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (xSemaphoreTake(s_wifi_runtime_mutex, pdMS_TO_TICKS(250)) != pdTRUE) {
+        wifi_set_last_error(ESP_ERR_TIMEOUT);
+        return ESP_ERR_TIMEOUT;
+    }
+
+    bool prev_ap = s_wifi_ap_active;
+    bool prev_sta = s_wifi_sta_active;
+    esp_err_t err = ESP_OK;
+
+    do {
+        if (!ap_enable && !sta_enable) {
+            if (s_wifi_driver_started) {
+                err = esp_wifi_stop();
+                if (err != ESP_OK) {
+                    ESP_LOGE(TAG, "Failed to stop WiFi driver: %s", esp_err_to_name(err));
+                    break;
+                }
+                s_wifi_driver_started = false;
+            }
+            if (prev_sta) {
+                ESP_LOGI(TAG, "WiFi STA disabled");
+            }
+            if (prev_ap) {
+                ESP_LOGI(TAG, "SoftAP disabled");
+            }
+            ESP_LOGI(TAG, "WiFi driver stopped");
+            s_wifi_sta_active = false;
+            s_wifi_ap_active = false;
+            s_wifi_sta_connected.store(false);
+            s_wifi_sta_ip_valid = false;
+            break;
+        }
+
+        wifi_mode_t mode = WIFI_MODE_NULL;
+        if (ap_enable && sta_enable) {
+            mode = WIFI_MODE_APSTA;
+        } else if (ap_enable) {
+            mode = WIFI_MODE_AP;
+        } else {
+            mode = WIFI_MODE_STA;
+        }
+
+        err = esp_wifi_set_mode(mode);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to set WiFi mode %d: %s", mode, esp_err_to_name(err));
+            break;
+        }
+
+        err = esp_wifi_set_config(WIFI_IF_AP, &s_wifi_ap_config);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to update SoftAP config: %s", esp_err_to_name(err));
+            break;
+        }
+
+        if (sta_enable) {
+            err = esp_wifi_set_config(WIFI_IF_STA, &s_wifi_sta_config);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to update STA config: %s", esp_err_to_name(err));
+                break;
+            }
+        } else if (prev_sta) {
+            esp_wifi_disconnect();
+            s_wifi_sta_ip_valid = false;
+        }
+
+        if (!s_wifi_driver_started) {
+            err = esp_wifi_start();
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to start WiFi driver: %s", esp_err_to_name(err));
+                break;
+            }
+            s_wifi_driver_started = true;
+        }
+
+        if (sta_enable) {
+            err = esp_wifi_connect();
+            if (err == ESP_ERR_WIFI_STATE || err == ESP_ERR_WIFI_CONN) {
+                ESP_LOGW(TAG, "WiFi connect pending: %s", esp_err_to_name(err));
+                err = ESP_OK;
+            } else if (err != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to start WiFi connection: %s", esp_err_to_name(err));
+                break;
+            } else {
+                ESP_LOGI(TAG, "WiFi STA connect requested (SSID=%s)", s_wifi_sta_config.sta.ssid);
+            }
+        }
+
+        if (!prev_ap && ap_enable) {
+            ESP_LOGI(TAG, "SoftAP enabled (SSID=%s, channel=%u)",
+                     s_wifi_ap_config.ap.ssid,
+                     s_wifi_ap_config.ap.channel);
+        } else if (prev_ap && !ap_enable) {
+            ESP_LOGI(TAG, "SoftAP disabled");
+        }
+
+        if (!prev_sta && sta_enable) {
+            ESP_LOGI(TAG, "WiFi STA enabled");
+        } else if (prev_sta && !sta_enable) {
+            ESP_LOGI(TAG, "WiFi STA disabled");
+            s_wifi_sta_connected.store(false);
+        }
+
+        s_wifi_ap_active = ap_enable;
+        s_wifi_sta_active = sta_enable;
+        if (!sta_enable) {
+            s_wifi_sta_connected.store(false);
+            s_wifi_sta_ip_valid = false;
+        }
+    } while (false);
+
+    xSemaphoreGive(s_wifi_runtime_mutex);
+    wifi_set_last_error(err);
+    return err;
+}
+
+static esp_err_t wifi_runtime_apply_targets(void)
+{
+    return wifi_runtime_apply(s_wifi_ap_target.load(), s_wifi_sta_target.load());
 }
 #if WALTER_ENABLE_HX711
 static void hx711_task(void *arg)
@@ -1267,6 +1900,16 @@ static void analog_task(void *arg)
             int64_t now_us = esp_timer_get_time();
             sensor_state_publish_analog(&analog, now_us);
 #if WALTER_SENSOR_LOG_ANALOG
+            float cpu_load = system_cpu_load_percent();
+            if (cpu_load < 0.0f) {
+                static bool s_cpu_warned = false;
+                if (!s_cpu_warned) {
+                    ESP_LOGW(TAG, "CPU load not available (run-time stats disabled)");
+                    s_cpu_warned = true;
+                }
+            } else {
+                ESP_LOGI(TAG, "System CPU load: %.1f%%", cpu_load);
+            }
             if (analog.battery_valid[0]) {
                 ESP_LOGI(TAG, "Battery1: %.2f V (%d mV)", analog.battery_v[0], analog.battery_mv[0]);
             }
@@ -1290,25 +1933,59 @@ static void analog_task(void *arg)
 #endif
 
 #if WALTER_ENABLE_RS485
+typedef struct {
+    char cmd[32];
+    esp_err_t err;
+} rs485_cmd_result_msg_t;
+
+static QueueHandle_t s_rs485_cmd_result_queue = nullptr;
+
+static void rs485_send_json(const char *context, cJSON *root);
+static void rs485_queue_command_result(const char *cmd, esp_err_t err);
+
 // RS485 TX Task - sends sensor data as JSON
 static void rs485_tx_task(void *arg)
 {
     ESP_LOGI(TAG, "RS485 TX task started");
     
-    TickType_t last_full_send = 0;
-    const TickType_t full_interval = pdMS_TO_TICKS(10000);  // 10 seconds
+    const TickType_t full_interval = pdMS_TO_TICKS(1000);  // full payload every 1 second for testing
+    TickType_t last_full_send = xTaskGetTickCount() - full_interval;
+#if WALTER_ENABLE_BNO055
+    const TickType_t imu_interval = pdMS_TO_TICKS(300);    // interleave IMU snapshots alle 0,3 s
+    TickType_t last_imu_send = last_full_send;
+#endif
+    const TickType_t loop_delay = pdMS_TO_TICKS(100);
 
     while (true) {
         TickType_t now = xTaskGetTickCount();
-        bool send_full = false;
+        bool send_full = ((now - last_full_send) >= full_interval);
+    #if WALTER_ENABLE_BNO055
+        bool send_imu = !send_full && ((now - last_imu_send) >= imu_interval);
+    #endif
 
-        if ((now - last_full_send) >= full_interval) {
-            send_full = true;
-            last_full_send = now;
+        if (s_rs485_cmd_result_queue) {
+            rs485_cmd_result_msg_t cmd_msg;
+            while (xQueueReceive(s_rs485_cmd_result_queue, &cmd_msg, 0) == pdPASS) {
+                cJSON *ack = cJSON_CreateObject();
+                cJSON_AddStringToObject(ack, "type", "cmd_ack");
+                cJSON_AddStringToObject(ack, "cmd", cmd_msg.cmd);
+                bool ok = (cmd_msg.err == ESP_OK);
+                cJSON_AddBoolToObject(ack, "ok", ok);
+                if (!ok) {
+                    cJSON_AddStringToObject(ack, "err", esp_err_to_name(cmd_msg.err));
+                }
+                cJSON_AddNumberToObject(ack, "ts", (double)(esp_timer_get_time() / 1000));
+                rs485_send_json("cmd_ack", ack);
+                cJSON_Delete(ack);
+            }
         }
 
         if (send_full) {
             sensor_shared_state_t snapshot = sensor_state_snapshot();
+            last_full_send = now;
+    #if WALTER_ENABLE_BNO055
+            last_imu_send = now;
+    #endif
 
             cJSON *root = cJSON_CreateObject();
             cJSON_AddStringToObject(root, "type", "full");
@@ -1437,18 +2114,132 @@ static void rs485_tx_task(void *arg)
             }
 #endif
 
-            char *json_str = cJSON_PrintUnformatted(root);
-            if (json_str) {
-                size_t len = strlen(json_str);
-                json_str[len] = '\n';  // Add newline
-                ESP_LOGI(TAG, "Sending RS485 full: %zu bytes", len + 1);
-                womo_rs485_write((uint8_t*)json_str, len + 1, pdMS_TO_TICKS(100));
-                cJSON_free(json_str);
+#if WALTER_ENABLE_LTE
+            if (snapshot.lte.registered || snapshot.lte.info_valid) {
+                cJSON *lte = cJSON_CreateObject();
+                cJSON_AddBoolToObject(lte, "registered", snapshot.lte.registered);
+                if (snapshot.lte.info_valid && snapshot.lte.operator_name[0] != '\0') {
+                    cJSON_AddStringToObject(lte, "operator", snapshot.lte.operator_name);
+                }
+                if (snapshot.lte.info_valid) {
+                    cJSON_AddNumberToObject(lte, "rsrp_dbm", snapshot.lte.rsrp_dbm);
+                    cJSON_AddNumberToObject(lte,
+                                             "signal_pct",
+                                             static_cast<double>(lte_signal_strength_percent(snapshot.lte.rsrp_dbm)));
+                }
+                cJSON_AddItemToObject(root, "lte", lte);
             }
+#endif
+
+            {
+                const auto &wifi = snapshot.wifi;
+                cJSON *wifi_json = cJSON_CreateObject();
+                cJSON_AddBoolToObject(wifi_json, "ap_target", wifi.ap_target);
+                cJSON_AddBoolToObject(wifi_json, "sta_target", wifi.sta_target);
+                cJSON_AddBoolToObject(wifi_json, "ap_active", wifi.ap_active);
+                cJSON_AddBoolToObject(wifi_json, "sta_active", wifi.sta_active);
+                cJSON_AddBoolToObject(wifi_json, "sta_connected", wifi.sta_connected);
+                cJSON_AddBoolToObject(wifi_json, "driver_started", wifi.driver_started);
+                cJSON_AddBoolToObject(wifi_json, "nat", wifi.nat_enabled);
+                cJSON_AddBoolToObject(wifi_json, "def_route", wifi.default_route_set);
+                cJSON_AddBoolToObject(wifi_json, "sta_cfg", wifi.sta_configured);
+                if (wifi.ap_ssid[0] != '\0') {
+                    cJSON_AddStringToObject(wifi_json, "ap_ssid", wifi.ap_ssid);
+                }
+                if (wifi.sta_ssid[0] != '\0') {
+                    cJSON_AddStringToObject(wifi_json, "sta_ssid", wifi.sta_ssid);
+                }
+                if (wifi.sta_ip_valid) {
+                    char ipbuf[16];
+                    snprintf(ipbuf, sizeof(ipbuf), IPSTR, IP2STR(&wifi.sta_ip));
+                    cJSON_AddStringToObject(wifi_json, "sta_ip", ipbuf);
+                    snprintf(ipbuf, sizeof(ipbuf), IPSTR, IP2STR(&wifi.sta_gateway));
+                    cJSON_AddStringToObject(wifi_json, "sta_gw", ipbuf);
+                    snprintf(ipbuf, sizeof(ipbuf), IPSTR, IP2STR(&wifi.sta_netmask));
+                    cJSON_AddStringToObject(wifi_json, "sta_mask", ipbuf);
+                }
+                if (wifi.last_error_valid) {
+                    cJSON_AddStringToObject(wifi_json, "last_err", esp_err_to_name(wifi.last_error));
+                }
+                cJSON_AddItemToObject(root, "wifi", wifi_json);
+            }
+
+            rs485_send_json("full", root);
             cJSON_Delete(root);
         }
-        
-        vTaskDelay(pdMS_TO_TICKS(10));  // Small delay to not hog CPU
+#if WALTER_ENABLE_BNO055
+        else if (send_imu) {
+            sensor_shared_state_t snapshot = sensor_state_snapshot();
+            last_imu_send = now;
+
+            if (snapshot.bno055.configured && snapshot.bno055.valid) {
+                cJSON *root = cJSON_CreateObject();
+                cJSON_AddStringToObject(root, "type", "imu");
+                cJSON_AddNumberToObject(root, "ts", (double)(esp_timer_get_time() / 1000));
+
+                cJSON *imu = cJSON_CreateObject();
+                cJSON_AddNumberToObject(imu, "yaw_deg", snapshot.bno055.yaw_deg);
+                cJSON_AddNumberToObject(imu, "pitch_deg", snapshot.bno055.pitch_deg);
+                cJSON_AddNumberToObject(imu, "roll_deg", snapshot.bno055.roll_deg);
+                cJSON_AddStringToObject(imu, "hdg", heading_to_compass(snapshot.bno055.yaw_deg));
+
+                cJSON *cal = cJSON_CreateObject();
+                cJSON_AddNumberToObject(cal, "sys", snapshot.bno055.calibration_sys);
+                cJSON_AddNumberToObject(cal, "gyro", snapshot.bno055.calibration_gyro);
+                cJSON_AddNumberToObject(cal, "acc", snapshot.bno055.calibration_accel);
+                cJSON_AddNumberToObject(cal, "mag", snapshot.bno055.calibration_mag);
+                cJSON_AddItemToObject(imu, "cal", cal);
+
+                if (snapshot.bno055.fallback) {
+                    cJSON_AddBoolToObject(imu, "fallback", true);
+                }
+                cJSON_AddNumberToObject(imu, "ts_us", (double)snapshot.bno055.timestamp_us);
+                cJSON_AddItemToObject(root, "imu", imu);
+
+                rs485_send_json("imu", root);
+                cJSON_Delete(root);
+            }
+        }
+#endif
+
+        vTaskDelay(loop_delay);  // Small delay to not hog CPU
+    }
+}
+
+static void rs485_send_json(const char *context, cJSON *root)
+{
+    if (!root) {
+        return;
+    }
+    char *json_str = cJSON_PrintUnformatted(root);
+    if (!json_str) {
+        ESP_LOGE(TAG, "Failed to encode RS485 %s payload", context ? context : "payload");
+        return;
+    }
+    size_t len = strlen(json_str);
+    json_str[len] = '\n';
+    ESP_LOGI(TAG, "Sending RS485 %s: %zu bytes", context ? context : "payload", len + 1);
+    esp_err_t write_err = womo_rs485_write((uint8_t *)json_str, len + 1, pdMS_TO_TICKS(100));
+    if (write_err != ESP_OK) {
+        ESP_LOGW(TAG, "RS485 write (%s) failed: %s", context ? context : "payload", esp_err_to_name(write_err));
+    }
+    cJSON_free(json_str);
+}
+
+static void rs485_queue_command_result(const char *cmd, esp_err_t err)
+{
+    if (!cmd) {
+        return;
+    }
+    if (!s_rs485_cmd_result_queue) {
+        ESP_LOGW(TAG, "RS485 command result queue not ready (cmd=%s)", cmd);
+        return;
+    }
+    rs485_cmd_result_msg_t msg = {};
+    strlcpy(msg.cmd, cmd, sizeof(msg.cmd));
+    msg.err = err;
+    if (xQueueSend(s_rs485_cmd_result_queue, &msg, 0) != pdPASS) {
+        ESP_LOGW(TAG, "RS485 command result queue full (cmd=%s)", cmd);
     }
 }
 
@@ -1500,26 +2291,56 @@ static void handle_rs485_command(const char *cmd_json)
     cJSON *cmd = cJSON_GetObjectItem(root, "cmd");
     if (cmd && cJSON_IsString(cmd)) {
         const char *cmd_str = cmd->valuestring;
-
-#if WALTER_ENABLE_HX711
         bool handled = false;
+        esp_err_t cmd_err = ESP_OK;
 
-        if (strcmp(cmd_str, "tare_a") == 0) {
+        if (strcmp(cmd_str, "lte_enable") == 0) {
+            handled = true;
+            cmd_err = command_set_lte_enabled(true);
+        } else if (strcmp(cmd_str, "lte_disable") == 0) {
+            handled = true;
+            cmd_err = command_set_lte_enabled(false);
+        } else if (strcmp(cmd_str, "wifi_enable_ap") == 0) {
+            handled = true;
+            cmd_err = command_set_wifi_ap_enabled(true);
+        } else if (strcmp(cmd_str, "wifi_disable_ap") == 0) {
+            handled = true;
+            cmd_err = command_set_wifi_ap_enabled(false);
+        } else if (strcmp(cmd_str, "wifi_enable_sta") == 0) {
+            handled = true;
+            cmd_err = command_set_wifi_sta_enabled(true);
+        } else if (strcmp(cmd_str, "wifi_disable_sta") == 0) {
+            handled = true;
+            cmd_err = command_set_wifi_sta_enabled(false);
+        } else if (strcmp(cmd_str, "wifi_scan_start") == 0) {
+            handled = true;
+            cmd_err = command_start_wifi_scan();
+        } else if (strcmp(cmd_str, "wifi_set_credentials") == 0) {
+            handled = true;
+            const cJSON *ssid = cJSON_GetObjectItem(root, "ssid");
+            const cJSON *password = cJSON_GetObjectItem(root, "password");
+            if (!ssid || !password || !cJSON_IsString(ssid) || !cJSON_IsString(password)) {
+                cmd_err = ESP_ERR_INVALID_ARG;
+            } else {
+                cmd_err = command_set_wifi_credentials(ssid->valuestring, password->valuestring);
+            }
+#if WALTER_ENABLE_HX711
+        } else if (strcmp(cmd_str, "tare_a") == 0) {
+            handled = true;
             ESP_LOGI(TAG, "Tare Platform A requested");
             // TODO: Implement tare functionality
-            handled = true;
         } else if (strcmp(cmd_str, "tare_b") == 0) {
+            handled = true;
             ESP_LOGI(TAG, "Tare Platform B requested");
             // TODO: Implement tare functionality
-            handled = true;
+#endif
         }
 
-        if (!handled) {
+        if (handled) {
+            rs485_report_command_result(cmd_str, cmd_err);
+        } else {
             ESP_LOGW(TAG, "Unknown command: %s", cmd_str);
         }
-#else
-        ESP_LOGW(TAG, "Unknown command: %s", cmd_str);
-#endif
     } else {
         ESP_LOGW(TAG, "RS485 command missing string field 'cmd'");
     }
@@ -1527,6 +2348,440 @@ static void handle_rs485_command(const char *cmd_json)
     cJSON_Delete(root);
 }
 #endif // WALTER_ENABLE_RS485
+
+#if WALTER_ENABLE_RS485
+static esp_err_t command_set_lte_enabled(bool enable)
+{
+#if WALTER_ENABLE_LTE
+    ESP_LOGI(TAG, "Command: LTE %s", enable ? "enable" : "disable");
+
+    bool previous = s_lte_target_enabled.exchange(enable);
+    if (previous == enable) {
+        return ESP_OK;
+    }
+
+    if (!s_lte_command_queue) {
+        ESP_LOGW(TAG, "LTE command queue not ready");
+        s_lte_target_enabled.store(previous);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    lte_runtime_cmd_t cmd = enable ? LTE_CMD_ENABLE : LTE_CMD_DISABLE;
+    if (xQueueSend(s_lte_command_queue, &cmd, pdMS_TO_TICKS(100)) != pdPASS) {
+        ESP_LOGW(TAG, "LTE command queue full");
+        s_lte_target_enabled.store(previous);
+        return ESP_ERR_TIMEOUT;
+    }
+    return ESP_OK;
+#else
+    (void)enable;
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
+}
+
+static esp_err_t command_set_wifi_ap_enabled(bool enable)
+{
+    ESP_LOGI(TAG, "Command: WiFi AP %s", enable ? "enable" : "disable");
+    bool previous = s_wifi_ap_target.exchange(enable);
+    if (previous == enable) {
+        return ESP_OK;
+    }
+
+    esp_err_t err = wifi_runtime_apply_targets();
+    if (err != ESP_OK) {
+        s_wifi_ap_target.store(previous);
+    }
+    return err;
+}
+
+static esp_err_t command_set_wifi_sta_enabled(bool enable)
+{
+    ESP_LOGI(TAG, "Command: WiFi STA %s", enable ? "enable" : "disable");
+    if (enable && !s_wifi_sta_configured) {
+        ESP_LOGW(TAG, "WiFi STA credentials missing, cannot enable STA");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    bool previous = s_wifi_sta_target.exchange(enable);
+    if (previous == enable) {
+        return ESP_OK;
+    }
+
+    esp_err_t err = wifi_runtime_apply_targets();
+    if (err != ESP_OK) {
+        s_wifi_sta_target.store(previous);
+    }
+    return err;
+}
+
+static esp_err_t command_start_wifi_scan(void)
+{
+    ESP_LOGI(TAG, "Command: WiFi scan start");
+    ESP_LOGW(TAG, "WiFi scan runtime control not implemented yet");
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+static esp_err_t command_set_wifi_credentials(const char *ssid, const char *password)
+{
+    if (!ssid || !password) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    ESP_LOGI(TAG,
+             "Command: WiFi credentials update (SSID length %u)",
+             static_cast<unsigned>(strlen(ssid)));
+    ESP_LOGW(TAG, "WiFi credential updates not implemented yet");
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+static void rs485_report_command_result(const char *cmd, esp_err_t err)
+{
+    if (!cmd) {
+        return;
+    }
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Command %s executed", cmd);
+    } else {
+        ESP_LOGW(TAG, "Command %s failed: %s", cmd, esp_err_to_name(err));
+    }
+    rs485_queue_command_result(cmd, err);
+}
+#endif // WALTER_ENABLE_RS485
+
+#if WALTER_ENABLE_LTE
+
+static const char *LTE_TAG = "lte_tcp";
+static WalterModemRsp s_lte_rsp = {};
+static uint8_t s_lte_mac[6] = {0};
+static bool s_lte_mac_ready = false;
+static uint16_t s_lte_counter = 0;
+static uint8_t s_lte_socket_id = 0;
+
+static void lte_runtime_notify(bool target_enabled, bool link_ready, esp_err_t last_err)
+{
+    static bool prev_target = true;
+    static bool prev_link = false;
+    static esp_err_t prev_err = ESP_OK;
+
+    s_lte_runtime_active.store(target_enabled && link_ready);
+    s_lte_last_error = last_err;
+
+    if (prev_target == target_enabled && prev_link == link_ready && prev_err == last_err) {
+        return;
+    }
+
+    prev_target = target_enabled;
+    prev_link = link_ready;
+    prev_err = last_err;
+
+    ESP_LOGI(LTE_TAG,
+             "Runtime state: target=%s link_ready=%s last_err=%s",
+             target_enabled ? "on" : "off",
+             link_ready ? "yes" : "no",
+             (last_err == ESP_OK) ? "OK" : esp_err_to_name(last_err));
+    // TODO: Publish LTE runtime state towards RS485 consumer.
+}
+
+static bool lte_is_registered(void)
+{
+    WalterModemNetworkRegState state = modem.getNetworkRegState();
+    return state == WALTER_MODEM_NETWORK_REG_REGISTERED_HOME ||
+           state == WALTER_MODEM_NETWORK_REG_REGISTERED_ROAMING;
+}
+
+static bool lte_wait_for_registration(int timeout_sec)
+{
+    ESP_LOGI(LTE_TAG, "Waiting for LTE registration (timeout %d s)", timeout_sec);
+    int elapsed = 0;
+    while (!lte_is_registered()) {
+        if (!s_lte_target_enabled.load()) {
+            ESP_LOGW(LTE_TAG, "Registration aborted (LTE disabled)");
+            sensor_state_publish_lte_registration(false);
+            return false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        ++elapsed;
+        if (elapsed >= timeout_sec) {
+            ESP_LOGW(LTE_TAG, "LTE registration timed out");
+            sensor_state_publish_lte_registration(false);
+            return false;
+        }
+    }
+    ESP_LOGI(LTE_TAG, "LTE registered");
+    sensor_state_publish_lte_registration(true);
+    return true;
+}
+
+static bool lte_configure_pdp(void)
+{
+    const char *apn = (*WALTER_LTE_APN != '\0') ? WALTER_LTE_APN : nullptr;
+    if (!modem.definePDPContext(1, apn, &s_lte_rsp)) {
+        ESP_LOGE(LTE_TAG, "definePDPContext failed (result=%d)", (int)s_lte_rsp.result);
+        return false;
+    }
+    return true;
+}
+
+static bool lte_attach_network(void)
+{
+    sensor_state_publish_lte_registration(false);
+    if (!modem.setOpState(WALTER_MODEM_OPSTATE_NO_RF)) {
+        ESP_LOGE(LTE_TAG, "setOpState(NO_RF) failed");
+        return false;
+    }
+
+    if (!lte_configure_pdp()) {
+        return false;
+    }
+
+    if (!modem.setOpState(WALTER_MODEM_OPSTATE_FULL)) {
+        ESP_LOGE(LTE_TAG, "setOpState(FULL) failed");
+        return false;
+    }
+
+    if (!modem.setNetworkSelectionMode(WALTER_MODEM_NETWORK_SEL_MODE_AUTOMATIC)) {
+        ESP_LOGE(LTE_TAG, "setNetworkSelectionMode failed");
+        return false;
+    }
+
+    return lte_wait_for_registration(WALTER_LTE_ATTACH_TIMEOUT_SEC);
+}
+
+static void lte_socket_event_handler(WalterModemSocketEvent ev,
+                                     int socket_id,
+                                     uint16_t data_received,
+                                     uint8_t *data,
+                                     void *args)
+{
+    (void)args;
+    (void)data;
+    if (ev == WALTER_MODEM_SOCKET_EVENT_RING) {
+        ESP_LOGI(LTE_TAG,
+                 "Incoming data on socket %d (%u bytes)",
+                 socket_id,
+                 static_cast<unsigned>(data_received));
+    }
+}
+
+static bool lte_update_cellinfo(void)
+{
+    if (!WalterModem::getCellInformation(WALTER_MODEM_SQNMONI_REPORTS_SERVING_CELL, &s_lte_rsp)) {
+        ESP_LOGW(LTE_TAG, "getCellInformation failed (result=%d)", (int)s_lte_rsp.result);
+        return false;
+    }
+
+    const WalterModemCellInformation &cell = s_lte_rsp.data.cellInformation;
+    ESP_LOGI(LTE_TAG,
+             "Operator %s (MCC %u, MNC %u, TAC %u, CID %u, RSRP %.1f dBm, RSRQ %.1f dB)",
+             cell.netName,
+             static_cast<unsigned>(cell.cc),
+             static_cast<unsigned>(cell.nc),
+             static_cast<unsigned>(cell.tac),
+             static_cast<unsigned>(cell.cid),
+             cell.rsrp,
+             cell.rsrq);
+    sensor_state_publish_lte_cellinfo(cell);
+    return true;
+}
+
+static bool lte_open_socket(void)
+{
+    modem.socketSetEventHandler(lte_socket_event_handler, nullptr);
+
+    if (!modem.socketConfig(&s_lte_rsp)) {
+        ESP_LOGE(LTE_TAG, "socketConfig failed (result=%d)", (int)s_lte_rsp.result);
+        return false;
+    }
+    s_lte_socket_id = s_lte_rsp.data.socketId;
+
+    if (!modem.socketConfigSecure(WALTER_LTE_TCP_SECURE != 0)) {
+        ESP_LOGE(LTE_TAG, "socketConfigSecure(%d) failed", WALTER_LTE_TCP_SECURE);
+        return false;
+    }
+
+    if (!modem.socketDial(WALTER_LTE_TCP_HOST,
+                          WALTER_LTE_TCP_PORT,
+                          0,
+                          nullptr,
+                          nullptr,
+                          nullptr,
+                          WALTER_MODEM_SOCKET_PROTO_TCP)) {
+        ESP_LOGE(LTE_TAG, "socketDial %s:%d failed", WALTER_LTE_TCP_HOST, WALTER_LTE_TCP_PORT);
+        return false;
+    }
+
+    ESP_LOGI(LTE_TAG, "TCP socket connected to %s:%d", WALTER_LTE_TCP_HOST, WALTER_LTE_TCP_PORT);
+    lte_update_cellinfo();
+    return true;
+}
+
+static void lte_close_socket(void)
+{
+    if (s_lte_socket_id != 0) {
+        modem.socketClose(nullptr, nullptr, nullptr, s_lte_socket_id);
+        s_lte_socket_id = 0;
+    }
+}
+
+static void lte_set_low_power(void)
+{
+    modem.setOpState(WALTER_MODEM_OPSTATE_MINIMUM);
+    sensor_state_publish_lte_registration(false);
+}
+
+static bool lte_send_heartbeat(void)
+{
+    if (!s_lte_mac_ready) {
+        esp_err_t err = esp_read_mac(s_lte_mac, ESP_MAC_WIFI_STA);
+        if (err != ESP_OK) {
+            ESP_LOGE(LTE_TAG, "esp_read_mac failed: %s", esp_err_to_name(err));
+            return false;
+        }
+        s_lte_mac_ready = true;
+    }
+
+    uint8_t payload[8] = {0};
+    memcpy(payload, s_lte_mac, sizeof(s_lte_mac));
+    payload[6] = static_cast<uint8_t>(s_lte_counter >> 8);
+    payload[7] = static_cast<uint8_t>(s_lte_counter & 0xFF);
+
+    if (!modem.socketSend(payload, sizeof(payload))) {
+        ESP_LOGE(LTE_TAG, "socketSend failed");
+        return false;
+    }
+
+    ESP_LOGI(LTE_TAG, "Heartbeat %u sent", static_cast<unsigned>(s_lte_counter));
+    ++s_lte_counter;
+    return true;
+}
+
+static void lte_tcp_task(void *arg)
+{
+    (void)arg;
+    ESP_LOGI(LTE_TAG, "LTE TCP task started");
+
+    sensor_state_publish_lte_registration(false);
+
+    if (!WalterModem::begin(static_cast<uart_port_t>(WALTER_LTE_UART_PORT))) {
+        ESP_LOGE(LTE_TAG, "WalterModem::begin failed on UART%d", WALTER_LTE_UART_PORT);
+        lte_runtime_notify(false, false, ESP_FAIL);
+        vTaskDelete(nullptr);
+        return;
+    }
+
+    if (strlen(WALTER_LTE_PIN) > 0) {
+        if (!WalterModem::unlockSIM(&s_lte_rsp, nullptr, nullptr, WALTER_LTE_PIN)) {
+            ESP_LOGE(LTE_TAG, "SIM unlock failed (result=%d)", (int)s_lte_rsp.result);
+            lte_runtime_notify(false, false, ESP_FAIL);
+            vTaskDelete(nullptr);
+            return;
+        }
+    }
+
+    const TickType_t interval_ticks = ms_to_ticks(WALTER_LTE_SEND_INTERVAL_MS);
+    bool link_ready = false;
+    bool runtime_enabled = s_lte_target_enabled.load();
+    lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
+
+    while (true) {
+        QueueHandle_t queue = s_lte_command_queue;
+        lte_runtime_cmd_t cmd;
+
+        if (!runtime_enabled) {
+            lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
+            if (link_ready) {
+                lte_close_socket();
+                lte_set_low_power();
+                link_ready = false;
+                lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
+            }
+
+            if (queue && xQueueReceive(queue, &cmd, portMAX_DELAY) == pdPASS) {
+                if (cmd == LTE_CMD_ENABLE || cmd == LTE_CMD_RESTART) {
+                    runtime_enabled = true;
+                    s_lte_target_enabled.store(true);
+                    lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
+                }
+            }
+            continue;
+        }
+
+        if (queue && xQueueReceive(queue, &cmd, 0) == pdPASS) {
+            if (cmd == LTE_CMD_DISABLE) {
+                runtime_enabled = false;
+                s_lte_target_enabled.store(false);
+                continue;
+            } else if (cmd == LTE_CMD_RESTART) {
+                if (link_ready) {
+                    lte_close_socket();
+                    lte_set_low_power();
+                    link_ready = false;
+                    lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
+                }
+            }
+        }
+
+        if (!link_ready) {
+            if (!lte_attach_network()) {
+                lte_runtime_notify(runtime_enabled, link_ready, ESP_FAIL);
+                if (queue && xQueueReceive(queue, &cmd, ms_to_ticks(WALTER_LTE_RETRY_DELAY_MS)) == pdPASS) {
+                    if (cmd == LTE_CMD_DISABLE) {
+                        runtime_enabled = false;
+                        s_lte_target_enabled.store(false);
+                    }
+                }
+                continue;
+            }
+
+            if (!lte_open_socket()) {
+                lte_close_socket();
+                lte_set_low_power();
+                lte_runtime_notify(runtime_enabled, link_ready, ESP_FAIL);
+                if (queue && xQueueReceive(queue, &cmd, ms_to_ticks(WALTER_LTE_RETRY_DELAY_MS)) == pdPASS) {
+                    if (cmd == LTE_CMD_DISABLE) {
+                        runtime_enabled = false;
+                        s_lte_target_enabled.store(false);
+                    }
+                }
+                continue;
+            }
+
+            link_ready = true;
+            lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
+        }
+
+        if (!lte_send_heartbeat()) {
+            lte_close_socket();
+            lte_set_low_power();
+            link_ready = false;
+            lte_runtime_notify(runtime_enabled, link_ready, ESP_FAIL);
+            if (queue && xQueueReceive(queue, &cmd, ms_to_ticks(WALTER_LTE_RETRY_DELAY_MS)) == pdPASS) {
+                if (cmd == LTE_CMD_DISABLE) {
+                    runtime_enabled = false;
+                    s_lte_target_enabled.store(false);
+                }
+            }
+            continue;
+        }
+
+        lte_update_cellinfo();
+
+        if (queue && xQueueReceive(queue, &cmd, interval_ticks) == pdPASS) {
+            if (cmd == LTE_CMD_DISABLE) {
+                runtime_enabled = false;
+                s_lte_target_enabled.store(false);
+            } else if (cmd == LTE_CMD_RESTART) {
+                if (link_ready) {
+                    lte_close_socket();
+                    lte_set_low_power();
+                    link_ready = false;
+                    lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
+                }
+            }
+        }
+    }
+}
+
+#endif // WALTER_ENABLE_LTE
 
 static esp_err_t sensor_subsystem_init(void)
 {
@@ -1687,6 +2942,12 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "womo_rs485_init() returned: %s (0x%x)", esp_err_to_name(rs485_err), rs485_err);
     if (rs485_err == ESP_OK) {
         ESP_LOGI(TAG, "RS485 initialized, starting communication tasks");
+        if (!s_rs485_cmd_result_queue) {
+            s_rs485_cmd_result_queue = xQueueCreate(8, sizeof(rs485_cmd_result_msg_t));
+            if (!s_rs485_cmd_result_queue) {
+                ESP_LOGE(TAG, "Failed to create RS485 command result queue");
+            }
+        }
         
         // Start RS485 TX task (sends sensor data)
         BaseType_t tx_created = xTaskCreate(
@@ -1715,6 +2976,28 @@ extern "C" void app_main(void)
         }
     } else {
         ESP_LOGW(TAG, "RS485 init failed: %s", esp_err_to_name(rs485_err));
+    }
+#endif
+
+#if WALTER_ENABLE_LTE
+    if (!s_lte_command_queue) {
+        s_lte_command_queue = xQueueCreate(8, sizeof(lte_runtime_cmd_t));
+        if (!s_lte_command_queue) {
+            ESP_LOGE(TAG, "Failed to create LTE command queue");
+        }
+    }
+
+    if (s_lte_command_queue) {
+        BaseType_t lte_created = xTaskCreate(
+            lte_tcp_task,
+            "lte_tcp",
+            WALTER_LTE_TASK_STACK,
+            nullptr,
+            WALTER_LTE_TASK_PRIORITY,
+            nullptr);
+        if (lte_created != pdPASS) {
+            ESP_LOGE(TAG, "Failed to create LTE TCP task");
+        }
     }
 #endif
 

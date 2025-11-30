@@ -69,6 +69,15 @@ typedef struct {
         uint8_t satellites;
         float confidence_m;
     } gps;
+
+    // LTE modem status
+    struct {
+        bool valid;
+        bool registered;
+        char operator_name[32];
+        float rsrp_dbm;
+        uint8_t signal_percent;
+    } lte;
 } womo_sensor_data_t;
 
 // Callback for received sensor data

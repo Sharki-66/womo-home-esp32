@@ -8,6 +8,7 @@ idf_component_register(
         "gui/womo_tank.c"
         "gui/womo_weather.c"
         "gui/womo_battery.c"
+        "gui/womo_attitude.c"
         "gui/womo_fonts_german.c"
         "gui/fonts/lv_font_montserrat_12_german.c"
         "gui/fonts/lv_font_montserrat_14_german.c"

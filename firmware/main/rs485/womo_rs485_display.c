@@ -16,7 +16,8 @@ static const char *TAG = "rs485_display";
 #define RS485_RX_GPIO       15  // Hardware connector pin (Waveshare: RXD=15)
 #define RS485_DE_GPIO       -1  // No DE pin on display side (receive only)
 #define RS485_BAUD_RATE     115200
-#define RS485_BUF_SIZE      1024
+#define RS485_BUF_SIZE      2048
+#define RS485_LINE_MAX      4096
 
 // State
 static bool s_initialized = false;
@@ -24,6 +25,57 @@ static womo_sensor_data_t s_latest_data = {0};
 static SemaphoreHandle_t s_data_mutex = NULL;
 static womo_rs485_data_cb_t s_data_callback = NULL;
 static void *s_callback_user_data = NULL;
+
+static void update_bno_from_json(const cJSON *imu, womo_sensor_data_t *data)
+{
+    if (!imu || !data) {
+        return;
+    }
+
+    const cJSON *yaw = cJSON_GetObjectItem(imu, "yaw_deg");
+    if (cJSON_IsNumber(yaw)) {
+        data->bno.heading_deg = (float)yaw->valuedouble;
+    }
+
+    const cJSON *pitch = cJSON_GetObjectItem(imu, "pitch_deg");
+    if (cJSON_IsNumber(pitch)) {
+        data->bno.pitch_deg = (float)pitch->valuedouble;
+    }
+
+    const cJSON *roll = cJSON_GetObjectItem(imu, "roll_deg");
+    if (cJSON_IsNumber(roll)) {
+        data->bno.roll_deg = (float)roll->valuedouble;
+    }
+
+    const cJSON *direction = cJSON_GetObjectItem(imu, "hdg");
+    if (cJSON_IsString(direction) && direction->valuestring) {
+        strncpy(data->bno.direction, direction->valuestring, sizeof(data->bno.direction) - 1);
+        data->bno.direction[sizeof(data->bno.direction) - 1] = '\0';
+    }
+
+    const cJSON *cal = cJSON_GetObjectItem(imu, "cal");
+    if (cJSON_IsObject(cal)) {
+        const cJSON *cal_sys = cJSON_GetObjectItem(cal, "sys");
+        const cJSON *cal_gyro = cJSON_GetObjectItem(cal, "gyro");
+        const cJSON *cal_acc = cJSON_GetObjectItem(cal, "acc");
+        const cJSON *cal_mag = cJSON_GetObjectItem(cal, "mag");
+
+        if (cJSON_IsNumber(cal_sys)) {
+            data->bno.cal_sys = (uint8_t)cal_sys->valuedouble;
+        }
+        if (cJSON_IsNumber(cal_gyro)) {
+            data->bno.cal_gyro = (uint8_t)cal_gyro->valuedouble;
+        }
+        if (cJSON_IsNumber(cal_acc)) {
+            data->bno.cal_accel = (uint8_t)cal_acc->valuedouble;
+        }
+        if (cJSON_IsNumber(cal_mag)) {
+            data->bno.cal_mag = (uint8_t)cal_mag->valuedouble;
+        }
+    }
+
+    data->bno.valid = true;
+}
 
 // Forward declarations
 static void rs485_rx_task(void *arg);
@@ -183,7 +235,7 @@ static void rs485_rx_task(void *arg)
     ESP_LOGI(TAG, "RS485 RX task started (stack: 8KB)");
     
     uint8_t buffer[RS485_BUF_SIZE];
-    char line_buffer[RS485_BUF_SIZE];
+    char line_buffer[RS485_LINE_MAX];
     size_t line_pos = 0;
     uint32_t packet_count = 0;
     
@@ -209,6 +261,9 @@ static void rs485_rx_task(void *arg)
                     }
                 } else if (line_pos < sizeof(line_buffer) - 1) {
                     line_buffer[line_pos++] = c;
+                } else {
+                    ESP_LOGW(TAG, "Line buffer overflow (%d bytes) - dropping partial JSON", line_pos);
+                    line_pos = 0;
                 }
             }
         }
@@ -421,6 +476,42 @@ static void parse_json_packet(const char *json_str)
             if (sat) data.gps.satellites = (uint8_t)sat->valueint;
             if (conf) data.gps.confidence_m = (float)conf->valuedouble;
         }
+
+        // LTE status
+        cJSON *lte = cJSON_GetObjectItem(root, "lte");
+        if (lte && cJSON_IsObject(lte)) {
+            cJSON *registered = cJSON_GetObjectItem(lte, "registered");
+            cJSON *operator_name = cJSON_GetObjectItem(lte, "operator");
+            cJSON *rsrp = cJSON_GetObjectItem(lte, "rsrp_dbm");
+            cJSON *signal_pct = cJSON_GetObjectItem(lte, "signal_pct");
+
+            if (registered || operator_name || rsrp || signal_pct) {
+                data.lte.valid = true;
+
+                if (registered) {
+                    if (cJSON_IsBool(registered)) {
+                        data.lte.registered = cJSON_IsTrue(registered);
+                    } else if (cJSON_IsNumber(registered)) {
+                        data.lte.registered = registered->valueint != 0;
+                    }
+                }
+
+                if (operator_name && cJSON_IsString(operator_name)) {
+                    snprintf(data.lte.operator_name, sizeof(data.lte.operator_name), "%s", operator_name->valuestring);
+                }
+
+                if (rsrp && cJSON_IsNumber(rsrp)) {
+                    data.lte.rsrp_dbm = (float)rsrp->valuedouble;
+                }
+
+                if (signal_pct && cJSON_IsNumber(signal_pct)) {
+                    int value = signal_pct->valueint;
+                    if (value < 0) value = 0;
+                    if (value > 100) value = 100;
+                    data.lte.signal_percent = (uint8_t)value;
+                }
+            }
+        }
         
         // Store latest data
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
@@ -433,31 +524,64 @@ static void parse_json_packet(const char *json_str)
             }
         }
         
-        ESP_LOGI(TAG, "Received full data: BNO=%s(%.1f°) Weight=%.1fkg Temp=%.1fC",
-                 data.bno.direction, data.bno.heading_deg, 
-                 data.hx711.weight_sum_kg, data.bme680.temperature_c);
+        if (data.hx711.valid) {
+            ESP_LOGI(TAG, "Received full data: BNO=%s(%.1f°) Weights A=%.1fkg B=%.1fkg Temp=%.1fC",
+                     data.bno.direction, data.bno.heading_deg,
+                     data.hx711.weight_a_kg, data.hx711.weight_b_kg, data.bme680.temperature_c);
+        } else {
+            ESP_LOGI(TAG, "Received full data: BNO=%s(%.1f°) Temp=%.1fC",
+                     data.bno.direction, data.bno.heading_deg, data.bme680.temperature_c);
+        }
     }
-    // Parse level data (BNO only)
+    else if (strcmp(type, "imu") == 0) {
+        cJSON *imu = cJSON_GetObjectItem(root, "imu");
+        if (!cJSON_IsObject(imu)) {
+            ESP_LOGW(TAG, "IMU packet missing imu object");
+        } else {
+            womo_sensor_data_t updated = {0};
+            bool notify = false;
+
+            if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+                updated = s_latest_data;
+
+                cJSON *ts = cJSON_GetObjectItem(root, "ts");
+                if (cJSON_IsNumber(ts)) {
+                    updated.timestamp_ms = (uint64_t)ts->valuedouble;
+                }
+
+                update_bno_from_json(imu, &updated);
+
+                s_latest_data = updated;
+                xSemaphoreGive(s_data_mutex);
+                notify = true;
+            }
+
+            if (notify && s_data_callback) {
+                s_data_callback(&updated, s_callback_user_data);
+            }
+        }
+    }
+    // Parse level data (legacy BNO only)
     else if (strcmp(type, "level") == 0) {
         cJSON *bno = cJSON_GetObjectItem(root, "bno");
         if (bno && xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
             s_latest_data.bno.valid = true;
-            
+
             cJSON *h = cJSON_GetObjectItem(bno, "h");
             cJSON *r = cJSON_GetObjectItem(bno, "r");
             cJSON *p = cJSON_GetObjectItem(bno, "p");
             cJSON *dir = cJSON_GetObjectItem(bno, "dir");
-            
+
             if (h) s_latest_data.bno.heading_deg = (float)h->valuedouble;
             if (r) s_latest_data.bno.roll_deg = (float)r->valuedouble;
             if (p) s_latest_data.bno.pitch_deg = (float)p->valuedouble;
             if (dir && cJSON_IsString(dir)) {
-                strncpy(s_latest_data.bno.direction, dir->valuestring, 
-                       sizeof(s_latest_data.bno.direction) - 1);
+                strncpy(s_latest_data.bno.direction, dir->valuestring,
+                        sizeof(s_latest_data.bno.direction) - 1);
             }
-            
+
             xSemaphoreGive(s_data_mutex);
-            
+
             // Fast update for leveling - callback with partial data
             if (s_data_callback) {
                 womo_sensor_data_t level_data = {0};

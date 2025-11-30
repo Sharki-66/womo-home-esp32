@@ -63,7 +63,8 @@
 #define WALTER_BNO055_I2C_ADDR 0x28
 #define WALTER_BNO055_STARTUP_DELAY_MS 650
 #define WALTER_BNO055_POST_RESET_DELAY_MS 700
-#define WALTER_BNO055_POLL_INTERVAL_MS 10000U  // Changed from 1000ms to 10000ms (10 seconds)
+#define WALTER_BNO055_POLL_INTERVAL_MS 300U    // Update IMU cadence to 0.3 seconds
+#define WALTER_BNO055_MAX_EULER_STEP_DEG 0.0f  // Disable Euler jump suppression for raw values
 
 // ====================================================================================
 // BME680 Environmental Sensor
@@ -131,6 +132,24 @@
 #define WALTER_RS485_DE_GPIO 16  // Used as RTS for RS485 half-duplex driver enable
 #define WALTER_RS485_BUFFER_SIZE 512
 #define WALTER_RS485_READ_TIMEOUT_MS 50
+
+// ====================================================================================
+// LTE Modem / TCP Uplink
+// ====================================================================================
+#define WALTER_ENABLE_LTE 1
+#define WALTER_LTE_UART_PORT 1
+#define WALTER_LTE_APN "web.vodafone.de"
+#define WALTER_LTE_USERNAME ""
+#define WALTER_LTE_PASSWORD ""
+#define WALTER_LTE_PIN ""
+#define WALTER_LTE_ATTACH_TIMEOUT_SEC 180
+#define WALTER_LTE_RETRY_DELAY_MS 10000U
+#define WALTER_LTE_TCP_HOST "walterdemo.quickspot.io"
+#define WALTER_LTE_TCP_PORT 1999
+#define WALTER_LTE_TCP_SECURE 0
+#define WALTER_LTE_SEND_INTERVAL_MS 30000U
+#define WALTER_LTE_TASK_STACK 4096
+#define WALTER_LTE_TASK_PRIORITY 5
 
 // ====================================================================================
 // Analog Monitor (Battery & Tank Levels)
