@@ -154,6 +154,13 @@ void lvgl_port_unlock(void);
  */
 bool lvgl_port_notify_rgb_vsync(void);
 
+/**
+ * @brief Manually override the touch polling rate.
+ *
+ * @param[in] enable true enables fast sampling, false restores adaptive timing.
+ */
+void lvgl_touch_set_fast_mode(bool enable);
+
 #ifdef __cplusplus
 }
 #endif

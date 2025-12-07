@@ -30,6 +30,18 @@ typedef struct {
     bool auto_reconnect;
 } womo_wifi_config_t;
 
+typedef struct {
+    char ssid[33];
+    wifi_auth_mode_t auth_mode;
+    int8_t rssi;
+    wifi_cipher_type_t pairwise_cipher;
+} womo_wifi_scan_result_t;
+
+typedef void (*womo_wifi_scan_callback_t)(const womo_wifi_scan_result_t *results,
+                                          size_t count,
+                                          esp_err_t status,
+                                          void *user_data);
+
 /**
  * @brief Initialize WiFi module
  * 
@@ -108,5 +120,8 @@ void womo_wifi_set_auto_reconnect(bool enable);
  * @return Error description string
  */
 const char* womo_wifi_get_last_error(void);
+
+esp_err_t womo_wifi_scan_async(womo_wifi_scan_callback_t callback, void *user_data);
+bool womo_wifi_is_scan_in_progress(void);
 
 #endif // WOMO_WIFI_H

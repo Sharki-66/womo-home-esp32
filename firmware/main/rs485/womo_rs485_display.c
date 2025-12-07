@@ -14,7 +14,7 @@ static const char *TAG = "rs485_display";
 #define RS485_UART_NUM      UART_NUM_1
 #define RS485_TX_GPIO       16  // Hardware connector pin (Waveshare: TXD=16)
 #define RS485_RX_GPIO       15  // Hardware connector pin (Waveshare: RXD=15)
-#define RS485_DE_GPIO       -1  // No DE pin on display side (receive only)
+#define RS485_DE_GPIO       -1  // DE handled by onboard transistor logic
 #define RS485_BAUD_RATE     115200
 #define RS485_BUF_SIZE      2048
 #define RS485_LINE_MAX      4096
@@ -25,6 +25,15 @@ static womo_sensor_data_t s_latest_data = {0};
 static SemaphoreHandle_t s_data_mutex = NULL;
 static womo_rs485_data_cb_t s_data_callback = NULL;
 static void *s_callback_user_data = NULL;
+static womo_rs485_event_cb_t s_event_callback = NULL;
+static void *s_event_user_data = NULL;
+
+static void rs485_emit_event(womo_rs485_event_t event)
+{
+    if (s_event_callback) {
+        s_event_callback(event, s_event_user_data);
+    }
+}
 
 static void update_bno_from_json(const cJSON *imu, womo_sensor_data_t *data)
 {
@@ -80,6 +89,32 @@ static void update_bno_from_json(const cJSON *imu, womo_sensor_data_t *data)
 // Forward declarations
 static void rs485_rx_task(void *arg);
 static void parse_json_packet(const char *json_str);
+static esp_err_t rs485_write_and_wait(const char *payload);
+
+static esp_err_t rs485_write_and_wait(const char *payload)
+{
+    if (!s_initialized || !payload) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    const size_t len = strlen(payload);
+    if (len == 0) {
+        return ESP_OK;
+    }
+
+    int written = uart_write_bytes(RS485_UART_NUM, payload, len);
+    if (written <= 0) {
+        return ESP_FAIL;
+    }
+
+    esp_err_t wait_err = uart_wait_tx_done(RS485_UART_NUM, pdMS_TO_TICKS(20));
+    if (wait_err != ESP_OK) {
+        ESP_LOGW(TAG, "uart_wait_tx_done failed: %s", esp_err_to_name(wait_err));
+        return wait_err;
+    }
+
+    return ESP_OK;
+}
 
 esp_err_t womo_rs485_display_init(void)
 {
@@ -122,8 +157,11 @@ esp_err_t womo_rs485_display_init(void)
     }
     
     // Set pins third - TX must be set even for RX-only to control DE/RE via transistor
-    err = uart_set_pin(RS485_UART_NUM, RS485_TX_GPIO, RS485_RX_GPIO, 
-                      UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    err = uart_set_pin(RS485_UART_NUM,
+                       RS485_TX_GPIO,
+                       RS485_RX_GPIO,
+                       UART_PIN_NO_CHANGE,
+                       UART_PIN_NO_CHANGE);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set UART pins: %s", esp_err_to_name(err));
         uart_driver_delete(RS485_UART_NUM);
@@ -135,17 +173,7 @@ esp_err_t womo_rs485_display_init(void)
              RS485_TX_GPIO, RS485_RX_GPIO);
     
     // Only set RS485 mode if we have a DE pin, otherwise use normal UART
-    if (RS485_DE_GPIO >= 0) {
-        err = uart_set_mode(RS485_UART_NUM, UART_MODE_RS485_HALF_DUPLEX);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to set RS485 mode: %s", esp_err_to_name(err));
-            uart_driver_delete(RS485_UART_NUM);
-            vSemaphoreDelete(s_data_mutex);
-            return err;
-        }
-    } else {
-        ESP_LOGI(TAG, "RS485 DE pin not configured - using plain UART mode");
-    }
+    ESP_LOGI(TAG, "RS485 DE pin not configured - using plain UART mode (transistor auto-DE)");
     
     // Start RX task with large stack (16KB for JSON parsing + LVGL callback + buffers)
     BaseType_t task_created = xTaskCreate(rs485_rx_task, "rs485_rx", 16384, NULL, 5, NULL);
@@ -167,6 +195,12 @@ void womo_rs485_set_data_callback(womo_rs485_data_cb_t callback, void *user_data
     s_callback_user_data = user_data;
 }
 
+void womo_rs485_set_event_callback(womo_rs485_event_cb_t callback, void *user_data)
+{
+    s_event_callback = callback;
+    s_event_user_data = user_data;
+}
+
 bool womo_rs485_get_latest_data(womo_sensor_data_t *data)
 {
     if (!data || !s_initialized) {
@@ -184,50 +218,54 @@ bool womo_rs485_get_latest_data(womo_sensor_data_t *data)
 
 esp_err_t womo_rs485_send_level_start(void)
 {
-    if (!s_initialized) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    
     const char *cmd = "{\"cmd\":\"level_start\"}\n";
-    int written = uart_write_bytes(RS485_UART_NUM, cmd, strlen(cmd));
-    ESP_LOGI(TAG, "Sent level_start command");
-    return (written > 0) ? ESP_OK : ESP_FAIL;
+    esp_err_t err = rs485_write_and_wait(cmd);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Sent level_start command");
+    }
+    return err;
 }
 
 esp_err_t womo_rs485_send_level_stop(void)
 {
-    if (!s_initialized) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    
     const char *cmd = "{\"cmd\":\"level_stop\"}\n";
-    int written = uart_write_bytes(RS485_UART_NUM, cmd, strlen(cmd));
-    ESP_LOGI(TAG, "Sent level_stop command");
-    return (written > 0) ? ESP_OK : ESP_FAIL;
+    esp_err_t err = rs485_write_and_wait(cmd);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Sent level_stop command");
+    }
+    return err;
 }
 
 esp_err_t womo_rs485_send_tare_a(void)
 {
-    if (!s_initialized) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    
     const char *cmd = "{\"cmd\":\"tare_a\"}\n";
-    int written = uart_write_bytes(RS485_UART_NUM, cmd, strlen(cmd));
-    ESP_LOGI(TAG, "Sent tare_a command");
-    return (written > 0) ? ESP_OK : ESP_FAIL;
+    esp_err_t err = rs485_write_and_wait(cmd);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Sent tare_a command");
+    }
+    return err;
 }
 
 esp_err_t womo_rs485_send_tare_b(void)
 {
-    if (!s_initialized) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    
     const char *cmd = "{\"cmd\":\"tare_b\"}\n";
-    int written = uart_write_bytes(RS485_UART_NUM, cmd, strlen(cmd));
-    ESP_LOGI(TAG, "Sent tare_b command");
-    return (written > 0) ? ESP_OK : ESP_FAIL;
+    esp_err_t err = rs485_write_and_wait(cmd);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Sent tare_b command");
+    }
+    return err;
+}
+
+esp_err_t womo_rs485_send_display_ready(void)
+{
+    const char *cmd = "{\"cmd\":\"display_ready\"}\n";
+    esp_err_t err = rs485_write_and_wait(cmd);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Sent display_ready acknowledgement");
+    } else {
+        ESP_LOGW(TAG, "Failed to send display_ready acknowledgement: %s", esp_err_to_name(err));
+    }
+    return err;
 }
 
 static void rs485_rx_task(void *arg)
@@ -279,6 +317,7 @@ static void parse_json_packet(const char *json_str)
     cJSON *root = cJSON_Parse(json_str);
     if (!root) {
         ESP_LOGW(TAG, "JSON parse failed: %s", json_str);
+        rs485_emit_event(WOMO_RS485_EVENT_INVALID_JSON);
         return;
     }
     
@@ -288,11 +327,33 @@ static void parse_json_packet(const char *json_str)
     if (!type_obj || !cJSON_IsString(type_obj)) {
         ESP_LOGW(TAG, "No type field");
         cJSON_Delete(root);
+        rs485_emit_event(WOMO_RS485_EVENT_INVALID_JSON);
         return;
     }
     
     const char *type = type_obj->valuestring;
     ESP_LOGI(TAG, "Type: %s", type);
+
+    if (strcmp(type, "hello") == 0) {
+        const cJSON *fw = cJSON_GetObjectItem(root, "fw");
+        const cJSON *uptime = cJSON_GetObjectItem(root, "uptime");
+        if (cJSON_IsString(fw)) {
+            ESP_LOGI(TAG, "Walter hello: fw=%s", fw->valuestring);
+        }
+        if (cJSON_IsNumber(uptime)) {
+            ESP_LOGI(TAG, "Walter uptime: %.0f s", uptime->valuedouble);
+        }
+        rs485_emit_event(WOMO_RS485_EVENT_HELLO);
+        womo_rs485_send_display_ready();
+        cJSON_Delete(root);
+        return;
+    }
+
+    if (strcmp(type, "hb") == 0) {
+        rs485_emit_event(WOMO_RS485_EVENT_HEARTBEAT);
+        cJSON_Delete(root);
+        return;
+    }
     
     // Parse full sensor data
     if (strcmp(type, "full") == 0) {
@@ -589,6 +650,10 @@ static void parse_json_packet(const char *json_str)
                 s_data_callback(&level_data, s_callback_user_data);
             }
         }
+    }
+    else {
+        ESP_LOGW(TAG, "Unrecognized RS485 packet type: %s", type);
+        rs485_emit_event(WOMO_RS485_EVENT_INVALID_JSON);
     }
     
     cJSON_Delete(root);

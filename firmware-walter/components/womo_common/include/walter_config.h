@@ -29,6 +29,12 @@
 #define WALTER_ENABLE_NAT 1
 
 // ====================================================================================
+// Web UI Configuration (SoftAP-hosted status page)
+// ====================================================================================
+#define WALTER_ENABLE_WEBUI 1
+#define WALTER_WEB_SERVER_PORT 80
+
+// ====================================================================================
 // Sensor Task Configuration
 // ====================================================================================
 #define WALTER_SENSOR_TASK_STACK 4096
@@ -67,6 +73,14 @@
 #define WALTER_BNO055_MAX_EULER_STEP_DEG 0.0f  // Disable Euler jump suppression for raw values
 
 // ====================================================================================
+// GPS / GNSS via Walter Modem
+// ====================================================================================
+#define WALTER_ENABLE_GPS 1
+#define WALTER_GPS_REQUEST_INTERVAL_MS 180000U   // request a fix every 3 minutes
+#define WALTER_GPS_RETRY_DELAY_MS 15000U         // wait 15s after a failed request
+#define WALTER_GPS_POLL_INTERVAL_MS 1000U        // poll GNSS fix buffer every second
+
+// ====================================================================================
 // BME680 Environmental Sensor
 // ====================================================================================
 #define WALTER_ENABLE_BME680 1
@@ -102,19 +116,20 @@
 #define WALTER_HX711_READY_TIMEOUT_MS 200U
 #define WALTER_HX711_READY_RETRY_COUNT 2
 #define WALTER_HX711_READY_BACKOFF_MS 50U
+#define WALTER_HX711_STARTUP_DELAY_MS 1000U  // Wartezeit nach dem Zuschalten der 3V3-Schiene
 #define WALTER_HX711_POLL_INTERVAL_MS 10000U  // 10 seconds cadence (slow weight changes)
 #define WALTER_HX711_GAIN_SETTING 1  // 1=Channel A 128x, 2=Channel B 32x, 3=Channel A 64x
 #define WALTER_HX711_AVG_SAMPLES 3   // Median of 3 samples with 15ms delay for 80Hz HX711
-#define WALTER_HX711_ENABLE_CHANNEL_B 1  // Both platforms working!
+#define WALTER_HX711_ENABLE_CHANNEL_B 1  // Enable once second load cell is connected
 
-// Platform A (on HX711 Channel B) - Raw values INCREASE with weight
-#define WALTER_HX711_OFFSET_A -49331  // Raw value at 0kg (empty platform) - Nov 4, 2025
-#define WALTER_HX711_SCALE_A 0.183f   // 7.2kg = 39319 counts → 0.183 g/count
+// Platform A (wired to HX711 Channel A @128x) - Raw values INCREASE with weight
+#define WALTER_HX711_OFFSET_A -283450  // 0 kg → raw ≈ -283450
+#define WALTER_HX711_SCALE_A 0.0389f   // 28 kg → raw Δ719400 ⇒ 0.039 g/count
 #define WALTER_HX711_INVERT_A 0       // Normal: (raw - OFFSET) * SCALE
 
-// Platform B (on HX711 Channel A) - Normal polarity  
-#define WALTER_HX711_OFFSET_B 4180    // Calibrated empty value
-#define WALTER_HX711_SCALE_B 0.04581f // 18kg = 392940 counts → 0.04581 g/count
+// Platform B (wired to HX711 Channel B @32x) - Normal polarity  
+#define WALTER_HX711_OFFSET_B  -72440  // 0 kg → raw ≈ -72440
+#define WALTER_HX711_SCALE_B 0.1553f   // 28 kg → raw Δ180240 ⇒ 0.155 g/count
 
 // HX711 plausibility thresholds (applied after conversion to kilograms)
 #define WALTER_HX711_MIN_KG            -5.0f
@@ -129,9 +144,12 @@
 #define WALTER_RS485_BAUDRATE 115200
 #define WALTER_RS485_TX_GPIO 17
 #define WALTER_RS485_RX_GPIO 18
-#define WALTER_RS485_DE_GPIO 16  // Used as RTS for RS485 half-duplex driver enable
+#define WALTER_RS485_DE_GPIO 15  // Used as RTS for RS485 half-duplex driver enable
 #define WALTER_RS485_BUFFER_SIZE 512
 #define WALTER_RS485_READ_TIMEOUT_MS 50
+#define WALTER_RS485_HELLO_PENDING_INTERVAL_MS 1000U   // Retry hello every 1s until display_ready
+#define WALTER_RS485_HELLO_READY_INTERVAL_MS 10000U    // Refresh hello every 10s after ACK
+#define WALTER_RS485_HEARTBEAT_INTERVAL_MS 2000U       // Heartbeat cadence once display is ready
 
 // ====================================================================================
 // LTE Modem / TCP Uplink

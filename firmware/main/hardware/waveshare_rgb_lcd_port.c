@@ -17,7 +17,7 @@ static i2c_master_bus_handle_t s_i2c_bus = NULL;
 static i2c_master_dev_handle_t s_ch422g_cfg_handle = NULL;
 static i2c_master_dev_handle_t s_ch422g_data_handle = NULL;
 
-#define GT911_I2C_FREQ_HZ        100000
+#define GT911_I2C_FREQ_HZ        400000
 
 #define CH422G_ADDR_CFG   0x24
 #define CH422G_ADDR_DATA  0x38

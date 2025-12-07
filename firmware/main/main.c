@@ -13,7 +13,7 @@
 #include "gui/womo_gas_bottle.h"
 #include "gui/womo_weather.h"
 #include "gui/womo_battery.h"
-#include "gui/womo_attitude.h"
+#include "gui/womo_connectivity_modal.h"
 #include "gui/womo_tank.h"
 #include "gui/womo_fonts_german.h"
 #include "network/womo_wifi.h"
@@ -29,6 +29,7 @@
 #include <string.h>
 #include <math.h>
 #include <limits.h>
+#include <stdbool.h>
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -53,13 +54,16 @@ static lv_obj_t *title_label = NULL;
 static lv_obj_t *time_label = NULL;
 static lv_obj_t *date_label = NULL;
 static lv_obj_t *status_label = NULL;
+static char status_label_last_text[80] = "";
 static lv_obj_t *wifi_label = NULL;
 static lv_obj_t *temp_label = NULL;   // Temperature display
 static lv_obj_t *humid_label = NULL;  // Humidity display
 static lv_obj_t *press_label = NULL;  // Pressure display
 static lv_obj_t *gas_label = NULL;    // Gas resistance display
 static lv_obj_t *air_title_label = NULL; // Air value heading
-static lv_obj_t *imu_label = NULL;    // Orientation display
+static lv_obj_t *imu_pitch_label = NULL;
+static lv_obj_t *imu_roll_label = NULL;
+static lv_obj_t *imu_heading_label = NULL;
 static lv_obj_t *gps_label = NULL;    // GPS position
 static lv_obj_t *fresh_water_caption_label = NULL; // Text unter Frischwasser-Tank
 static lv_obj_t *grey_water_caption_label = NULL;  // Text unter Grauwasser-Tank
@@ -68,19 +72,8 @@ static lv_obj_t *rs485_debug_label = NULL; // RS485 debug status
 static womo_weather_t *weather_widget = NULL; // Weather widget
 static womo_battery_t *main_battery = NULL;   // Battery 1 widget
 static womo_battery_t *secondary_battery = NULL; // Battery 2 widget
-static womo_attitude_t *attitude_widget = NULL; // Kuenstlicher Horizont
-static lv_obj_t *attitude_button = NULL; // Button to toggle attitude window
-static lv_obj_t *attitude_button_label = NULL; // Label on the attitude button
-static lv_obj_t *attitude_close_button = NULL; // Close button inside the attitude window
-static lv_obj_t *attitude_close_label = NULL;  // Label for the close button
 static lv_timer_t *ui_update_timer = NULL; // Periodic UI/IMU refresh timer
-static TaskHandle_t attitude_task_handle = NULL; // Dedicated task for HUD updates
-
-static bool attitude_visible = false;
 static const uint32_t UI_UPDATE_INTERVAL_DEFAULT_MS = 500;
-static const uint32_t UI_UPDATE_INTERVAL_ATTITUDE_MS = 300;
-static uint32_t ui_update_period_ms = UI_UPDATE_INTERVAL_DEFAULT_MS;
-static const int ATTITUDE_LOCK_TIMEOUT_MS = -1; // Block until LVGL lock is available
 
 typedef enum {
     WOMO_IMU_ORIENTATION_FRONT = 0,
@@ -152,31 +145,133 @@ static womo_sensor_data_t latest_sensor_data = {0};
 static uint32_t latest_packet_count = 0;
 static bool latest_data_valid = false;
 static rs485_missing_t latest_missing_snapshot = {0};
-static bool latest_attitude_pending = false;
-static int64_t latest_attitude_arrival_us = 0;
-static float attitude_last_roll = NAN;
-static float attitude_last_pitch = NAN;
+static int64_t rs485_last_packet_time_us = 0;
+static int64_t rs485_watchdog_start_us = 0;
+static bool rs485_timeout_active = false;
+static const int64_t RS485_TIMEOUT_US = 5LL * 60LL * 1000000LL;  // 5 Minuten in Mikrosekunden
+static bool rs485_waiting_for_handshake = false;
+static bool rs485_invalid_data_active = false;
+
+typedef enum {
+    SYSTEM_STATUS_SOURCE_MANUAL = 0,
+    SYSTEM_STATUS_SOURCE_RS485_TIMEOUT,
+    SYSTEM_STATUS_SOURCE_RS485_WAITING,
+    SYSTEM_STATUS_SOURCE_RS485_INVALID,
+    SYSTEM_STATUS_SOURCE_WIFI,
+    SYSTEM_STATUS_SOURCE_BATTERY,
+    SYSTEM_STATUS_SOURCE_SENSOR,
+    SYSTEM_STATUS_SOURCE_MAX
+} system_status_source_t;
+
+typedef struct {
+    bool active;
+    womo_status_level_t level;
+    womo_string_id_t detail_id;
+} system_status_entry_t;
+
+static system_status_entry_t system_status_entries[SYSTEM_STATUS_SOURCE_MAX] = {0};
+static womo_status_level_t system_status_current_level = WOMO_STATUS_OK;
+static womo_string_id_t system_status_current_detail = STR_MAX;
+static womo_status_level_t system_status_manual_level = WOMO_STATUS_OK;
+static portMUX_TYPE system_status_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
 // RS485 data callback
 static void rs485_data_received(const womo_sensor_data_t *data, void *user_data);
-static bool attitude_process_snapshot_locked(const womo_sensor_data_t *snapshot,
-                                             int64_t arrival_us,
-                                             bool log_latency);
+static void imu_labels_update(bool has_data,
+                              float roll_deg,
+                              float pitch_deg,
+                              float heading_deg,
+                              const char *direction);
 static void openweather_update_cb(const womo_weather_http_data_t *data, void *user_data);
 static womo_weather_condition_t map_openweather_condition(int weather_id, bool is_night);
 static womo_weather_condition_t map_day_condition_to_night(womo_weather_condition_t condition);
 static void update_connectivity_label(void);
 static uint8_t wifi_rssi_to_percent(int8_t rssi);
-static void attitude_set_visible(bool visible);
-static void attitude_button_event_handler(lv_event_t *e);
-static void attitude_close_button_event_handler(lv_event_t *e);
 static void ui_update_timer_cb(lv_timer_t *timer);
-static void attitude_task(void *arg);
-static void update_ui_timer_period(void);
+static void wifi_label_event_cb(lv_event_t *event);
+static void connectivity_snapshot_fill(womo_connectivity_snapshot_t *snapshot,
+                                       const womo_lte_status_t *lte_snapshot,
+                                       uint8_t wifi_percent,
+                                       const char *wifi_ssid,
+                                       womo_wifi_status_t wifi_status,
+                                       bool wifi_connected);
 static void imu_orientation_set(womo_imu_orientation_t orientation, bool persist);
 static esp_err_t imu_orientation_store_to_nvs(uint8_t value);
 static void imu_orientation_apply(float *roll_deg, float *pitch_deg);
 static void imu_orientation_load_from_nvs(void);
+static void rs485_event_handler(womo_rs485_event_t event, void *user_data);
+
+static void imu_labels_update(bool has_data,
+                              float roll_deg,
+                              float pitch_deg,
+                              float heading_deg,
+                              const char *direction)
+{
+    if (!imu_pitch_label && !imu_roll_label && !imu_heading_label) {
+        return;
+    }
+
+    static bool last_has_data = false;
+    static char last_pitch_text[48] = "";
+    static char last_roll_text[48] = "";
+    static char last_heading_text[64] = "";
+
+    const char *pitch_placeholder = "Pitch: --.-°";
+    const char *roll_placeholder = "Roll : --.-°";
+    const char *heading_placeholder = "-- (---°)";
+
+    if (has_data) {
+        char pitch_buf[48];
+        char roll_buf[48];
+        char heading_buf[64];
+        const char *dir = (direction && direction[0]) ? direction : "?";
+
+        snprintf(pitch_buf, sizeof(pitch_buf), "Pitch: %+0.1f°", pitch_deg);
+        snprintf(roll_buf, sizeof(roll_buf), "Roll : %+0.1f°", roll_deg);
+        snprintf(heading_buf, sizeof(heading_buf), "%s (%.1f°)", dir, heading_deg);
+
+        if (imu_pitch_label && strcmp(pitch_buf, last_pitch_text) != 0) {
+            lv_label_set_text(imu_pitch_label, pitch_buf);
+            strncpy(last_pitch_text, pitch_buf, sizeof(last_pitch_text) - 1);
+            last_pitch_text[sizeof(last_pitch_text) - 1] = '\0';
+        }
+        if (imu_roll_label && strcmp(roll_buf, last_roll_text) != 0) {
+            lv_label_set_text(imu_roll_label, roll_buf);
+            strncpy(last_roll_text, roll_buf, sizeof(last_roll_text) - 1);
+            last_roll_text[sizeof(last_roll_text) - 1] = '\0';
+        }
+        if (imu_heading_label && strcmp(heading_buf, last_heading_text) != 0) {
+            lv_label_set_text(imu_heading_label, heading_buf);
+            strncpy(last_heading_text, heading_buf, sizeof(last_heading_text) - 1);
+            last_heading_text[sizeof(last_heading_text) - 1] = '\0';
+        }
+
+        last_has_data = true;
+        return;
+    }
+
+    if (!last_has_data) {
+        return;
+    }
+
+    if (imu_pitch_label && strcmp(pitch_placeholder, last_pitch_text) != 0) {
+        lv_label_set_text(imu_pitch_label, pitch_placeholder);
+        strncpy(last_pitch_text, pitch_placeholder, sizeof(last_pitch_text) - 1);
+        last_pitch_text[sizeof(last_pitch_text) - 1] = '\0';
+    }
+    if (imu_roll_label && strcmp(roll_placeholder, last_roll_text) != 0) {
+        lv_label_set_text(imu_roll_label, roll_placeholder);
+        strncpy(last_roll_text, roll_placeholder, sizeof(last_roll_text) - 1);
+        last_roll_text[sizeof(last_roll_text) - 1] = '\0';
+    }
+    if (imu_heading_label && strcmp(heading_placeholder, last_heading_text) != 0) {
+        lv_label_set_text(imu_heading_label, heading_placeholder);
+        strncpy(last_heading_text, heading_placeholder, sizeof(last_heading_text) - 1);
+        last_heading_text[sizeof(last_heading_text) - 1] = '\0';
+    }
+
+    last_has_data = false;
+}
 
 static void apply_text_theme_colors(void)
 {
@@ -191,35 +286,15 @@ static void apply_text_theme_colors(void)
     if (press_label) lv_obj_set_style_text_color(press_label, text_color, 0);
     if (humid_label) lv_obj_set_style_text_color(humid_label, text_color, 0);
     if (temp_label) lv_obj_set_style_text_color(temp_label, text_color, 0);
-    if (imu_label) {
-        lv_obj_set_style_text_color(imu_label, lv_color_white(), 0);
-        lv_obj_set_style_bg_color(imu_label, lv_color_hex(0x1F3B6F), 0);
-        lv_obj_set_style_bg_opa(imu_label, LV_OPA_COVER, 0);
-    }
+    if (imu_pitch_label) lv_obj_set_style_text_color(imu_pitch_label, lv_color_white(), 0);
+    if (imu_roll_label) lv_obj_set_style_text_color(imu_roll_label, lv_color_white(), 0);
+    if (imu_heading_label) lv_obj_set_style_text_color(imu_heading_label, lv_color_white(), 0);
     if (gps_label) lv_obj_set_style_text_color(gps_label, text_color, 0);
     lv_color_t tank_label_color = lv_color_black();
     if (fresh_water_caption_label) lv_obj_set_style_text_color(fresh_water_caption_label, tank_label_color, 0);
     if (grey_water_caption_label) lv_obj_set_style_text_color(grey_water_caption_label, tank_label_color, 0);
     if (fresh_water_tank) womo_tank_set_text_color(fresh_water_tank, tank_label_color);
     if (grey_water_tank) womo_tank_set_text_color(grey_water_tank, tank_label_color);
-    if (attitude_button) {
-        lv_color_t btn_color = womo_theme_is_daytime() ? lv_color_hex(0x254D7A) : lv_color_hex(0x112A4F);
-        lv_color_t btn_checked_color = womo_theme_is_daytime() ? lv_color_hex(0x2F69C2) : lv_color_hex(0x1B4A9A);
-        lv_obj_set_style_bg_color(attitude_button, btn_color, 0);
-        lv_obj_set_style_bg_opa(attitude_button, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(attitude_button, btn_checked_color, LV_STATE_CHECKED);
-    }
-    if (attitude_button_label) {
-        lv_obj_set_style_text_color(attitude_button_label, lv_color_white(), 0);
-    }
-    if (attitude_close_button) {
-        lv_color_t close_bg = womo_theme_is_daytime() ? lv_color_hex(0x7A1F2F) : lv_color_hex(0x511722);
-        lv_obj_set_style_bg_color(attitude_close_button, close_bg, 0);
-        lv_obj_set_style_bg_opa(attitude_close_button, LV_OPA_COVER, 0);
-    }
-    if (attitude_close_label) {
-        lv_obj_set_style_text_color(attitude_close_label, lv_color_white(), 0);
-    }
 }
 
 static uint8_t wifi_rssi_to_percent(int8_t rssi)
@@ -269,20 +344,206 @@ static void update_connectivity_label(void)
     lv_label_set_text(wifi_label, combined);
 }
 
-static void update_ui_timer_period(void)
+static void connectivity_snapshot_fill(womo_connectivity_snapshot_t *snapshot,
+                                       const womo_lte_status_t *lte_snapshot,
+                                       uint8_t wifi_percent,
+                                       const char *wifi_ssid,
+                                       womo_wifi_status_t wifi_status,
+                                       bool wifi_connected)
 {
-    if (!ui_update_timer) {
+    if (!snapshot) {
         return;
     }
 
-    uint32_t target_period = attitude_visible ? UI_UPDATE_INTERVAL_ATTITUDE_MS : UI_UPDATE_INTERVAL_DEFAULT_MS;
-    if (ui_update_period_ms == target_period) {
+    memset(snapshot, 0, sizeof(*snapshot));
+    snapshot->wifi_connected = wifi_connected;
+    snapshot->wifi_status = wifi_status;
+    snapshot->wifi_signal_percent = wifi_percent;
+    if (wifi_ssid) {
+        strncpy(snapshot->wifi_ssid, wifi_ssid, sizeof(snapshot->wifi_ssid) - 1);
+        snapshot->wifi_ssid[sizeof(snapshot->wifi_ssid) - 1] = '\0';
+    }
+
+    if (lte_snapshot) {
+        snapshot->lte_valid = lte_snapshot->valid;
+        snapshot->lte_registered = lte_snapshot->registered;
+        snapshot->lte_signal_percent = lte_snapshot->signal_percent;
+        if (lte_snapshot->operator_name[0] != '\0') {
+            strncpy(snapshot->lte_operator,
+                    lte_snapshot->operator_name,
+                    sizeof(snapshot->lte_operator) - 1);
+            snapshot->lte_operator[sizeof(snapshot->lte_operator) - 1] = '\0';
+        }
+    }
+}
+
+static void status_label_apply_text(const char *text)
+{
+    if (!status_label || !text) {
         return;
     }
 
-    lv_timer_set_period(ui_update_timer, target_period);
-    ui_update_period_ms = target_period;
-    ESP_LOGI(TAG, "UI/IMU timer set to %u ms", target_period);
+    if (strcmp(text, status_label_last_text) == 0) {
+        return;
+    }
+
+    lv_label_set_text(status_label, text);
+    strncpy(status_label_last_text, text, sizeof(status_label_last_text) - 1);
+    status_label_last_text[sizeof(status_label_last_text) - 1] = '\0';
+}
+
+static womo_string_id_t status_level_to_locale_id(womo_status_level_t level)
+{
+    switch (level) {
+        case WOMO_STATUS_OK:
+            return STR_STATUS_OK;
+        case WOMO_STATUS_WARNING:
+            return STR_STATUS_WARNING;
+        case WOMO_STATUS_ERROR:
+            return STR_STATUS_ERROR;
+        case WOMO_STATUS_CRITICAL:
+            return STR_STATUS_CRITICAL;
+        default:
+            return STR_STATUS_OK;
+    }
+}
+
+static void status_label_update_default(void)
+{
+    womo_status_level_t current = womo_theme_get_status();
+    womo_string_id_t status_id = status_level_to_locale_id(current);
+
+    char buf[80];
+    snprintf(buf,
+             sizeof(buf),
+             "%s %s",
+             womo_locale_get_string(STR_STATUS),
+             womo_locale_get_string(status_id));
+    status_label_apply_text(buf);
+}
+
+static void status_label_show_detail(womo_status_level_t level, const char *detail)
+{
+    if (!detail || detail[0] == '\0') {
+        return;
+    }
+
+    char buf[96];
+    snprintf(buf,
+             sizeof(buf),
+             "%s %s (%s)",
+             womo_locale_get_string(STR_STATUS),
+             womo_locale_get_string(status_level_to_locale_id(level)),
+             detail);
+    status_label_apply_text(buf);
+}
+
+static void system_status_apply(bool force_label_update)
+{
+    system_status_entry_t entries_copy[SYSTEM_STATUS_SOURCE_MAX];
+    taskENTER_CRITICAL(&system_status_spinlock);
+    memcpy(entries_copy, system_status_entries, sizeof(entries_copy));
+    taskEXIT_CRITICAL(&system_status_spinlock);
+
+    womo_status_level_t resolved = WOMO_STATUS_OK;
+    womo_string_id_t detail_id = STR_MAX;
+    bool detail_valid = false;
+
+    for (int i = 0; i < SYSTEM_STATUS_SOURCE_MAX; ++i) {
+        if (!entries_copy[i].active) {
+            continue;
+        }
+
+        if (entries_copy[i].level > resolved) {
+            resolved = entries_copy[i].level;
+            detail_id = entries_copy[i].detail_id;
+            detail_valid = (detail_id < STR_MAX);
+        } else if (entries_copy[i].level == resolved && !detail_valid && entries_copy[i].detail_id < STR_MAX) {
+            detail_id = entries_copy[i].detail_id;
+            detail_valid = true;
+        }
+    }
+
+    bool level_changed = (resolved != system_status_current_level);
+    bool detail_changed = (detail_id != system_status_current_detail);
+
+    system_status_current_level = resolved;
+    system_status_current_detail = detail_id;
+
+    womo_theme_set_status(resolved);
+    if (level_changed) {
+        womo_theme_apply_to_screen(NULL);
+    }
+
+    if (detail_valid) {
+        if (force_label_update || level_changed || detail_changed) {
+            status_label_show_detail(resolved, womo_locale_get_string(detail_id));
+        }
+    } else if (force_label_update || level_changed || detail_changed) {
+        status_label_update_default();
+    }
+}
+
+static void system_status_raise(system_status_source_t source,
+                                womo_status_level_t level,
+                                womo_string_id_t detail_id)
+{
+    if (source >= SYSTEM_STATUS_SOURCE_MAX) {
+        return;
+    }
+
+    taskENTER_CRITICAL(&system_status_spinlock);
+    system_status_entries[source].active = true;
+    system_status_entries[source].level = level;
+    system_status_entries[source].detail_id = detail_id;
+    taskEXIT_CRITICAL(&system_status_spinlock);
+
+    system_status_apply(false);
+}
+
+static void system_status_clear(system_status_source_t source)
+{
+    if (source >= SYSTEM_STATUS_SOURCE_MAX) {
+        return;
+    }
+
+    taskENTER_CRITICAL(&system_status_spinlock);
+    system_status_entries[source].active = false;
+    system_status_entries[source].level = WOMO_STATUS_OK;
+    system_status_entries[source].detail_id = STR_MAX;
+    if (source == SYSTEM_STATUS_SOURCE_MANUAL) {
+        system_status_manual_level = WOMO_STATUS_OK;
+    }
+    taskEXIT_CRITICAL(&system_status_spinlock);
+
+    system_status_apply(false);
+}
+
+static void system_status_cycle_manual(void)
+{
+    womo_status_level_t next_level = WOMO_STATUS_OK;
+    switch (system_status_manual_level) {
+        case WOMO_STATUS_OK:
+            next_level = WOMO_STATUS_WARNING;
+            break;
+        case WOMO_STATUS_WARNING:
+            next_level = WOMO_STATUS_ERROR;
+            break;
+        case WOMO_STATUS_ERROR:
+            next_level = WOMO_STATUS_CRITICAL;
+            break;
+        case WOMO_STATUS_CRITICAL:
+        default:
+            next_level = WOMO_STATUS_OK;
+            break;
+    }
+
+    system_status_manual_level = next_level;
+    if (next_level == WOMO_STATUS_OK) {
+        system_status_clear(SYSTEM_STATUS_SOURCE_MANUAL);
+    } else {
+        system_status_raise(SYSTEM_STATUS_SOURCE_MANUAL, next_level, STR_MAX);
+    }
 }
 
 static esp_err_t imu_orientation_store_to_nvs(uint8_t value)
@@ -379,6 +640,34 @@ static void imu_orientation_load_from_nvs(void)
     }
 
     imu_orientation_set((womo_imu_orientation_t)stored, false);
+}
+
+static void rs485_event_handler(womo_rs485_event_t event, void *user_data)
+{
+    (void)user_data;
+
+    switch (event) {
+        case WOMO_RS485_EVENT_HELLO:
+            ESP_LOGI(TAG, "RS485 hello empfangen - Walter ist bereit");
+            if (rs485_waiting_for_handshake) {
+                rs485_waiting_for_handshake = false;
+                system_status_clear(SYSTEM_STATUS_SOURCE_RS485_WAITING);
+            }
+            break;
+        case WOMO_RS485_EVENT_HEARTBEAT:
+            // Heartbeats dienen aktuell nur zur Diagnose
+            break;
+        case WOMO_RS485_EVENT_INVALID_JSON:
+            if (!rs485_invalid_data_active) {
+                rs485_invalid_data_active = true;
+                system_status_raise(SYSTEM_STATUS_SOURCE_RS485_INVALID,
+                                    WOMO_STATUS_ERROR,
+                                    STR_RS485_INVALID_DATA);
+            }
+            break;
+        default:
+            break;
+    }
 }
 
 
@@ -498,19 +787,12 @@ static void screen_event_handler(lv_event_t * e)
             if (rs485_packet_count == 0 && rs485_debug_label) {
                 lv_label_set_text(rs485_debug_label, womo_locale_get_string(STR_RS485_WAITING));
             }
+            system_status_apply(true);
             // Timer callback will update time/date with new language on next cycle
         }
         // Right side: cycle status (keep for system status simulation)
         else if (point.x > 400) {
-            womo_theme_cycle_status();
-            
-            // Update status label with new status
-            const womo_string_id_t status_ids[] = {STR_STATUS_OK, STR_STATUS_WARNING, STR_STATUS_ERROR, STR_STATUS_CRITICAL};
-            char status_buf[40];
-            snprintf(status_buf, sizeof(status_buf), "%s %s", 
-                    womo_locale_get_string(STR_STATUS), 
-                    womo_locale_get_string(status_ids[womo_theme_get_status()]));
-            lv_label_set_text(status_label, status_buf);
+            system_status_cycle_manual();
         }
         // Note: Theme mode is now fully automatic based on real time - no manual control needed
     }
@@ -525,6 +807,11 @@ static void ui_update_timer_cb(lv_timer_t *timer)
     rs485_missing_t missing_snapshot = (rs485_missing_t){0};
     uint32_t packet_count = 0;
     bool data_valid = false;
+    bool rs485_timeout_snapshot = false;
+    bool rs485_waiting_snapshot = false;
+    int64_t last_packet_us = 0;
+    const int64_t now_us = esp_timer_get_time();
+    bool modal_open = womo_connectivity_modal_is_open();
 
     taskENTER_CRITICAL(&display_data_spinlock);
     snapshot = latest_sensor_data;
@@ -532,7 +819,36 @@ static void ui_update_timer_cb(lv_timer_t *timer)
     missing_snapshot = latest_missing_snapshot;
     packet_count = latest_packet_count;
     data_valid = latest_data_valid;
+    last_packet_us = rs485_last_packet_time_us;
+    rs485_timeout_snapshot = rs485_timeout_active;
+    rs485_waiting_snapshot = rs485_waiting_for_handshake;
     taskEXIT_CRITICAL(&display_data_spinlock);
+
+    int64_t reference_us = last_packet_us ? last_packet_us : rs485_watchdog_start_us;
+    bool timed_out_now = false;
+    if (reference_us > 0) {
+        timed_out_now = (now_us - reference_us) >= RS485_TIMEOUT_US;
+    }
+
+    if (timed_out_now != rs485_timeout_snapshot) {
+        taskENTER_CRITICAL(&display_data_spinlock);
+        rs485_timeout_active = timed_out_now;
+        taskEXIT_CRITICAL(&display_data_spinlock);
+        rs485_timeout_snapshot = timed_out_now;
+
+        double elapsed_s = (reference_us > 0) ?
+                           (double)(now_us - reference_us) / 1000000.0 : 0.0;
+        if (timed_out_now) {
+            ESP_LOGE(TAG, "RS485 Timeout: keine neuen Pakete seit %.1f s", elapsed_s);
+            system_status_raise(SYSTEM_STATUS_SOURCE_RS485_TIMEOUT,
+                                WOMO_STATUS_ERROR,
+                                STR_RS485_TIMEOUT_SOURCE);
+            system_status_clear(SYSTEM_STATUS_SOURCE_RS485_WAITING);
+        } else {
+            ESP_LOGI(TAG, "RS485 Timeout aufgehoben (Unterbrechung %.1f s)", elapsed_s);
+            system_status_clear(SYSTEM_STATUS_SOURCE_RS485_TIMEOUT);
+        }
+    }
 
     // Connectivity label (WiFi + LTE)
     if (wifi_label) {
@@ -540,15 +856,17 @@ static void ui_update_timer_cb(lv_timer_t *timer)
         char wifi_line[64];
         char lte_line[64];
         char combined[140];
+        bool wifi_connected_now = womo_wifi_is_connected();
+        uint8_t wifi_percent = 0;
 
-        if (womo_wifi_is_connected()) {
+        if (wifi_connected_now) {
             char ssid[33] = {0};
             if (womo_wifi_get_ssid(ssid, sizeof(ssid)) != ESP_OK || ssid[0] == '\0') {
                 strcpy(ssid, "unknown");
             }
             int8_t rssi = womo_wifi_get_rssi();
-            uint8_t percent = wifi_rssi_to_percent(rssi);
-            snprintf(wifi_line, sizeof(wifi_line), "WiFi: %s %u%%", ssid, percent);
+            wifi_percent = wifi_rssi_to_percent(rssi);
+            snprintf(wifi_line, sizeof(wifi_line), "WiFi: %s %u%%", ssid, wifi_percent);
         } else {
             snprintf(wifi_line, sizeof(wifi_line), "WiFi: offline 0%%");
         }
@@ -569,13 +887,51 @@ static void ui_update_timer_cb(lv_timer_t *timer)
             strncpy(last_connectivity_text, combined, sizeof(last_connectivity_text) - 1);
             last_connectivity_text[sizeof(last_connectivity_text) - 1] = '\0';
         }
+
+        if (modal_open) {
+            char modal_ssid[33] = {0};
+            if (wifi_connected_now) {
+                if (womo_wifi_get_ssid(modal_ssid, sizeof(modal_ssid)) != ESP_OK) {
+                    modal_ssid[0] = '\0';
+                }
+            }
+            womo_connectivity_snapshot_t modal_snapshot;
+            womo_wifi_status_t wifi_status = womo_wifi_get_status();
+            connectivity_snapshot_fill(&modal_snapshot,
+                                       &lte_snapshot,
+                                       wifi_percent,
+                                       modal_ssid,
+                                       wifi_status,
+                                       wifi_connected_now);
+            static womo_connectivity_snapshot_t last_modal_snapshot = {0};
+            if (memcmp(&modal_snapshot, &last_modal_snapshot, sizeof(modal_snapshot)) != 0) {
+                womo_connectivity_modal_refresh(&modal_snapshot);
+                last_modal_snapshot = modal_snapshot;
+            }
+        }
     }
 
     // RS485 debug label
     if (rs485_debug_label) {
         static uint32_t last_packet_count = 0;
         static char last_rs485_text[60] = "";
-        if (!data_valid) {
+        if (rs485_timeout_snapshot) {
+            const char *timeout_text = womo_locale_get_string(STR_RS485_TIMEOUT_LABEL);
+            if (strcmp(timeout_text, last_rs485_text) != 0) {
+                lv_label_set_text(rs485_debug_label, timeout_text);
+                strncpy(last_rs485_text, timeout_text, sizeof(last_rs485_text) - 1);
+                last_rs485_text[sizeof(last_rs485_text) - 1] = '\0';
+            }
+            lv_obj_set_style_text_color(rs485_debug_label, lv_color_make(255, 0, 0), 0);
+        } else if (rs485_waiting_snapshot) {
+            const char *waiting_hello = womo_locale_get_string(STR_RS485_WAITING_HELLO);
+            if (strcmp(waiting_hello, last_rs485_text) != 0) {
+                lv_label_set_text(rs485_debug_label, waiting_hello);
+                strncpy(last_rs485_text, waiting_hello, sizeof(last_rs485_text) - 1);
+                last_rs485_text[sizeof(last_rs485_text) - 1] = '\0';
+            }
+            lv_obj_set_style_text_color(rs485_debug_label, lv_color_make(255, 165, 0), 0);
+        } else if (!data_valid) {
             const char *waiting = womo_locale_get_string(STR_RS485_WAITING);
             if (strcmp(waiting, last_rs485_text) != 0) {
                 lv_label_set_text(rs485_debug_label, waiting);
@@ -596,34 +952,19 @@ static void ui_update_timer_cb(lv_timer_t *timer)
         }
     }
 
-    if (!data_valid) {
+    if (!data_valid || modal_open) {
         return;
     }
 
     float disp_roll = snapshot.bno.roll_deg;
     float disp_pitch = snapshot.bno.pitch_deg;
-    if (snapshot.bno.valid) {
+    float heading_deg = snapshot.bno.heading_deg;
+    bool imu_valid = snapshot.bno.valid;
+    if (imu_valid) {
         imu_orientation_apply(&disp_roll, &disp_pitch);
     }
 
-    // IMU label
-    if (imu_label) {
-        static char last_imu_text[100] = "";
-        char buf[100];
-        if (snapshot.bno.valid) {
-            const char *dir = snapshot.bno.direction[0] ? snapshot.bno.direction : "?";
-            snprintf(buf, sizeof(buf), "%s %s %.1f° R:%.1f° P:%.1f°",
-                     womo_locale_get_string(STR_IMU), dir, snapshot.bno.heading_deg,
-                     disp_roll, disp_pitch);
-        } else {
-            snprintf(buf, sizeof(buf), "%s --", womo_locale_get_string(STR_IMU));
-        }
-        if (strcmp(buf, last_imu_text) != 0) {
-            lv_label_set_text(imu_label, buf);
-            strncpy(last_imu_text, buf, sizeof(last_imu_text) - 1);
-            last_imu_text[sizeof(last_imu_text) - 1] = '\0';
-        }
-    }
+    imu_labels_update(imu_valid, disp_roll, disp_pitch, heading_deg, snapshot.bno.direction);
 
     // BME680 labels
     if (gas_label || press_label || humid_label || temp_label) {
@@ -791,165 +1132,6 @@ static void ui_update_timer_cb(lv_timer_t *timer)
     }
 }
 
-static void attitude_task(void *arg)
-{
-    (void)arg;
-
-    int64_t last_process_us = 0;
-
-    while (1) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-        while (1) {
-            bool pending = false;
-            bool data_valid = false;
-            bool visible = false;
-            womo_sensor_data_t snapshot = (womo_sensor_data_t){0};
-            int64_t arrival_us = 0;
-
-            taskENTER_CRITICAL(&display_data_spinlock);
-            pending = latest_attitude_pending;
-            if (pending) {
-                snapshot = latest_sensor_data;
-                data_valid = latest_data_valid;
-                arrival_us = latest_attitude_arrival_us;
-                latest_attitude_pending = false;
-                latest_attitude_arrival_us = 0;
-            }
-            visible = attitude_visible;
-            taskEXIT_CRITICAL(&display_data_spinlock);
-
-            if (!pending) {
-                break;
-            }
-
-            if (!visible || !data_valid || !snapshot.bno.valid || !attitude_widget) {
-                continue;
-            }
-
-            if (!lvgl_port_lock(ATTITUDE_LOCK_TIMEOUT_MS)) {
-                ESP_LOGW(TAG, "Attitude task: failed to lock LVGL, retrying");
-                continue;
-            }
-
-            bool updated = attitude_process_snapshot_locked(&snapshot, arrival_us, true);
-            lvgl_port_unlock();
-
-            if (updated) {
-                int64_t end_us = esp_timer_get_time();
-                if (last_process_us != 0) {
-                    int64_t delta_us = end_us - last_process_us;
-                    if (delta_us > 200000) {
-                        ESP_LOGW(TAG, "HUD interval gap: %lld us", (long long)delta_us);
-                    } else {
-                        ESP_LOGD(TAG, "HUD interval: %lld us", (long long)delta_us);
-                    }
-                }
-                last_process_us = end_us;
-            }
-        }
-    }
-}
-
-static bool attitude_process_snapshot_locked(const womo_sensor_data_t *snapshot,
-                                             int64_t arrival_us,
-                                             bool log_latency)
-{
-    if (!snapshot || !attitude_widget || !attitude_widget->container) {
-        return false;
-    }
-
-    if (!snapshot->bno.valid) {
-        return false;
-    }
-
-    float disp_roll = snapshot->bno.roll_deg;
-    float disp_pitch = snapshot->bno.pitch_deg;
-    imu_orientation_apply(&disp_roll, &disp_pitch);
-
-    bool needs_update = !isfinite(attitude_last_roll) || !isfinite(attitude_last_pitch) ||
-                        disp_roll != attitude_last_roll || disp_pitch != attitude_last_pitch;
-
-    if (!needs_update) {
-        return false;
-    }
-
-    womo_attitude_update(attitude_widget, disp_roll, disp_pitch);
-    attitude_last_roll = disp_roll;
-    attitude_last_pitch = disp_pitch;
-
-    if (log_latency && arrival_us > 0) {
-        int64_t end_us = esp_timer_get_time();
-        ESP_LOGI(TAG, "HUD latency: %lld us", (long long)(end_us - arrival_us));
-    }
-
-    return true;
-}
-
-static void attitude_set_visible(bool visible)
-{
-    if (!attitude_widget || !attitude_widget->container) {
-        return;
-    }
-
-    bool visibility_changed = (visible != attitude_visible);
-    attitude_visible = visible;
-
-    if (visible) {
-        if (lv_obj_has_flag(attitude_widget->container, LV_OBJ_FLAG_HIDDEN)) {
-            lv_obj_clear_flag(attitude_widget->container, LV_OBJ_FLAG_HIDDEN);
-        }
-        lv_obj_move_foreground(attitude_widget->container);
-        if (attitude_button && !lv_obj_has_state(attitude_button, LV_STATE_CHECKED)) {
-            lv_obj_add_state(attitude_button, LV_STATE_CHECKED);
-        }
-    } else {
-        if (!lv_obj_has_flag(attitude_widget->container, LV_OBJ_FLAG_HIDDEN)) {
-            lv_obj_add_flag(attitude_widget->container, LV_OBJ_FLAG_HIDDEN);
-        }
-        if (attitude_button && lv_obj_has_state(attitude_button, LV_STATE_CHECKED)) {
-            lv_obj_clear_state(attitude_button, LV_STATE_CHECKED);
-        }
-    }
-
-    if (visibility_changed) {
-        update_ui_timer_period();
-        if (attitude_visible) {
-            taskENTER_CRITICAL(&display_data_spinlock);
-            if (latest_data_valid && latest_sensor_data.bno.valid) {
-                latest_attitude_pending = true;
-                latest_attitude_arrival_us = 0;
-            }
-            taskEXIT_CRITICAL(&display_data_spinlock);
-            if (attitude_task_handle) {
-                xTaskNotifyGive(attitude_task_handle);
-            }
-        }
-    }
-}
-
-static void attitude_button_event_handler(lv_event_t *e)
-{
-    if (lv_event_get_code(e) == LV_EVENT_VALUE_CHANGED) {
-        lv_obj_t *btn = lv_event_get_target(e);
-        if (!attitude_widget || !attitude_widget->container) {
-            if (lv_obj_has_state(btn, LV_STATE_CHECKED)) {
-                lv_obj_clear_state(btn, LV_STATE_CHECKED);
-            }
-            return;
-        }
-        bool checked = lv_obj_has_state(btn, LV_STATE_CHECKED);
-        attitude_set_visible(checked);
-    }
-}
-
-static void attitude_close_button_event_handler(lv_event_t *e)
-{
-    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        attitude_set_visible(false);
-    }
-}
-
 // Timer callback for updating time display
 static void time_update_timer_cb(lv_timer_t *timer)
 {
@@ -1103,6 +1285,35 @@ static void openweather_update_cb(const womo_weather_http_data_t *data, void *us
     }
 }
 
+static void wifi_label_event_cb(lv_event_t *event)
+{
+    if (!event || lv_event_get_code(event) != LV_EVENT_CLICKED) {
+        return;
+    }
+
+    bool wifi_connected = womo_wifi_is_connected();
+    womo_wifi_status_t wifi_status = womo_wifi_get_status();
+    uint8_t wifi_percent = 0;
+    char ssid[33] = {0};
+
+    if (wifi_connected) {
+        int8_t rssi = womo_wifi_get_rssi();
+        wifi_percent = wifi_rssi_to_percent(rssi);
+        if (womo_wifi_get_ssid(ssid, sizeof(ssid)) != ESP_OK) {
+            ssid[0] = '\0';
+        }
+    }
+
+    womo_connectivity_snapshot_t snapshot;
+    connectivity_snapshot_fill(&snapshot,
+                               &lte_status,
+                               wifi_percent,
+                               ssid,
+                               wifi_status,
+                               wifi_connected);
+    womo_connectivity_modal_show(lv_scr_act(), &snapshot);
+}
+
 void app_main()
 {
     // Initialize i2cdev FIRST (needed by display for CH422G GPIO expander)
@@ -1111,6 +1322,9 @@ void app_main()
     
     // Initialize time management
     womo_time_init();
+    rs485_watchdog_start_us = esp_timer_get_time();
+    rs485_last_packet_time_us = rs485_watchdog_start_us;
+    rs485_timeout_active = false;
     
     // Initialize WiFi
     ESP_LOGI(TAG, "Initializing WiFi...");
@@ -1144,6 +1358,11 @@ void app_main()
     if (womo_rs485_display_init() == ESP_OK) {
         ESP_LOGI(TAG, "RS485 initialized - will receive data from Walter");
         womo_rs485_set_data_callback(rs485_data_received, NULL);
+        womo_rs485_set_event_callback(rs485_event_handler, NULL);
+        rs485_waiting_for_handshake = true;
+        system_status_raise(SYSTEM_STATUS_SOURCE_RS485_WAITING,
+                            WOMO_STATUS_WARNING,
+                            STR_RS485_WAITING_HELLO);
     } else {
         ESP_LOGW(TAG, "RS485 init failed - continuing without external sensors");
     }
@@ -1209,6 +1428,8 @@ void app_main()
         lv_obj_set_style_text_color(wifi_label, lv_color_black(), 0);
         lv_obj_set_style_text_align(wifi_label, LV_TEXT_ALIGN_LEFT, 0);
         lv_obj_align(wifi_label, LV_ALIGN_TOP_LEFT, 10, 10);
+        lv_obj_add_flag(wifi_label, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(wifi_label, wifi_label_event_cb, LV_EVENT_CLICKED, NULL);
         update_connectivity_label();
         
         // Weather data (top right) - Gas first, all one font size larger
@@ -1253,62 +1474,43 @@ void app_main()
         lv_obj_set_style_text_align(temp_label, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_align(temp_label, LV_ALIGN_TOP_RIGHT, -10, 110);
 
-    // Andere Sensoren in die Mitte
-    imu_label = lv_label_create(screen);
-    snprintf(init_buf, sizeof(init_buf), "%s --", womo_locale_get_string(STR_IMU));
-    lv_label_set_text(imu_label, init_buf);
-    lv_label_set_long_mode(imu_label, LV_LABEL_LONG_WRAP);
-    lv_obj_set_style_text_font(imu_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(imu_label, lv_color_white(), 0);
-    lv_obj_set_width(imu_label, 280);
-    lv_obj_align(imu_label, LV_ALIGN_CENTER, 0, 20);
-    lv_obj_move_foreground(imu_label);
-    lv_obj_set_style_bg_color(imu_label, lv_color_hex(0x1F3B6F), 0);
-    lv_obj_set_style_bg_opa(imu_label, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(imu_label, 6, 0);
-    lv_obj_set_style_pad_hor(imu_label, 8, 0);
-    lv_obj_set_style_pad_ver(imu_label, 4, 0);
-    lv_obj_set_style_border_width(imu_label, 0, 0);
-    
-    // Toggle button to show the artificial horizon popup
-    attitude_button = lv_btn_create(screen);
-    lv_obj_set_size(attitude_button, 130, 36);
-    lv_obj_align(attitude_button, LV_ALIGN_BOTTOM_MID, 0, -80);
-    lv_obj_add_flag(attitude_button, LV_OBJ_FLAG_CHECKABLE);
-    lv_obj_set_style_radius(attitude_button, 10, 0);
-    lv_obj_set_style_border_width(attitude_button, 0, 0);
-    lv_obj_add_event_cb(attitude_button, attitude_button_event_handler, LV_EVENT_ALL, NULL);
-    attitude_button_label = lv_label_create(attitude_button);
-    lv_label_set_text(attitude_button_label, "Horizont");
-    lv_obj_center(attitude_button_label);
-    lv_obj_set_style_text_font(attitude_button_label, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(attitude_button_label, lv_color_white(), 0);
-
-    lv_coord_t display_height = lv_disp_get_ver_res(NULL);
-    if (display_height <= 0) {
-        display_height = 260; // fallback to previous default
+    // IMU-Werte als freistehende Labels (ca. 40% von oben, 30% vom rechten Rand)
+    lv_coord_t disp_w = lv_disp_get_hor_res(NULL);
+    lv_coord_t disp_h = lv_disp_get_ver_res(NULL);
+    if (disp_w <= 0) {
+        disp_w = 800;
+    }
+    if (disp_h <= 0) {
+        disp_h = 480;
     }
 
-    attitude_widget = womo_attitude_create(lv_layer_top(), display_height);
-    if (attitude_widget && attitude_widget->container) {
-        attitude_close_button = lv_btn_create(attitude_widget->container);
-        lv_obj_set_size(attitude_close_button, 36, 36);
-        lv_obj_align(attitude_close_button, LV_ALIGN_TOP_RIGHT, -6, 6);
-        lv_obj_set_style_radius(attitude_close_button, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_border_width(attitude_close_button, 0, 0);
-        lv_obj_add_event_cb(attitude_close_button, attitude_close_button_event_handler, LV_EVENT_CLICKED, NULL);
-
-        attitude_close_label = lv_label_create(attitude_close_button);
-        lv_label_set_text(attitude_close_label, "X");
-        lv_obj_center(attitude_close_label);
-        lv_obj_set_style_text_font(attitude_close_label, &lv_font_montserrat_16, 0);
-
-        lv_obj_add_flag(attitude_widget->container, LV_OBJ_FLAG_HIDDEN);
-    } else {
-        ESP_LOGW(TAG, "Failed to create attitude widget");
+    lv_coord_t right_margin = (lv_coord_t)lrintf(disp_w * 0.30f) - 30;
+    if (right_margin < 0) {
+        right_margin = 0;
     }
+    lv_coord_t top_offset = (lv_coord_t)lrintf(disp_h * 0.40f) - 40;
+    if (top_offset < 0) {
+        top_offset = 0;
+    }
+    lv_coord_t line_spacing = 24;
 
-    attitude_set_visible(false);
+    imu_pitch_label = lv_label_create(screen);
+    lv_label_set_text(imu_pitch_label, "Pitch: --.-°");
+    lv_obj_set_style_text_font(imu_pitch_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(imu_pitch_label, lv_color_white(), 0);
+    lv_obj_align(imu_pitch_label, LV_ALIGN_TOP_RIGHT, -right_margin, top_offset);
+
+    imu_roll_label = lv_label_create(screen);
+    lv_label_set_text(imu_roll_label, "Roll : --.-°");
+    lv_obj_set_style_text_font(imu_roll_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(imu_roll_label, lv_color_white(), 0);
+    lv_obj_align(imu_roll_label, LV_ALIGN_TOP_RIGHT, -right_margin, top_offset + line_spacing);
+
+    imu_heading_label = lv_label_create(screen);
+    lv_label_set_text(imu_heading_label, "-- (---°)");
+    lv_obj_set_style_text_font(imu_heading_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(imu_heading_label, lv_color_white(), 0);
+    lv_obj_align(imu_heading_label, LV_ALIGN_TOP_RIGHT, -right_margin, top_offset + (line_spacing * 2));
 
     // GPS label (erstelle später, wenn nötig)
     gps_label = NULL;
@@ -1367,25 +1569,66 @@ void app_main()
         ESP_LOGW(TAG, "Failed to create weather widget");
     }
     
-    // Create first battery widget (Battery 1) - at bottom edge
-    main_battery = womo_battery_create(screen, 250, 420);  // Bottom edge: y=420 (480-60 for battery height)
+    const lv_coord_t battery_bottom_margin = 4;
+
+    // Create first battery widget (Battery 1) - KFZ Batterie
+    main_battery = womo_battery_create(screen, 0, 0);
     if (main_battery) {
         // Set 12V battery voltage range: 10.5V (0%) to 14.4V (100%)
         womo_battery_set_voltage_range(main_battery, 10.5f, 14.4f);
         womo_battery_set_no_data(main_battery);
         womo_battery_set_show_percent(main_battery, false); // Hide percentage for clean look
+
+        // Position: 4/5 der Bildschirmbreite und 3/4 der Bildschirmhöhe (zentriert auf den Widgetmaßen)
+        lv_coord_t car_width = lv_obj_get_width(main_battery->container);
+        lv_coord_t car_height = lv_obj_get_height(main_battery->container);
+        lv_coord_t car_x = (lv_coord_t)((disp_w * 4) / 5) - (car_width / 2);
+        lv_coord_t car_y = (lv_coord_t)((disp_h * 3) / 4) - (car_height / 2);
+        if (car_x < 0) {
+            car_x = 0;
+        }
+        if ((car_x + car_width) > disp_w) {
+            car_x = disp_w - car_width;
+        }
+        if (car_y < 0) {
+            car_y = 0;
+        }
+        if ((car_y + car_height) > disp_h) {
+            car_y = disp_h - car_height;
+        }
+        womo_battery_set_pos(main_battery, car_x, car_y);
         ESP_LOGI(TAG, "Battery 1 widget created successfully");
     } else {
         ESP_LOGW(TAG, "Failed to create battery 1 widget");
     }
     
-    // Create second battery widget (Battery 2) - right next to first one at bottom
-    secondary_battery = womo_battery_create(screen, 320, 420);  // Same y position, 70px to the right
+    // Create second battery widget (Battery 2) - OMO Batterie
+    secondary_battery = womo_battery_create(screen, 0, 0);
     if (secondary_battery) {
         // Same voltage range as first battery
         womo_battery_set_voltage_range(secondary_battery, 10.5f, 14.4f);
         womo_battery_set_no_data(secondary_battery);
         womo_battery_set_show_percent(secondary_battery, false); // Hide percentage for clean look
+
+        // Position: 1/3 der Bildschirmbreite und 2/3 der Bildschirmhöhe (zentriert)
+        lv_coord_t omo_width = lv_obj_get_width(secondary_battery->container);
+        lv_coord_t omo_height = lv_obj_get_height(secondary_battery->container);
+        lv_coord_t omo_x = (lv_coord_t)(disp_w / 3) - (omo_width / 2);
+        lv_coord_t omo_y = (lv_coord_t)((disp_h * 2) / 3) - (omo_height / 2);
+        if (omo_x < 0) {
+            omo_x = 0;
+        }
+        if (omo_x + omo_width > disp_w) {
+            omo_x = disp_w - omo_width;
+        }
+        if (omo_y < 0) {
+            omo_y = 0;
+        }
+        if (omo_y + omo_height > disp_h) {
+            omo_y = disp_h - omo_height - battery_bottom_margin;
+        }
+
+        womo_battery_set_pos(secondary_battery, omo_x, omo_y);
         ESP_LOGI(TAG, "Battery 2 widget created successfully");
     } else {
         ESP_LOGW(TAG, "Failed to create battery 2 widget");
@@ -1402,20 +1645,15 @@ void app_main()
         
         // Create status label (right bottom - higher to avoid FPS overlay)
         status_label = lv_label_create(screen);
-        char status_buf[40];
-        snprintf(status_buf, sizeof(status_buf), "%s %s", 
-                womo_locale_get_string(STR_STATUS), 
-                womo_locale_get_string(STR_STATUS_OK));
-        lv_label_set_text(status_label, status_buf);
+        status_label_last_text[0] = '\0';
+        system_status_apply(true);
         lv_obj_set_style_text_color(status_label, lv_color_black(), 0);
         lv_obj_align(status_label, LV_ALIGN_BOTTOM_LEFT, 553, -10);  // 20px weiter rechts: 533+20 = 553px, bottom -10px
         
     // Create LVGL timer to update time every second
     lv_timer_create(time_update_timer_cb, 1000, NULL);
     ui_update_timer = lv_timer_create(ui_update_timer_cb, UI_UPDATE_INTERVAL_DEFAULT_MS, NULL);
-    if (ui_update_timer) {
-        ui_update_period_ms = UI_UPDATE_INTERVAL_DEFAULT_MS;
-    } else {
+    if (!ui_update_timer) {
         ESP_LOGW(TAG, "Failed to create UI update timer");
     }
 
@@ -1426,14 +1664,6 @@ void app_main()
         lvgl_port_unlock();
     }
 
-    BaseType_t att_task_ret = xTaskCreatePinnedToCore(attitude_task, "attitude_task", 4096, NULL,
-                                                      tskIDLE_PRIORITY + 3, &attitude_task_handle, 1);
-    if (att_task_ret != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create attitude task");
-    } else {
-        xTaskNotifyGive(attitude_task_handle);
-    }
-    
     // Connect to WiFi in background
     ESP_LOGI(TAG, "Connecting to WiFi: %s", WIFI_SSID);
     if (womo_wifi_connect(WIFI_SSID, WIFI_PASSWORD, WIFI_MAX_RETRY) == ESP_OK) {
@@ -1464,17 +1694,37 @@ static void rs485_data_received(const womo_sensor_data_t *data, void *user_data)
         return;
     }
 
+    if (rs485_waiting_for_handshake) {
+        rs485_waiting_for_handshake = false;
+        system_status_clear(SYSTEM_STATUS_SOURCE_RS485_WAITING);
+        ESP_LOGI(TAG, "RS485 handshake abgeschlossen (erstes Datenpaket)");
+    }
+
+    if (rs485_invalid_data_active) {
+        rs485_invalid_data_active = false;
+        system_status_clear(SYSTEM_STATUS_SOURCE_RS485_INVALID);
+    }
+
     rs485_packet_count++;
-    static int64_t last_packet_ts = 0;
     int64_t now_us = esp_timer_get_time();
-    int64_t delta_us = (last_packet_ts == 0) ? 0 : now_us - last_packet_ts;
-    last_packet_ts = now_us;
-    ESP_LOGI(TAG, "rs485_data_received: packet %lu (Δ%lld us)", rs485_packet_count, (long long)delta_us);
+    int64_t previous_us = 0;
+    bool timeout_was_active = false;
+
+    taskENTER_CRITICAL(&display_data_spinlock);
+    previous_us = rs485_last_packet_time_us;
+    rs485_last_packet_time_us = now_us;
+    timeout_was_active = rs485_timeout_active;
+    rs485_timeout_active = false;
+    taskEXIT_CRITICAL(&display_data_spinlock);
+
+    int64_t delta_us = (previous_us == 0) ? 0 : (now_us - previous_us);
+    if (timeout_was_active) {
+        ESP_LOGI(TAG, "RS485 Timeout beendet, Empfang nach %.1f s wieder aktiv",
+                 (double)delta_us / 1000000.0);
+    }
+    ESP_LOGD(TAG, "rs485_data_received: packet %lu (Δ%lld us)", rs485_packet_count, (long long)delta_us);
 
     womo_sensor_data_t snapshot = *data;
-    if (snapshot.bno.valid) {
-        latest_attitude_pending = true;
-    }
 
     if (snapshot.bno.valid && (rs485_packet_count % 20 == 0)) {
         const char *dir = snapshot.bno.direction[0] ? snapshot.bno.direction : "?";
@@ -1608,29 +1858,11 @@ static void rs485_data_received(const womo_sensor_data_t *data, void *user_data)
         }
     }
 
-    bool immediate_done = false;
-    if (attitude_visible && attitude_widget) {
-        if (lvgl_port_lock(ATTITUDE_LOCK_TIMEOUT_MS)) {
-            immediate_done = attitude_process_snapshot_locked(&snapshot, now_us, true);
-            lvgl_port_unlock();
-        }
-    }
-
     taskENTER_CRITICAL(&display_data_spinlock);
     latest_sensor_data = snapshot;
     latest_packet_count = rs485_packet_count;
     latest_missing_snapshot = rs485_missing_counter;
     latest_data_valid = true;
-    bool horizon_trigger_required = false;
-    if (snapshot.bno.valid) {
-        latest_attitude_pending = !immediate_done;
-        latest_attitude_arrival_us = immediate_done ? 0 : now_us;
-        horizon_trigger_required = !immediate_done;
-    }
     taskEXIT_CRITICAL(&display_data_spinlock);
-
-    if (horizon_trigger_required && attitude_task_handle && attitude_visible) {
-        xTaskNotifyGive(attitude_task_handle);
-    }
 }
 

@@ -19,6 +19,7 @@ menu "Example Configuration"
             range 0 10
             help
                 Maximum number of WiFi connection retry attempts. Set to 0 for infinite retries.
+
     endmenu
 
     menu "Display"

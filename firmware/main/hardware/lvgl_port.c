@@ -18,6 +18,45 @@
 static const char *TAG = "lv_port";                      // Tag for logging
 static SemaphoreHandle_t lvgl_mux;                       // LVGL mutex for synchronization
 static TaskHandle_t lvgl_task_handle = NULL;             // Handle for the LVGL task
+static lv_indev_t *touch_indev = NULL;                   // Registered touch input device
+
+#define TOUCH_FAST_PERIOD_MS     4U
+#define TOUCH_NORMAL_PERIOD_MS   12U
+#define TOUCH_FAST_HOLD_MS       180U
+#define TOUCH_RELEASE_FILTER_MS  40U
+static uint32_t touch_last_activity = 0;
+static uint32_t touch_current_period = TOUCH_NORMAL_PERIOD_MS;
+static bool touch_fast_forced = false;
+typedef struct {
+    bool is_pressed;
+    lv_point_t last_point;
+    uint32_t last_sample_tick;
+} touch_state_t;
+
+static touch_state_t touch_state = {0};
+
+static void touch_set_read_period(uint32_t period_ms)
+{
+    if (!touch_indev || !touch_indev->driver || !touch_indev->driver->read_timer) {
+        return;
+    }
+    if (touch_current_period == period_ms) {
+        return;
+    }
+    lv_timer_set_period(touch_indev->driver->read_timer, period_ms);
+    touch_current_period = period_ms;
+}
+
+void lvgl_touch_set_fast_mode(bool enable)
+{
+    touch_fast_forced = enable;
+    if (enable) {
+        touch_last_activity = lv_tick_get();
+        touch_set_read_period(TOUCH_FAST_PERIOD_MS);
+    } else if (!touch_state.is_pressed) {
+        touch_set_read_period(TOUCH_NORMAL_PERIOD_MS);
+    }
+}
 
 #if EXAMPLE_LVGL_PORT_ROTATION_DEGREE != 0
 // Function to get the next frame buffer for double buffering
@@ -434,6 +473,7 @@ static void touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
     uint16_t touchpad_x; // Variable for X coordinate
     uint16_t touchpad_y; // Variable for Y coordinate
     uint8_t touchpad_cnt = 0; // Variable for touch count
+    uint32_t now = lv_tick_get();
 
     /* Read data from touch controller into memory */
     esp_lcd_touch_read_data(tp); // Read data from touch controller
@@ -441,12 +481,27 @@ static void touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
     /* Read data from touch controller */
     bool touchpad_pressed = esp_lcd_touch_get_coordinates(tp, &touchpad_x, &touchpad_y, NULL, &touchpad_cnt, 1); // Get touch coordinates
     if (touchpad_pressed && touchpad_cnt > 0) {
+        touch_state.is_pressed = true;
+        touch_state.last_point.x = touchpad_x;
+        touch_state.last_point.y = touchpad_y;
+        touch_state.last_sample_tick = now;
         data->point.x = touchpad_x; // Set the X coordinate
         data->point.y = touchpad_y; // Set the Y coordinate
         data->state = LV_INDEV_STATE_PRESSED; // Set state to pressed
         ESP_LOGD(TAG, "Touch position: %d,%d", touchpad_x, touchpad_y); // Log touch position
+        touch_last_activity = lv_tick_get();
+        touch_set_read_period(TOUCH_FAST_PERIOD_MS);
     } else {
+        if (touch_state.is_pressed && lv_tick_elaps(touch_state.last_sample_tick) < TOUCH_RELEASE_FILTER_MS) {
+            data->point = touch_state.last_point;
+            data->state = LV_INDEV_STATE_PRESSED;
+            return;
+        }
+        touch_state.is_pressed = false;
         data->state = LV_INDEV_STATE_RELEASED; // Set state to released
+        if (!touch_fast_forced && touch_last_activity != 0 && lv_tick_elaps(touch_last_activity) > TOUCH_FAST_HOLD_MS) {
+            touch_set_read_period(TOUCH_NORMAL_PERIOD_MS);
+        }
     }
 }
 
@@ -462,7 +517,13 @@ static lv_indev_t *indev_init(esp_lcd_touch_handle_t tp)
     indev_drv_tp.read_cb = touchpad_read; // Set the read callback function
     indev_drv_tp.user_data = tp; // Set user data to the touch panel handle
 
-    return lv_indev_drv_register(&indev_drv_tp); // Register the input device driver
+    lv_indev_t *indev = lv_indev_drv_register(&indev_drv_tp); // Register the input device driver
+
+    touch_indev = indev;
+    touch_current_period = TOUCH_NORMAL_PERIOD_MS;
+    touch_set_read_period(TOUCH_NORMAL_PERIOD_MS);
+
+    return indev;
 }
 
 static void tick_increment(void *arg)

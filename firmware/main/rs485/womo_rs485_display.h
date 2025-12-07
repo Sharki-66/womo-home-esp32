@@ -83,17 +83,29 @@ typedef struct {
 // Callback for received sensor data
 typedef void (*womo_rs485_data_cb_t)(const womo_sensor_data_t *data, void *user_data);
 
+typedef enum {
+    WOMO_RS485_EVENT_HELLO = 0,
+    WOMO_RS485_EVENT_HEARTBEAT,
+    WOMO_RS485_EVENT_INVALID_JSON,
+} womo_rs485_event_t;
+
+typedef void (*womo_rs485_event_cb_t)(womo_rs485_event_t event, void *user_data);
+
 // Initialize RS485 communication
 esp_err_t womo_rs485_display_init(void);
 
 // Set callback for full sensor data
 void womo_rs485_set_data_callback(womo_rs485_data_cb_t callback, void *user_data);
 
+// Optional event callback (handshake, heartbeat, parse errors)
+void womo_rs485_set_event_callback(womo_rs485_event_cb_t callback, void *user_data);
+
 // Send commands to Walter
 esp_err_t womo_rs485_send_level_start(void);
 esp_err_t womo_rs485_send_level_stop(void);
 esp_err_t womo_rs485_send_tare_a(void);
 esp_err_t womo_rs485_send_tare_b(void);
+esp_err_t womo_rs485_send_display_ready(void);
 
 // Get latest sensor data (non-blocking)
 bool womo_rs485_get_latest_data(womo_sensor_data_t *data);

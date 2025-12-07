@@ -12,6 +12,7 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include <string.h>
+#include <stdlib.h>
 
 static const char *TAG = "womo_wifi";
 
@@ -27,6 +28,11 @@ static uint8_t max_retry_count = 5;
 static bool auto_reconnect_enabled = true;
 static char last_error[64] = "No error";
 static esp_netif_t *sta_netif = NULL;
+static TaskHandle_t s_wifi_scan_task = NULL;
+static womo_wifi_scan_callback_t s_wifi_scan_callback = NULL;
+static void *s_wifi_scan_user_data = NULL;
+
+static void wifi_scan_task(void *arg);
 
 // WiFi event handler
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
@@ -121,8 +127,15 @@ esp_err_t womo_wifi_connect(const char *ssid, const char *password, uint8_t max_
         return ESP_ERR_INVALID_ARG;
     }
     
+    if (s_wifi_event_group == NULL) {
+        ESP_LOGE(TAG, "WiFi not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+
     max_retry_count = max_retry;
     retry_count = 0;
+    auto_reconnect_enabled = true;
+    xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
     
     ESP_LOGI(TAG, "Connecting to WiFi: %s", ssid);
     
@@ -249,4 +262,107 @@ void womo_wifi_set_auto_reconnect(bool enable)
 const char* womo_wifi_get_last_error(void)
 {
     return last_error;
+}
+
+static void wifi_scan_task(void *arg)
+{
+    (void)arg;
+    esp_err_t err = ESP_OK;
+    womo_wifi_scan_result_t *results = NULL;
+    size_t result_count = 0;
+
+    wifi_scan_config_t scan_config = {
+        .ssid = NULL,
+        .bssid = NULL,
+        .channel = 0,
+        .show_hidden = false,
+        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+        .scan_time.active = {
+            .min = 0,
+            .max = 120,
+        },
+        .scan_time.passive = 0,
+    };
+
+    err = esp_wifi_start();
+    if (err == ESP_ERR_WIFI_CONN || err == ESP_ERR_WIFI_STATE) {
+        err = ESP_OK;
+    }
+
+    if (err == ESP_OK) {
+        err = esp_wifi_scan_start(&scan_config, true);
+    }
+
+    if (err == ESP_OK) {
+        uint16_t ap_count = 0;
+        err = esp_wifi_scan_get_ap_num(&ap_count);
+        if (err == ESP_OK && ap_count > 0) {
+            wifi_ap_record_t *ap_records = calloc(ap_count, sizeof(*ap_records));
+            if (ap_records) {
+                uint16_t copy_count = ap_count;
+                err = esp_wifi_scan_get_ap_records(&copy_count, ap_records);
+                if (err == ESP_OK && copy_count > 0) {
+                    result_count = copy_count;
+                    results = calloc(result_count, sizeof(womo_wifi_scan_result_t));
+                    if (results) {
+                        for (size_t i = 0; i < result_count; i++) {
+                            const wifi_ap_record_t *rec = &ap_records[i];
+                            strncpy(results[i].ssid, (const char *)rec->ssid, sizeof(results[i].ssid) - 1);
+                            results[i].ssid[sizeof(results[i].ssid) - 1] = '\0';
+                            results[i].auth_mode = rec->authmode;
+                            results[i].rssi = rec->rssi;
+                            results[i].pairwise_cipher = rec->pairwise_cipher;
+                        }
+                    } else {
+                        err = ESP_ERR_NO_MEM;
+                    }
+                }
+                free(ap_records);
+            } else {
+                err = ESP_ERR_NO_MEM;
+            }
+        }
+    }
+
+    if (s_wifi_scan_callback) {
+        s_wifi_scan_callback(results, result_count, err, s_wifi_scan_user_data);
+    }
+
+    if (results) {
+        free(results);
+    }
+
+    s_wifi_scan_task = NULL;
+    s_wifi_scan_callback = NULL;
+    s_wifi_scan_user_data = NULL;
+    vTaskDelete(NULL);
+}
+
+esp_err_t womo_wifi_scan_async(womo_wifi_scan_callback_t callback, void *user_data)
+{
+    if (!callback) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (s_wifi_scan_task != NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    s_wifi_scan_callback = callback;
+    s_wifi_scan_user_data = user_data;
+
+    BaseType_t created = xTaskCreate(wifi_scan_task, "wifi_scan", 4096, NULL, 4, &s_wifi_scan_task);
+    if (created != pdPASS) {
+        s_wifi_scan_task = NULL;
+        s_wifi_scan_callback = NULL;
+        s_wifi_scan_user_data = NULL;
+        return ESP_ERR_NO_MEM;
+    }
+
+    return ESP_OK;
+}
+
+bool womo_wifi_is_scan_in_progress(void)
+{
+    return (s_wifi_scan_task != NULL);
 }

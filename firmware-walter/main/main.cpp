@@ -12,6 +12,7 @@
 
 #include "esp_err.h"
 #include "esp_event.h"
+#include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_netif.h"
@@ -42,6 +43,12 @@
 #include "womo_hx711.h"
 #include "womo_rs485.h"
 #include "WalterModem.h"
+#if WALTER_ENABLE_GPS
+#include "womo_gps.h"
+#endif
+#if WALTER_ENABLE_WEBUI
+#include "web/womo_web.h"
+#endif
 
 #if WALTER_ENABLE_BME680
 #include "bme680.h"
@@ -842,29 +849,118 @@ static void bno055_task(void *arg)
 
         if (publish) {
             sensor_state_publish_bno055(measurement, fallback, publish_ts);
+#if WALTER_ENABLE_WEBUI
+            womo_web_imu_sample_t web_sample = {
+                .valid = true,
+                .fallback = fallback,
+                .calibrated = measurement.calibrated,
+                .yaw_deg = measurement.yaw_deg,
+                .pitch_deg = measurement.pitch_deg,
+                .roll_deg = measurement.roll_deg,
+                .temperature_c = measurement.temperature_c,
+                .cal_sys = measurement.calibration_sys,
+                .cal_gyro = measurement.calibration_gyro,
+                .cal_accel = measurement.calibration_accel,
+                .cal_mag = measurement.calibration_mag,
+                .timestamp_us = publish_ts,
+            };
+            womo_web_publish_imu(&web_sample);
+#endif
 #if WALTER_SENSOR_LOG_BNO055
-            const char *heading_label = heading_to_compass(measurement.yaw_deg);
-            float delta_ms = 0.0f;
-            if (s_bno055_last_log_ts_us > 0 && publish_ts > s_bno055_last_log_ts_us) {
-                delta_ms = (float)(publish_ts - s_bno055_last_log_ts_us) / 1000.0f;
+            static const int64_t kLogIntervalUs = (int64_t)WALTER_ANALOG_POLL_INTERVAL_MS * 1000;
+            bool should_log = false;
+            if (s_bno055_last_log_ts_us == 0) {
+                should_log = true;
+            } else if (publish_ts > s_bno055_last_log_ts_us) {
+                int64_t delta_us = publish_ts - s_bno055_last_log_ts_us;
+                if (delta_us >= kLogIntervalUs) {
+                    should_log = true;
+                }
             }
-            s_bno055_last_log_ts_us = publish_ts;
-            ESP_LOGI(TAG,
-                     "BNO055 dT=%.1f ms cal=%u/%u/%u/%u heading=%.1f° (%s) roll=%.1f° pitch=%.1f°%s",
-                     delta_ms,
-                     measurement.calibration_sys,
-                     measurement.calibration_gyro,
-                     measurement.calibration_accel,
-                     measurement.calibration_mag,
-                     measurement.yaw_deg,
-                     heading_label,
-                     measurement.roll_deg,
-                     measurement.pitch_deg,
-                     fallback ? " (fallback)" : "");
+
+            if (should_log) {
+                const char *heading_label = heading_to_compass(measurement.yaw_deg);
+                float delta_ms = 0.0f;
+                if (s_bno055_last_log_ts_us > 0 && publish_ts > s_bno055_last_log_ts_us) {
+                    delta_ms = (float)(publish_ts - s_bno055_last_log_ts_us) / 1000.0f;
+                }
+                s_bno055_last_log_ts_us = publish_ts;
+                ESP_LOGI(TAG,
+                         "BNO055 dT=%.1f ms cal=%u/%u/%u/%u heading=%.1f° (%s) roll=%.1f° pitch=%.1f°%s",
+                         delta_ms,
+                         measurement.calibration_sys,
+                         measurement.calibration_gyro,
+                         measurement.calibration_accel,
+                         measurement.calibration_mag,
+                         measurement.yaw_deg,
+                         heading_label,
+                         measurement.roll_deg,
+                         measurement.pitch_deg,
+                         fallback ? " (fallback)" : "");
+            }
 #endif
         }
 
         vTaskDelayUntil(&last_wake, period);
+    }
+}
+#endif
+
+#if WALTER_ENABLE_GPS
+static void sensor_state_note_gps_request_result(esp_err_t status);
+static void sensor_state_publish_gps_fix(const womo_gps_data_t &fix);
+
+static void gps_task(void *arg)
+{
+    (void)arg;
+    ESP_LOGI(TAG, "GPS task started");
+
+    esp_err_t init_err = womo_gps_init();
+    sensor_state_note_gps_request_result(init_err);
+    if (init_err != ESP_OK) {
+        ESP_LOGE(TAG, "GPS init failed: %s", esp_err_to_name(init_err));
+        vTaskDelete(nullptr);
+        return;
+    }
+
+    const TickType_t request_interval = ms_to_ticks(WALTER_GPS_REQUEST_INTERVAL_MS);
+    const TickType_t poll_delay = ms_to_ticks(WALTER_GPS_POLL_INTERVAL_MS);
+    const TickType_t retry_delay = ms_to_ticks(WALTER_GPS_RETRY_DELAY_MS);
+    TickType_t last_request = xTaskGetTickCount() - request_interval;
+    int64_t last_fix_timestamp = 0;
+
+    while (true) {
+        TickType_t now = xTaskGetTickCount();
+        if ((now - last_request) >= request_interval) {
+            esp_err_t req_err = womo_gps_request_fix();
+            sensor_state_note_gps_request_result(req_err);
+            if (req_err == ESP_OK) {
+                ESP_LOGI(TAG, "GPS fix request queued");
+                last_request = now;
+            } else {
+                ESP_LOGW(TAG, "GPS fix request failed: %s", esp_err_to_name(req_err));
+                vTaskDelay(retry_delay);
+                continue;
+            }
+        }
+
+        womo_gps_data_t fix = {};
+        if (womo_gps_get_last_fix(&fix) == ESP_OK) {
+            sensor_state_publish_gps_fix(fix);
+            if (fix.timestamp != 0 && fix.timestamp != last_fix_timestamp) {
+                last_fix_timestamp = fix.timestamp;
+                ESP_LOGI(TAG,
+                         "GPS fix lat=%.6f lon=%.6f alt=%.1f m speed=%.1f km/h sats=%u conf=%.1f m",
+                         fix.latitude,
+                         fix.longitude,
+                         fix.altitude_m,
+                         fix.speed_kmh,
+                         fix.satellites,
+                         fix.confidence_m);
+            }
+        }
+
+        vTaskDelay(poll_delay);
     }
 }
 #endif
@@ -893,6 +989,9 @@ static esp_err_t wifi_runtime_apply(bool ap_enable, bool sta_enable);
 static esp_err_t wifi_runtime_apply_targets(void);
 static void sensor_state_publish_wifi_state(void);
 static void wifi_set_last_error(esp_err_t err);
+#if WALTER_ENABLE_GPS && WALTER_ENABLE_LTE
+static SemaphoreHandle_t s_modem_ready_sem = nullptr;
+#endif
 
 static constexpr gpio_num_t SENSOR_RAIL_GPIO = GPIO_NUM_0;
 
@@ -951,12 +1050,6 @@ static bool hx_plausibility_check(int index, float value, const char *label)
 {
     if (!isfinite(value)) {
         ESP_LOGW(TAG, "%s non-finite (%.3f)", label, value);
-        return false;
-    }
-
-    if (value < WALTER_HX711_MIN_KG || value > WALTER_HX711_MAX_KG) {
-        ESP_LOGW(TAG, "%s out of bounds: %.3f kg (%.3f..%.3f)", label, value,
-                 WALTER_HX711_MIN_KG, WALTER_HX711_MAX_KG);
         return false;
     }
 
@@ -1022,6 +1115,22 @@ typedef struct {
         womo_analog_data_t data;
         int64_t timestamp_us;
     } analog;
+#endif
+#if WALTER_ENABLE_GPS
+    struct {
+        bool valid;
+        double latitude;
+        double longitude;
+        double altitude_m;
+        float speed_kmh;
+        float heading_deg;
+        uint8_t satellites;
+        float confidence_m;
+        uint32_t time_to_fix_ms;
+        int64_t timestamp;
+        int64_t last_request_us;
+        esp_err_t last_error;
+    } gps;
 #endif
 #if WALTER_ENABLE_BNO055
     struct {
@@ -1139,6 +1248,38 @@ static void sensor_state_publish_analog(const womo_analog_data_t *analog, int64_
     s_sensor_state.analog.valid = true;
     s_sensor_state.analog.data = *analog;
     s_sensor_state.analog.timestamp_us = timestamp_us;
+    portEXIT_CRITICAL(&s_sensor_state_mux);
+}
+#endif
+
+#if WALTER_ENABLE_GPS
+static void sensor_state_note_gps_request_result(esp_err_t status)
+{
+    portENTER_CRITICAL(&s_sensor_state_mux);
+    auto &slot = s_sensor_state.gps;
+    slot.last_request_us = esp_timer_get_time();
+    slot.last_error = status;
+    if (status != ESP_OK) {
+        slot.valid = false;
+    }
+    portEXIT_CRITICAL(&s_sensor_state_mux);
+}
+
+static void sensor_state_publish_gps_fix(const womo_gps_data_t &fix)
+{
+    portENTER_CRITICAL(&s_sensor_state_mux);
+    auto &slot = s_sensor_state.gps;
+    slot.valid = fix.valid;
+    slot.latitude = fix.latitude;
+    slot.longitude = fix.longitude;
+    slot.altitude_m = fix.altitude_m;
+    slot.speed_kmh = fix.speed_kmh;
+    slot.heading_deg = fix.heading_deg;
+    slot.satellites = fix.satellites;
+    slot.confidence_m = fix.confidence_m;
+    slot.time_to_fix_ms = fix.time_to_fix_ms;
+    slot.timestamp = fix.timestamp;
+    slot.last_error = ESP_OK;
     portEXIT_CRITICAL(&s_sensor_state_mux);
 }
 #endif
@@ -1337,6 +1478,11 @@ static void bno055_task(void *arg);
 #endif
 #if WALTER_ENABLE_BME680
 static void bme680_task(void *arg);
+#endif
+#if WALTER_ENABLE_GPS
+static void gps_task(void *arg);
+static void sensor_state_publish_gps_fix(const womo_gps_data_t &fix);
+static void sensor_state_note_gps_request_result(esp_err_t status);
 #endif
 #if WALTER_ENABLE_RS485
 static void rs485_tx_task(void *arg);
@@ -1678,6 +1824,24 @@ static esp_err_t wifi_runtime_apply(bool ap_enable, bool sta_enable)
         if (!ap_enable && !sta_enable) {
             if (s_wifi_driver_started) {
                 err = esp_wifi_stop();
+    #if !WALTER_ENABLE_LTE
+        ESP_LOGE(TAG, "GPS task requires LTE modem support; enable WALTER_ENABLE_LTE");
+        vTaskDelete(nullptr);
+        return;
+    #else
+        if (!s_modem_ready_sem) {
+            ESP_LOGE(TAG, "GPS task missing modem-ready semaphore; aborting");
+            vTaskDelete(nullptr);
+            return;
+        }
+
+        ESP_LOGI(TAG, "GPS waiting for modem initialisation");
+        while (xSemaphoreTake(s_modem_ready_sem, ms_to_ticks(1000)) != pdTRUE) {
+            ESP_LOGW(TAG, "GPS still waiting for modem...");
+        }
+        xSemaphoreGive(s_modem_ready_sem);
+    #endif
+
                 if (err != ESP_OK) {
                     ESP_LOGE(TAG, "Failed to stop WiFi driver: %s", esp_err_to_name(err));
                     break;
@@ -1793,35 +1957,14 @@ static void hx711_task(void *arg)
     TickType_t last_wake = xTaskGetTickCount();
 
     while (true) {
-        int32_t raw_b = 0;
-        float kg_b = 0.0f;
-        bool have_b = false;
-        bool fallback_b = false;
-        bool read_b_ok = false;
-        int64_t fallback_b_ts = 0;
-
-        if (womo_hx711_set_gain(&s_hx711, WOMO_HX711_GAIN_A_128) == ESP_OK &&
-            womo_hx711_read_average(&s_hx711, WALTER_HX711_AVG_SAMPLES, &raw_b) == ESP_OK) {
-            read_b_ok = true;
-            float grams_b = (raw_b - (int32_t)WALTER_HX711_OFFSET_B) * WALTER_HX711_SCALE_B;
-            kg_b = grams_b / 1000.0f;
-            have_b = hx_plausibility_check(HX_IDX_PLATFORM_B, kg_b, "HX711.B");
-        }
-        if (!have_b && hx_get_last_valid(HX_IDX_PLATFORM_B, &kg_b, &fallback_b_ts)) {
-            have_b = true;
-            fallback_b = true;
-            const char *reason = read_b_ok ? "new sample rejected" : "read failed";
-            ESP_LOGW(TAG, "HX711.B using last valid value %.2f kg (%s)", kg_b, reason);
-        }
-
-#if WALTER_HX711_ENABLE_CHANNEL_B
         int32_t raw_a = 0;
         float kg_a = 0.0f;
         bool have_a = false;
         bool fallback_a = false;
         bool read_a_ok = false;
         int64_t fallback_a_ts = 0;
-        if (womo_hx711_set_gain(&s_hx711, WOMO_HX711_GAIN_B_32) == ESP_OK &&
+
+        if (womo_hx711_set_gain(&s_hx711, WOMO_HX711_GAIN_A_128) == ESP_OK &&
             womo_hx711_read_average(&s_hx711, WALTER_HX711_AVG_SAMPLES, &raw_a) == ESP_OK) {
             read_a_ok = true;
 #if WALTER_HX711_INVERT_A
@@ -1839,25 +1982,47 @@ static void hx711_task(void *arg)
             ESP_LOGW(TAG, "HX711.A using last valid value %.2f kg (%s)", kg_a, reason);
         }
 
+#if WALTER_HX711_ENABLE_CHANNEL_B
+        int32_t raw_b = 0;
+        float kg_b = 0.0f;
+        bool have_b = false;
+        bool fallback_b = false;
+        bool read_b_ok = false;
+        int64_t fallback_b_ts = 0;
+
+        if (womo_hx711_set_gain(&s_hx711, WOMO_HX711_GAIN_B_32) == ESP_OK &&
+            womo_hx711_read_average(&s_hx711, WALTER_HX711_AVG_SAMPLES, &raw_b) == ESP_OK) {
+            read_b_ok = true;
+            float grams_b = (raw_b - (int32_t)WALTER_HX711_OFFSET_B) * WALTER_HX711_SCALE_B;
+            kg_b = grams_b / 1000.0f;
+            have_b = hx_plausibility_check(HX_IDX_PLATFORM_B, kg_b, "HX711.B");
+        }
+        if (!have_b && hx_get_last_valid(HX_IDX_PLATFORM_B, &kg_b, &fallback_b_ts)) {
+            have_b = true;
+            fallback_b = true;
+            const char *reason = read_b_ok ? "new sample rejected" : "read failed";
+            ESP_LOGW(TAG, "HX711.B using last valid value %.2f kg (%s)", kg_b, reason);
+        }
+
         if (have_a && have_b) {
             ESP_LOGI(TAG, "HX711: A=%.2fkg%s (raw=%ld) B=%.2fkg%s (raw=%ld)",
                      kg_a, fallback_a ? "*" : "", (long)raw_a,
                      kg_b, fallback_b ? "*" : "", (long)raw_b);
-        } else if (have_b) {
-            ESP_LOGI(TAG, "HX711: B=%.2fkg%s (raw=%ld)",
-                     kg_b, fallback_b ? "*" : "", (long)raw_b);
         } else if (have_a) {
             ESP_LOGI(TAG, "HX711: A=%.2fkg%s (raw=%ld)",
                      kg_a, fallback_a ? "*" : "", (long)raw_a);
+        } else if (have_b) {
+            ESP_LOGI(TAG, "HX711: B=%.2fkg%s (raw=%ld)",
+                     kg_b, fallback_b ? "*" : "", (long)raw_b);
         }
 #else
-        const bool have_a = false;
-        const bool fallback_a = false;
-        const float kg_a = 0.0f;
-        const int64_t fallback_a_ts = 0;
-        if (have_b) {
-            ESP_LOGI(TAG, "HX711 Channel A: raw=%ld → %.2f kg%s",
-                     (long)raw_b, kg_b, fallback_b ? "*" : "");
+        const bool have_b = false;
+        const bool fallback_b = false;
+        const float kg_b = 0.0f;
+        const int64_t fallback_b_ts = 0;
+        if (have_a) {
+            ESP_LOGI(TAG, "HX711: A=%.2fkg%s (raw=%ld)",
+                     kg_a, fallback_a ? "*" : "", (long)raw_a);
         }
 #endif
 
@@ -1871,8 +2036,8 @@ static void hx711_task(void *arg)
             timestamp_us = fallback_b_ts;
         }
 #else
-        if (fallback_b) {
-            timestamp_us = fallback_b_ts;
+        if (fallback_a) {
+            timestamp_us = fallback_a_ts;
         }
 #endif
 
@@ -1939,29 +2104,58 @@ typedef struct {
 } rs485_cmd_result_msg_t;
 
 static QueueHandle_t s_rs485_cmd_result_queue = nullptr;
+static std::atomic<bool> s_rs485_display_ready(false);
+static std::atomic<uint32_t> s_rs485_display_ready_seen(0);
+static std::atomic<uint32_t> s_rs485_hello_sent(0);
+static std::atomic<uint32_t> s_rs485_heartbeat_sent(0);
+static std::atomic<int64_t> s_rs485_last_display_ready_us(0);
 
 static void rs485_send_json(const char *context, cJSON *root);
 static void rs485_queue_command_result(const char *cmd, esp_err_t err);
+static void rs485_send_hello_packet(void);
+static void rs485_send_heartbeat_packet(void);
+static void rs485_handle_display_ready(void);
 
 // RS485 TX Task - sends sensor data as JSON
 static void rs485_tx_task(void *arg)
 {
     ESP_LOGI(TAG, "RS485 TX task started");
     
-    const TickType_t full_interval = pdMS_TO_TICKS(1000);  // full payload every 1 second for testing
+    s_rs485_display_ready.store(false);
+    s_rs485_display_ready_seen.store(0);
+    s_rs485_hello_sent.store(0);
+    s_rs485_heartbeat_sent.store(0);
+    s_rs485_last_display_ready_us.store(0);
+
+    const TickType_t full_interval = pdMS_TO_TICKS(5000);  // full payload every 5 seconds
     TickType_t last_full_send = xTaskGetTickCount() - full_interval;
-#if WALTER_ENABLE_BNO055
-    const TickType_t imu_interval = pdMS_TO_TICKS(300);    // interleave IMU snapshots alle 0,3 s
-    TickType_t last_imu_send = last_full_send;
-#endif
     const TickType_t loop_delay = pdMS_TO_TICKS(100);
+
+    const TickType_t hello_pending_interval = ms_to_ticks(WALTER_RS485_HELLO_PENDING_INTERVAL_MS);
+    const TickType_t heartbeat_interval = (WALTER_RS485_HEARTBEAT_INTERVAL_MS > 0)
+                                              ? ms_to_ticks(WALTER_RS485_HEARTBEAT_INTERVAL_MS)
+                                              : 0;
+    TickType_t last_hello_send = xTaskGetTickCount() - hello_pending_interval;
+    TickType_t last_heartbeat_send = xTaskGetTickCount();
+
+    rs485_send_hello_packet();
+    last_hello_send = xTaskGetTickCount();
 
     while (true) {
         TickType_t now = xTaskGetTickCount();
         bool send_full = ((now - last_full_send) >= full_interval);
-    #if WALTER_ENABLE_BNO055
-        bool send_imu = !send_full && ((now - last_imu_send) >= imu_interval);
-    #endif
+
+        TickType_t hello_interval = s_rs485_display_ready.load() ? 0 : hello_pending_interval;
+        if (hello_interval > 0 && (now - last_hello_send) >= hello_interval) {
+            rs485_send_hello_packet();
+            last_hello_send = now;
+        }
+
+        if (heartbeat_interval > 0 && s_rs485_display_ready.load() &&
+            (now - last_heartbeat_send) >= heartbeat_interval) {
+            rs485_send_heartbeat_packet();
+            last_heartbeat_send = now;
+        }
 
         if (s_rs485_cmd_result_queue) {
             rs485_cmd_result_msg_t cmd_msg;
@@ -1982,10 +2176,7 @@ static void rs485_tx_task(void *arg)
 
         if (send_full) {
             sensor_shared_state_t snapshot = sensor_state_snapshot();
-            last_full_send = now;
-    #if WALTER_ENABLE_BNO055
-            last_imu_send = now;
-    #endif
+                last_full_send = now;
 
             cJSON *root = cJSON_CreateObject();
             cJSON_AddStringToObject(root, "type", "full");
@@ -2131,6 +2322,31 @@ static void rs485_tx_task(void *arg)
             }
 #endif
 
+#if WALTER_ENABLE_GPS
+            if (snapshot.gps.valid || snapshot.gps.last_request_us != 0 || snapshot.gps.last_error != ESP_OK) {
+                cJSON *gps = cJSON_CreateObject();
+                cJSON_AddBoolToObject(gps, "valid", snapshot.gps.valid);
+                if (snapshot.gps.valid) {
+                    cJSON_AddNumberToObject(gps, "lat", snapshot.gps.latitude);
+                    cJSON_AddNumberToObject(gps, "lon", snapshot.gps.longitude);
+                    cJSON_AddNumberToObject(gps, "alt_m", snapshot.gps.altitude_m);
+                    cJSON_AddNumberToObject(gps, "speed_kmh", snapshot.gps.speed_kmh);
+                    cJSON_AddNumberToObject(gps, "heading_deg", snapshot.gps.heading_deg);
+                    cJSON_AddNumberToObject(gps, "sat", snapshot.gps.satellites);
+                    cJSON_AddNumberToObject(gps, "conf_m", snapshot.gps.confidence_m);
+                    cJSON_AddNumberToObject(gps, "ttf_ms", snapshot.gps.time_to_fix_ms);
+                    cJSON_AddNumberToObject(gps, "ts", (double)snapshot.gps.timestamp);
+                }
+                if (snapshot.gps.last_request_us != 0) {
+                    cJSON_AddNumberToObject(gps, "last_req_us", (double)snapshot.gps.last_request_us);
+                }
+                if (snapshot.gps.last_error != ESP_OK) {
+                    cJSON_AddStringToObject(gps, "last_err", esp_err_to_name(snapshot.gps.last_error));
+                }
+                cJSON_AddItemToObject(root, "gps", gps);
+            }
+#endif
+
             {
                 const auto &wifi = snapshot.wifi;
                 cJSON *wifi_json = cJSON_CreateObject();
@@ -2167,40 +2383,6 @@ static void rs485_tx_task(void *arg)
             rs485_send_json("full", root);
             cJSON_Delete(root);
         }
-#if WALTER_ENABLE_BNO055
-        else if (send_imu) {
-            sensor_shared_state_t snapshot = sensor_state_snapshot();
-            last_imu_send = now;
-
-            if (snapshot.bno055.configured && snapshot.bno055.valid) {
-                cJSON *root = cJSON_CreateObject();
-                cJSON_AddStringToObject(root, "type", "imu");
-                cJSON_AddNumberToObject(root, "ts", (double)(esp_timer_get_time() / 1000));
-
-                cJSON *imu = cJSON_CreateObject();
-                cJSON_AddNumberToObject(imu, "yaw_deg", snapshot.bno055.yaw_deg);
-                cJSON_AddNumberToObject(imu, "pitch_deg", snapshot.bno055.pitch_deg);
-                cJSON_AddNumberToObject(imu, "roll_deg", snapshot.bno055.roll_deg);
-                cJSON_AddStringToObject(imu, "hdg", heading_to_compass(snapshot.bno055.yaw_deg));
-
-                cJSON *cal = cJSON_CreateObject();
-                cJSON_AddNumberToObject(cal, "sys", snapshot.bno055.calibration_sys);
-                cJSON_AddNumberToObject(cal, "gyro", snapshot.bno055.calibration_gyro);
-                cJSON_AddNumberToObject(cal, "acc", snapshot.bno055.calibration_accel);
-                cJSON_AddNumberToObject(cal, "mag", snapshot.bno055.calibration_mag);
-                cJSON_AddItemToObject(imu, "cal", cal);
-
-                if (snapshot.bno055.fallback) {
-                    cJSON_AddBoolToObject(imu, "fallback", true);
-                }
-                cJSON_AddNumberToObject(imu, "ts_us", (double)snapshot.bno055.timestamp_us);
-                cJSON_AddItemToObject(root, "imu", imu);
-
-                rs485_send_json("imu", root);
-                cJSON_Delete(root);
-            }
-        }
-#endif
 
         vTaskDelay(loop_delay);  // Small delay to not hog CPU
     }
@@ -2218,12 +2400,100 @@ static void rs485_send_json(const char *context, cJSON *root)
     }
     size_t len = strlen(json_str);
     json_str[len] = '\n';
-    ESP_LOGI(TAG, "Sending RS485 %s: %zu bytes", context ? context : "payload", len + 1);
+    const char *ctx = context ? context : "payload";
+    bool log_info = true;
+    if (context && strcmp(context, "heartbeat") == 0) {
+        log_info = false;
+    }
+    if (log_info) {
+        ESP_LOGI(TAG, "Sending RS485 %s: %zu bytes", ctx, len + 1);
+    } else {
+        ESP_LOGD(TAG, "Sending RS485 %s: %zu bytes", ctx, len + 1);
+    }
     esp_err_t write_err = womo_rs485_write((uint8_t *)json_str, len + 1, pdMS_TO_TICKS(100));
     if (write_err != ESP_OK) {
-        ESP_LOGW(TAG, "RS485 write (%s) failed: %s", context ? context : "payload", esp_err_to_name(write_err));
+        ESP_LOGW(TAG, "RS485 write (%s) failed: %s", ctx, esp_err_to_name(write_err));
     }
     cJSON_free(json_str);
+}
+
+static void rs485_send_hello_packet(void)
+{
+    cJSON *hello = cJSON_CreateObject();
+    if (!hello) {
+        ESP_LOGE(TAG, "Failed to allocate RS485 hello packet");
+        return;
+    }
+
+    int64_t now_us = esp_timer_get_time();
+    double uptime_sec = (double)now_us / 1000000.0;
+    cJSON_AddStringToObject(hello, "type", "hello");
+
+    char fw_buf[64] = "Walter";
+    const esp_app_desc_t *app = esp_app_get_description();
+    if (app) {
+        if (app->project_name[0] != '\0') {
+            snprintf(fw_buf, sizeof(fw_buf), "%s %s", app->project_name, app->version);
+        } else if (app->version[0] != '\0') {
+            snprintf(fw_buf, sizeof(fw_buf), "%s", app->version);
+        }
+    }
+
+    cJSON_AddStringToObject(hello, "fw", fw_buf);
+    cJSON_AddNumberToObject(hello, "uptime", uptime_sec);
+    cJSON_AddBoolToObject(hello, "display_ready", s_rs485_display_ready.load());
+    cJSON_AddNumberToObject(hello, "ts", (double)(now_us / 1000));
+
+    rs485_send_json("hello", hello);
+    cJSON_Delete(hello);
+
+    uint32_t sent = ++s_rs485_hello_sent;
+    if (sent == 1) {
+        ESP_LOGI(TAG, "RS485 hello sent (fw=%s)", fw_buf);
+    } else {
+        ESP_LOGD(TAG,
+                 "RS485 hello #%lu sent (ready=%s)",
+                 (unsigned long)sent,
+                 s_rs485_display_ready.load() ? "true" : "false");
+    }
+}
+
+static void rs485_send_heartbeat_packet(void)
+{
+    cJSON *hb = cJSON_CreateObject();
+    if (!hb) {
+        ESP_LOGE(TAG, "Failed to allocate RS485 heartbeat packet");
+        return;
+    }
+
+    int64_t now_us = esp_timer_get_time();
+    cJSON_AddStringToObject(hb, "type", "hb");
+    cJSON_AddNumberToObject(hb, "uptime", (double)now_us / 1000000.0);
+    cJSON_AddNumberToObject(hb, "ts", (double)(now_us / 1000));
+
+    rs485_send_json("heartbeat", hb);
+    cJSON_Delete(hb);
+
+    uint32_t sent = ++s_rs485_heartbeat_sent;
+    ESP_LOGD(TAG, "RS485 heartbeat #%lu sent", (unsigned long)sent);
+}
+
+static void rs485_handle_display_ready(void)
+{
+    bool was_ready = s_rs485_display_ready.exchange(true);
+    uint32_t ack_count = ++s_rs485_display_ready_seen;
+    int64_t now_us = esp_timer_get_time();
+    int64_t previous = s_rs485_last_display_ready_us.exchange(now_us);
+    double delta = (previous > 0) ? (double)(now_us - previous) / 1000000.0 : 0.0;
+
+    if (!was_ready) {
+        ESP_LOGI(TAG, "Display acknowledged handshake (ack #%lu)", (unsigned long)ack_count);
+    } else {
+        ESP_LOGI(TAG,
+                 "Display re-acknowledged handshake (ack #%lu, dt=%.1fs)",
+                 (unsigned long)ack_count,
+                 delta);
+    }
 }
 
 static void rs485_queue_command_result(const char *cmd, esp_err_t err)
@@ -2292,9 +2562,14 @@ static void handle_rs485_command(const char *cmd_json)
     if (cmd && cJSON_IsString(cmd)) {
         const char *cmd_str = cmd->valuestring;
         bool handled = false;
+        bool send_result = true;
         esp_err_t cmd_err = ESP_OK;
 
-        if (strcmp(cmd_str, "lte_enable") == 0) {
+        if (strcmp(cmd_str, "display_ready") == 0) {
+            handled = true;
+            send_result = false;
+            rs485_handle_display_ready();
+        } else if (strcmp(cmd_str, "lte_enable") == 0) {
             handled = true;
             cmd_err = command_set_lte_enabled(true);
         } else if (strcmp(cmd_str, "lte_disable") == 0) {
@@ -2337,7 +2612,9 @@ static void handle_rs485_command(const char *cmd_json)
         }
 
         if (handled) {
-            rs485_report_command_result(cmd_str, cmd_err);
+            if (send_result) {
+                rs485_report_command_result(cmd_str, cmd_err);
+            }
         } else {
             ESP_LOGW(TAG, "Unknown command: %s", cmd_str);
         }
@@ -2677,6 +2954,12 @@ static void lte_tcp_task(void *arg)
         }
     }
 
+#if WALTER_ENABLE_GPS
+    if (s_modem_ready_sem) {
+        xSemaphoreGive(s_modem_ready_sem);
+    }
+#endif
+
     const TickType_t interval_ticks = ms_to_ticks(WALTER_LTE_SEND_INTERVAL_MS);
     bool link_ready = false;
     bool runtime_enabled = s_lte_target_enabled.load();
@@ -2789,6 +3072,13 @@ static esp_err_t sensor_subsystem_init(void)
     esp_err_t first_error = ESP_OK;
 
 #if WALTER_ENABLE_HX711
+    if (WALTER_HX711_STARTUP_DELAY_MS > 0) {
+        ESP_LOGI(TAG,
+                 "Waiting %u ms before HX711 init",
+                 (unsigned)WALTER_HX711_STARTUP_DELAY_MS);
+        vTaskDelay(ms_to_ticks(WALTER_HX711_STARTUP_DELAY_MS));
+    }
+
     esp_err_t hx_err = womo_hx711_init(&s_hx711,
                                        (gpio_num_t)WALTER_HX711_DOUT_GPIO,
                                        (gpio_num_t)WALTER_HX711_SCK_GPIO,
@@ -2904,6 +3194,24 @@ static esp_err_t sensor_subsystem_init(void)
     }
 #endif
 
+#if WALTER_ENABLE_GPS
+    {
+        BaseType_t task_created = xTaskCreate(
+            gps_task,
+            "gps",
+            WALTER_SENSOR_TASK_STACK,
+            nullptr,
+            WALTER_SENSOR_TASK_PRIORITY,
+            nullptr);
+        if (task_created == pdPASS) {
+            any_sensor = true;
+        } else {
+            ESP_LOGE(TAG, "Failed to create GPS task");
+            first_error = (first_error == ESP_OK) ? ESP_ERR_NO_MEM : first_error;
+        }
+    }
+#endif
+
     if (!any_sensor) {
         ESP_LOGW(TAG, "Sensor subsystem configured but no sensors initialised");
         return (first_error == ESP_OK) ? ESP_FAIL : first_error;
@@ -2930,7 +3238,23 @@ extern "C" void app_main(void)
 
     enable_switched_3v3();
 
+#if WALTER_ENABLE_GPS && WALTER_ENABLE_LTE
+    if (!s_modem_ready_sem) {
+        s_modem_ready_sem = xSemaphoreCreateBinary();
+        if (!s_modem_ready_sem) {
+            ESP_LOGE(TAG, "Failed to create modem-ready semaphore");
+        }
+    }
+#endif
+
     ESP_ERROR_CHECK(wifi_init_apsta());
+
+#if WALTER_ENABLE_WEBUI
+    esp_err_t web_err = womo_web_start();
+    if (web_err != ESP_OK) {
+        ESP_LOGW(TAG, "Web UI start failed: %s", esp_err_to_name(web_err));
+    }
+#endif
 
     esp_err_t sensor_err = sensor_subsystem_init();
     if (sensor_err != ESP_OK) {
