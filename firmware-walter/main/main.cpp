@@ -43,6 +43,10 @@
 #include "womo_rs485.h"
 #include "WalterModem.h"
 
+#if WALTER_ENABLE_GPS
+#include "womo_gps.h"
+#endif
+
 #if WALTER_ENABLE_BME680
 #include "bme680.h"
 #endif
@@ -1079,6 +1083,22 @@ typedef struct {
         int64_t timestamp_us;
     } lte;
 #endif
+#if WALTER_ENABLE_GPS
+    struct {
+        bool valid;
+        double latitude;
+        double longitude;
+        double altitude_m;
+        float speed_kmh;
+        float heading_deg;
+        uint8_t satellites;
+        float confidence_m;
+        int64_t timestamp;
+        uint32_t time_to_fix_ms;
+        uint32_t fix_count;
+        int64_t last_fix_attempt_us;
+    } gps;
+#endif
     struct {
         bool ap_target;
         bool sta_target;
@@ -1307,6 +1327,30 @@ static void sensor_state_publish_bme680(size_t index, const bme680_measurement_t
     slot.gas_range = measurement.gas_range;
     slot.gas_index = measurement.gas_index;
     slot.timestamp_us = timestamp_us;
+    portEXIT_CRITICAL(&s_sensor_state_mux);
+}
+#endif
+
+#if WALTER_ENABLE_GPS
+static void sensor_state_publish_gps(const womo_gps_data_t *data, uint32_t fix_count)
+{
+    if (!data) {
+        return;
+    }
+    portENTER_CRITICAL(&s_sensor_state_mux);
+    auto &gps = s_sensor_state.gps;
+    gps.valid = data->valid;
+    gps.latitude = data->latitude;
+    gps.longitude = data->longitude;
+    gps.altitude_m = data->altitude_m;
+    gps.speed_kmh = data->speed_kmh;
+    gps.heading_deg = data->heading_deg;
+    gps.satellites = data->satellites;
+    gps.confidence_m = data->confidence_m;
+    gps.timestamp = data->timestamp;
+    gps.time_to_fix_ms = data->time_to_fix_ms;
+    gps.fix_count = fix_count;
+    gps.last_fix_attempt_us = esp_timer_get_time();
     portEXIT_CRITICAL(&s_sensor_state_mux);
 }
 #endif
@@ -2164,6 +2208,24 @@ static void rs485_tx_task(void *arg)
                 cJSON_AddItemToObject(root, "wifi", wifi_json);
             }
 
+#if WALTER_ENABLE_GPS
+            if (snapshot.gps.valid) {
+                cJSON *gps = cJSON_CreateObject();
+                cJSON_AddNumberToObject(gps, "lat", snapshot.gps.latitude);
+                cJSON_AddNumberToObject(gps, "lon", snapshot.gps.longitude);
+                cJSON_AddNumberToObject(gps, "alt_m", snapshot.gps.altitude_m);
+                cJSON_AddNumberToObject(gps, "speed_kmh", snapshot.gps.speed_kmh);
+                cJSON_AddNumberToObject(gps, "heading_deg", snapshot.gps.heading_deg);
+                cJSON_AddStringToObject(gps, "hdg", heading_to_compass(snapshot.gps.heading_deg));
+                cJSON_AddNumberToObject(gps, "sats", snapshot.gps.satellites);
+                cJSON_AddNumberToObject(gps, "conf_m", snapshot.gps.confidence_m);
+                cJSON_AddNumberToObject(gps, "ttf_ms", snapshot.gps.time_to_fix_ms);
+                cJSON_AddNumberToObject(gps, "fix_count", snapshot.gps.fix_count);
+                cJSON_AddNumberToObject(gps, "ts", (double)snapshot.gps.timestamp);
+                cJSON_AddItemToObject(root, "gps", gps);
+            }
+#endif
+
             rs485_send_json("full", root);
             cJSON_Delete(root);
         }
@@ -2446,6 +2508,74 @@ static void rs485_report_command_result(const char *cmd, esp_err_t err)
     rs485_queue_command_result(cmd, err);
 }
 #endif // WALTER_ENABLE_RS485
+
+#if WALTER_ENABLE_GPS
+/**
+ * @brief GPS task - periodically executes GNSS fix cycles
+ */
+static void gps_task(void *arg)
+{
+    (void)arg;
+    const char *GPS_TAG = "womo_gps_task";
+    
+    ESP_LOGI(GPS_TAG, "GPS task started");
+    
+    // Initialize GPS subsystem
+    esp_err_t init_err = womo_gps_init();
+    if (init_err != ESP_OK) {
+        ESP_LOGE(GPS_TAG, "Failed to initialize GPS subsystem: %s", esp_err_to_name(init_err));
+        ESP_LOGE(GPS_TAG, "GPS task terminating");
+        vTaskDelete(nullptr);
+        return;
+    }
+    
+    // Register LTE control callback
+    esp_err_t reg_err = womo_gps_register_lte_control(command_set_lte_enabled);
+    if (reg_err != ESP_OK) {
+        ESP_LOGW(GPS_TAG, "Failed to register LTE control callback: %s", esp_err_to_name(reg_err));
+        ESP_LOGW(GPS_TAG, "GPS will manage LTE manually");
+    }
+    
+    uint32_t fix_count = 0;
+    const TickType_t interval_ticks = pdMS_TO_TICKS(WALTER_GPS_FIX_INTERVAL_MS);
+    
+    // First fix attempt immediately after startup delay
+    vTaskDelay(pdMS_TO_TICKS(10000)); // Wait 10 seconds for system to stabilize
+    
+    while (true) {
+        ESP_LOGI(GPS_TAG, "=== Starting GPS fix cycle #%u ===", fix_count + 1);
+        
+        esp_err_t fix_err = womo_gps_execute_fix_cycle();
+        
+        if (fix_err == ESP_OK) {
+            // Retrieve and publish the fix
+            womo_gps_data_t fix_data = {};
+            if (womo_gps_get_last_fix(&fix_data) == ESP_OK) {
+                fix_count++;
+                sensor_state_publish_gps(&fix_data, fix_count);
+                
+                ESP_LOGI(GPS_TAG, "GPS fix #%u successful: lat=%.6f, lon=%.6f, alt=%.1f m, "
+                         "sats=%u, conf=%.1f m, speed=%.1f km/h, heading=%.1f°",
+                         fix_count,
+                         fix_data.latitude,
+                         fix_data.longitude,
+                         fix_data.altitude_m,
+                         fix_data.satellites,
+                         fix_data.confidence_m,
+                         fix_data.speed_kmh,
+                         fix_data.heading_deg);
+            } else {
+                ESP_LOGW(GPS_TAG, "GPS fix succeeded but could not retrieve data");
+            }
+        } else {
+            ESP_LOGW(GPS_TAG, "GPS fix cycle failed: %s", esp_err_to_name(fix_err));
+        }
+        
+        ESP_LOGI(GPS_TAG, "Next GPS fix in %u seconds", WALTER_GPS_FIX_INTERVAL_MS / 1000);
+        vTaskDelay(interval_ticks);
+    }
+}
+#endif // WALTER_ENABLE_GPS
 
 #if WALTER_ENABLE_LTE
 
@@ -2998,6 +3128,22 @@ extern "C" void app_main(void)
         if (lte_created != pdPASS) {
             ESP_LOGE(TAG, "Failed to create LTE TCP task");
         }
+    }
+#endif
+
+#if WALTER_ENABLE_GPS
+    // Start GPS task
+    BaseType_t gps_created = xTaskCreate(
+        gps_task,
+        "gps",
+        WALTER_GPS_TASK_STACK,
+        nullptr,
+        WALTER_GPS_TASK_PRIORITY,
+        nullptr);
+    if (gps_created != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create GPS task");
+    } else {
+        ESP_LOGI(TAG, "GPS task created successfully");
     }
 #endif
 

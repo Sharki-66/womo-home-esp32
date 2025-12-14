@@ -152,6 +152,14 @@
 #define WALTER_LTE_TASK_PRIORITY 5
 
 // ====================================================================================
+// GPS/GNSS Configuration
+// ====================================================================================
+#define WALTER_ENABLE_GPS 1
+#define WALTER_GPS_FIX_INTERVAL_MS 3600000U  // 1 hour between fixes
+#define WALTER_GPS_TASK_STACK 4096
+#define WALTER_GPS_TASK_PRIORITY 5
+
+// ====================================================================================
 // Analog Monitor (Battery & Tank Levels)
 // ====================================================================================
 #define WALTER_ENABLE_ANALOG 1

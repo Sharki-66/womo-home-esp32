@@ -27,6 +27,9 @@ static SemaphoreHandle_t s_gps_mutex = NULL;
 static volatile bool s_gnss_fix_rcvd = false;
 static WalterModemGNSSFix s_latest_gnss_fix = {};
 
+// LTE control callback
+static womo_gps_lte_control_cb_t s_lte_control_cb = nullptr;
+
 static const char *modem_state_str(WalterModemState state)
 {
     switch (state) {
@@ -396,4 +399,160 @@ extern "C" esp_err_t womo_gps_set_utc_time(int64_t epoch_time)
     
     ESP_LOGI(TAG, "Set GNSS UTC time to %lld", epoch_time);
     return ESP_OK;
+}
+
+extern "C" esp_err_t womo_gps_register_lte_control(womo_gps_lte_control_cb_t callback)
+{
+    if (!callback) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    s_lte_control_cb = callback;
+    ESP_LOGI(TAG, "LTE control callback registered");
+    return ESP_OK;
+}
+
+/**
+ * @brief Get current time from LTE network
+ * Based on the positioning.cpp example which syncs time via LTE
+ */
+static esp_err_t fetch_time_from_lte(int64_t *epoch_time)
+{
+    if (!epoch_time) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    WalterModemRsp rsp = {};
+    
+    // Try to get current clock from modem (includes network time if registered)
+    if (!modem.getClock(&rsp)) {
+        ESP_LOGW(TAG, "Failed to get clock from modem");
+        return ESP_FAIL;
+    }
+    
+    *epoch_time = rsp.data.clock.epochTime;
+    ESP_LOGI(TAG, "Fetched time from LTE network: %lld", *epoch_time);
+    return ESP_OK;
+}
+
+/**
+ * @brief Wait for GNSS fix with timeout
+ */
+static esp_err_t wait_for_gnss_fix(uint32_t timeout_ms)
+{
+    ESP_LOGI(TAG, "Waiting for GNSS fix (timeout %u ms)", timeout_ms);
+    
+    uint32_t elapsed_ms = 0;
+    const uint32_t poll_interval_ms = 100;
+    
+    while (!s_gnss_fix_rcvd && elapsed_ms < timeout_ms) {
+        vTaskDelay(pdMS_TO_TICKS(poll_interval_ms));
+        elapsed_ms += poll_interval_ms;
+        
+        // Log progress every 10 seconds
+        if (elapsed_ms % 10000 == 0) {
+            ESP_LOGI(TAG, "Waiting for GNSS fix... %u/%u seconds", 
+                     elapsed_ms / 1000, timeout_ms / 1000);
+        }
+    }
+    
+    if (!s_gnss_fix_rcvd) {
+        ESP_LOGW(TAG, "GNSS fix timeout after %u ms", elapsed_ms);
+        return ESP_ERR_TIMEOUT;
+    }
+    
+    ESP_LOGI(TAG, "GNSS fix received after %u ms", elapsed_ms);
+    return ESP_OK;
+}
+
+extern "C" esp_err_t womo_gps_execute_fix_cycle(void)
+{
+    ESP_LOGI(TAG, "=== Starting complete GNSS fix cycle ===");
+    
+    esp_err_t result = ESP_OK;
+    bool lte_was_disabled = false;
+    
+    // Step 1: Fetch time from LTE network (while still connected)
+    ESP_LOGI(TAG, "Step 1: Fetching time from LTE network");
+    int64_t network_time = 0;
+    if (fetch_time_from_lte(&network_time) == ESP_OK) {
+        // Set GNSS subsystem time for faster fix
+        if (womo_gps_set_utc_time(network_time) != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to set GNSS time, continuing anyway");
+        }
+    } else {
+        ESP_LOGW(TAG, "Could not fetch time from LTE, GNSS fix may take longer");
+    }
+    
+    // Step 2: Disable LTE (required for GNSS - shared radio)
+    ESP_LOGI(TAG, "Step 2: Disabling LTE for GNSS operation");
+    if (s_lte_control_cb) {
+        if (s_lte_control_cb(false) == ESP_OK) {
+            lte_was_disabled = true;
+            // Give LTE time to fully disconnect
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            ESP_LOGI(TAG, "LTE disabled successfully");
+        } else {
+            ESP_LOGW(TAG, "Failed to disable LTE via callback, trying manual disconnect");
+            if (!lte_disconnect()) {
+                ESP_LOGE(TAG, "Failed to disconnect LTE");
+                result = ESP_FAIL;
+                goto cleanup;
+            }
+            lte_was_disabled = true;
+        }
+    } else {
+        ESP_LOGI(TAG, "No LTE control callback, disconnecting manually");
+        if (!lte_disconnect()) {
+            ESP_LOGE(TAG, "Failed to disconnect LTE");
+            result = ESP_FAIL;
+            goto cleanup;
+        }
+        lte_was_disabled = true;
+    }
+    
+    // Step 3: Execute GNSS fix
+    ESP_LOGI(TAG, "Step 3: Requesting GNSS fix");
+    if (womo_gps_request_fix() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to request GNSS fix");
+        result = ESP_FAIL;
+        goto cleanup;
+    }
+    
+    // Wait for fix (timeout: 3 minutes for cold start, less for hot start)
+    uint32_t fix_timeout_ms = s_fix_received ? 60000 : 180000;
+    if (wait_for_gnss_fix(fix_timeout_ms) != ESP_OK) {
+        ESP_LOGE(TAG, "GNSS fix timeout");
+        result = ESP_ERR_TIMEOUT;
+        // Continue to cleanup and re-enable LTE
+    } else {
+        ESP_LOGI(TAG, "GNSS fix completed successfully");
+        result = ESP_OK;
+    }
+    
+cleanup:
+    // Step 4: Re-enable LTE
+    if (lte_was_disabled) {
+        ESP_LOGI(TAG, "Step 4: Re-enabling LTE");
+        if (s_lte_control_cb) {
+            esp_err_t lte_enable_result = s_lte_control_cb(true);
+            if (lte_enable_result != ESP_OK) {
+                ESP_LOGW(TAG, "Failed to re-enable LTE: %s", esp_err_to_name(lte_enable_result));
+                // Don't override the main result if GNSS succeeded
+                if (result == ESP_OK) {
+                    result = lte_enable_result;
+                }
+            } else {
+                ESP_LOGI(TAG, "LTE re-enabled successfully");
+            }
+        } else {
+            ESP_LOGW(TAG, "No LTE control callback, LTE remains disabled");
+            ESP_LOGW(TAG, "LTE will need to be manually re-enabled by the application");
+        }
+    }
+    
+    ESP_LOGI(TAG, "=== GNSS fix cycle complete: %s ===", 
+             result == ESP_OK ? "SUCCESS" : esp_err_to_name(result));
+    
+    return result;
 }

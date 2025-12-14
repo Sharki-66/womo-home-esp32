@@ -83,6 +83,38 @@ esp_err_t womo_gps_get_utc_time(int64_t *epoch_time);
  */
 esp_err_t womo_gps_set_utc_time(int64_t epoch_time);
 
+/**
+ * @brief Execute complete GNSS fix cycle (disable LTE, get time, fix, re-enable LTE)
+ * 
+ * This function handles the full workflow:
+ * 1. Fetches current time from LTE network
+ * 2. Disables LTE (required for GNSS operation - shared radio)
+ * 3. Executes GNSS fix
+ * 4. Re-enables LTE
+ * 
+ * @note This is a blocking operation that may take 30-180 seconds
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t womo_gps_execute_fix_cycle(void);
+
+/**
+ * @brief Callback function type for LTE control
+ * 
+ * @param enable True to enable LTE, false to disable
+ * @return ESP_OK on success, error code otherwise
+ */
+typedef esp_err_t (*womo_gps_lte_control_cb_t)(bool enable);
+
+/**
+ * @brief Register LTE control callback for GPS module
+ * 
+ * This allows the GPS module to control LTE radio state during GNSS operations.
+ * 
+ * @param callback Function to call for LTE enable/disable
+ * @return ESP_OK on success
+ */
+esp_err_t womo_gps_register_lte_control(womo_gps_lte_control_cb_t callback);
+
 #ifdef __cplusplus
 }
 #endif
