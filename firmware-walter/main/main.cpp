@@ -1391,6 +1391,9 @@ static esp_err_t sensor_subsystem_init(void);
 static void configure_routing_after_connect(void);
 static void configure_softap_dns(void);
 static void enable_switched_3v3(void);
+#if WALTER_ENABLE_LTE
+static esp_err_t lte_control_for_gps(bool enable);
+#endif
 #if WALTER_ENABLE_RS485
 static esp_err_t command_set_lte_enabled(bool enable);
 static esp_err_t command_set_wifi_ap_enabled(bool enable);
@@ -2411,30 +2414,55 @@ static void handle_rs485_command(const char *cmd_json)
 }
 #endif // WALTER_ENABLE_RS485
 
-#if WALTER_ENABLE_RS485
-static esp_err_t command_set_lte_enabled(bool enable)
-{
 #if WALTER_ENABLE_LTE
-    ESP_LOGI(TAG, "Command: LTE %s", enable ? "enable" : "disable");
-
+/**
+ * @brief Internal LTE control function for GPS module
+ */
+static esp_err_t lte_control_for_gps(bool enable)
+{
+    ESP_LOGI(TAG, "GPS module requesting LTE %s", enable ? "enable" : "disable");
+    
     bool previous = s_lte_target_enabled.exchange(enable);
     if (previous == enable) {
         return ESP_OK;
     }
-
+    
     if (!s_lte_command_queue) {
         ESP_LOGW(TAG, "LTE command queue not ready");
         s_lte_target_enabled.store(previous);
         return ESP_ERR_INVALID_STATE;
     }
-
+    
     lte_runtime_cmd_t cmd = enable ? LTE_CMD_ENABLE : LTE_CMD_DISABLE;
     if (xQueueSend(s_lte_command_queue, &cmd, pdMS_TO_TICKS(100)) != pdPASS) {
         ESP_LOGW(TAG, "LTE command queue full");
         s_lte_target_enabled.store(previous);
         return ESP_ERR_TIMEOUT;
     }
+    
+    // Wait a bit for the command to take effect
+    if (enable) {
+        // Enabling - wait for LTE to come back up
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    } else {
+        // Disabling - wait for LTE to shut down
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+    
     return ESP_OK;
+}
+#endif
+
+#if WALTER_ENABLE_RS485
+static esp_err_t command_set_lte_enabled(bool enable)
+{
+#if WALTER_ENABLE_LTE
+    return lte_control_for_gps(enable);
+#else
+    (void)enable;
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
+}
 #else
     (void)enable;
     return ESP_ERR_NOT_SUPPORTED;
@@ -2529,12 +2557,16 @@ static void gps_task(void *arg)
         return;
     }
     
+#if WALTER_ENABLE_LTE
     // Register LTE control callback
-    esp_err_t reg_err = womo_gps_register_lte_control(command_set_lte_enabled);
+    esp_err_t reg_err = womo_gps_register_lte_control(lte_control_for_gps);
     if (reg_err != ESP_OK) {
         ESP_LOGW(GPS_TAG, "Failed to register LTE control callback: %s", esp_err_to_name(reg_err));
         ESP_LOGW(GPS_TAG, "GPS will manage LTE manually");
     }
+#else
+    ESP_LOGW(GPS_TAG, "LTE not enabled, GPS will operate without LTE coordination");
+#endif
     
     uint32_t fix_count = 0;
     const TickType_t interval_ticks = pdMS_TO_TICKS(WALTER_GPS_FIX_INTERVAL_MS);
