@@ -58,14 +58,14 @@ The connection between ESP Board and the LCD is as follows:
 * The LCD parameters and GPIO number used by this example can be changed in [example_rgb_avoid_tearing.c](main/example_rgb_avoid_tearing.c). Especially, please pay attention to the **vendor specific initialization**, it can be different between manufacturers and should consult the LCD supplier for initialization sequence code.
 * The LVGL parameters can be changed not only through `menuconfig` but also directly in `lvgl_conf.h`
 
-### ESP32-S3-A7670E-4G (ohne Kamera)
+### ESP32-S3-A7670E-4G (camera not used)
 
-Wenn du die ESP32-S3-A7670E-4G ohne Kamera nutzt und die frei gewordenen Pins für Display/Touch/Sensor-I2C verwenden möchtest, passe die neuen Kconfig-Optionen an:
+If you run the ESP32-S3-A7670E-4G without the camera and want to reuse those freed pins for the display/touch/sensor I2C bus, adjust the new Kconfig options:
 
 - `Board Hardware -> Shared I2C SDA pin`
 - `Board Hardware -> Shared I2C SCL pin`
 
-Standardmäßig bleiben die ursprünglichen Waveshare-AMOLED-7" Pins erhalten (SDA=8, SCL=9); für das A7670E-Board kannst du hier dein eigenes Pin-Mapping eintragen.
+Defaults keep the original Waveshare AMOLED 7" wiring (SDA=8, SCL=9); for the A7670E board you can enter your own pin mapping here.
 
 ### Configure the Project
 
