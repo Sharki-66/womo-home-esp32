@@ -8,13 +8,15 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "hardware/board_config.h"
 
 static const char *TAG = "womo_bme680";
 
-// I2C configuration (shared with display/touch)
-#define I2C_MASTER_NUM          I2C_NUM_0
-#define I2C_MASTER_SDA_IO       8
-#define I2C_MASTER_SCL_IO       9
+// Shared I2C mapping (centralized for easier board swaps)
+#define I2C_MASTER_NUM          BOARD_I2C_PORT
+#define I2C_MASTER_SDA_IO       BOARD_I2C_SDA
+#define I2C_MASTER_SCL_IO       BOARD_I2C_SCL
+
 #define BME680_I2C_ADDR         BME680_I2C_ADDR_1  // 0x77
 
 static bme680_t bme680_dev = { 0 };

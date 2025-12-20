@@ -58,6 +58,15 @@ The connection between ESP Board and the LCD is as follows:
 * The LCD parameters and GPIO number used by this example can be changed in [example_rgb_avoid_tearing.c](main/example_rgb_avoid_tearing.c). Especially, please pay attention to the **vendor specific initialization**, it can be different between manufacturers and should consult the LCD supplier for initialization sequence code.
 * The LVGL parameters can be changed not only through `menuconfig` but also directly in `lvgl_conf.h`
 
+### ESP32-S3-A7670E-4G (ohne Kamera)
+
+Wenn du die ESP32-S3-A7670E-4G ohne Kamera nutzt und die frei gewordenen Pins für Display/Touch/Sensor-I2C verwenden möchtest, passe die neuen Kconfig-Optionen an:
+
+- `Board Hardware -> Shared I2C SDA pin`
+- `Board Hardware -> Shared I2C SCL pin`
+
+Standardmäßig bleiben die ursprünglichen Waveshare-AMOLED-7" Pins erhalten (SDA=8, SCL=9); für das A7670E-Board kannst du hier dein eigenes Pin-Mapping eintragen.
+
 ### Configure the Project
 
 Run `idf.py menuconfig` and navigate to `Example Configuration` menu.

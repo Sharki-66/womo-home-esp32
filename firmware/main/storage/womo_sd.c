@@ -8,6 +8,7 @@
 #include "sdmmc_cmd.h"
 #include "driver/sdmmc_host.h"
 #include "driver/i2c.h"
+#include "hardware/board_config.h"
 #include <sys/stat.h>
 #include <string.h>
 
@@ -26,9 +27,9 @@ static spi_host_device_t spi_host = SPI2_HOST;  // Store SPI host for cleanup
 #define PIN_CS    -1  // CS controlled via I2C GPIO expander
 
 // I2C for GPIO expander (CH422G)
-#define I2C_MASTER_NUM     0
-#define I2C_MASTER_SCL_IO  9
-#define I2C_MASTER_SDA_IO  8
+#define I2C_MASTER_NUM     BOARD_I2C_PORT
+#define I2C_MASTER_SCL_IO  BOARD_I2C_SCL
+#define I2C_MASTER_SDA_IO  BOARD_I2C_SDA
 #define I2C_MASTER_FREQ_HZ 400000
 
 // CH422G I2C addresses for SD card CS control

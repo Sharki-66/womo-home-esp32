@@ -12,12 +12,13 @@
 #include "esp_lcd_touch_gt911.h"
 #include "lv_demos.h"
 #include "lvgl_port.h"
+#include "board_config.h"
 
 #define CONFIG_EXAMPLE_LCD_TOUCH_CONTROLLER_GT911 1 // 1 initiates the touch, 0 closes the touch.
 
-#define I2C_MASTER_SCL_IO           9       /*!< GPIO number used for I2C master clock */
-#define I2C_MASTER_SDA_IO           8       /*!< GPIO number used for I2C master data  */
-#define I2C_MASTER_NUM              0       /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
+#define I2C_MASTER_SCL_IO           BOARD_I2C_SCL             /*!< GPIO number used for I2C master clock */
+#define I2C_MASTER_SDA_IO           BOARD_I2C_SDA             /*!< GPIO number used for I2C master data  */
+#define I2C_MASTER_NUM              BOARD_I2C_PORT            /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
 #define I2C_MASTER_FREQ_HZ          400000                     /*!< I2C master clock frequency */
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */

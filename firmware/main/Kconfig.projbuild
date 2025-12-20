@@ -21,6 +21,26 @@ menu "Example Configuration"
                 Maximum number of WiFi connection retry attempts. Set to 0 for infinite retries.
     endmenu
 
+    menu "Board Hardware"
+        config WOMO_I2C_SDA
+            int "Shared I2C SDA pin"
+            default 8
+            range 0 48
+            help
+                SDA pin used by the shared I2C bus (touch, sensors, GPIO expander).
+                For the ESP32-S3-A7670E-4G without camera you can repurpose freed camera
+                pins here if your wiring differs from the Waveshare AMOLED 7\" defaults.
+
+        config WOMO_I2C_SCL
+            int "Shared I2C SCL pin"
+            default 9
+            range 0 48
+            help
+                SCL pin used by the shared I2C bus (touch, sensors, GPIO expander).
+                Adjust to match your ESP32-S3-A7670E-4G wiring when the camera pins
+                are reused for the display stack.
+    endmenu
+
     menu "Display"
         config EXAMPLE_LCD_RGB_BOUNCE_BUFFER_HEIGHT
             int "RGB Bounce buffer height"
