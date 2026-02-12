@@ -124,4 +124,15 @@ const char* womo_wifi_get_last_error(void);
 esp_err_t womo_wifi_scan_async(womo_wifi_scan_callback_t callback, void *user_data);
 bool womo_wifi_is_scan_in_progress(void);
 
+/**
+ * @brief Scan nach bekannten Netzwerken und verbinde zum ersten Treffer (MRU-Reihenfolge)
+ *
+ * Lädt die gespeicherten Zugangsdaten aus NVS und wählt die zuerst gespeicherte SSID,
+ * die im Scan gefunden wird. Passwort wird aus dem NVS-Eintrag verwendet.
+ *
+ * @param max_retry Maximale Verbindungsversuche (0 = unendlich)
+ * @return ESP_OK bei erfolgreicher Verbindung, ESP_ERR_NOT_FOUND wenn kein bekanntes Netz in Reichweite
+ */
+esp_err_t womo_wifi_connect_best_known(uint8_t max_retry);
+
 #endif // WOMO_WIFI_H

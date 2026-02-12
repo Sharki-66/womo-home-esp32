@@ -13,6 +13,7 @@
 #include "esp_err.h"
 #include "esp_event.h"
 #include "esp_app_desc.h"
+#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_netif.h"
@@ -31,6 +32,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #if (defined(configGENERATE_RUN_TIME_STATS) && (configGENERATE_RUN_TIME_STATS == 1) && \
     defined(configUSE_TRACE_FACILITY) && (configUSE_TRACE_FACILITY == 1))
@@ -45,6 +47,7 @@
 #include "WalterModem.h"
 #if WALTER_ENABLE_GPS
 #include "womo_gps.h"
+#include "modem_manager.h"
 #endif
 #if WALTER_ENABLE_WEBUI
 #include "web/womo_web.h"
@@ -52,6 +55,7 @@
 
 #if WALTER_ENABLE_BME680
 #include "bme680.h"
+#include "bsec_interface.h"
 #endif
 
 #if WALTER_ENABLE_BNO055
@@ -62,6 +66,10 @@ WalterModem modem;
 static const char *TAG = "walter_main";
 static constexpr size_t WIFI_SSID_MAX_LEN = 32;
 
+#if WALTER_ENABLE_GPS
+static SemaphoreHandle_t s_modem_ready_sem = nullptr;
+#endif
+
 static void configure_logging(void)
 {
     esp_log_level_set("*", ESP_LOG_WARN);
@@ -70,8 +78,10 @@ static void configure_logging(void)
     esp_log_level_set("womo_hx711", ESP_LOG_INFO);
     esp_log_level_set("womo_rs485", ESP_LOG_INFO);
     esp_log_level_set("womo_gps", ESP_LOG_INFO);
-    esp_log_level_set("lte_tcp", ESP_LOG_INFO);
-    esp_log_level_set("WalterModem", ESP_LOG_INFO);
+    // Höheres Logging für LTE-Diagnose
+    esp_log_level_set("lte_tcp", ESP_LOG_DEBUG);
+    esp_log_level_set("modem_mgr", ESP_LOG_DEBUG);
+    esp_log_level_set("WalterModem", ESP_LOG_DEBUG);
 }
 
 static TickType_t ms_to_ticks(uint32_t ms)
@@ -94,7 +104,7 @@ static float clampf(float value, float min_val, float max_val)
     return value;
 }
 
-static float wrap_angle_deg(float angle)
+static __attribute__((unused)) float wrap_angle_deg(float angle)
 {
     while (angle < -180.0f) {
         angle += 360.0f;
@@ -105,7 +115,7 @@ static float wrap_angle_deg(float angle)
     return angle;
 }
 
-static float wrap_angle_0_360(float angle)
+static __attribute__((unused)) float wrap_angle_0_360(float angle)
 {
     while (angle < 0.0f) {
         angle += 360.0f;
@@ -116,35 +126,32 @@ static float wrap_angle_0_360(float angle)
     return angle;
 }
 
-static bool limit_angle_delta(float &current,
-                              float previous,
-                              float max_step_deg,
-                              bool wrap_to_360)
+// Begrenze Winkelsprünge und optionaler Wrap um ±180°
+static bool limit_angle_delta(float &value, float last, float max_step_deg, bool wrap_around)
 {
     if (max_step_deg <= 0.0f) {
         return false;
     }
 
-    float diff = current - previous;
-    while (diff > 180.0f) {
-        diff -= 360.0f;
-    }
-    while (diff < -180.0f) {
-        diff += 360.0f;
+    float delta = value - last;
+    if (wrap_around) {
+        delta = wrap_angle_deg(delta);
     }
 
-    if (fabsf(diff) <= max_step_deg) {
-        return false;
+    bool adjusted = false;
+    if (fabsf(delta) > max_step_deg) {
+        delta = copysignf(max_step_deg, delta);
+        adjusted = true;
     }
 
-    float limited = previous + copysignf(max_step_deg, diff);
-    current = wrap_to_360 ? wrap_angle_0_360(limited) : wrap_angle_deg(limited);
-    return true;
+    value = wrap_around ? wrap_angle_deg(last + delta) : last + delta;
+    return adjusted;
 }
+
+// remove unused helpers to silence warnings
 
 static const char* heading_to_compass(float heading);
 
-#if WALTER_ENABLE_LTE
 static uint8_t lte_signal_strength_percent(float rsrp_dbm)
 {
     if (!isfinite(rsrp_dbm)) {
@@ -156,7 +163,111 @@ static uint8_t lte_signal_strength_percent(float rsrp_dbm)
     pct = clampf(pct, 0.0f, 100.0f);
     return static_cast<uint8_t>(pct + 0.5f);
 }
+// LTE Runtime-Steuerung (früh platziert, damit GPS-Task darauf zugreifen kann)
+QueueHandle_t s_lte_command_queue = nullptr;
+std::atomic<bool> s_lte_target_enabled{true};
+std::atomic<bool> s_lte_runtime_active{false};
+esp_err_t s_lte_last_error = ESP_OK;
+std::atomic<bool> s_lte_quiet_active{false};
+
+// Vorwärtsdeklaration für LTE-Steuerung, genutzt im GPS-Task
+esp_err_t lte_runtime_set_enabled(bool enable);
+typedef enum {
+    LTE_CMD_ENABLE,
+    LTE_CMD_DISABLE,
+    LTE_CMD_RESTART,
+    LTE_CMD_QUIET_ON,
+    LTE_CMD_QUIET_OFF,
+} lte_runtime_cmd_t;
+
+esp_err_t lte_runtime_set_enabled(bool enable)
+{
+#if WALTER_ENABLE_LTE
+    ESP_LOGI(TAG, "Command: LTE %s (caller=%s)", enable ? "enable" : "disable", pcTaskGetName(NULL));
+    bool previous = s_lte_target_enabled.exchange(enable);
+    if (previous == enable) {
+        return ESP_OK;
+    }
+
+    if (!s_lte_command_queue) {
+        ESP_LOGW(TAG, "LTE command queue not ready");
+        s_lte_target_enabled.store(previous);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    lte_runtime_cmd_t cmd = enable ? LTE_CMD_ENABLE : LTE_CMD_DISABLE;
+    if (xQueueSend(s_lte_command_queue, &cmd, pdMS_TO_TICKS(100)) != pdPASS) {
+        ESP_LOGW(TAG, "LTE command queue full");
+        s_lte_target_enabled.store(previous);
+        return ESP_ERR_TIMEOUT;
+    }
+    return ESP_OK;
+#else
+    (void)enable;
+    return ESP_ERR_NOT_SUPPORTED;
 #endif
+}
+
+esp_err_t lte_runtime_set_quiet(bool quiet)
+{
+#if WALTER_ENABLE_LTE
+    ESP_LOGI(TAG, "Command: LTE quiet %s (caller=%s)", quiet ? "on" : "off", pcTaskGetName(NULL));
+
+    if (!s_lte_command_queue) {
+        ESP_LOGW(TAG, "LTE command queue not ready");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    lte_runtime_cmd_t cmd = quiet ? LTE_CMD_QUIET_ON : LTE_CMD_QUIET_OFF;
+    if (xQueueSend(s_lte_command_queue, &cmd, pdMS_TO_TICKS(100)) != pdPASS) {
+        ESP_LOGW(TAG, "LTE quiet command queue full");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    // Optimistisch setzen, damit Aufrufer nicht auf Queue-Verarbeitung warten muss
+    s_lte_quiet_active.store(quiet);
+
+    TickType_t start = xTaskGetTickCount();
+    const TickType_t wait_ticks = pdMS_TO_TICKS(3000);
+    while ((xTaskGetTickCount() - start) < wait_ticks) {
+        if (s_lte_quiet_active.load() == quiet) {
+            return ESP_OK;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
+    ESP_LOGW(TAG, "LTE quiet transition timeout (requested=%d active=%d)",
+             quiet ? 1 : 0,
+             s_lte_quiet_active.load() ? 1 : 0);
+    return ESP_ERR_TIMEOUT;
+#else
+    (void)quiet;
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
+}
+
+esp_err_t lte_runtime_restart(void)
+{
+#if WALTER_ENABLE_LTE
+    ESP_LOGI(TAG, "Command: LTE restart (caller=%s)", pcTaskGetName(NULL));
+
+    if (!s_lte_command_queue) {
+        ESP_LOGW(TAG, "LTE command queue not ready");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    lte_runtime_cmd_t cmd = LTE_CMD_RESTART;
+    if (xQueueSend(s_lte_command_queue, &cmd, pdMS_TO_TICKS(100)) != pdPASS) {
+        ESP_LOGW(TAG, "LTE restart command queue full");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    s_lte_target_enabled.store(true);
+    return ESP_OK;
+#else
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
+}
 
 #if WALTER_ENABLE_BME680 || WALTER_ENABLE_BNO055
 static i2c_master_bus_handle_t s_sensor_i2c_bus = nullptr;
@@ -195,6 +306,10 @@ static esp_err_t ensure_sensor_i2c_bus(void)
 #if WALTER_ENABLE_BNO055
 static constexpr const char *BNO055_NVS_NAMESPACE = "bno055";
 static constexpr const char *BNO055_NVS_KEY = "calib";
+static constexpr const char *GAS_NVS_NAMESPACE = "gas_hist";
+static constexpr const char *GAS_NVS_KEY = "hist";
+static constexpr const char *GAS_NVS_TARA_KEY = "tara";
+static constexpr uint32_t GAS_TARA_BLOB_VERSION = 1;
 static constexpr uint32_t BNO055_CAL_VERSION = 1;
 
 typedef struct {
@@ -339,11 +454,42 @@ typedef struct {
     float dewpoint_c;
     float gas_res_kohm;
     uint16_t iaq_score;
+    uint8_t iaq_accuracy;
+    float co2_eq_ppm;
+    float bvoc_ppm;
     bool gas_valid;
     bool heater_stable;
     uint8_t gas_range;
     uint8_t gas_index;
 } bme680_measurement_t;
+
+enum class PressureTrendState : uint8_t {
+    kUnknown = 0,
+    kSteady,
+    kRiseSlow,
+    kRiseFast,
+    kFallSlow,
+    kFallFast,
+};
+
+enum class PressureDiffState : uint8_t {
+    kUnknown = 0,
+    kOk,
+    kWarn,
+    kHigh,
+};
+
+typedef struct {
+    int64_t ts_us;
+    float pressure_hpa;
+    bool valid;
+} pressure_sample_t;
+
+typedef struct {
+    pressure_sample_t samples[1200];  // 3h window at worst-case cadence
+    size_t head;
+    size_t count;
+} pressure_history_t;
 
 typedef struct {
     uint8_t address;
@@ -371,6 +517,211 @@ typedef struct {
 } bme680_plausibility_state_t;
 
 static bme680_plausibility_state_t s_bme680_plausibility[kBme680MaxSensors] = {};
+static pressure_history_t s_bme_pressure_history[kBme680MaxSensors] = {};
+static PressureTrendState s_bme_pressure_trend[kBme680MaxSensors] = {
+    PressureTrendState::kUnknown,
+    PressureTrendState::kUnknown,
+};
+
+static constexpr int kPressTrendWindowSec = 3 * 3600;      // 3h Fenster
+static constexpr int kPressTrendMinWindowSec = 3600;       // mindestens 1h Daten
+static constexpr uint16_t kPressTrendMinSamples = 20;      // Mindestanzahl Samples
+static constexpr float kPressTrendSlow = 0.3f;             // hPa/h
+static constexpr float kPressTrendFast = 1.0f;             // hPa/h
+static constexpr float kPressTrendHys = 0.2f;              // Hysterese
+
+static constexpr int kPressDiffWindowSec = 300;            // 5 Minuten Outdoor-Mittel
+static constexpr float kPressDiffWarn = 1.0f;              // hPa
+static constexpr float kPressDiffHigh = 2.0f;              // hPa
+
+static const char *pressure_trend_state_str(PressureTrendState state)
+{
+    switch (state) {
+        case PressureTrendState::kSteady:
+            return "steady";
+        case PressureTrendState::kRiseSlow:
+            return "rise_slow";
+        case PressureTrendState::kRiseFast:
+            return "rise_fast";
+        case PressureTrendState::kFallSlow:
+            return "fall_slow";
+        case PressureTrendState::kFallFast:
+            return "fall_fast";
+        case PressureTrendState::kUnknown:
+        default:
+            return "unknown";
+    }
+}
+
+static const char *pressure_diff_state_str(PressureDiffState state)
+{
+    switch (state) {
+        case PressureDiffState::kOk:
+            return "ok";
+        case PressureDiffState::kWarn:
+            return "warn";
+        case PressureDiffState::kHigh:
+            return "high";
+        case PressureDiffState::kUnknown:
+        default:
+            return "unknown";
+    }
+}
+
+static void pressure_history_add(size_t index, int64_t ts_us, float pressure_hpa)
+{
+    if (index >= kBme680MaxSensors) {
+        return;
+    }
+    auto &hist = s_bme_pressure_history[index];
+    hist.samples[hist.head] = {ts_us, pressure_hpa, true};
+    hist.head = (hist.head + 1) % (sizeof(hist.samples) / sizeof(hist.samples[0]));
+    if (hist.count < (sizeof(hist.samples) / sizeof(hist.samples[0]))) {
+        hist.count++;
+    }
+}
+
+static bool pressure_history_trend(size_t index, int64_t now_us, float *out_slope_hpa_h,
+                                   uint16_t *out_samples, uint16_t *out_window_min,
+                                   PressureTrendState *io_state)
+{
+    if (index >= kBme680MaxSensors) {
+        return false;
+    }
+    const auto &hist = s_bme_pressure_history[index];
+    if (hist.count == 0) {
+        return false;
+    }
+
+    const int64_t window_us = static_cast<int64_t>(kPressTrendWindowSec) * 1000000LL;
+    const int64_t min_window_us = static_cast<int64_t>(kPressTrendMinWindowSec) * 1000000LL;
+    const size_t cap = sizeof(hist.samples) / sizeof(hist.samples[0]);
+
+    // Collect samples inside window (newest to oldest)
+    float sum_t = 0.0f;
+    float sum_p = 0.0f;
+    float sum_t2 = 0.0f;
+    float sum_tp = 0.0f;
+    uint16_t n = 0;
+    int64_t newest_ts = 0;
+    int64_t oldest_ts = 0;
+
+    // Use the newest sample timestamp as reference to keep numbers small
+    const pressure_sample_t *latest = nullptr;
+    for (size_t i = 0; i < hist.count; ++i) {
+        size_t idx = (hist.head + cap - 1 - i) % cap;
+        const auto &s = hist.samples[idx];
+        if (!s.valid) {
+            continue;
+        }
+        if (latest == nullptr) {
+            latest = &s;
+        }
+        int64_t age = latest->ts_us - s.ts_us;
+        if (age > window_us) {
+            break;
+        }
+        float t = static_cast<float>(-(age) / 1e6);  // seconds relative to latest (0 at newest)
+        sum_t += t;
+        sum_p += s.pressure_hpa;
+        sum_t2 += t * t;
+        sum_tp += t * s.pressure_hpa;
+        if (n == 0) {
+            newest_ts = s.ts_us;
+        }
+        oldest_ts = s.ts_us;
+        ++n;
+    }
+
+    if (n < kPressTrendMinSamples) {
+        return false;
+    }
+    int64_t span_us = newest_ts - oldest_ts;
+    if (span_us < min_window_us) {
+        return false;
+    }
+
+    float denom = (n * sum_t2) - (sum_t * sum_t);
+    if (denom == 0.0f) {
+        return false;
+    }
+    float slope_hpa_per_s = ((n * sum_tp) - (sum_t * sum_p)) / denom;
+    float slope_hpa_per_h = slope_hpa_per_s * 3600.0f;
+
+    PressureTrendState prev = io_state ? *io_state : PressureTrendState::kUnknown;
+    PressureTrendState state = PressureTrendState::kSteady;
+    float slow_up = kPressTrendSlow + kPressTrendHys;
+    float slow_down = kPressTrendSlow - kPressTrendHys;
+    float fast_up = kPressTrendFast + kPressTrendHys;
+    float fast_down = kPressTrendFast - kPressTrendHys;
+
+    auto classify = [&](float s, PressureTrendState last) {
+        if (last == PressureTrendState::kRiseFast || last == PressureTrendState::kRiseSlow) {
+            if (s > fast_down) return PressureTrendState::kRiseFast;
+            if (s > slow_down) return PressureTrendState::kRiseSlow;
+        }
+        if (last == PressureTrendState::kFallFast || last == PressureTrendState::kFallSlow) {
+            if (s < -fast_down) return PressureTrendState::kFallFast;
+            if (s < -slow_down) return PressureTrendState::kFallSlow;
+        }
+        if (s >= fast_up) return PressureTrendState::kRiseFast;
+        if (s >= slow_up) return PressureTrendState::kRiseSlow;
+        if (s <= -fast_up) return PressureTrendState::kFallFast;
+        if (s <= -slow_up) return PressureTrendState::kFallSlow;
+        return PressureTrendState::kSteady;
+    };
+
+    state = classify(slope_hpa_per_h, prev);
+
+    if (out_slope_hpa_h) {
+        *out_slope_hpa_h = slope_hpa_per_h;
+    }
+    if (out_samples) {
+        *out_samples = n;
+    }
+    if (out_window_min) {
+        *out_window_min = static_cast<uint16_t>(span_us / 60000000LL);
+    }
+    if (io_state) {
+        *io_state = state;
+    }
+    return true;
+}
+
+static bool pressure_history_avg(size_t index, int64_t now_us, int window_sec, float *out_avg,
+                                 uint16_t *out_samples)
+{
+    if (index >= kBme680MaxSensors) {
+        return false;
+    }
+    const auto &hist = s_bme_pressure_history[index];
+    const int64_t window_us = static_cast<int64_t>(window_sec) * 1000000LL;
+    const size_t cap = sizeof(hist.samples) / sizeof(hist.samples[0]);
+    float sum = 0.0f;
+    uint16_t n = 0;
+    for (size_t i = 0; i < hist.count; ++i) {
+        size_t idx = (hist.head + cap - 1 - i) % cap;
+        const auto &s = hist.samples[idx];
+        if (!s.valid) {
+            continue;
+        }
+        if ((now_us - s.ts_us) > window_us) {
+            break;
+        }
+        sum += s.pressure_hpa;
+        ++n;
+    }
+    if (n == 0) {
+        return false;
+    }
+    if (out_avg) {
+        *out_avg = sum / static_cast<float>(n);
+    }
+    if (out_samples) {
+        *out_samples = n;
+    }
+    return true;
+}
 
 static bool bme680_get_last_valid(size_t index,
                                   bme680_measurement_t *out_measurement,
@@ -402,130 +753,15 @@ static bool bme680_apply_plausibility(size_t index,
         return false;
     }
 
-    bool fallback_used = false;
+    (void)log_tag;  // Validation disabled; keep signature stable.
+
     bme680_plausibility_state_t &state = s_bme680_plausibility[index];
-    const bool have_last = state.have_value;
-    const bme680_measurement_t previous = state.last;
-    const float dt_s = (have_last && now_us > state.last_timestamp_us)
-                           ? static_cast<float>(now_us - state.last_timestamp_us) / 1000000.0f
-                           : 0.0f;
-
-    auto handle_non_finite = [&](float &value, const char *field_name, float last_value) {
-        if (!isfinite(value)) {
-            if (have_last) {
-                ESP_LOGW(TAG, "%s %s non-finite, using previous %.2f", log_tag, field_name, last_value);
-                value = last_value;
-                fallback_used = true;
-            } else {
-                ESP_LOGW(TAG, "%s %s non-finite, clamping to 0", log_tag, field_name);
-                value = 0.0f;
-                fallback_used = true;
-            }
-        }
-    };
-
-    auto handle_range = [&](float &value, float min_val, float max_val, const char *field_name, float last_value) {
-        if (value < min_val || value > max_val) {
-            if (have_last) {
-                ESP_LOGW(TAG, "%s %s %.2f out of bounds (%.2f..%.2f), using previous %.2f",
-                         log_tag, field_name, value, min_val, max_val, last_value);
-                value = last_value;
-                fallback_used = true;
-            } else {
-                ESP_LOGW(TAG, "%s %s %.2f out of bounds (%.2f..%.2f), clamping",
-                         log_tag, field_name, value, min_val, max_val);
-                value = clampf(value, min_val, max_val);
-                fallback_used = true;
-            }
-        }
-    };
-
-    auto handle_delta = [&](float &value, float last_value, float max_delta_per_sec, const char *field_name) {
-        if (have_last && dt_s > 0.0f && max_delta_per_sec > 0.0f) {
-            float delta_per_sec = fabsf(value - last_value) / dt_s;
-            if (delta_per_sec > max_delta_per_sec) {
-                ESP_LOGW(TAG,
-                         "%s %s delta %.2f per second exceeds %.2f, using previous %.2f",
-                         log_tag,
-                         field_name,
-                         delta_per_sec,
-                         max_delta_per_sec,
-                         last_value);
-                value = last_value;
-                fallback_used = true;
-            }
-        }
-    };
-
-    handle_non_finite(measurement.temperature_c, "temperature", previous.temperature_c);
-    handle_range(measurement.temperature_c,
-                 WALTER_BME680_TEMP_MIN_C,
-                 WALTER_BME680_TEMP_MAX_C,
-                 "temperature",
-                 previous.temperature_c);
-    handle_delta(measurement.temperature_c,
-                 previous.temperature_c,
-                 WALTER_BME680_TEMP_MAX_DELTA_PER_SEC,
-                 "temperature");
-
-    handle_non_finite(measurement.humidity_pct, "humidity", previous.humidity_pct);
-    handle_range(measurement.humidity_pct,
-                 WALTER_BME680_HUM_MIN_PCT,
-                 WALTER_BME680_HUM_MAX_PCT,
-                 "humidity",
-                 previous.humidity_pct);
-    handle_delta(measurement.humidity_pct,
-                 previous.humidity_pct,
-                 WALTER_BME680_HUM_MAX_DELTA_PER_SEC,
-                 "humidity");
-
-    handle_non_finite(measurement.pressure_hpa, "pressure", previous.pressure_hpa);
-    handle_range(measurement.pressure_hpa,
-                 WALTER_BME680_PRESS_MIN_HPA,
-                 WALTER_BME680_PRESS_MAX_HPA,
-                 "pressure",
-                 previous.pressure_hpa);
-    handle_delta(measurement.pressure_hpa,
-                 previous.pressure_hpa,
-                 WALTER_BME680_PRESS_MAX_DELTA_PER_SEC,
-                 "pressure");
-
-    if (!isfinite(measurement.dewpoint_c)) {
-        if (have_last) {
-            ESP_LOGW(TAG, "%s dewpoint non-finite, using previous %.2f", log_tag, previous.dewpoint_c);
-            measurement.dewpoint_c = previous.dewpoint_c;
-        } else {
-            measurement.dewpoint_c = 0.0f;
-        }
-        fallback_used = true;
-    }
-
-    if (!measurement.gas_valid) {
-        if (have_last && previous.gas_valid) {
-            ESP_LOGW(TAG, "%s gas measurement invalid, using previous sample", log_tag);
-            measurement.gas_valid = previous.gas_valid;
-            measurement.gas_res_kohm = previous.gas_res_kohm;
-            measurement.gas_range = previous.gas_range;
-            measurement.gas_index = previous.gas_index;
-            measurement.heater_stable = previous.heater_stable;
-            fallback_used = true;
-        }
-    } else {
-        handle_non_finite(measurement.gas_res_kohm, "gas", previous.gas_res_kohm);
-    }
-
-    if (have_last) {
-        if (!isfinite(measurement.temperature_c) || !isfinite(measurement.humidity_pct)) {
-            measurement.dewpoint_c = previous.dewpoint_c;
-        }
-    }
-
     state.have_value = true;
     state.last = measurement;
     state.last_timestamp_us = now_us;
 
     if (out_used_fallback) {
-        *out_used_fallback = fallback_used;
+        *out_used_fallback = false;
     }
 
     return true;
@@ -537,13 +773,52 @@ static void bme680_task(void *arg)
     const size_t index = params->index;
     const char *log_tag = params->log_tag;
 
+    const bool use_bsec = (params->address == WALTER_BME680_ADDR_1);
+    const TickType_t period = ms_to_ticks(use_bsec ? 3000U : WALTER_BME680_POLL_INTERVAL_MS);
+    uint32_t bsec_publish_divider = use_bsec ? (WALTER_BME680_POLL_INTERVAL_MS / 3000U) : 1U;
+    if (bsec_publish_divider == 0U) {
+        bsec_publish_divider = 1U;
+    }
+    uint32_t bsec_publish_countdown = bsec_publish_divider;
+
     ESP_LOGI(TAG, "%s task started (index=%u, addr=0x%02X)", log_tag, (unsigned)index, params->address);
 
     bme680_handle_t handle = nullptr;
     bool initialised = false;
     bool startup_delay_done = false;
 
-    const TickType_t period = ms_to_ticks(WALTER_BME680_POLL_INTERVAL_MS);
+    bsec_library_return_t bsec_status = BSEC_OK;
+    bool bsec_ready = false;
+
+    if (use_bsec) {
+        bsec_status = bsec_init();
+        if (bsec_status != BSEC_OK) {
+            ESP_LOGW(TAG, "%s bsec_init failed: %d", log_tag, (int)bsec_status);
+        } else {
+            bsec_sensor_configuration_t requested_virtual_sensors[] = {
+                {BSEC_SAMPLE_RATE_LP, BSEC_OUTPUT_IAQ},
+                {BSEC_SAMPLE_RATE_LP, BSEC_OUTPUT_CO2_EQUIVALENT},
+                {BSEC_SAMPLE_RATE_LP, BSEC_OUTPUT_BREATH_VOC_EQUIVALENT},
+                {BSEC_SAMPLE_RATE_LP, BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE},
+                {BSEC_SAMPLE_RATE_LP, BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY},
+                {BSEC_SAMPLE_RATE_LP, BSEC_OUTPUT_RAW_PRESSURE},
+                {BSEC_SAMPLE_RATE_LP, BSEC_OUTPUT_RAW_GAS},
+            };
+            bsec_sensor_configuration_t required_sensor_settings[BSEC_MAX_PHYSICAL_SENSOR] = {};
+            uint8_t n_required = BSEC_MAX_PHYSICAL_SENSOR;
+            bsec_status = bsec_update_subscription(requested_virtual_sensors,
+                                                   sizeof(requested_virtual_sensors) / sizeof(requested_virtual_sensors[0]),
+                                                   required_sensor_settings,
+                                                   &n_required);
+            if (bsec_status != BSEC_OK) {
+                ESP_LOGW(TAG, "%s bsec_update_subscription failed: %d", log_tag, (int)bsec_status);
+            } else {
+                bsec_ready = true;
+                ESP_LOGI(TAG, "%s BSEC enabled (LP 3s, publish/30s)", log_tag);
+            }
+        }
+    }
+
     TickType_t last_wake = xTaskGetTickCount();
 
     while (true) {
@@ -599,10 +874,58 @@ static void bme680_task(void *arg)
             measurement.dewpoint_c = data.dewpoint_temperature;
             measurement.gas_res_kohm = data.gas_resistance / 1000.0f;
             measurement.iaq_score = data.iaq_score;
+            measurement.iaq_accuracy = 0;
+            measurement.co2_eq_ppm = 0.0f;
+            measurement.bvoc_ppm = 0.0f;
             measurement.gas_valid = data.gas_valid;
             measurement.heater_stable = data.heater_stable;
             measurement.gas_range = data.gas_range;
             measurement.gas_index = data.gas_index;
+
+            if (use_bsec && bsec_ready) {
+                const int64_t ts_ns = timestamp_us * 1000;  // BSEC expects ns
+                bsec_input_t inputs[4] = {};
+                uint8_t n_inputs = 0;
+
+                inputs[n_inputs++] = {ts_ns, data.air_temperature, 1, BSEC_INPUT_TEMPERATURE};
+                inputs[n_inputs++] = {ts_ns, data.barometric_pressure, 1, BSEC_INPUT_PRESSURE};
+                inputs[n_inputs++] = {ts_ns, data.relative_humidity, 1, BSEC_INPUT_HUMIDITY};
+                inputs[n_inputs++] = {ts_ns, data.gas_resistance, 1, BSEC_INPUT_GASRESISTOR};
+
+                bsec_output_t outputs[10] = {};
+                uint8_t n_outputs = sizeof(outputs) / sizeof(outputs[0]);
+                bsec_status = bsec_do_steps(inputs, n_inputs, outputs, &n_outputs);
+                if (bsec_status != BSEC_OK) {
+                    ESP_LOGW(TAG, "%s bsec_do_steps failed: %d", log_tag, (int)bsec_status);
+                } else {
+                    for (uint8_t i = 0; i < n_outputs; ++i) {
+                        const bsec_output_t &out = outputs[i];
+                        switch (out.sensor_id) {
+                        case BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE:
+                            measurement.temperature_c = out.signal;
+                            break;
+                        case BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY:
+                            measurement.humidity_pct = out.signal;
+                            break;
+                        case BSEC_OUTPUT_RAW_PRESSURE:
+                            measurement.pressure_hpa = out.signal / 100.0f;
+                            break;
+                        case BSEC_OUTPUT_IAQ:
+                            measurement.iaq_score = static_cast<uint16_t>(out.signal);
+                            measurement.iaq_accuracy = out.accuracy;
+                            break;
+                        case BSEC_OUTPUT_CO2_EQUIVALENT:
+                            measurement.co2_eq_ppm = out.signal;
+                            break;
+                        case BSEC_OUTPUT_BREATH_VOC_EQUIVALENT:
+                            measurement.bvoc_ppm = out.signal;
+                            break;
+                        default:
+                            break;
+                        }
+                    }
+                }
+            }
 
             bool used_fallback = false;
             if (bme680_apply_plausibility(index, measurement, timestamp_us, log_tag, &used_fallback)) {
@@ -620,7 +943,20 @@ static void bme680_task(void *arg)
             }
         }
 
-        if (publish) {
+        bool do_publish = publish;
+        if (use_bsec && publish) {
+            if (bsec_publish_countdown > 0) {
+                bsec_publish_countdown -= 1;
+            }
+            if (bsec_publish_countdown > 0) {
+                do_publish = false;
+            } else {
+                bsec_publish_countdown = bsec_publish_divider;
+                do_publish = true;
+            }
+        }
+
+        if (do_publish) {
             sensor_state_publish_bme680(index, measurement, fallback, timestamp_us);
 #if WALTER_SENSOR_LOG_BME680
             ESP_LOGI(TAG,
@@ -909,11 +1245,29 @@ static void bno055_task(void *arg)
 #if WALTER_ENABLE_GPS
 static void sensor_state_note_gps_request_result(esp_err_t status);
 static void sensor_state_publish_gps_fix(const womo_gps_data_t &fix);
+static bool gps_fix_plausible(const womo_gps_data_t &fix);
 
 static void gps_task(void *arg)
 {
     (void)arg;
     ESP_LOGI(TAG, "GPS task started");
+
+#if !WALTER_ENABLE_LTE
+    ESP_LOGE(TAG, "GPS task requires LTE modem support; enable WALTER_ENABLE_LTE");
+    vTaskDelete(nullptr);
+    return;
+#else
+    if (!s_modem_ready_sem) {
+        ESP_LOGE(TAG, "GPS task missing modem-ready semaphore; aborting");
+        vTaskDelete(nullptr);
+        return;
+    }
+
+    ESP_LOGI(TAG, "GPS waiting for modem initialisation");
+    while (xSemaphoreTake(s_modem_ready_sem, ms_to_ticks(1000)) != pdTRUE) {
+        ESP_LOGW(TAG, "GPS still waiting for modem...");
+    }
+    xSemaphoreGive(s_modem_ready_sem);
 
     esp_err_t init_err = womo_gps_init();
     sensor_state_note_gps_request_result(init_err);
@@ -923,45 +1277,69 @@ static void gps_task(void *arg)
         return;
     }
 
+    const TickType_t first_delay = ms_to_ticks(WALTER_GPS_FIRST_DELAY_MS);
     const TickType_t request_interval = ms_to_ticks(WALTER_GPS_REQUEST_INTERVAL_MS);
     const TickType_t poll_delay = ms_to_ticks(WALTER_GPS_POLL_INTERVAL_MS);
-    const TickType_t retry_delay = ms_to_ticks(WALTER_GPS_RETRY_DELAY_MS);
-    TickType_t last_request = xTaskGetTickCount() - request_interval;
+    const TickType_t gnss_timeout = ms_to_ticks(WALTER_GPS_FIX_TIMEOUT_MS);
+    TickType_t last_request = xTaskGetTickCount();
+    bool first_cycle = true;
     int64_t last_fix_timestamp = 0;
+    const TickType_t wait_log_interval = ms_to_ticks(10000);
+    TickType_t last_wait_log = xTaskGetTickCount();
 
     while (true) {
         TickType_t now = xTaskGetTickCount();
-        if ((now - last_request) >= request_interval) {
-            esp_err_t req_err = womo_gps_request_fix();
+        TickType_t wait = first_cycle ? first_delay : request_interval;
+        if ((now - last_request) >= wait) {
+            uint32_t waited_ms = (uint32_t)((now - last_request) * portTICK_PERIOD_MS);
+            ESP_LOGI(TAG, "GPS cycle trigger after %u ms (first=%s)", waited_ms, first_cycle ? "yes" : "no");
+            womo_gps_data_t fix = {};
+            esp_err_t req_err = modem_manager_run_gnss_cycle(gnss_timeout, &fix);
             sensor_state_note_gps_request_result(req_err);
-            if (req_err == ESP_OK) {
-                ESP_LOGI(TAG, "GPS fix request queued");
-                last_request = now;
-            } else {
-                ESP_LOGW(TAG, "GPS fix request failed: %s", esp_err_to_name(req_err));
-                vTaskDelay(retry_delay);
-                continue;
-            }
-        }
+            last_request = now;
+            first_cycle = false;
 
-        womo_gps_data_t fix = {};
-        if (womo_gps_get_last_fix(&fix) == ESP_OK) {
-            sensor_state_publish_gps_fix(fix);
-            if (fix.timestamp != 0 && fix.timestamp != last_fix_timestamp) {
-                last_fix_timestamp = fix.timestamp;
-                ESP_LOGI(TAG,
-                         "GPS fix lat=%.6f lon=%.6f alt=%.1f m speed=%.1f km/h sats=%u conf=%.1f m",
-                         fix.latitude,
-                         fix.longitude,
-                         fix.altitude_m,
-                         fix.speed_kmh,
-                         fix.satellites,
-                         fix.confidence_m);
+            if (req_err == ESP_OK) {
+                const bool plausible = gps_fix_plausible(fix);
+                if (plausible) {
+                    sensor_state_publish_gps_fix(fix);
+                    if (fix.timestamp != 0 && fix.timestamp != last_fix_timestamp) {
+                        last_fix_timestamp = fix.timestamp;
+                        ESP_LOGI(TAG,
+                                 "GPS fix lat=%.6f lon=%.6f alt=%.1f m speed=%.1f km/h sats=%u conf=%.1f m",
+                                 fix.latitude,
+                                 fix.longitude,
+                                 fix.altitude_m,
+                                 fix.speed_kmh,
+                                 fix.satellites,
+                                 fix.confidence_m);
+                    }
+                } else {
+                    ESP_LOGW(TAG,
+                             "GPS fix rejected (plausibility) lat=%.6f lon=%.6f alt=%.1f m speed=%.1f km/h sats=%u conf=%.1f m",
+                             fix.latitude,
+                             fix.longitude,
+                             fix.altitude_m,
+                             fix.speed_kmh,
+                             fix.satellites,
+                             fix.confidence_m);
+                }
+            } else {
+                ESP_LOGW(TAG, "GNSS cycle failed: %s", esp_err_to_name(req_err));
+            }
+        } else {
+            TickType_t since_log = now - last_wait_log;
+            if (since_log >= wait_log_interval) {
+                TickType_t remaining_ticks = wait - (now - last_request);
+                uint32_t remaining_ms = (uint32_t)(remaining_ticks * portTICK_PERIOD_MS);
+                ESP_LOGD(TAG, "GPS waiting: next cycle in %u ms (first=%s)", remaining_ms, first_cycle ? "yes" : "no");
+                last_wait_log = now;
             }
         }
 
         vTaskDelay(poll_delay);
     }
+#endif // WALTER_ENABLE_LTE
 }
 #endif
 
@@ -989,9 +1367,6 @@ static esp_err_t wifi_runtime_apply(bool ap_enable, bool sta_enable);
 static esp_err_t wifi_runtime_apply_targets(void);
 static void sensor_state_publish_wifi_state(void);
 static void wifi_set_last_error(esp_err_t err);
-#if WALTER_ENABLE_GPS && WALTER_ENABLE_LTE
-static SemaphoreHandle_t s_modem_ready_sem = nullptr;
-#endif
 
 static constexpr gpio_num_t SENSOR_RAIL_GPIO = GPIO_NUM_0;
 
@@ -1002,6 +1377,39 @@ static womo_hx711_t s_hx711 = {};
 
 static constexpr int HX_IDX_PLATFORM_A = 0;
 static constexpr int HX_IDX_PLATFORM_B = 1;
+
+typedef struct {
+    int64_t ts_us;
+    float net_a_kg;
+    float net_b_kg;
+    bool valid_a;
+    bool valid_b;
+} gas_hist_sample_t;
+
+static constexpr size_t GAS_HISTORY_SAMPLES = (WALTER_GAS_HISTORY_MINUTES * 60) / 10; // 10s cadence
+static gas_hist_sample_t s_gas_history[GAS_HISTORY_SAMPLES];
+static size_t s_gas_hist_count = 0;
+static size_t s_gas_hist_head = 0;
+
+static float s_gas_tara_kg[2] = {WALTER_GAS_TARA_KG, WALTER_GAS_TARA_KG};
+
+static constexpr size_t GAS_NVS_SLOTS = WALTER_GAS_HISTORY_MINUTES / WALTER_GAS_NVS_INTERVAL_MIN;
+static gas_hist_sample_t s_gas_nvs_slots[GAS_NVS_SLOTS];
+static size_t s_gas_nvs_count = 0;
+static int64_t s_gas_last_nvs_save_us = 0;
+static portMUX_TYPE s_gas_hist_mux = portMUX_INITIALIZER_UNLOCKED;
+
+typedef struct {
+    bool valid;
+    int active_idx; // 0=A, 1=B, -1=keine
+    float net_kg;
+    float rate_kgph_1h;
+    float rate_kgph_2h;
+    float rest_hours;
+    float net_a;
+    float net_b;
+} gas_consumption_state_t;
+static gas_consumption_state_t s_gas_state = {};
 
 typedef struct {
     bool has_value;
@@ -1095,6 +1503,7 @@ static bool hx_plausibility_check(int index, float value, const char *label)
 
     return ok;
 }
+
 #endif
 
 typedef struct {
@@ -1104,15 +1513,28 @@ typedef struct {
         bool valid_b;
         bool fallback_a;
         bool fallback_b;
+        bool nc;
         float kg_a;
         float kg_b;
         int64_t timestamp_us;
     } hx711;
+    struct {
+        bool valid;
+        int active_idx; // 0=A, 1=B, -1=none
+        float net_kg;
+        float rate_kgph_1h;
+        float rate_kgph_2h;
+        float rest_hours;
+        float net_a;
+        float net_b;
+    } gas;
 #endif
 #if WALTER_ENABLE_ANALOG
     struct {
         bool valid;
         womo_analog_data_t data;
+        bool batt_nc[2];
+        bool tank_nc[2];
         int64_t timestamp_us;
     } analog;
 #endif
@@ -1128,6 +1550,7 @@ typedef struct {
         float confidence_m;
         uint32_t time_to_fix_ms;
         int64_t timestamp;
+        int64_t last_fix_us;
         int64_t last_request_us;
         esp_err_t last_error;
     } gps;
@@ -1164,10 +1587,21 @@ typedef struct {
         float dewpoint_c;
         float gas_res_kohm;
         uint16_t iaq_score;
+        uint8_t iaq_accuracy; // Added for IAQ accuracy
+        float co2_eq_ppm;     // Added for CO2 equivalent concentration
+        float bvoc_ppm;       // Added for VOC concentration
         bool gas_valid;
         bool heater_stable;
         uint8_t gas_range;
         uint8_t gas_index;
+        float press_trend_slope_hpa_h;
+        uint16_t press_trend_samples;
+        uint16_t press_trend_window_min;
+        uint8_t press_trend_state;
+        float press_diff_hpa;
+        uint16_t press_diff_samples;
+        uint16_t press_diff_window_min;
+        uint8_t press_diff_state;
         int64_t timestamp_us;
     } bme680[kBme680MaxSensors];
     size_t bme680_active;
@@ -1224,6 +1658,7 @@ static sensor_shared_state_t sensor_state_snapshot(void)
 #if WALTER_ENABLE_HX711
 static void sensor_state_publish_hx711(bool have_a, float kg_a, bool fallback_a,
                                        bool have_b, float kg_b, bool fallback_b,
+                                       bool nc,
                                        int64_t timestamp_us)
 {
     portENTER_CRITICAL(&s_sensor_state_mux);
@@ -1231,6 +1666,7 @@ static void sensor_state_publish_hx711(bool have_a, float kg_a, bool fallback_a,
     s_sensor_state.hx711.valid_b = have_b;
     s_sensor_state.hx711.fallback_a = fallback_a;
     s_sensor_state.hx711.fallback_b = fallback_b;
+    s_sensor_state.hx711.nc = nc;
     s_sensor_state.hx711.kg_a = kg_a;
     s_sensor_state.hx711.kg_b = kg_b;
     s_sensor_state.hx711.timestamp_us = timestamp_us;
@@ -1238,15 +1674,284 @@ static void sensor_state_publish_hx711(bool have_a, float kg_a, bool fallback_a,
 }
 #endif
 
-#if WALTER_ENABLE_ANALOG
-static void sensor_state_publish_analog(const womo_analog_data_t *analog, int64_t timestamp_us)
+// ------------------------------------------------------------
+// Gas-Verbrauch: Verlauf, Persistenz, Ableitungen
+// ------------------------------------------------------------
+
+static inline float gas_net_from_raw(int idx, float kg_raw)
 {
-    if (!analog) {
+    float tara = WALTER_GAS_TARA_KG;
+    if (idx >= 0 && idx < 2) {
+        tara = s_gas_tara_kg[idx];
+    }
+    float net = kg_raw - tara;
+    return net < 0.0f ? 0.0f : net;
+}
+
+static esp_err_t gas_tara_save_to_nvs(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(GAS_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    struct __attribute__((packed)) {
+        uint32_t version;
+        float tara[2];
+    } blob = {};
+    blob.version = GAS_TARA_BLOB_VERSION;
+    blob.tara[0] = s_gas_tara_kg[0];
+    blob.tara[1] = s_gas_tara_kg[1];
+
+    err = nvs_set_blob(handle, GAS_NVS_TARA_KEY, &blob, sizeof(blob));
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    return err;
+}
+
+static void gas_tara_restore_from_nvs(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(GAS_NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        if (err != ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGW(TAG, "Gas tara NVS open failed: %s", esp_err_to_name(err));
+        }
+        return;
+    }
+
+    struct __attribute__((packed)) {
+        uint32_t version;
+        float tara[2];
+    } blob = {};
+    size_t sz = sizeof(blob);
+    err = nvs_get_blob(handle, GAS_NVS_TARA_KEY, &blob, &sz);
+    nvs_close(handle);
+    if (err != ESP_OK) {
+        if (err != ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGW(TAG, "Gas tara NVS read failed: %s", esp_err_to_name(err));
+        }
+        return;
+    }
+    if (sz != sizeof(blob) || blob.version != GAS_TARA_BLOB_VERSION) {
+        ESP_LOGW(TAG, "Gas tara NVS blob invalid (sz=%u, ver=%u)", (unsigned)sz, (unsigned)blob.version);
+        return;
+    }
+
+    float max_tara = (WALTER_GAS_TARA_KG_MAX > 0.0f) ? WALTER_GAS_TARA_KG_MAX : WALTER_GAS_TARA_KG;
+    for (int i = 0; i < 2; ++i) {
+        float v = blob.tara[i];
+        if (!isfinite(v) || v <= 0.0f) {
+            v = WALTER_GAS_TARA_KG;
+        }
+        if (v > max_tara) {
+            v = max_tara;
+        }
+        s_gas_tara_kg[i] = v;
+    }
+    ESP_LOGI(TAG, "Gas tara restored: A=%.2f kg, B=%.2f kg", s_gas_tara_kg[0], s_gas_tara_kg[1]);
+}
+
+static void gas_history_push(bool valid_a, float kg_a, bool valid_b, float kg_b, int64_t ts_us)
+{
+    float net_a = valid_a ? gas_net_from_raw(HX_IDX_PLATFORM_A, kg_a) : 0.0f;
+    float net_b = valid_b ? gas_net_from_raw(HX_IDX_PLATFORM_B, kg_b) : 0.0f;
+
+    portENTER_CRITICAL(&s_gas_hist_mux);
+    gas_hist_sample_t *slot = &s_gas_history[s_gas_hist_head];
+    slot->ts_us = ts_us;
+    slot->net_a_kg = net_a;
+    slot->net_b_kg = net_b;
+    slot->valid_a = valid_a;
+    slot->valid_b = valid_b;
+
+    s_gas_hist_head = (s_gas_hist_head + 1) % GAS_HISTORY_SAMPLES;
+    if (s_gas_hist_count < GAS_HISTORY_SAMPLES) {
+        ++s_gas_hist_count;
+    }
+    portEXIT_CRITICAL(&s_gas_hist_mux);
+
+    // NVS-Checkpoint nur selten, um Wear zu begrenzen
+    const int64_t interval_us = (int64_t)WALTER_GAS_NVS_INTERVAL_MIN * 60 * 1000000LL;
+    if (ts_us - s_gas_last_nvs_save_us >= interval_us) {
+        size_t idx = s_gas_nvs_count < GAS_NVS_SLOTS ? s_gas_nvs_count : (s_gas_nvs_count % GAS_NVS_SLOTS);
+        s_gas_nvs_slots[idx] = *slot;
+        if (s_gas_nvs_count < GAS_NVS_SLOTS) {
+            ++s_gas_nvs_count;
+        }
+        s_gas_last_nvs_save_us = ts_us;
+
+        nvs_handle_t handle;
+        esp_err_t err = nvs_open(GAS_NVS_NAMESPACE, NVS_READWRITE, &handle);
+        if (err == ESP_OK) {
+            struct __attribute__((packed)) {
+                uint32_t count;
+                gas_hist_sample_t slots[GAS_NVS_SLOTS];
+            } blob = {};
+            blob.count = s_gas_nvs_count;
+            memcpy(blob.slots, s_gas_nvs_slots, sizeof(s_gas_nvs_slots));
+            err = nvs_set_blob(handle, GAS_NVS_KEY, &blob, sizeof(blob));
+            if (err == ESP_OK) {
+                err = nvs_commit(handle);
+            }
+            if (err != ESP_OK) {
+                ESP_LOGW(TAG, "Gas history NVS save failed: %s", esp_err_to_name(err));
+            }
+            nvs_close(handle);
+        } else {
+            ESP_LOGW(TAG, "Gas history NVS open failed: %s", esp_err_to_name(err));
+        }
+    }
+}
+
+static void gas_history_restore_from_nvs(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(GAS_NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        if (err != ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGW(TAG, "Gas history NVS open (ro) failed: %s", esp_err_to_name(err));
+        }
+        return;
+    }
+
+    struct __attribute__((packed)) {
+        uint32_t count;
+        gas_hist_sample_t slots[GAS_NVS_SLOTS];
+    } blob = {};
+    size_t sz = sizeof(blob);
+    err = nvs_get_blob(handle, GAS_NVS_KEY, &blob, &sz);
+    nvs_close(handle);
+    if (err != ESP_OK) {
+        if (err != ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGW(TAG, "Gas history NVS read failed: %s", esp_err_to_name(err));
+        }
+        return;
+    }
+
+    s_gas_nvs_count = blob.count > GAS_NVS_SLOTS ? GAS_NVS_SLOTS : blob.count;
+    memcpy(s_gas_nvs_slots, blob.slots, sizeof(s_gas_nvs_slots));
+
+    // Seed RAM-Historie mit NVS-Slots (chronologische Reihenfolge annehmen)
+    for (size_t i = 0; i < s_gas_nvs_count; ++i) {
+        gas_hist_sample_t *s = &s_gas_nvs_slots[i];
+        float kg_a = s->net_a_kg + s_gas_tara_kg[HX_IDX_PLATFORM_A];
+        float kg_b = s->net_b_kg + s_gas_tara_kg[HX_IDX_PLATFORM_B];
+        gas_history_push(s->valid_a, kg_a, s->valid_b, kg_b, s->ts_us);
+    }
+    ESP_LOGI(TAG, "Gas history restored: %u checkpoints", (unsigned)s_gas_nvs_count);
+}
+
+static bool gas_history_find_sample(int64_t now_us, int64_t age_target_us, gas_hist_sample_t *out)
+{
+    bool found = false;
+    portENTER_CRITICAL(&s_gas_hist_mux);
+    size_t idx = s_gas_hist_head;
+    for (size_t i = 0; i < s_gas_hist_count; ++i) {
+        if (idx == 0) {
+            idx = GAS_HISTORY_SAMPLES;
+        }
+        idx--;
+        gas_hist_sample_t s = s_gas_history[idx];
+        if (now_us - s.ts_us >= age_target_us) {
+            *out = s;
+            found = true;
+            break;
+        }
+    }
+    portEXIT_CRITICAL(&s_gas_hist_mux);
+    return found;
+}
+
+static void gas_compute_state(bool valid_a, float kg_a, bool valid_b, float kg_b, int64_t ts_us)
+{
+    float net_a = valid_a ? gas_net_from_raw(HX_IDX_PLATFORM_A, kg_a) : 0.0f;
+    float net_b = valid_b ? gas_net_from_raw(HX_IDX_PLATFORM_B, kg_b) : 0.0f;
+
+    gas_hist_sample_t s1h = {};
+    gas_hist_sample_t s2h = {};
+    bool have1h = gas_history_find_sample(ts_us, 3600LL * 1000000LL, &s1h);
+    bool have2h = gas_history_find_sample(ts_us, 7200LL * 1000000LL, &s2h);
+
+    auto rate_from = [](float now_net, float prev_net, int64_t dt_us) {
+        if (dt_us <= 0) return 0.0f;
+        float delta = prev_net - now_net;
+        if (delta <= 0.0f) return 0.0f;
+        float hours = (float)dt_us / 3600000000.0f;
+        return delta / hours;
+    };
+
+    float rate1_a = have1h && s1h.valid_a ? rate_from(net_a, s1h.net_a_kg, ts_us - s1h.ts_us) : 0.0f;
+    float rate1_b = have1h && s1h.valid_b ? rate_from(net_b, s1h.net_b_kg, ts_us - s1h.ts_us) : 0.0f;
+    float rate2_a = have2h && s2h.valid_a ? rate_from(net_a, s2h.net_a_kg, ts_us - s2h.ts_us) : 0.0f;
+    float rate2_b = have2h && s2h.valid_b ? rate_from(net_b, s2h.net_b_kg, ts_us - s2h.ts_us) : 0.0f;
+
+    // Aktive Flasche wählen: die mit Netto > Min und geringerem Netto (typisch: aktuell in Benutzung)
+    int active_idx = -1;
+    if (net_a >= WALTER_GAS_MIN_NET_KG && net_b >= WALTER_GAS_MIN_NET_KG) {
+        active_idx = (net_a <= net_b) ? HX_IDX_PLATFORM_A : HX_IDX_PLATFORM_B;
+    } else if (net_a >= WALTER_GAS_MIN_NET_KG) {
+        active_idx = HX_IDX_PLATFORM_A;
+    } else if (net_b >= WALTER_GAS_MIN_NET_KG) {
+        active_idx = HX_IDX_PLATFORM_B;
+    }
+
+    float net_active = 0.0f;
+    float rate1 = 0.0f;
+    float rate2 = 0.0f;
+    if (active_idx == HX_IDX_PLATFORM_A) {
+        net_active = net_a;
+        rate1 = rate1_a;
+        rate2 = rate2_a;
+    } else if (active_idx == HX_IDX_PLATFORM_B) {
+        net_active = net_b;
+        rate1 = rate1_b;
+        rate2 = rate2_b;
+    }
+
+    float rate_use = rate1 > 0.0f ? rate1 : rate2;
+    float rest_h = (rate_use > 0.0f) ? (net_active / rate_use) : -1.0f;
+
+    gas_consumption_state_t snapshot = {};
+    snapshot.valid = (active_idx >= 0);
+    snapshot.active_idx = active_idx;
+    snapshot.net_kg = net_active;
+    snapshot.rate_kgph_1h = rate1;
+    snapshot.rate_kgph_2h = rate2;
+    snapshot.rest_hours = rest_h;
+    snapshot.net_a = net_a;
+    snapshot.net_b = net_b;
+
+    portENTER_CRITICAL(&s_sensor_state_mux);
+    s_gas_state = snapshot;
+    s_sensor_state.gas.valid = snapshot.valid;
+    s_sensor_state.gas.active_idx = snapshot.active_idx;
+    s_sensor_state.gas.net_kg = snapshot.net_kg;
+    s_sensor_state.gas.rate_kgph_1h = snapshot.rate_kgph_1h;
+    s_sensor_state.gas.rate_kgph_2h = snapshot.rate_kgph_2h;
+    s_sensor_state.gas.rest_hours = snapshot.rest_hours;
+    s_sensor_state.gas.net_a = snapshot.net_a;
+    s_sensor_state.gas.net_b = snapshot.net_b;
+    portEXIT_CRITICAL(&s_sensor_state_mux);
+}
+
+#if WALTER_ENABLE_ANALOG
+static void sensor_state_publish_analog(const womo_analog_data_t *analog,
+                                        const bool batt_nc[2],
+                                        const bool tank_nc[2],
+                                        int64_t timestamp_us)
+{
+    if (!analog || !batt_nc || !tank_nc) {
         return;
     }
     portENTER_CRITICAL(&s_sensor_state_mux);
     s_sensor_state.analog.valid = true;
     s_sensor_state.analog.data = *analog;
+    memcpy(s_sensor_state.analog.batt_nc, batt_nc, sizeof(s_sensor_state.analog.batt_nc));
+    memcpy(s_sensor_state.analog.tank_nc, tank_nc, sizeof(s_sensor_state.analog.tank_nc));
     s_sensor_state.analog.timestamp_us = timestamp_us;
     portEXIT_CRITICAL(&s_sensor_state_mux);
 }
@@ -1279,8 +1984,21 @@ static void sensor_state_publish_gps_fix(const womo_gps_data_t &fix)
     slot.confidence_m = fix.confidence_m;
     slot.time_to_fix_ms = fix.time_to_fix_ms;
     slot.timestamp = fix.timestamp;
+    slot.last_fix_us = esp_timer_get_time();
     slot.last_error = ESP_OK;
     portEXIT_CRITICAL(&s_sensor_state_mux);
+}
+
+static bool gps_fix_plausible(const womo_gps_data_t &fix)
+{
+    if (!fix.valid) {
+        return false;
+    }
+    const bool sats_ok = fix.satellites >= 4;
+    const bool conf_ok = fix.confidence_m <= 1000.0f; // reject huge uncertainty
+    const bool alt_ok = (fix.altitude_m > -500.0f) && (fix.altitude_m < 3000.0f);
+    const bool speed_ok = fix.speed_kmh <= 80.0f; // assume Fahrzeug steht/rollt langsam
+    return sats_ok && conf_ok && alt_ok && speed_ok;
 }
 #endif
 
@@ -1294,6 +2012,10 @@ static void sensor_state_publish_lte_registration(bool registered)
     }
     s_sensor_state.lte.timestamp_us = esp_timer_get_time();
     portEXIT_CRITICAL(&s_sensor_state_mux);
+
+    ESP_LOGI(TAG, "LTE reg state set: registered=%s info_valid=%s",
+             registered ? "yes" : "no",
+             s_sensor_state.lte.info_valid ? "yes" : "no");
 }
 
 static void sensor_state_publish_lte_cellinfo(const WalterModemCellInformation &cell)
@@ -1313,6 +2035,13 @@ static void sensor_state_publish_lte_cellinfo(const WalterModemCellInformation &
     s_sensor_state.lte.band = cell.band;
     s_sensor_state.lte.timestamp_us = esp_timer_get_time();
     portEXIT_CRITICAL(&s_sensor_state_mux);
+
+    ESP_LOGI(TAG,
+             "LTE cell info: op=%s reg=yes rsrp=%.1f dBm rsrq=%.1f dB band=%u",
+             s_sensor_state.lte.operator_name,
+             s_sensor_state.lte.rsrp_dbm,
+             s_sensor_state.lte.rsrq_db,
+             static_cast<unsigned>(s_sensor_state.lte.band));
 }
 #endif
 
@@ -1421,6 +2150,14 @@ static void sensor_state_mark_bme680_configured(size_t index, uint8_t address)
     slot.address = address;
     slot.valid = false;
     slot.fallback = false;
+    slot.press_trend_slope_hpa_h = 0.0f;
+    slot.press_trend_samples = 0;
+    slot.press_trend_window_min = 0;
+    slot.press_trend_state = static_cast<uint8_t>(PressureTrendState::kUnknown);
+    slot.press_diff_hpa = 0.0f;
+    slot.press_diff_samples = 0;
+    slot.press_diff_window_min = 0;
+    slot.press_diff_state = static_cast<uint8_t>(PressureDiffState::kUnknown);
     if (s_sensor_state.bme680_active < (index + 1)) {
         s_sensor_state.bme680_active = index + 1;
     }
@@ -1433,6 +2170,75 @@ static void sensor_state_publish_bme680(size_t index, const bme680_measurement_t
     if (index >= kBme680MaxSensors) {
         return;
     }
+
+    // Trendberechnung vor dem Lock vorbereiten
+    pressure_history_add(index, timestamp_us, measurement.pressure_hpa);
+
+    float trend_slope_hpa_h = 0.0f;
+    uint16_t trend_samples = 0;
+    uint16_t trend_window_min = 0;
+    PressureTrendState trend_state = s_bme_pressure_trend[index];
+    bool trend_ok = pressure_history_trend(index,
+                                           timestamp_us,
+                                           &trend_slope_hpa_h,
+                                           &trend_samples,
+                                           &trend_window_min,
+                                           &trend_state);
+    if (!trend_ok) {
+        trend_slope_hpa_h = 0.0f;
+        trend_samples = 0;
+        trend_window_min = 0;
+        trend_state = PressureTrendState::kUnknown;
+    } else {
+        s_bme_pressure_trend[index] = trend_state;
+    }
+
+    float diff_hpa = 0.0f;
+    uint16_t diff_samples = 0;
+    uint16_t diff_window_min = 0;
+    PressureDiffState diff_state = PressureDiffState::kUnknown;
+    uint8_t sensor_addr = 0;
+    {
+        portENTER_CRITICAL(&s_sensor_state_mux);
+        sensor_addr = s_sensor_state.bme680[index].address;
+        portEXIT_CRITICAL(&s_sensor_state_mux);
+    }
+    if (sensor_addr == WALTER_BME680_ADDR_0) {
+        // Outdoor ist Referenz; Indoor dient nur als Plausibilisierung (kein Mittelwert)
+        float out_avg = 0.0f;
+        uint16_t out_samples = 0;
+        bool have_out_avg = pressure_history_avg(index,
+                                                 timestamp_us,
+                                                 kPressDiffWindowSec,
+                                                 &out_avg,
+                                                 &out_samples);
+
+        float in_latest = 0.0f;
+        bool have_in = false;
+        int64_t in_age_us = 0;
+        if (s_bme680_plausibility[1].have_value && s_bme680_plausibility[1].last_timestamp_us > 0) {
+            in_latest = s_bme680_plausibility[1].last.pressure_hpa;
+            in_age_us = timestamp_us - s_bme680_plausibility[1].last_timestamp_us;
+            if (in_age_us <= static_cast<int64_t>(kPressDiffWindowSec) * 1000000LL) {
+                have_in = true;
+            }
+        }
+
+        if (have_out_avg && have_in) {
+            diff_hpa = out_avg - in_latest;
+            diff_samples = out_samples;
+            diff_window_min = static_cast<uint16_t>(kPressDiffWindowSec / 60);
+            float adiff = fabsf(diff_hpa);
+            if (adiff < kPressDiffWarn) {
+                diff_state = PressureDiffState::kOk;
+            } else if (adiff < kPressDiffHigh) {
+                diff_state = PressureDiffState::kWarn;
+            } else {
+                diff_state = PressureDiffState::kHigh;
+            }
+        }
+    }
+
     portENTER_CRITICAL(&s_sensor_state_mux);
     auto &slot = s_sensor_state.bme680[index];
     slot.valid = true;
@@ -1443,17 +2249,28 @@ static void sensor_state_publish_bme680(size_t index, const bme680_measurement_t
     slot.dewpoint_c = measurement.dewpoint_c;
     slot.gas_res_kohm = measurement.gas_res_kohm;
     slot.iaq_score = measurement.iaq_score;
+    slot.iaq_accuracy = measurement.iaq_accuracy;
+    slot.co2_eq_ppm = measurement.co2_eq_ppm;
+    slot.bvoc_ppm = measurement.bvoc_ppm;
     slot.gas_valid = measurement.gas_valid;
     slot.heater_stable = measurement.heater_stable;
     slot.gas_range = measurement.gas_range;
     slot.gas_index = measurement.gas_index;
+    slot.press_trend_slope_hpa_h = trend_slope_hpa_h;
+    slot.press_trend_samples = trend_samples;
+    slot.press_trend_window_min = trend_window_min;
+    slot.press_trend_state = static_cast<uint8_t>(trend_state);
+    slot.press_diff_hpa = diff_hpa;
+    slot.press_diff_samples = diff_samples;
+    slot.press_diff_window_min = diff_window_min;
+    slot.press_diff_state = static_cast<uint8_t>(diff_state);
     slot.timestamp_us = timestamp_us;
     portEXIT_CRITICAL(&s_sensor_state_mux);
 }
 #endif
 
 // Kompassrichtungen: 16-teilige Rose
-static const char* heading_to_compass(float heading) {
+static __attribute__((unused)) const char* heading_to_compass(float heading) {
     static const char* directions[16] = {
         "N", "NNO", "NO", "ONO", "O", "OSO", "SO", "SSO",
         "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"
@@ -1487,19 +2304,22 @@ static void sensor_state_note_gps_request_result(esp_err_t status);
 #if WALTER_ENABLE_RS485
 static void rs485_tx_task(void *arg);
 static void rs485_rx_task(void *arg);
-static void handle_rs485_command(const char *cmd_json);
+static void rs485_process_rx_line(const char *line);
+static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_err_t *out_err);
 #endif
 static esp_err_t sensor_subsystem_init(void);
 static void configure_routing_after_connect(void);
 static void configure_softap_dns(void);
 static void enable_switched_3v3(void);
 #if WALTER_ENABLE_RS485
-static esp_err_t command_set_lte_enabled(bool enable);
 static esp_err_t command_set_wifi_ap_enabled(bool enable);
 static esp_err_t command_set_wifi_sta_enabled(bool enable);
 static esp_err_t command_start_wifi_scan(void);
 static esp_err_t command_set_wifi_credentials(const char *ssid, const char *password);
 static void rs485_report_command_result(const char *cmd, esp_err_t err);
+#if WALTER_ENABLE_HX711
+static esp_err_t command_gas_bottle_replace(const cJSON *root);
+#endif
 #endif
 static float system_cpu_load_percent(void);
 #if WALTER_HAS_RUNTIME_STATS
@@ -1548,19 +2368,6 @@ static float system_cpu_load_percent(void)
     return -1.0f;
 }
 #endif
-#if WALTER_ENABLE_LTE
-typedef enum {
-    LTE_CMD_ENABLE,
-    LTE_CMD_DISABLE,
-    LTE_CMD_RESTART,
-} lte_runtime_cmd_t;
-
-static QueueHandle_t s_lte_command_queue = nullptr;
-static std::atomic<bool> s_lte_target_enabled{true};
-static std::atomic<bool> s_lte_runtime_active{false};
-static esp_err_t s_lte_last_error = ESP_OK;
-#endif
-
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     if (event_base != WIFI_EVENT) {
@@ -1819,126 +2626,107 @@ static esp_err_t wifi_runtime_apply(bool ap_enable, bool sta_enable)
     bool prev_ap = s_wifi_ap_active;
     bool prev_sta = s_wifi_sta_active;
     esp_err_t err = ESP_OK;
+    wifi_mode_t mode = WIFI_MODE_NULL;
 
-    do {
-        if (!ap_enable && !sta_enable) {
-            if (s_wifi_driver_started) {
-                err = esp_wifi_stop();
-    #if !WALTER_ENABLE_LTE
-        ESP_LOGE(TAG, "GPS task requires LTE modem support; enable WALTER_ENABLE_LTE");
-        vTaskDelete(nullptr);
-        return;
-    #else
-        if (!s_modem_ready_sem) {
-            ESP_LOGE(TAG, "GPS task missing modem-ready semaphore; aborting");
-            vTaskDelete(nullptr);
-            return;
-        }
-
-        ESP_LOGI(TAG, "GPS waiting for modem initialisation");
-        while (xSemaphoreTake(s_modem_ready_sem, ms_to_ticks(1000)) != pdTRUE) {
-            ESP_LOGW(TAG, "GPS still waiting for modem...");
-        }
-        xSemaphoreGive(s_modem_ready_sem);
-    #endif
-
-                if (err != ESP_OK) {
-                    ESP_LOGE(TAG, "Failed to stop WiFi driver: %s", esp_err_to_name(err));
-                    break;
-                }
-                s_wifi_driver_started = false;
-            }
-            if (prev_sta) {
-                ESP_LOGI(TAG, "WiFi STA disabled");
-            }
-            if (prev_ap) {
-                ESP_LOGI(TAG, "SoftAP disabled");
-            }
-            ESP_LOGI(TAG, "WiFi driver stopped");
-            s_wifi_sta_active = false;
-            s_wifi_ap_active = false;
-            s_wifi_sta_connected.store(false);
-            s_wifi_sta_ip_valid = false;
-            break;
-        }
-
-        wifi_mode_t mode = WIFI_MODE_NULL;
-        if (ap_enable && sta_enable) {
-            mode = WIFI_MODE_APSTA;
-        } else if (ap_enable) {
-            mode = WIFI_MODE_AP;
-        } else {
-            mode = WIFI_MODE_STA;
-        }
-
-        err = esp_wifi_set_mode(mode);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to set WiFi mode %d: %s", mode, esp_err_to_name(err));
-            break;
-        }
-
-        err = esp_wifi_set_config(WIFI_IF_AP, &s_wifi_ap_config);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to update SoftAP config: %s", esp_err_to_name(err));
-            break;
-        }
-
-        if (sta_enable) {
-            err = esp_wifi_set_config(WIFI_IF_STA, &s_wifi_sta_config);
+    if (!ap_enable && !sta_enable) {
+        if (s_wifi_driver_started) {
+            err = esp_wifi_stop();
             if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to update STA config: %s", esp_err_to_name(err));
-                break;
+                ESP_LOGE(TAG, "Failed to stop WiFi driver: %s", esp_err_to_name(err));
+                goto exit;
             }
-        } else if (prev_sta) {
-            esp_wifi_disconnect();
-            s_wifi_sta_ip_valid = false;
+            s_wifi_driver_started = false;
         }
-
-        if (!s_wifi_driver_started) {
-            err = esp_wifi_start();
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to start WiFi driver: %s", esp_err_to_name(err));
-                break;
-            }
-            s_wifi_driver_started = true;
+        if (prev_sta) {
+            ESP_LOGI(TAG, "WiFi STA disabled");
         }
-
-        if (sta_enable) {
-            err = esp_wifi_connect();
-            if (err == ESP_ERR_WIFI_STATE || err == ESP_ERR_WIFI_CONN) {
-                ESP_LOGW(TAG, "WiFi connect pending: %s", esp_err_to_name(err));
-                err = ESP_OK;
-            } else if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to start WiFi connection: %s", esp_err_to_name(err));
-                break;
-            } else {
-                ESP_LOGI(TAG, "WiFi STA connect requested (SSID=%s)", s_wifi_sta_config.sta.ssid);
-            }
-        }
-
-        if (!prev_ap && ap_enable) {
-            ESP_LOGI(TAG, "SoftAP enabled (SSID=%s, channel=%u)",
-                     s_wifi_ap_config.ap.ssid,
-                     s_wifi_ap_config.ap.channel);
-        } else if (prev_ap && !ap_enable) {
+        if (prev_ap) {
             ESP_LOGI(TAG, "SoftAP disabled");
         }
+        ESP_LOGI(TAG, "WiFi driver stopped");
+        s_wifi_sta_active = false;
+        s_wifi_ap_active = false;
+        s_wifi_sta_connected.store(false);
+        s_wifi_sta_ip_valid = false;
+        goto exit;
+    }
 
-        if (!prev_sta && sta_enable) {
-            ESP_LOGI(TAG, "WiFi STA enabled");
-        } else if (prev_sta && !sta_enable) {
-            ESP_LOGI(TAG, "WiFi STA disabled");
-            s_wifi_sta_connected.store(false);
+    if (ap_enable && sta_enable) {
+        mode = WIFI_MODE_APSTA;
+    } else if (ap_enable) {
+        mode = WIFI_MODE_AP;
+    } else {
+        mode = WIFI_MODE_STA;
+    }
+
+    err = esp_wifi_set_mode(mode);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set WiFi mode %d: %s", mode, esp_err_to_name(err));
+        goto exit;
+    }
+
+    err = esp_wifi_set_config(WIFI_IF_AP, &s_wifi_ap_config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to update SoftAP config: %s", esp_err_to_name(err));
+        goto exit;
+    }
+
+    if (sta_enable) {
+        err = esp_wifi_set_config(WIFI_IF_STA, &s_wifi_sta_config);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to update STA config: %s", esp_err_to_name(err));
+            goto exit;
         }
+    } else if (prev_sta) {
+        esp_wifi_disconnect();
+        s_wifi_sta_ip_valid = false;
+    }
 
-        s_wifi_ap_active = ap_enable;
-        s_wifi_sta_active = sta_enable;
-        if (!sta_enable) {
-            s_wifi_sta_connected.store(false);
-            s_wifi_sta_ip_valid = false;
+    if (!s_wifi_driver_started) {
+        err = esp_wifi_start();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to start WiFi driver: %s", esp_err_to_name(err));
+            goto exit;
         }
-    } while (false);
+        s_wifi_driver_started = true;
+    }
 
+    if (sta_enable) {
+        err = esp_wifi_connect();
+        if (err == ESP_ERR_WIFI_STATE || err == ESP_ERR_WIFI_CONN) {
+            ESP_LOGW(TAG, "WiFi connect pending: %s", esp_err_to_name(err));
+            err = ESP_OK;
+        } else if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to start WiFi connection: %s", esp_err_to_name(err));
+            goto exit;
+        } else {
+            ESP_LOGI(TAG, "WiFi STA connect requested (SSID=%s)", s_wifi_sta_config.sta.ssid);
+        }
+    }
+
+    if (!prev_ap && ap_enable) {
+        ESP_LOGI(TAG, "SoftAP enabled (SSID=%s, channel=%u)",
+                 s_wifi_ap_config.ap.ssid,
+                 s_wifi_ap_config.ap.channel);
+    } else if (prev_ap && !ap_enable) {
+        ESP_LOGI(TAG, "SoftAP disabled");
+    }
+
+    if (!prev_sta && sta_enable) {
+        ESP_LOGI(TAG, "WiFi STA enabled");
+    } else if (prev_sta && !sta_enable) {
+        ESP_LOGI(TAG, "WiFi STA disabled");
+        s_wifi_sta_connected.store(false);
+    }
+
+    s_wifi_ap_active = ap_enable;
+    s_wifi_sta_active = sta_enable;
+    if (!sta_enable) {
+        s_wifi_sta_connected.store(false);
+        s_wifi_sta_ip_valid = false;
+    }
+
+exit:
     xSemaphoreGive(s_wifi_runtime_mutex);
     wifi_set_last_error(err);
     return err;
@@ -1972,8 +2760,13 @@ static void hx711_task(void *arg)
 #else
             float grams_a = (raw_a - (int32_t)WALTER_HX711_OFFSET_A) * WALTER_HX711_SCALE_A;
 #endif
-            kg_a = grams_a / 1000.0f;
-            have_a = hx_plausibility_check(HX_IDX_PLATFORM_A, kg_a, "HX711.A");
+            if (raw_a == 0) {
+                read_a_ok = false;
+                ESP_LOGW(TAG, "HX711: raw A is 0 -> likely not connected");
+            } else {
+                kg_a = grams_a / 1000.0f;
+                have_a = hx_plausibility_check(HX_IDX_PLATFORM_A, kg_a, "HX711.A");
+            }
         }
         if (!have_a && hx_get_last_valid(HX_IDX_PLATFORM_A, &kg_a, &fallback_a_ts)) {
             have_a = true;
@@ -1994,8 +2787,13 @@ static void hx711_task(void *arg)
             womo_hx711_read_average(&s_hx711, WALTER_HX711_AVG_SAMPLES, &raw_b) == ESP_OK) {
             read_b_ok = true;
             float grams_b = (raw_b - (int32_t)WALTER_HX711_OFFSET_B) * WALTER_HX711_SCALE_B;
-            kg_b = grams_b / 1000.0f;
-            have_b = hx_plausibility_check(HX_IDX_PLATFORM_B, kg_b, "HX711.B");
+            if (raw_b == 0) {
+                read_b_ok = false;
+                ESP_LOGW(TAG, "HX711: raw B is 0 -> likely not connected");
+            } else {
+                kg_b = grams_b / 1000.0f;
+                have_b = hx_plausibility_check(HX_IDX_PLATFORM_B, kg_b, "HX711.B");
+            }
         }
         if (!have_b && hx_get_last_valid(HX_IDX_PLATFORM_B, &kg_b, &fallback_b_ts)) {
             have_b = true;
@@ -2022,9 +2820,20 @@ static void hx711_task(void *arg)
         const int64_t fallback_b_ts = 0;
         if (have_a) {
             ESP_LOGI(TAG, "HX711: A=%.2fkg%s (raw=%ld)",
-                     kg_a, fallback_a ? "*" : "", (long)raw_a);
+                 kg_a, fallback_a ? "*" : "", (long)raw_a);
         }
 #endif
+
+        bool hx_nc = false;
+    #if WALTER_HX711_ENABLE_CHANNEL_B
+        if (raw_a == 0 && raw_b == 0) {
+            hx_nc = true;
+        }
+    #else
+        if (raw_a == 0) {
+            hx_nc = true;
+        }
+    #endif
 
         int64_t timestamp_us = esp_timer_get_time();
 #if WALTER_HX711_ENABLE_CHANNEL_B
@@ -2041,8 +2850,12 @@ static void hx711_task(void *arg)
         }
 #endif
 
+        gas_history_push(have_a, kg_a, have_b, kg_b, timestamp_us);
+        gas_compute_state(have_a, kg_a, have_b, kg_b, timestamp_us);
+
         sensor_state_publish_hx711(have_a, kg_a, fallback_a,
                                    have_b, kg_b, fallback_b,
+                                   hx_nc,
                                    timestamp_us);
 
         vTaskDelayUntil(&last_wake, period);
@@ -2062,8 +2875,22 @@ static void analog_task(void *arg)
         womo_analog_data_t analog = {};
         esp_err_t err = womo_analog_read(&analog);
         if (err == ESP_OK) {
+            const int batt_nc_thresh_mv = 30; // ADC mV unterhalb dieses Werts => Batterie nicht angeschlossen
+            bool batt_nc[2] = {false, false};
+            bool tank_nc[2] = {false, false};
+
+            for (int i = 0; i < 2; ++i) {
+                if (analog.battery_valid[i] && analog.battery_mv[i] <= batt_nc_thresh_mv) {
+                    batt_nc[i] = true;
+                    analog.battery_valid[i] = false;
+                    analog.battery_mv[i] = 0;
+                    analog.battery_v[i] = 0.0f;
+                    ESP_LOGI(TAG, "Battery%d marked NC (<=%d mV)", i + 1, batt_nc_thresh_mv);
+                }
+            }
+
             int64_t now_us = esp_timer_get_time();
-            sensor_state_publish_analog(&analog, now_us);
+            sensor_state_publish_analog(&analog, batt_nc, tank_nc, now_us);
 #if WALTER_SENSOR_LOG_ANALOG
             float cpu_load = system_cpu_load_percent();
             if (cpu_load < 0.0f) {
@@ -2098,23 +2925,47 @@ static void analog_task(void *arg)
 #endif
 
 #if WALTER_ENABLE_RS485
-typedef struct {
-    char cmd[32];
-    esp_err_t err;
-} rs485_cmd_result_msg_t;
+static constexpr int WALTER_RS485_MAX_PENDING = 8;
+static constexpr int WALTER_RS485_ACK_TIMEOUT_MS = 3000;
 
-static QueueHandle_t s_rs485_cmd_result_queue = nullptr;
+typedef struct {
+    bool in_use;
+    bool warned;
+    uint32_t seq;
+    int64_t sent_us;
+    char label[32];
+} rs485_pending_frame_t;
+
+static SemaphoreHandle_t s_rs485_tx_mutex = nullptr;
+static rs485_pending_frame_t s_rs485_pending[WALTER_RS485_MAX_PENDING];
+static portMUX_TYPE s_rs485_pending_lock = portMUX_INITIALIZER_UNLOCKED;
+static portMUX_TYPE s_rs485_seq_lock = portMUX_INITIALIZER_UNLOCKED;
+static uint32_t s_rs485_tx_seq = 1;
+static uint32_t s_rs485_last_rx_seq = 0;
+static uint32_t s_rs485_last_ack_seq = 0;
+static int64_t s_rs485_last_ack_us = 0;
+static int64_t s_rs485_last_rx_heartbeat_us = 0;
+static std::atomic<int64_t> s_rs485_last_rx_us{0};
+static std::atomic<int64_t> s_rs485_last_rx_line_us{0};
+static int64_t s_rs485_last_tx_heartbeat_us = 0;
 static std::atomic<bool> s_rs485_display_ready(false);
 static std::atomic<uint32_t> s_rs485_display_ready_seen(0);
 static std::atomic<uint32_t> s_rs485_hello_sent(0);
 static std::atomic<uint32_t> s_rs485_heartbeat_sent(0);
 static std::atomic<int64_t> s_rs485_last_display_ready_us(0);
 
-static void rs485_send_json(const char *context, cJSON *root);
-static void rs485_queue_command_result(const char *cmd, esp_err_t err);
+static uint32_t rs485_next_seq(void);
+static void rs485_mark_rx_seq(uint32_t seq);
+static void rs485_track_pending(uint32_t seq, const char *label);
+static void rs485_resolve_pending(uint32_t seq, bool success, const char *label_from_packet, const char *err_text);
+static void rs485_check_pending_timeouts(void);
+static esp_err_t rs485_send_frame(const char *context, cJSON *root, bool default_need_ack);
+static esp_err_t rs485_send_ack_packet(uint32_t rx_seq, bool success, const char *label, const char *err_text);
 static void rs485_send_hello_packet(void);
 static void rs485_send_heartbeat_packet(void);
+static void rs485_handle_ack_packet(const cJSON *root);
 static void rs485_handle_display_ready(void);
+static void rs485_log_hex_bytes(const char *label, const uint8_t *data, size_t len);
 
 // RS485 TX Task - sends sensor data as JSON
 static void rs485_tx_task(void *arg)
@@ -2145,6 +2996,17 @@ static void rs485_tx_task(void *arg)
         TickType_t now = xTaskGetTickCount();
         bool send_full = ((now - last_full_send) >= full_interval);
 
+        // Prefer to send full frames kurz nach dem letzten Heartbeat des Displays, um Kollisionen zu vermeiden.
+        // Wenn der letzte HB frisch (<=500 ms) oder älter als 2 s ist, senden; sonst warten bis zum nächsten HB.
+        int64_t now_us = esp_timer_get_time();
+        int64_t last_hb_us = s_rs485_last_rx_heartbeat_us;
+        if (send_full && s_rs485_display_ready.load() && last_hb_us > 0) {
+            int64_t hb_age = now_us - last_hb_us;
+            if (hb_age > 500000 && hb_age < 2000000) {
+                send_full = false;  // außerhalb des bevorzugten Fensters: sende nach nächstem HB
+            }
+        }
+
         TickType_t hello_interval = s_rs485_display_ready.load() ? 0 : hello_pending_interval;
         if (hello_interval > 0 && (now - last_hello_send) >= hello_interval) {
             rs485_send_hello_packet();
@@ -2157,23 +3019,6 @@ static void rs485_tx_task(void *arg)
             last_heartbeat_send = now;
         }
 
-        if (s_rs485_cmd_result_queue) {
-            rs485_cmd_result_msg_t cmd_msg;
-            while (xQueueReceive(s_rs485_cmd_result_queue, &cmd_msg, 0) == pdPASS) {
-                cJSON *ack = cJSON_CreateObject();
-                cJSON_AddStringToObject(ack, "type", "cmd_ack");
-                cJSON_AddStringToObject(ack, "cmd", cmd_msg.cmd);
-                bool ok = (cmd_msg.err == ESP_OK);
-                cJSON_AddBoolToObject(ack, "ok", ok);
-                if (!ok) {
-                    cJSON_AddStringToObject(ack, "err", esp_err_to_name(cmd_msg.err));
-                }
-                cJSON_AddNumberToObject(ack, "ts", (double)(esp_timer_get_time() / 1000));
-                rs485_send_json("cmd_ack", ack);
-                cJSON_Delete(ack);
-            }
-        }
-
         if (send_full) {
             sensor_shared_state_t snapshot = sensor_state_snapshot();
                 last_full_send = now;
@@ -2183,25 +3028,86 @@ static void rs485_tx_task(void *arg)
             cJSON_AddNumberToObject(root, "ts", (double)(esp_timer_get_time() / 1000));
 
 #if WALTER_ENABLE_HX711
-            if (snapshot.hx711.valid_a || snapshot.hx711.valid_b) {
+            if (snapshot.hx711.valid_a || snapshot.hx711.valid_b || snapshot.hx711.nc) {
                 cJSON *hx = cJSON_CreateObject();
-                if (snapshot.hx711.valid_a) {
-                    cJSON_AddNumberToObject(hx, "a", snapshot.hx711.kg_a);
-                    if (snapshot.hx711.fallback_a) {
+                const bool swap = (WALTER_GAS_SWAP_AB != 0);
+                float hx_a = snapshot.hx711.kg_a;
+                float hx_b = snapshot.hx711.kg_b;
+                bool fb_a = snapshot.hx711.fallback_a;
+                bool fb_b = snapshot.hx711.fallback_b;
+                bool valid_a = snapshot.hx711.valid_a;
+                bool valid_b = snapshot.hx711.valid_b;
+                if (swap) {
+                    std::swap(hx_a, hx_b);
+                    std::swap(fb_a, fb_b);
+                    std::swap(valid_a, valid_b);
+                }
+
+                if (valid_a) {
+                    cJSON_AddNumberToObject(hx, "a", hx_a);
+                    if (fb_a) {
                         cJSON_AddBoolToObject(hx, "a_fb", true);
                     }
                 }
-                if (snapshot.hx711.valid_b) {
-                    cJSON_AddNumberToObject(hx, "b", snapshot.hx711.kg_b);
-                    if (snapshot.hx711.fallback_b) {
+                if (valid_b) {
+                    cJSON_AddNumberToObject(hx, "b", hx_b);
+                    if (fb_b) {
                         cJSON_AddBoolToObject(hx, "b_fb", true);
                     }
                 }
-                if (snapshot.hx711.valid_a && snapshot.hx711.valid_b) {
-                    cJSON_AddNumberToObject(hx, "sum", snapshot.hx711.kg_a + snapshot.hx711.kg_b);
+                if (valid_a && valid_b) {
+                    cJSON_AddNumberToObject(hx, "sum", hx_a + hx_b);
                 }
                 cJSON_AddNumberToObject(hx, "ts_us", (double)snapshot.hx711.timestamp_us);
+                if (snapshot.hx711.nc) {
+                    cJSON_AddBoolToObject(hx, "nc", true);
+                }
                 cJSON_AddItemToObject(root, "hx", hx);
+            }
+
+            if (snapshot.gas.valid) {
+                cJSON *gas = cJSON_CreateObject();
+                const bool swap = (WALTER_GAS_SWAP_AB != 0);
+                int active = snapshot.gas.active_idx;
+                float net = snapshot.gas.net_kg;
+                float net_a = snapshot.gas.net_a;
+                float net_b = snapshot.gas.net_b;
+                float net_active = -1.0f;
+                if (swap) {
+                    std::swap(net_a, net_b);
+                    if (active == HX_IDX_PLATFORM_A) active = HX_IDX_PLATFORM_B;
+                    else if (active == HX_IDX_PLATFORM_B) active = HX_IDX_PLATFORM_A;
+                }
+                if (active == HX_IDX_PLATFORM_A) {
+                    net_active = net_a;
+                } else if (active == HX_IDX_PLATFORM_B) {
+                    net_active = net_b;
+                }
+
+                const float cap_kg = WALTER_GAS_FILL_KG;
+                auto pct_from = [cap_kg](float net_kg) {
+                    if (cap_kg <= 0.0f || !isfinite(net_kg)) return 0.0f;
+                    float pct = (net_kg / cap_kg) * 100.0f;
+                    if (pct < 0.0f) pct = 0.0f;
+                    if (pct > 100.0f) pct = 100.0f;
+                    return pct;
+                };
+                float pct_a = pct_from(net_a);
+                float pct_b = pct_from(net_b);
+                float pct_active = (net_active >= 0.0f) ? pct_from(net_active) : 0.0f;
+
+                cJSON_AddNumberToObject(gas, "active", active);
+                cJSON_AddNumberToObject(gas, "net", net);
+                cJSON_AddNumberToObject(gas, "cap_kg", cap_kg);
+                cJSON_AddNumberToObject(gas, "rate1h", snapshot.gas.rate_kgph_1h);
+                cJSON_AddNumberToObject(gas, "rate2h", snapshot.gas.rate_kgph_2h);
+                cJSON_AddNumberToObject(gas, "rest_h", snapshot.gas.rest_hours);
+                cJSON_AddNumberToObject(gas, "net_a", net_a);
+                cJSON_AddNumberToObject(gas, "net_b", net_b);
+                cJSON_AddNumberToObject(gas, "pct_a", pct_a);
+                cJSON_AddNumberToObject(gas, "pct_b", pct_b);
+                cJSON_AddNumberToObject(gas, "pct", pct_active);
+                cJSON_AddItemToObject(root, "gas", gas);
             }
 #endif
 
@@ -2209,18 +3115,30 @@ static void rs485_tx_task(void *arg)
             if (snapshot.analog.valid) {
                 const womo_analog_data_t &analog = snapshot.analog.data;
                 cJSON *bat = cJSON_CreateObject();
+                bool have_bat = false;
                 if (analog.battery_valid[0]) cJSON_AddNumberToObject(bat, "b1", analog.battery_v[0]);
                 if (analog.battery_valid[1]) cJSON_AddNumberToObject(bat, "b2", analog.battery_v[1]);
+                if (snapshot.analog.batt_nc[0]) { cJSON_AddBoolToObject(bat, "nc1", true); have_bat = true; }
+                if (snapshot.analog.batt_nc[1]) { cJSON_AddBoolToObject(bat, "nc2", true); have_bat = true; }
                 if (analog.battery_valid[0] || analog.battery_valid[1]) {
+                    have_bat = true;
+                }
+                if (have_bat) {
                     cJSON_AddItemToObject(root, "bat", bat);
                 } else {
                     cJSON_Delete(bat);
                 }
 
                 cJSON *tank = cJSON_CreateObject();
+                bool have_tank = false;
                 if (analog.tank_valid[0]) cJSON_AddNumberToObject(tank, "t1", analog.tank_percent[0]);
                 if (analog.tank_valid[1]) cJSON_AddNumberToObject(tank, "t2", analog.tank_percent[1]);
+                if (snapshot.analog.tank_nc[0]) { cJSON_AddBoolToObject(tank, "nc1", true); have_tank = true; }
+                if (snapshot.analog.tank_nc[1]) { cJSON_AddBoolToObject(tank, "nc2", true); have_tank = true; }
                 if (analog.tank_valid[0] || analog.tank_valid[1]) {
+                    have_tank = true;
+                }
+                if (have_tank) {
                     cJSON_AddItemToObject(root, "tank", tank);
                 } else {
                     cJSON_Delete(tank);
@@ -2291,6 +3209,35 @@ static void rs485_tx_task(void *arg)
                         cJSON_AddNumberToObject(node, "gas_idx", entry.gas_index);
                     }
                     cJSON_AddNumberToObject(node, "iaq", entry.iaq_score);
+                    if (entry.iaq_accuracy > 0) {
+                        cJSON_AddNumberToObject(node, "iaq_acc", entry.iaq_accuracy);
+                    }
+                    if (entry.co2_eq_ppm > 0.0f) {
+                        cJSON_AddNumberToObject(node, "eco2_ppm", entry.co2_eq_ppm);
+                    }
+                    if (entry.bvoc_ppm > 0.0f) {
+                        cJSON_AddNumberToObject(node, "bvoc_ppm", entry.bvoc_ppm);
+                    }
+                    if (entry.press_trend_samples > 0) {
+                        cJSON *trend = cJSON_CreateObject();
+                        cJSON_AddStringToObject(trend,
+                                                 "state",
+                                                 pressure_trend_state_str(static_cast<PressureTrendState>(entry.press_trend_state)));
+                        cJSON_AddNumberToObject(trend, "slope_hpa_h", entry.press_trend_slope_hpa_h);
+                        cJSON_AddNumberToObject(trend, "samples", entry.press_trend_samples);
+                        cJSON_AddNumberToObject(trend, "window_min", entry.press_trend_window_min);
+                        cJSON_AddItemToObject(node, "press_trend", trend);
+                    }
+                    if (entry.press_diff_samples > 0) {
+                        cJSON *diff = cJSON_CreateObject();
+                        cJSON_AddStringToObject(diff,
+                                                "state",
+                                                pressure_diff_state_str(static_cast<PressureDiffState>(entry.press_diff_state)));
+                        cJSON_AddNumberToObject(diff, "hpa", entry.press_diff_hpa);
+                        cJSON_AddNumberToObject(diff, "samples", entry.press_diff_samples);
+                        cJSON_AddNumberToObject(diff, "window_min", entry.press_diff_window_min);
+                        cJSON_AddItemToObject(node, "press_diff", diff);
+                    }
                     cJSON_AddNumberToObject(node, "ts_us", (double)entry.timestamp_us);
                     if (entry.fallback) {
                         cJSON_AddBoolToObject(node, "fallback", true);
@@ -2319,6 +3266,15 @@ static void rs485_tx_task(void *arg)
                                              static_cast<double>(lte_signal_strength_percent(snapshot.lte.rsrp_dbm)));
                 }
                 cJSON_AddItemToObject(root, "lte", lte);
+
+                ESP_LOGI(TAG,
+                         "RS485 full: lte registered=%s info_valid=%s rsrp=%.1f signal_pct=%u",
+                         snapshot.lte.registered ? "yes" : "no",
+                         snapshot.lte.info_valid ? "yes" : "no",
+                         snapshot.lte.rsrp_dbm,
+                         snapshot.lte.info_valid
+                             ? lte_signal_strength_percent(snapshot.lte.rsrp_dbm)
+                             : 0U);
             }
 #endif
 
@@ -2327,15 +3283,23 @@ static void rs485_tx_task(void *arg)
                 cJSON *gps = cJSON_CreateObject();
                 cJSON_AddBoolToObject(gps, "valid", snapshot.gps.valid);
                 if (snapshot.gps.valid) {
+                    // Mirror verbose fields with the short aliases expected by the display firmware.
                     cJSON_AddNumberToObject(gps, "lat", snapshot.gps.latitude);
                     cJSON_AddNumberToObject(gps, "lon", snapshot.gps.longitude);
                     cJSON_AddNumberToObject(gps, "alt_m", snapshot.gps.altitude_m);
+                    cJSON_AddNumberToObject(gps, "alt", snapshot.gps.altitude_m);
                     cJSON_AddNumberToObject(gps, "speed_kmh", snapshot.gps.speed_kmh);
+                    cJSON_AddNumberToObject(gps, "spd", snapshot.gps.speed_kmh);
                     cJSON_AddNumberToObject(gps, "heading_deg", snapshot.gps.heading_deg);
+                    cJSON_AddNumberToObject(gps, "hdg", snapshot.gps.heading_deg);
                     cJSON_AddNumberToObject(gps, "sat", snapshot.gps.satellites);
                     cJSON_AddNumberToObject(gps, "conf_m", snapshot.gps.confidence_m);
+                    cJSON_AddNumberToObject(gps, "conf", snapshot.gps.confidence_m);
                     cJSON_AddNumberToObject(gps, "ttf_ms", snapshot.gps.time_to_fix_ms);
                     cJSON_AddNumberToObject(gps, "ts", (double)snapshot.gps.timestamp);
+                    if (snapshot.gps.last_fix_us != 0) {
+                        cJSON_AddNumberToObject(gps, "last_fix_us", (double)snapshot.gps.last_fix_us);
+                    }
                 }
                 if (snapshot.gps.last_request_us != 0) {
                     cJSON_AddNumberToObject(gps, "last_req_us", (double)snapshot.gps.last_request_us);
@@ -2380,41 +3344,126 @@ static void rs485_tx_task(void *arg)
                 cJSON_AddItemToObject(root, "wifi", wifi_json);
             }
 
-            rs485_send_json("full", root);
+            bool request_ack = s_rs485_display_ready.load();
+            esp_err_t send_err = rs485_send_frame("full", root, request_ack);
+            if (send_err != ESP_OK) {
+                ESP_LOGW(TAG, "Failed to send RS485 full snapshot: %s", esp_err_to_name(send_err));
+            }
             cJSON_Delete(root);
         }
 
+        rs485_check_pending_timeouts();
         vTaskDelay(loop_delay);  // Small delay to not hog CPU
     }
 }
 
-static void rs485_send_json(const char *context, cJSON *root)
+static esp_err_t rs485_send_frame(const char *context, cJSON *root, bool default_need_ack)
 {
     if (!root) {
-        return;
+        return ESP_ERR_INVALID_ARG;
     }
+
+    // Avoid collisions: wait for a short idle window after last RX before transmitting.
+    static constexpr int64_t RS485_MIN_IDLE_US = 150000;   // 150 ms idle required
+    static constexpr int64_t RS485_IDLE_WAIT_MAX_US = 400000; // cap wait at 400 ms
+    int64_t wait_start = esp_timer_get_time();
+    for (;;) {
+        int64_t now = esp_timer_get_time();
+        int64_t last_rx = s_rs485_last_rx_us.load();
+        if (last_rx == 0 || (now - last_rx) >= RS485_MIN_IDLE_US) {
+            break;  // idle gap satisfied
+        }
+        if ((now - wait_start) >= RS485_IDLE_WAIT_MAX_US) {
+            ESP_LOGW(TAG,
+                     "RS485 TX after idle wait timeout (last_rx=%lld us ago)",
+                     (long long)(now - last_rx));
+            break;  // give up waiting, try to send
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+
+    bool need_ack = default_need_ack;
+    cJSON *need_ack_item = cJSON_GetObjectItem(root, "need_ack");
+    if (cJSON_IsBool(need_ack_item)) {
+        need_ack = cJSON_IsTrue(need_ack_item);
+    } else {
+        cJSON_AddBoolToObject(root, "need_ack", need_ack);
+    }
+
+    uint32_t seq = rs485_next_seq();
+    cJSON_AddNumberToObject(root, "seq", (double)seq);
+
+    if (!cJSON_GetObjectItem(root, "ts")) {
+        cJSON_AddNumberToObject(root, "ts", (double)(esp_timer_get_time() / 1000));
+    }
+
     char *json_str = cJSON_PrintUnformatted(root);
     if (!json_str) {
         ESP_LOGE(TAG, "Failed to encode RS485 %s payload", context ? context : "payload");
-        return;
+        return ESP_ERR_NO_MEM;
     }
+
     size_t len = strlen(json_str);
-    json_str[len] = '\n';
+    char *payload = static_cast<char *>(malloc(len + 2));
+    if (!payload) {
+        cJSON_free(json_str);
+        return ESP_ERR_NO_MEM;
+    }
+    memcpy(payload, json_str, len);
+    payload[len] = '\n';
+    payload[len + 1] = '\0';
+
     const char *ctx = context ? context : "payload";
     bool log_info = true;
     if (context && strcmp(context, "heartbeat") == 0) {
         log_info = false;
     }
     if (log_info) {
-        ESP_LOGI(TAG, "Sending RS485 %s: %zu bytes", ctx, len + 1);
+        ESP_LOGI(TAG,
+                 "Sending RS485 %s (seq=%lu need_ack=%s): %zu bytes",
+                 ctx,
+                 (unsigned long)seq,
+                 need_ack ? "true" : "false",
+                 len + 1);
     } else {
-        ESP_LOGD(TAG, "Sending RS485 %s: %zu bytes", ctx, len + 1);
+        ESP_LOGD(TAG, "Sending RS485 %s (seq=%lu)", ctx, (unsigned long)seq);
     }
-    esp_err_t write_err = womo_rs485_write((uint8_t *)json_str, len + 1, pdMS_TO_TICKS(100));
+
+    if (s_rs485_tx_mutex) {
+        if (xSemaphoreTake(s_rs485_tx_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+            free(payload);
+            cJSON_free(json_str);
+            return ESP_ERR_TIMEOUT;
+        }
+    }
+
+    // Allow enough TX time for larger JSON frames (≈10 bits/byte @ 115200 baud).
+    uint32_t tx_time_ms = ((len + 1) * 10 * 1000 + (WALTER_RS485_BAUDRATE - 1)) / WALTER_RS485_BAUDRATE;
+    if (tx_time_ms < 200) {
+        tx_time_ms = 200;  // minimum to cover small frames
+    } else if (tx_time_ms > 1000) {
+        tx_time_ms = 1000; // cap wait time to 1s
+    }
+
+    esp_err_t write_err = womo_rs485_write((const uint8_t *)payload, len + 1, pdMS_TO_TICKS(tx_time_ms));
+
+    if (s_rs485_tx_mutex) {
+        xSemaphoreGive(s_rs485_tx_mutex);
+    }
+
+    free(payload);
+    cJSON_free(json_str);
+
     if (write_err != ESP_OK) {
         ESP_LOGW(TAG, "RS485 write (%s) failed: %s", ctx, esp_err_to_name(write_err));
+        return write_err;
     }
-    cJSON_free(json_str);
+
+    if (need_ack) {
+        rs485_track_pending(seq, ctx);
+    }
+
+    return ESP_OK;
 }
 
 static void rs485_send_hello_packet(void)
@@ -2443,9 +3492,20 @@ static void rs485_send_hello_packet(void)
     cJSON_AddNumberToObject(hello, "uptime", uptime_sec);
     cJSON_AddBoolToObject(hello, "display_ready", s_rs485_display_ready.load());
     cJSON_AddNumberToObject(hello, "ts", (double)(now_us / 1000));
+    if (s_rs485_last_rx_seq != 0) {
+        cJSON_AddNumberToObject(hello, "rx_seq", (double)s_rs485_last_rx_seq);
+    }
+    if (s_rs485_last_ack_seq != 0) {
+        cJSON_AddNumberToObject(hello, "last_ack", (double)s_rs485_last_ack_seq);
+    }
 
-    rs485_send_json("hello", hello);
+    esp_err_t send_err = rs485_send_frame("hello", hello, false);
     cJSON_Delete(hello);
+
+    if (send_err != ESP_OK) {
+        ESP_LOGW(TAG, "RS485 hello send failed: %s", esp_err_to_name(send_err));
+        return;
+    }
 
     uint32_t sent = ++s_rs485_hello_sent;
     if (sent == 1) {
@@ -2470,12 +3530,230 @@ static void rs485_send_heartbeat_packet(void)
     cJSON_AddStringToObject(hb, "type", "hb");
     cJSON_AddNumberToObject(hb, "uptime", (double)now_us / 1000000.0);
     cJSON_AddNumberToObject(hb, "ts", (double)(now_us / 1000));
+    if (s_rs485_last_rx_seq != 0) {
+        cJSON_AddNumberToObject(hb, "rx_seq", (double)s_rs485_last_rx_seq);
+    }
+    if (s_rs485_last_ack_seq != 0) {
+        cJSON_AddNumberToObject(hb, "last_ack", (double)s_rs485_last_ack_seq);
+    }
 
-    rs485_send_json("heartbeat", hb);
+    esp_err_t send_err = rs485_send_frame("heartbeat", hb, false);
     cJSON_Delete(hb);
 
-    uint32_t sent = ++s_rs485_heartbeat_sent;
-    ESP_LOGD(TAG, "RS485 heartbeat #%lu sent", (unsigned long)sent);
+    if (send_err == ESP_OK) {
+        s_rs485_last_tx_heartbeat_us = now_us;
+        uint32_t sent = ++s_rs485_heartbeat_sent;
+        ESP_LOGD(TAG, "RS485 heartbeat #%lu sent", (unsigned long)sent);
+    } else {
+        ESP_LOGW(TAG, "Heartbeat send failed: %s", esp_err_to_name(send_err));
+    }
+}
+
+static uint32_t rs485_next_seq(void)
+{
+    uint32_t seq = 0;
+    portENTER_CRITICAL(&s_rs485_seq_lock);
+    seq = s_rs485_tx_seq++;
+    if (s_rs485_tx_seq == 0) {
+        s_rs485_tx_seq = 1;
+    }
+    portEXIT_CRITICAL(&s_rs485_seq_lock);
+    if (seq == 0) {
+        return rs485_next_seq();
+    }
+    return seq;
+}
+
+static void rs485_mark_rx_seq(uint32_t seq)
+{
+    if (seq == 0) {
+        return;
+    }
+    portENTER_CRITICAL(&s_rs485_seq_lock);
+    s_rs485_last_rx_seq = seq;
+    portEXIT_CRITICAL(&s_rs485_seq_lock);
+}
+
+static void rs485_track_pending(uint32_t seq, const char *label)
+{
+    if (seq == 0) {
+        return;
+    }
+    rs485_pending_frame_t entry = {};
+    entry.in_use = true;
+    entry.warned = false;
+    entry.seq = seq;
+    entry.sent_us = esp_timer_get_time();
+    if (label && label[0] != '\0') {
+        strlcpy(entry.label, label, sizeof(entry.label));
+    } else {
+        strlcpy(entry.label, "frame", sizeof(entry.label));
+    }
+
+    bool stored = false;
+    portENTER_CRITICAL(&s_rs485_pending_lock);
+    for (int i = 0; i < WALTER_RS485_MAX_PENDING; ++i) {
+        if (!s_rs485_pending[i].in_use) {
+            s_rs485_pending[i] = entry;
+            stored = true;
+            break;
+        }
+    }
+    portEXIT_CRITICAL(&s_rs485_pending_lock);
+
+    if (!stored) {
+        ESP_LOGW(TAG,
+                 "Pending buffer full, dropping tracking for %s (seq=%lu)",
+                 entry.label,
+                 (unsigned long)seq);
+    }
+}
+
+static void rs485_resolve_pending(uint32_t seq,
+                                  bool success,
+                                  const char *label_from_packet,
+                                  const char *err_text)
+{
+    if (seq == 0) {
+        return;
+    }
+
+    rs485_pending_frame_t resolved = {};
+    bool found = false;
+
+    portENTER_CRITICAL(&s_rs485_pending_lock);
+    for (int i = 0; i < WALTER_RS485_MAX_PENDING; ++i) {
+        if (s_rs485_pending[i].in_use && s_rs485_pending[i].seq == seq) {
+            resolved = s_rs485_pending[i];
+            s_rs485_pending[i].in_use = false;
+            s_rs485_pending[i].warned = false;
+            found = true;
+            break;
+        }
+    }
+    portEXIT_CRITICAL(&s_rs485_pending_lock);
+
+    const char *label = label_from_packet;
+    if ((!label || label[0] == '\0') && resolved.label[0] != '\0') {
+        label = resolved.label;
+    }
+    if (!label || label[0] == '\0') {
+        label = "frame";
+    }
+
+    if (found) {
+        ESP_LOGI(TAG,
+                 "RS485 ACK for %s (seq=%lu) status=%s",
+                 label,
+                 (unsigned long)seq,
+                 success ? "ok" : "err");
+    } else {
+        ESP_LOGW(TAG,
+                 "Unexpected RS485 ACK for seq=%lu (label=%s)",
+                 (unsigned long)seq,
+                 label);
+    }
+
+    if (!success && err_text && err_text[0] != '\0') {
+        ESP_LOGW(TAG, "ACK error detail: %s", err_text);
+    }
+}
+
+static void rs485_check_pending_timeouts(void)
+{
+    const int64_t now_us = esp_timer_get_time();
+    const int64_t timeout_us = (int64_t)WALTER_RS485_ACK_TIMEOUT_MS * 1000;
+
+    struct warn_entry {
+        bool valid;
+        uint32_t seq;
+        char label[sizeof(s_rs485_pending[0].label)];
+        double age_ms;
+    } warn_list[WALTER_RS485_MAX_PENDING] = {};
+
+    portENTER_CRITICAL(&s_rs485_pending_lock);
+    for (int i = 0; i < WALTER_RS485_MAX_PENDING; ++i) {
+        if (!s_rs485_pending[i].in_use || s_rs485_pending[i].warned) {
+            continue;
+        }
+        int64_t age_us = now_us - s_rs485_pending[i].sent_us;
+        if (age_us >= timeout_us) {
+            s_rs485_pending[i].warned = true;
+            s_rs485_pending[i].in_use = false;  // give slot back immediately after timeout
+            warn_list[i].valid = true;
+            warn_list[i].seq = s_rs485_pending[i].seq;
+            warn_list[i].age_ms = (double)age_us / 1000.0;
+            strlcpy(warn_list[i].label, s_rs485_pending[i].label, sizeof(warn_list[i].label));
+        }
+    }
+    portEXIT_CRITICAL(&s_rs485_pending_lock);
+
+    for (int i = 0; i < WALTER_RS485_MAX_PENDING; ++i) {
+        if (!warn_list[i].valid) {
+            continue;
+        }
+        ESP_LOGW(TAG,
+                 "Awaiting ACK for %s (seq=%lu) since %.0f ms",
+                 warn_list[i].label,
+                 (unsigned long)warn_list[i].seq,
+                 warn_list[i].age_ms);
+    }
+}
+
+static esp_err_t rs485_send_ack_packet(uint32_t rx_seq, bool success, const char *label, const char *err_text)
+{
+    if (rx_seq == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    cJSON *ack = cJSON_CreateObject();
+    if (!ack) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    cJSON_AddStringToObject(ack, "type", "ack");
+    cJSON_AddNumberToObject(ack, "ack", (double)rx_seq);
+    cJSON_AddStringToObject(ack, "status", success ? "ok" : "err");
+    cJSON_AddBoolToObject(ack, "need_ack", false);
+    if (label && label[0] != '\0') {
+        cJSON_AddStringToObject(ack, "cmd", label);
+    }
+    if (!success && err_text && err_text[0] != '\0') {
+        cJSON_AddStringToObject(ack, "err", err_text);
+    }
+
+    esp_err_t err = rs485_send_frame("ack", ack, false);
+    cJSON_Delete(ack);
+    return err;
+}
+
+static void rs485_handle_ack_packet(const cJSON *root)
+{
+    if (!root) {
+        return;
+    }
+
+    const cJSON *ack_val = cJSON_GetObjectItem(root, "ack");
+    if (!cJSON_IsNumber(ack_val)) {
+        ESP_LOGW(TAG, "ACK packet missing numeric ack field");
+        return;
+    }
+
+    uint32_t ack_seq = (uint32_t)ack_val->valuedouble;
+    const cJSON *status = cJSON_GetObjectItem(root, "status");
+    const char *status_str = (cJSON_IsString(status) && status->valuestring) ? status->valuestring : "ok";
+    bool success = (strcmp(status_str, "ok") == 0);
+    const cJSON *cmd = cJSON_GetObjectItem(root, "cmd");
+    const char *cmd_str = (cJSON_IsString(cmd) && cmd->valuestring) ? cmd->valuestring : nullptr;
+    const cJSON *err = cJSON_GetObjectItem(root, "err");
+    const char *err_str = (cJSON_IsString(err) && err->valuestring) ? err->valuestring : nullptr;
+
+    rs485_resolve_pending(ack_seq, success, cmd_str, err_str);
+
+    portENTER_CRITICAL(&s_rs485_seq_lock);
+    s_rs485_last_ack_seq = ack_seq;
+    s_rs485_last_ack_us = esp_timer_get_time();
+    portEXIT_CRITICAL(&s_rs485_seq_lock);
 }
 
 static void rs485_handle_display_ready(void)
@@ -2496,23 +3774,6 @@ static void rs485_handle_display_ready(void)
     }
 }
 
-static void rs485_queue_command_result(const char *cmd, esp_err_t err)
-{
-    if (!cmd) {
-        return;
-    }
-    if (!s_rs485_cmd_result_queue) {
-        ESP_LOGW(TAG, "RS485 command result queue not ready (cmd=%s)", cmd);
-        return;
-    }
-    rs485_cmd_result_msg_t msg = {};
-    strlcpy(msg.cmd, cmd, sizeof(msg.cmd));
-    msg.err = err;
-    if (xQueueSend(s_rs485_cmd_result_queue, &msg, 0) != pdPASS) {
-        ESP_LOGW(TAG, "RS485 command result queue full (cmd=%s)", cmd);
-    }
-}
-
 // RS485 RX Task - receives commands from AMOLED
 static void rs485_rx_task(void *arg)
 {
@@ -2521,10 +3782,12 @@ static void rs485_rx_task(void *arg)
     uint8_t buffer[512];
     char line_buffer[512];
     size_t line_pos = 0;
+    int64_t last_dump_us = 0;
     
     while (true) {
         int len = womo_rs485_read(buffer, sizeof(buffer) - 1, pdMS_TO_TICKS(100));
         if (len > 0) {
+            s_rs485_last_rx_us.store(esp_timer_get_time());
             buffer[len] = '\0';
             
             // Process byte by byte to find complete JSON lines
@@ -2534,11 +3797,25 @@ static void rs485_rx_task(void *arg)
                 if (c == '\n' || c == '\r') {
                     if (line_pos > 0) {
                         line_buffer[line_pos] = '\0';
-                        handle_rs485_command(line_buffer);
+                        s_rs485_last_rx_line_us.store(esp_timer_get_time());
+                        rs485_process_rx_line(line_buffer);
                         line_pos = 0;
                     }
-                } else if (line_pos < sizeof(line_buffer) - 1) {
-                    line_buffer[line_pos++] = c;
+                } else if ((unsigned char)c >= 0x20 && (unsigned char)c <= 0x7E) {
+                    if (line_pos < sizeof(line_buffer) - 1) {
+                        line_buffer[line_pos++] = c;
+                    }
+                } else {
+                    // Non-ASCII: often idle noise (0x00/0xFF). Ignore 0x00 quietly; log others throttled.
+                    if ((unsigned char)c != 0x00) {
+                        int64_t now_us = esp_timer_get_time();
+                        if ((now_us - last_dump_us) > 500000) { // max 2 dumps/s
+                            rs485_log_hex_bytes("RS485 raw", buffer, (size_t)len);
+                            last_dump_us = now_us;
+                        }
+                        ESP_LOGW(TAG, "RS485 byte dropped (0x%02X) - resetting line", (unsigned char)c);
+                    }
+                    line_pos = 0;
                 }
             }
         }
@@ -2547,115 +3824,363 @@ static void rs485_rx_task(void *arg)
     }
 }
 
-// Handle commands received from AMOLED
-static void handle_rs485_command(const char *cmd_json)
+static bool rs485_line_is_ascii(const char *line)
 {
-    ESP_LOGI(TAG, "RS485 RX: %s", cmd_json);
+    if (!line) {
+        return false;
+    }
+    const unsigned char *p = reinterpret_cast<const unsigned char *>(line);
+    while (*p) {
+        if (*p < 0x20 || *p > 0x7E) {
+            ESP_LOGW(TAG, "RS485 line dropped (non-ASCII byte 0x%02X)", (unsigned)*p);
+            return false;
+        }
+        ++p;
+    }
+    return true;
+}
 
-    cJSON *root = cJSON_Parse(cmd_json);
-    if (!root) {
-        ESP_LOGW(TAG, "Failed to parse JSON command");
+static void rs485_log_hexdump(const char *label, const char *line)
+{
+    if (!line) {
+        return;
+    }
+    char buf[200];
+    size_t len = strnlen(line, sizeof(buf));
+    size_t n = 0;
+    for (size_t i = 0; i < len && n + 3 < sizeof(buf); ++i) {
+        n += snprintf(buf + n, sizeof(buf) - n, "%02X", (unsigned char)line[i]);
+    }
+    buf[sizeof(buf) - 1] = '\0';
+    ESP_LOGW(TAG, "%s (hex %zu bytes): %s", label ? label : "RS485 dump", len, buf);
+}
+
+static void rs485_log_hex_bytes(const char *label, const uint8_t *data, size_t len)
+{
+    if (!data || len == 0) {
+        return;
+    }
+    char buf[200];
+    size_t n = 0;
+    for (size_t i = 0; i < len && n + 3 < sizeof(buf); ++i) {
+        n += snprintf(buf + n, sizeof(buf) - n, "%02X", (unsigned char)data[i]);
+    }
+    buf[sizeof(buf) - 1] = '\0';
+    ESP_LOGW(TAG, "%s (%zu bytes): %s", label ? label : "RS485 bytes", len, buf);
+}
+
+// Handle packets received from display
+static void rs485_process_rx_line(const char *line)
+{
+    if (!line) {
         return;
     }
 
-    cJSON *cmd = cJSON_GetObjectItem(root, "cmd");
-    if (cmd && cJSON_IsString(cmd)) {
-        const char *cmd_str = cmd->valuestring;
-        bool handled = false;
-        bool send_result = true;
-        esp_err_t cmd_err = ESP_OK;
+    while (*line && static_cast<unsigned char>(*line) < 0x20) {
+        ++line;
+    }
+    if (*line == '\0') {
+        return;
+    }
 
-        if (strcmp(cmd_str, "display_ready") == 0) {
-            handled = true;
-            send_result = false;
-            rs485_handle_display_ready();
-        } else if (strcmp(cmd_str, "lte_enable") == 0) {
-            handled = true;
-            cmd_err = command_set_lte_enabled(true);
-        } else if (strcmp(cmd_str, "lte_disable") == 0) {
-            handled = true;
-            cmd_err = command_set_lte_enabled(false);
-        } else if (strcmp(cmd_str, "wifi_enable_ap") == 0) {
-            handled = true;
-            cmd_err = command_set_wifi_ap_enabled(true);
-        } else if (strcmp(cmd_str, "wifi_disable_ap") == 0) {
-            handled = true;
-            cmd_err = command_set_wifi_ap_enabled(false);
-        } else if (strcmp(cmd_str, "wifi_enable_sta") == 0) {
-            handled = true;
-            cmd_err = command_set_wifi_sta_enabled(true);
-        } else if (strcmp(cmd_str, "wifi_disable_sta") == 0) {
-            handled = true;
-            cmd_err = command_set_wifi_sta_enabled(false);
-        } else if (strcmp(cmd_str, "wifi_scan_start") == 0) {
-            handled = true;
-            cmd_err = command_start_wifi_scan();
-        } else if (strcmp(cmd_str, "wifi_set_credentials") == 0) {
-            handled = true;
-            const cJSON *ssid = cJSON_GetObjectItem(root, "ssid");
-            const cJSON *password = cJSON_GetObjectItem(root, "password");
-            if (!ssid || !password || !cJSON_IsString(ssid) || !cJSON_IsString(password)) {
-                cmd_err = ESP_ERR_INVALID_ARG;
-            } else {
-                cmd_err = command_set_wifi_credentials(ssid->valuestring, password->valuestring);
-            }
-#if WALTER_ENABLE_HX711
-        } else if (strcmp(cmd_str, "tare_a") == 0) {
-            handled = true;
-            ESP_LOGI(TAG, "Tare Platform A requested");
-            // TODO: Implement tare functionality
-        } else if (strcmp(cmd_str, "tare_b") == 0) {
-            handled = true;
-            ESP_LOGI(TAG, "Tare Platform B requested");
-            // TODO: Implement tare functionality
-#endif
+    if (line[0] && line[1] && line[2] &&
+        static_cast<unsigned char>(line[0]) == 0xEF &&
+        static_cast<unsigned char>(line[1]) == 0xBB &&
+        static_cast<unsigned char>(line[2]) == 0xBF) {
+        line += 3;
+        while (*line && static_cast<unsigned char>(*line) < 0x20) {
+            ++line;
         }
+        if (*line == '\0') {
+            return;
+        }
+    }
 
+    if (!rs485_line_is_ascii(line)) {
+        return;
+    }
+
+    while (*line && *line != '{' && *line != '[') {
+        ++line;
+    }
+    if (*line == '\0') {
+        ESP_LOGW(TAG, "RS485 line without JSON start ignored");
+        rs485_log_hexdump("RS485 no JSON start", line);
+        return;
+    }
+
+    // Trim trailing noise after the last closing brace/bracket
+    const char *end_brace = strrchr(line, '}');
+    const char *end_bracket = strrchr(line, ']');
+    const char *end = end_brace;
+    if (end_bracket && (!end || end_bracket > end)) {
+        end = end_bracket;
+    }
+    if (!end) {
+        ESP_LOGW(TAG, "RS485 line without JSON end ignored");
+        rs485_log_hexdump("RS485 no JSON end", line);
+        return;
+    }
+
+    size_t json_len = (size_t)(end - line + 1);
+    char clean_line[512];
+    if (json_len >= sizeof(clean_line)) {
+        ESP_LOGW(TAG, "RS485 JSON too long (%zu)", json_len);
+        return;
+    }
+    memcpy(clean_line, line, json_len);
+    clean_line[json_len] = '\0';
+    line = clean_line;
+
+    ESP_LOGI(TAG, "RS485 RX: %s", line);
+
+    cJSON *root = cJSON_Parse(line);
+    if (!root) {
+        ESP_LOGW(TAG, "Failed to parse JSON packet");
+        rs485_log_hexdump("RS485 JSON parse fail", line);
+        return;
+    }
+
+    const cJSON *seq_obj = cJSON_GetObjectItem(root, "seq");
+    uint32_t rx_seq = 0;
+    if (cJSON_IsNumber(seq_obj)) {
+        rx_seq = (uint32_t)seq_obj->valuedouble;
+        rs485_mark_rx_seq(rx_seq);
+    }
+
+    bool need_ack = false;
+    const cJSON *need_ack_obj = cJSON_GetObjectItem(root, "need_ack");
+    if (cJSON_IsBool(need_ack_obj)) {
+        need_ack = cJSON_IsTrue(need_ack_obj);
+    } else if (rx_seq != 0) {
+        need_ack = true;
+    }
+
+    const cJSON *type_obj = cJSON_GetObjectItem(root, "type");
+    const char *type = (cJSON_IsString(type_obj) && type_obj->valuestring)
+                           ? type_obj->valuestring
+                           : nullptr;
+    const cJSON *cmd_obj = cJSON_GetObjectItem(root, "cmd");
+    const char *cmd_str = (cJSON_IsString(cmd_obj) && cmd_obj->valuestring)
+                              ? cmd_obj->valuestring
+                              : nullptr;
+
+    const char *ack_label = nullptr;
+    if (type && type[0] != '\0') {
+        ack_label = type;
+    } else if (cmd_str && cmd_str[0] != '\0') {
+        ack_label = cmd_str;
+    } else {
+        ack_label = "frame";
+    }
+
+    bool ack_success = false;
+    char ack_error[96] = "";
+
+    if (type && (strcmp(type, "ack") == 0 || strcmp(type, "cmd_ack") == 0)) {
+        rs485_handle_ack_packet(root);
+        need_ack = false;
+        ack_success = true;
+    } else if (type && strcmp(type, "hb") == 0) {
+        s_rs485_last_rx_heartbeat_us = esp_timer_get_time();
+        ack_success = true;
+        need_ack = false;
+    } else if (cmd_str) {
+        esp_err_t cmd_err = ESP_OK;
+        bool handled = rs485_execute_command(root, cmd_str, &cmd_err);
         if (handled) {
-            if (send_result) {
-                rs485_report_command_result(cmd_str, cmd_err);
+            rs485_report_command_result(cmd_str, cmd_err);
+            ack_success = (cmd_err == ESP_OK);
+            if (!ack_success) {
+                strlcpy(ack_error, esp_err_to_name(cmd_err), sizeof(ack_error));
             }
         } else {
             ESP_LOGW(TAG, "Unknown command: %s", cmd_str);
+            strlcpy(ack_error, "unknown command", sizeof(ack_error));
+            ack_success = false;
         }
     } else {
-        ESP_LOGW(TAG, "RS485 command missing string field 'cmd'");
+        ESP_LOGW(TAG, "RS485 packet missing 'cmd' field");
+        strlcpy(ack_error, "missing cmd", sizeof(ack_error));
+        ack_success = false;
+    }
+
+    if (need_ack && rx_seq != 0) {
+        esp_err_t ack_err = rs485_send_ack_packet(rx_seq, ack_success, ack_label, ack_success ? nullptr : ack_error);
+        if (ack_err != ESP_OK) {
+            ESP_LOGW(TAG,
+                     "Failed to send ACK for seq=%lu (%s): %s",
+                     (unsigned long)rx_seq,
+                     ack_label,
+                     esp_err_to_name(ack_err));
+        }
     }
 
     cJSON_Delete(root);
 }
+
+static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_err_t *out_err)
+{
+    if (!cmd_str) {
+        if (out_err) {
+            *out_err = ESP_ERR_INVALID_ARG;
+        }
+        return false;
+    }
+
+    esp_err_t cmd_err = ESP_OK;
+    bool handled = true;
+
+    if (strcmp(cmd_str, "display_ready") == 0) {
+        rs485_handle_display_ready();
+    } else if (strcmp(cmd_str, "lte_enable") == 0) {
+        cmd_err = lte_runtime_set_enabled(true);
+    } else if (strcmp(cmd_str, "lte_disable") == 0) {
+        cmd_err = lte_runtime_set_enabled(false);
+    } else if (strcmp(cmd_str, "wifi_enable_ap") == 0) {
+        cmd_err = command_set_wifi_ap_enabled(true);
+    } else if (strcmp(cmd_str, "wifi_disable_ap") == 0) {
+        cmd_err = command_set_wifi_ap_enabled(false);
+    } else if (strcmp(cmd_str, "wifi_enable_sta") == 0) {
+        cmd_err = command_set_wifi_sta_enabled(true);
+    } else if (strcmp(cmd_str, "wifi_disable_sta") == 0) {
+        cmd_err = command_set_wifi_sta_enabled(false);
+    } else if (strcmp(cmd_str, "wifi_scan_start") == 0) {
+        cmd_err = command_start_wifi_scan();
+    } else if (strcmp(cmd_str, "wifi_set_credentials") == 0) {
+        const cJSON *ssid = root ? cJSON_GetObjectItem(root, "ssid") : nullptr;
+        const cJSON *password = root ? cJSON_GetObjectItem(root, "password") : nullptr;
+        if (!ssid || !password || !cJSON_IsString(ssid) || !cJSON_IsString(password)) {
+            cmd_err = ESP_ERR_INVALID_ARG;
+        } else {
+            cmd_err = command_set_wifi_credentials(ssid->valuestring, password->valuestring);
+        }
+#if WALTER_ENABLE_HX711
+    } else if (strcmp(cmd_str, "gas_bottle_replace") == 0) {
+        cmd_err = command_gas_bottle_replace(root);
+    } else if (strcmp(cmd_str, "tare_a") == 0) {
+        ESP_LOGI(TAG, "Tare Platform A requested");
+        cmd_err = ESP_ERR_NOT_SUPPORTED;
+    } else if (strcmp(cmd_str, "tare_b") == 0) {
+        ESP_LOGI(TAG, "Tare Platform B requested");
+        cmd_err = ESP_ERR_NOT_SUPPORTED;
+#endif
+    } else {
+        handled = false;
+    }
+
+    if (out_err) {
+        *out_err = handled ? cmd_err : ESP_ERR_INVALID_ARG;
+    }
+    return handled;
+}
+
+static void rs485_report_command_result(const char *cmd, esp_err_t err)
+{
+    if (!cmd) {
+        return;
+    }
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Command %s executed", cmd);
+    } else {
+        ESP_LOGW(TAG, "Command %s failed: %s", cmd, esp_err_to_name(err));
+    }
+}
 #endif // WALTER_ENABLE_RS485
 
 #if WALTER_ENABLE_RS485
-static esp_err_t command_set_lte_enabled(bool enable)
+#if WALTER_ENABLE_HX711
+static int gas_display_slot_to_hx_idx(int display_slot)
 {
-#if WALTER_ENABLE_LTE
-    ESP_LOGI(TAG, "Command: LTE %s", enable ? "enable" : "disable");
+    if (display_slot == 0) {
+        return (WALTER_GAS_SWAP_AB != 0) ? HX_IDX_PLATFORM_B : HX_IDX_PLATFORM_A;
+    }
+    if (display_slot == 1) {
+        return (WALTER_GAS_SWAP_AB != 0) ? HX_IDX_PLATFORM_A : HX_IDX_PLATFORM_B;
+    }
+    return -1;
+}
 
-    bool previous = s_lte_target_enabled.exchange(enable);
-    if (previous == enable) {
-        return ESP_OK;
+static esp_err_t command_gas_bottle_replace(const cJSON *root)
+{
+    const cJSON *slot = root ? cJSON_GetObjectItem(root, "slot") : nullptr;
+    if (!slot && root) {
+        slot = cJSON_GetObjectItem(root, "channel");
     }
 
-    if (!s_lte_command_queue) {
-        ESP_LOGW(TAG, "LTE command queue not ready");
-        s_lte_target_enabled.store(previous);
+    int display_slot = -1;
+    if (cJSON_IsNumber(slot)) {
+        int v = static_cast<int>(slot->valuedouble);
+        if (v == 0 || v == 1) {
+            display_slot = v;
+        }
+    } else if (cJSON_IsString(slot) && slot->valuestring) {
+        const char *s = slot->valuestring;
+        if (s[0] == 'f' || s[0] == 'F' || s[0] == 'a' || s[0] == 'A') {
+            display_slot = 0;
+        } else if (s[0] == 'b' || s[0] == 'B' || s[0] == 'r' || s[0] == 'R') {
+            display_slot = 1;
+        }
+    }
+
+    if (display_slot < 0) {
+        ESP_LOGW(TAG, "Gas bottle replace: missing/invalid slot");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    int hx_idx = gas_display_slot_to_hx_idx(display_slot);
+    if (hx_idx < 0) {
+        ESP_LOGW(TAG, "Gas bottle replace: slot %d not mapped", display_slot);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    sensor_shared_state_t snapshot = sensor_state_snapshot();
+    bool valid = (hx_idx == HX_IDX_PLATFORM_A) ? snapshot.hx711.valid_a : snapshot.hx711.valid_b;
+    float kg_raw = (hx_idx == HX_IDX_PLATFORM_A) ? snapshot.hx711.kg_a : snapshot.hx711.kg_b;
+    if (!valid || !isfinite(kg_raw)) {
+        ESP_LOGW(TAG, "Gas bottle replace: HX%c value invalid", (hx_idx == HX_IDX_PLATFORM_A) ? 'A' : 'B');
         return ESP_ERR_INVALID_STATE;
     }
 
-    lte_runtime_cmd_t cmd = enable ? LTE_CMD_ENABLE : LTE_CMD_DISABLE;
-    if (xQueueSend(s_lte_command_queue, &cmd, pdMS_TO_TICKS(100)) != pdPASS) {
-        ESP_LOGW(TAG, "LTE command queue full");
-        s_lte_target_enabled.store(previous);
-        return ESP_ERR_TIMEOUT;
+    float new_tara = kg_raw - WALTER_GAS_FILL_KG;
+    float max_tara = (WALTER_GAS_TARA_KG_MAX > 0.0f) ? WALTER_GAS_TARA_KG_MAX : WALTER_GAS_TARA_KG;
+    if (new_tara < 0.0f) {
+        new_tara = 0.0f;
     }
-    return ESP_OK;
-#else
-    (void)enable;
-    return ESP_ERR_NOT_SUPPORTED;
-#endif
-}
+    if (new_tara > max_tara) {
+        new_tara = max_tara;
+    }
 
+    float old_tara = s_gas_tara_kg[hx_idx];
+    s_gas_tara_kg[hx_idx] = new_tara;
+    esp_err_t save_err = gas_tara_save_to_nvs();
+    if (save_err != ESP_OK) {
+        ESP_LOGW(TAG, "Gas tara NVS save failed: %s", esp_err_to_name(save_err));
+    }
+
+    int64_t ts_us = snapshot.hx711.timestamp_us != 0 ? snapshot.hx711.timestamp_us : esp_timer_get_time();
+    gas_history_push(snapshot.hx711.valid_a, snapshot.hx711.kg_a,
+                     snapshot.hx711.valid_b, snapshot.hx711.kg_b,
+                     ts_us);
+    gas_compute_state(snapshot.hx711.valid_a, snapshot.hx711.kg_a,
+                      snapshot.hx711.valid_b, snapshot.hx711.kg_b,
+                      ts_us);
+
+    const char *slot_label = (display_slot == 0) ? "front" : "back";
+    ESP_LOGI(TAG,
+             "Gas bottle replace (%s -> HX%c): tara %.2f -> %.2f kg (raw=%.2f kg, fill=%.1f kg)%s",
+             slot_label,
+             (hx_idx == HX_IDX_PLATFORM_A) ? 'A' : 'B',
+             old_tara,
+             new_tara,
+             kg_raw,
+             WALTER_GAS_FILL_KG,
+             (save_err == ESP_OK) ? "" : " [NVS save failed]");
+
+    return save_err;
+}
+#endif
 static esp_err_t command_set_wifi_ap_enabled(bool enable)
 {
     ESP_LOGI(TAG, "Command: WiFi AP %s", enable ? "enable" : "disable");
@@ -2709,19 +4234,6 @@ static esp_err_t command_set_wifi_credentials(const char *ssid, const char *pass
     ESP_LOGW(TAG, "WiFi credential updates not implemented yet");
     return ESP_ERR_NOT_SUPPORTED;
 }
-
-static void rs485_report_command_result(const char *cmd, esp_err_t err)
-{
-    if (!cmd) {
-        return;
-    }
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Command %s executed", cmd);
-    } else {
-        ESP_LOGW(TAG, "Command %s failed: %s", cmd, esp_err_to_name(err));
-    }
-    rs485_queue_command_result(cmd, err);
-}
 #endif // WALTER_ENABLE_RS485
 
 #if WALTER_ENABLE_LTE
@@ -2769,6 +4281,7 @@ static bool lte_wait_for_registration(int timeout_sec)
 {
     ESP_LOGI(LTE_TAG, "Waiting for LTE registration (timeout %d s)", timeout_sec);
     int elapsed = 0;
+    int last_log = 0;
     while (!lte_is_registered()) {
         if (!s_lte_target_enabled.load()) {
             ESP_LOGW(LTE_TAG, "Registration aborted (LTE disabled)");
@@ -2777,6 +4290,11 @@ static bool lte_wait_for_registration(int timeout_sec)
         }
         vTaskDelay(pdMS_TO_TICKS(1000));
         ++elapsed;
+        if (elapsed - last_log >= 5) {
+            WalterModemNetworkRegState reg = modem.getNetworkRegState();
+            ESP_LOGI(LTE_TAG, "Registration pending... state=%d elapsed=%ds", (int)reg, elapsed);
+            last_log = elapsed;
+        }
         if (elapsed >= timeout_sec) {
             ESP_LOGW(LTE_TAG, "LTE registration timed out");
             sensor_state_publish_lte_registration(false);
@@ -2801,8 +4319,20 @@ static bool lte_configure_pdp(void)
 static bool lte_attach_network(void)
 {
     sensor_state_publish_lte_registration(false);
-    if (!modem.setOpState(WALTER_MODEM_OPSTATE_NO_RF)) {
-        ESP_LOGE(LTE_TAG, "setOpState(NO_RF) failed");
+    
+    // Try to reset RF state (CFUN=4) multiple times as it might fail if modem is busy
+    bool rf_reset_ok = false;
+    for (int i = 0; i < 3; i++) {
+        if (modem.setOpState(WALTER_MODEM_OPSTATE_NO_RF)) {
+            rf_reset_ok = true;
+            break;
+        }
+        ESP_LOGW(LTE_TAG, "setOpState(NO_RF) failed (attempt %d/3), retrying...", i + 1);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
+    if (!rf_reset_ok) {
+        ESP_LOGE(LTE_TAG, "setOpState(NO_RF) failed after retries");
         return false;
     }
 
@@ -2902,6 +4432,19 @@ static void lte_close_socket(void)
 static void lte_set_low_power(void)
 {
     modem.setOpState(WALTER_MODEM_OPSTATE_MINIMUM);
+
+    // Warte darauf, dass das Modem den Suchzustand verlässt, damit GNSS exklusiv nutzen kann
+    const TickType_t timeout = ms_to_ticks(15000);
+    TickType_t start = xTaskGetTickCount();
+    while (xTaskGetTickCount() - start < timeout) {
+        WalterModemNetworkRegState reg = modem.getNetworkRegState();
+        if (reg == WALTER_MODEM_NETWORK_REG_NOT_SEARCHING) {
+            break;
+        }
+        vTaskDelay(ms_to_ticks(100));
+    }
+
+    s_lte_socket_id = 0;
     sensor_state_publish_lte_registration(false);
 }
 
@@ -2921,8 +4464,11 @@ static bool lte_send_heartbeat(void)
     payload[6] = static_cast<uint8_t>(s_lte_counter >> 8);
     payload[7] = static_cast<uint8_t>(s_lte_counter & 0xFF);
 
-    if (!modem.socketSend(payload, sizeof(payload))) {
-        ESP_LOGE(LTE_TAG, "socketSend failed");
+    const int sock_id = static_cast<int>(s_lte_socket_id);
+    if (!modem.socketSend(payload, sizeof(payload), nullptr, nullptr, nullptr, WALTER_MODEM_RAI_NO_INFO, sock_id)) {
+        WalterModemSocketState st = WalterModem::socketGetState(sock_id);
+        WalterModemNetworkRegState reg = modem.getNetworkRegState();
+        ESP_LOGE(LTE_TAG, "socketSend failed (sock=%d state=%d reg=%d) -> forcing reconnect", sock_id, static_cast<int>(st), (int)reg);
         return false;
     }
 
@@ -2963,13 +4509,19 @@ static void lte_tcp_task(void *arg)
     const TickType_t interval_ticks = ms_to_ticks(WALTER_LTE_SEND_INTERVAL_MS);
     bool link_ready = false;
     bool runtime_enabled = s_lte_target_enabled.load();
+    bool quiet = s_lte_quiet_active.load();
+    bool quiet_applied = false;
     lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
 
     while (true) {
+        // Ziehe den Quiet-Status zu Beginn, damit unmittelbar nach einem Quiet-On keine Heartbeats/SQNMONI mehr laufen.
+        quiet = s_lte_quiet_active.load();
         QueueHandle_t queue = s_lte_command_queue;
         lte_runtime_cmd_t cmd;
 
         if (!runtime_enabled) {
+            quiet = false;
+            s_lte_quiet_active.store(false);
             lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
             if (link_ready) {
                 lte_close_socket();
@@ -2983,6 +4535,11 @@ static void lte_tcp_task(void *arg)
                     runtime_enabled = true;
                     s_lte_target_enabled.store(true);
                     lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
+                } else if (cmd == LTE_CMD_QUIET_OFF) {
+                    // no-op, quiet already cleared above
+                } else if (cmd == LTE_CMD_QUIET_ON) {
+                    quiet = true;
+                    s_lte_quiet_active.store(true);
                 }
             }
             continue;
@@ -2992,6 +4549,14 @@ static void lte_tcp_task(void *arg)
             if (cmd == LTE_CMD_DISABLE) {
                 runtime_enabled = false;
                 s_lte_target_enabled.store(false);
+                quiet = false;
+                s_lte_quiet_active.store(false);
+                if (link_ready) {
+                    lte_close_socket();
+                }
+                lte_set_low_power();
+                link_ready = false;
+                lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
                 continue;
             } else if (cmd == LTE_CMD_RESTART) {
                 if (link_ready) {
@@ -3000,7 +4565,63 @@ static void lte_tcp_task(void *arg)
                     link_ready = false;
                     lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
                 }
+            } else if (cmd == LTE_CMD_QUIET_ON) {
+                quiet = true;
+                s_lte_quiet_active.store(true);
+            } else if (cmd == LTE_CMD_QUIET_OFF) {
+                quiet = false;
+                s_lte_quiet_active.store(false);
             }
+        }
+
+        if (quiet) {
+            if (!quiet_applied) {
+                if (link_ready) {
+                    lte_close_socket();
+                    link_ready = false;
+                }
+                if (!modem.setOpState(WALTER_MODEM_OPSTATE_NO_RF)) {
+                    ESP_LOGW(LTE_TAG, "setOpState(NO_RF) during quiet failed");
+                }
+                s_lte_quiet_active.store(true);
+                quiet_applied = true;
+            }
+
+            if (queue && xQueueReceive(queue, &cmd, ms_to_ticks(200)) == pdPASS) {
+                if (cmd == LTE_CMD_DISABLE) {
+                    runtime_enabled = false;
+                    s_lte_target_enabled.store(false);
+                    quiet = false;
+                    s_lte_quiet_active.store(false);
+                    quiet_applied = false;
+                    if (link_ready) {
+                        lte_close_socket();
+                    }
+                    lte_set_low_power();
+                    link_ready = false;
+                    lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
+                    continue;
+                } else if (cmd == LTE_CMD_RESTART) {
+                    if (link_ready) {
+                        lte_close_socket();
+                        lte_set_low_power();
+                        link_ready = false;
+                        lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
+                    }
+                } else if (cmd == LTE_CMD_QUIET_OFF) {
+                    quiet = false;
+                    s_lte_quiet_active.store(false);
+                    quiet_applied = false;
+                }
+            } else {
+                vTaskDelay(ms_to_ticks(200));
+            }
+            continue;
+        }
+
+        // Reset quiet sentinel when we leave quiet state
+        if (!quiet) {
+            quiet_applied = false;
         }
 
         if (!link_ready) {
@@ -3036,12 +4657,13 @@ static void lte_tcp_task(void *arg)
             lte_close_socket();
             lte_set_low_power();
             link_ready = false;
+            s_lte_socket_id = 0;
             lte_runtime_notify(runtime_enabled, link_ready, ESP_FAIL);
-            if (queue && xQueueReceive(queue, &cmd, ms_to_ticks(WALTER_LTE_RETRY_DELAY_MS)) == pdPASS) {
-                if (cmd == LTE_CMD_DISABLE) {
-                    runtime_enabled = false;
-                    s_lte_target_enabled.store(false);
-                }
+            // Aggressiver Re-Dial: sofort versuchen, Registrierung + Socket neu aufzubauen
+            if (lte_attach_network() && lte_open_socket()) {
+                link_ready = true;
+                lte_runtime_notify(runtime_enabled, link_ready, ESP_OK);
+                continue;
             }
             continue;
         }
@@ -3199,9 +4821,9 @@ static esp_err_t sensor_subsystem_init(void)
         BaseType_t task_created = xTaskCreate(
             gps_task,
             "gps",
-            WALTER_SENSOR_TASK_STACK,
+            WALTER_GPS_TASK_STACK,
             nullptr,
-            WALTER_SENSOR_TASK_PRIORITY,
+            WALTER_GPS_TASK_PRIORITY,
             nullptr);
         if (task_created == pdPASS) {
             any_sensor = true;
@@ -3233,6 +4855,8 @@ extern "C" void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+    gas_tara_restore_from_nvs();
+    gas_history_restore_from_nvs();
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
@@ -3266,10 +4890,10 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "womo_rs485_init() returned: %s (0x%x)", esp_err_to_name(rs485_err), rs485_err);
     if (rs485_err == ESP_OK) {
         ESP_LOGI(TAG, "RS485 initialized, starting communication tasks");
-        if (!s_rs485_cmd_result_queue) {
-            s_rs485_cmd_result_queue = xQueueCreate(8, sizeof(rs485_cmd_result_msg_t));
-            if (!s_rs485_cmd_result_queue) {
-                ESP_LOGE(TAG, "Failed to create RS485 command result queue");
+        if (!s_rs485_tx_mutex) {
+            s_rs485_tx_mutex = xSemaphoreCreateMutex();
+            if (!s_rs485_tx_mutex) {
+                ESP_LOGE(TAG, "Failed to create RS485 TX mutex");
             }
         }
         
@@ -3277,41 +4901,31 @@ extern "C" void app_main(void)
         BaseType_t tx_created = xTaskCreate(
             rs485_tx_task,
             "rs485_tx",
-            4096,
-            NULL,
+            5120,
+            nullptr,
             5,
-            NULL
-        );
+            nullptr);
         if (tx_created != pdPASS) {
             ESP_LOGE(TAG, "Failed to create RS485 TX task");
         }
-        
+
         // Start RS485 RX task (receives commands)
         BaseType_t rx_created = xTaskCreate(
             rs485_rx_task,
             "rs485_rx",
-            3072,
-            NULL,
+            4096,
+            nullptr,
             5,
-            NULL
-        );
+            nullptr);
         if (rx_created != pdPASS) {
             ESP_LOGE(TAG, "Failed to create RS485 RX task");
         }
-    } else {
-        ESP_LOGW(TAG, "RS485 init failed: %s", esp_err_to_name(rs485_err));
     }
-#endif
 
-#if WALTER_ENABLE_LTE
+    s_lte_command_queue = xQueueCreate(8, sizeof(lte_runtime_cmd_t));
     if (!s_lte_command_queue) {
-        s_lte_command_queue = xQueueCreate(8, sizeof(lte_runtime_cmd_t));
-        if (!s_lte_command_queue) {
-            ESP_LOGE(TAG, "Failed to create LTE command queue");
-        }
-    }
-
-    if (s_lte_command_queue) {
+        ESP_LOGE(TAG, "Failed to create LTE command queue");
+    } else {
         BaseType_t lte_created = xTaskCreate(
             lte_tcp_task,
             "lte_tcp",

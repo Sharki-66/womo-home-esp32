@@ -71,6 +71,8 @@ void example_lvgl_unlock(void);
 
 esp_err_t waveshare_esp32_s3_rgb_lcd_init();
 
+esp_err_t womo_ch422g_assert_sd_cs(void);
+
 esp_err_t wavesahre_rgb_lcd_bl_on();
 esp_err_t wavesahre_rgb_lcd_bl_off();
 

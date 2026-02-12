@@ -2,16 +2,17 @@ menu "Example Configuration"
 
     menu "WiFi Configuration"
         config WOMO_WIFI_SSID
-            string "WiFi SSID"
-            default "YourSSID"
+            string "Router-AP SSID"
+            default "Malibu-622"
             help
-                SSID (network name) for WoMo WiFi connection.
+                SSID des internen Router-AP (RUTX11).
+                Das Display verbindet sich ausschließlich mit diesem Netz.
 
         config WOMO_WIFI_PASSWORD
-            string "WiFi Password"
-            default "YourPassword"
+            string "Router-AP Password"
+            default "Wlan-XA622"
             help
-                WiFi password (WPA2) for WoMo WiFi connection.
+                WPA2-Passwort des internen Router-AP (RUTX11).
 
         config WOMO_WIFI_MAX_RETRY
             int "Maximum WiFi retry attempts"
@@ -20,6 +21,27 @@ menu "Example Configuration"
             help
                 Maximum number of WiFi connection retry attempts. Set to 0 for infinite retries.
 
+    endmenu
+
+    menu "Router RUTX11 (UCI/JSON-RPC)"
+        config WOMO_ROUTER_IP
+            string "Router IP-Adresse"
+            default "192.168.10.1"
+            help
+                IP-Adresse des RUTX11 im internen Netz.
+
+        config WOMO_ROUTER_USERNAME
+            string "Router Login-Benutzer"
+            default "admin"
+            help
+                Benutzername für den ubus JSON-RPC Login.
+
+        config WOMO_ROUTER_PASSWORD
+            string "Router Login-Passwort"
+            default ""
+            help
+                Passwort für den ubus JSON-RPC Login.
+                ACHTUNG: Wird im Build gespeichert – nicht in öffentliche Repos committen!
     endmenu
 
     menu "Display"

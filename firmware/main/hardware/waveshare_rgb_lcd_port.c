@@ -6,7 +6,6 @@
 
 #include "waveshare_rgb_lcd_port.h"
 #include "esp_check.h"
-#include "i2cdev.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -16,6 +15,7 @@ static const char *TAG = "womo_display";
 static i2c_master_bus_handle_t s_i2c_bus = NULL;
 static i2c_master_dev_handle_t s_ch422g_cfg_handle = NULL;
 static i2c_master_dev_handle_t s_ch422g_data_handle = NULL;
+static bool s_ch422g_backlight_on = true; // gespiegelt, damit CH422G-Schreibzugriffe (z. B. SD-CS) den BL-Zustand respektieren
 
 #define GT911_I2C_FREQ_HZ        400000
 
@@ -52,6 +52,7 @@ static esp_err_t ensure_i2c_bus(void)
         .sda_io_num = I2C_MASTER_SDA_IO,
         .scl_io_num = I2C_MASTER_SCL_IO,
         .clk_source = I2C_CLK_SRC_DEFAULT,
+        .glitch_ignore_cnt = 7,
         .flags =
         {
             .enable_internal_pullup = true,
@@ -62,13 +63,6 @@ static esp_err_t ensure_i2c_bus(void)
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to create I2C master bus: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    err = i2cdev_attach_bus(I2C_MASTER_NUM, s_i2c_bus, I2C_MASTER_SDA_IO, I2C_MASTER_SCL_IO);
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to attach i2cdev to bus: %s", esp_err_to_name(err));
         return err;
     }
 
@@ -115,6 +109,35 @@ static esp_err_t ensure_ch422g_handles(void)
         }
     }
 
+    return ESP_OK;
+}
+
+esp_err_t womo_ch422g_assert_sd_cs(void)
+{
+    if (ensure_ch422g_handles() != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Unable to assert SD-CS because CH422G handles are unavailable");
+        return ESP_FAIL;
+    }
+
+    uint8_t cfg = 0x01;
+    esp_err_t err = ch422g_write_byte(s_ch422g_cfg_handle, cfg);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "CH422G cfg write failed for SD-CS: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // EXIO4 low für SD-CS, Backlight-Bit gemäß aktuellem Zustand lassen
+    uint8_t data = s_ch422g_backlight_on ? 0x0E : 0x0A;
+    err = ch422g_write_byte(s_ch422g_data_handle, data);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "CH422G data write failed for SD-CS: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "CH422G SD-CS asserted via EXIO4 (data=0x%02X)", data);
     return ESP_OK;
 }
 
@@ -288,6 +311,10 @@ esp_err_t wavesahre_rgb_lcd_bl_on()
 {
     ESP_RETURN_ON_ERROR(ensure_ch422g_handles(), TAG, "CH422G handles not ready for backlight on");
 
+    s_ch422g_backlight_on = true;
+
+    ESP_LOGI(TAG, "Backlight ON (CH422G)");
+
     // Configure CH422G to output mode
     uint8_t write_buf = 0x01;
     ESP_RETURN_ON_ERROR(i2c_master_transmit(s_ch422g_cfg_handle, &write_buf, 1, I2C_MASTER_TIMEOUT_MS), TAG, "CH422G mode write failed");
@@ -302,6 +329,10 @@ esp_err_t wavesahre_rgb_lcd_bl_on()
 esp_err_t wavesahre_rgb_lcd_bl_off()
 {
     ESP_RETURN_ON_ERROR(ensure_ch422g_handles(), TAG, "CH422G handles not ready for backlight off");
+
+    s_ch422g_backlight_on = false;
+
+    ESP_LOGI(TAG, "Backlight OFF (CH422G)");
 
     // Configure CH422G to output mode
     uint8_t write_buf = 0x01;

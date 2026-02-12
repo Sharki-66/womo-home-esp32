@@ -1,0 +1,34 @@
+idf_component_register(
+    SRCS
+        "app_main.c"
+        "sensors/analog_sensor.c"
+        "time/gnss_time.c"
+        "network/net_manager.c"
+        "network/rs485_modem.c"
+        "network/womo_rs485.c"
+        "sensors/max17048_sensor.c"
+        "sensors/bno055_sensor.c"
+        "hal/i2c_ext_bus.c"
+        "sensors/bme680_sensor.c"
+        "time/rtc_pcf8523.c"
+        "sensors/hx711_sensor.c"
+        "time/time_sync.c"
+        "time/lte_time.c"
+    INCLUDE_DIRS
+        "."
+        "sensors"
+        "time"
+        "network"
+        "hal"
+    REQUIRES
+        bsec
+        bno055
+        nvs_flash
+        esp_app_format
+        esp_adc
+        bme680
+        web_wifi
+        hx711
+        i2c_bus
+        json
+)

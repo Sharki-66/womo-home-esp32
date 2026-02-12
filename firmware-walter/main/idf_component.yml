@@ -4,27 +4,20 @@ dependencies:
 
   esp-idf-lib/i2cdev:
     version: ^2
-    override_path: 
-      D:/Hajo/womo-home-esp32/firmware/managed_components/esp-idf-lib__i2cdev
 
   esp-idf-lib/esp_idf_lib_helpers:
     version: ^1
-    override_path: 
-      D:/Hajo/womo-home-esp32/firmware/managed_components/esp-idf-lib__esp_idf_lib_helpers
 
   esp-idf-lib/hx711: '*'
 
   k0i05/esp_bme680:
     version: ^1.2.7
-    override_path:
-      D:/Hajo/womo-home-esp32/firmware-walter/components/k0i05__esp_bme680
+    override_path: ../components/k0i05__esp_bme680
 
   adithya-187326/bno055:
     version: ^1.0.1
-    override_path:
-      D:/Hajo/womo-home-esp32/firmware-walter/components/adithya-187326__bno055
+    override_path: ../components/adithya-187326__bno055
 
   dptechnics/walter-modem:
     version: '*'
     git: https://github.com/QuickSpot/walter-esp-idf.git
- 

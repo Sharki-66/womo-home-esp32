@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="de">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0">
+  <title>WoMoHome</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%23002134'/><text x='50%25' y='52%25' font-family='Arial' font-size='28' fill='white' text-anchor='middle'>W</text></svg>">
+</head>
+
+<body>
+  <div class="home-base">
+    <div class="header-base flex flex-jcb">
+        <div class="header-logo">WoMoHome</div>
+        <div class="header-menu" onclick="menuClick(this)">
+        </div>
+    </div>
+    <div class="content-base flex">
+      <div class="left-base" id="leftMenu">
+<!--        <div class="left-title">系统菜单</div>-->
+        <ul>
+          <li>
+            <a href="index.html" class="content">Systemstatus</a>
+          </li>
+          <li>
+            <a href="wlan.html">WLAN-Einstellungen</a>
+          </li>
+        </ul>
+      </div>
+      <div class="right-base">
+        <div class="page-header">
+          <span class="header-title-one" onclick="networkStatus()">Netzwerkstatus</span>
+          <span>/</span>
+          <span class="header-title-two" onclick="customerList()">Client-Liste</span>
+          <span>/</span>
+          <span class="header-title-three" onclick="batteryStatus()">Akku</span>
+        </div>
+        <div class="page-content" id="networkShow">
+          <div class="page-title">Basisstatus</div>
+          <div class="page-detail flex flex-wrap">
+            <div class="base-detail flex flex-ac">
+              <img src="./img/shebei.png" alt="Internet">
+              <div class="base-two flex-v flex-ac">
+                <span class="base-line-text">Internet</span>
+                <div class="base-line"></div>
+                <span>Clients: <span class="client-count" id="client-count-top">0</span></span>
+              </div>
+            </div>
+            <div class="base-detail flex flex-ac">
+              <img src="./img/luyouqi.png" alt="Hotspot">
+              <div class="base-two flex-v flex-ac">
+                <span class="base-line-text">Hotspot</span>
+                <div class="base-line"></div>
+                <span>2.4 GHz Wi-Fi aktiv</span>
+              </div>
+            </div>
+            <div class="base-detail flex flex-ac">
+              <img src="./img/xinhao.png" alt="Mobilfunk">
+              <div class="base-two flex-v flex-ac">
+                <span class="base-line-text">Mobilfunk Signal</span>
+                <div class="base-line"></div>
+                <span id="lte-signal">– dBm</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="page-title">Gerätestatus</div>
+          <div class="page-detail flex flex-wrap">
+            <div class="device-detail">
+              <div class="device-battery">
+                <span>Verbindungsdauer</span>
+                <span class="device-content" id="connect-time">xxx</span>
+              </div>
+              <div class="device-battery">
+                <span>Freie Verbindungen</span>
+                <span class="device-content" id="remain-count">x</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="page-content" id="batteryShow">
+          <div class="page-title">Akkustatus</div>
+          <div class="page-detail flex flex-wrap">
+            <div class="device-detail">
+              <div class="device-battery">
+                <span>Spannung</span>
+                <span class="device-content" id="battery-voltage">–</span>
+              </div>
+              <div class="device-battery">
+                <span>Ladestand</span>
+                <span class="device-content" id="battery-soc">–</span>
+              </div>
+              <div class="device-battery">
+                <span>Alter der Messung</span>
+                <span class="device-content" id="battery-age">–</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="page-content" id="customerShow">
+          <div class="page-title">Aktive Clients</div>
+          <div class="page-detail">
+            <table class="tableStyle tCenter">
+                <thead>
+                    <tr>
+                        <th>Hostname</th>
+                        <th>MAC-Adresse</th>
+                        <th>IP-Adresse</th>
+                        <th>Verbunden seit</th>
+                        <th>Aktion</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="js/index.js"></script>
+  <script>
+    initHash();
+    window.addEventListener('hashchange', function() {
+      initHash();
+    })
+  </script>
+</body>
+
+</html>

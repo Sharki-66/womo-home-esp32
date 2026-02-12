@@ -1,0 +1,16 @@
+name: Push component to https://components.espressif.com
+on:
+  push:
+jobs:
+  upload_components:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+      - name: Upload component to the component registry
+        uses: espressif/upload-components-ci-action@v2
+        with:
+          components: "bno055: ." # component_name: directory
+          namespace: "adithya-187326"
+          api_token: ${{ secrets.IDF_COMPONENT_API_TOKEN }}

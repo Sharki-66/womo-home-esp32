@@ -8,6 +8,7 @@
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "nvs_flash.h"
+#include "nvs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -31,6 +32,110 @@ static esp_netif_t *sta_netif = NULL;
 static TaskHandle_t s_wifi_scan_task = NULL;
 static womo_wifi_scan_callback_t s_wifi_scan_callback = NULL;
 static void *s_wifi_scan_user_data = NULL;
+// Persistenz für bis zu 50 bekannte SSIDs mit Passwort
+#define WIFI_KNOWN_MAX 50
+typedef struct {
+    char ssid[33];
+    char pwd[64];
+} wifi_known_entry_t;
+
+static wifi_known_entry_t s_known_list[WIFI_KNOWN_MAX] = {0};
+static size_t s_known_count = 0;
+static bool s_known_loaded = false;
+
+static esp_err_t wifi_nvs_load_known(wifi_known_entry_t *list, size_t *count)
+{
+    if (!list || !count) return ESP_ERR_INVALID_ARG;
+
+    nvs_handle_t h;
+    esp_err_t err = nvs_open("wifi_cfg", NVS_READONLY, &h);
+    if (err != ESP_OK) {
+        *count = 0;
+        return err;
+    }
+
+    uint8_t cnt = 0;
+    err = nvs_get_u8(h, "known_count", &cnt);
+    if (err != ESP_OK) {
+        *count = 0;
+        nvs_close(h);
+        return ESP_OK;
+    }
+    if (cnt > WIFI_KNOWN_MAX) cnt = WIFI_KNOWN_MAX;
+
+    size_t blob_size = cnt * sizeof(wifi_known_entry_t);
+    if (cnt > 0) {
+        err = nvs_get_blob(h, "known_list", list, &blob_size);
+        if (err != ESP_OK) {
+            cnt = 0;
+        }
+    }
+    *count = cnt;
+    nvs_close(h);
+    return ESP_OK;
+}
+
+static void wifi_nvs_save_known(const wifi_known_entry_t *list, size_t count)
+{
+    if (!list || count == 0) return;
+    if (count > WIFI_KNOWN_MAX) count = WIFI_KNOWN_MAX;
+
+    nvs_handle_t h;
+    if (nvs_open("wifi_cfg", NVS_READWRITE, &h) != ESP_OK) return;
+
+    nvs_set_u8(h, "known_count", (uint8_t)count);
+    nvs_set_blob(h, "known_list", list, count * sizeof(wifi_known_entry_t));
+    nvs_commit(h);
+    nvs_close(h);
+}
+
+static int wifi_known_find(const wifi_known_entry_t *list, size_t count, const char *ssid)
+{
+    if (!list || !ssid) return -1;
+    for (size_t i = 0; i < count; i++) {
+        if (strncmp(list[i].ssid, ssid, sizeof(list[i].ssid)) == 0) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+static void wifi_known_promote(wifi_known_entry_t *list, size_t *count, const char *ssid, const char *pwd)
+{
+    if (!list || !count || !ssid || !pwd || ssid[0] == '\0' || pwd[0] == '\0') return;
+
+    size_t cnt = *count;
+    int idx = wifi_known_find(list, cnt, ssid);
+
+    wifi_known_entry_t new_entry = {0};
+    strncpy(new_entry.ssid, ssid, sizeof(new_entry.ssid) - 1);
+    strncpy(new_entry.pwd, pwd, sizeof(new_entry.pwd) - 1);
+
+    // Platz schaffen: Eintrag an die Spitze, Rest eins nach hinten
+    if (idx >= 0) {
+        for (int i = idx; i > 0; i--) {
+            list[i] = list[i - 1];
+        }
+        list[0] = new_entry;
+    } else {
+        if (cnt < WIFI_KNOWN_MAX) {
+            cnt++;
+        }
+        for (size_t i = cnt - 1; i > 0; i--) {
+            list[i] = list[i - 1];
+        }
+        list[0] = new_entry;
+    }
+    *count = cnt;
+}
+
+static void wifi_known_ensure_loaded(void)
+{
+    if (!s_known_loaded) {
+        (void)wifi_nvs_load_known(s_known_list, &s_known_count);
+        s_known_loaded = true;
+    }
+}
 
 static void wifi_scan_task(void *arg);
 
@@ -104,6 +209,9 @@ esp_err_t womo_wifi_init(void)
         ESP_LOGE(TAG, "Failed to create network interface");
         return ESP_FAIL;
     }
+
+    // Sprechender Hostname für DHCP-Lease-Erkennung
+    esp_netif_set_hostname(sta_netif, "WoMo-Display");
     
     // Initialize WiFi with default config
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -138,11 +246,27 @@ esp_err_t womo_wifi_connect(const char *ssid, const char *password, uint8_t max_
     xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
     
     ESP_LOGI(TAG, "Connecting to WiFi: %s", ssid);
+
+    char pwd_buf[64] = "";
+    bool password_provided = (password != NULL && password[0] != '\0');
+    wifi_known_ensure_loaded();
+
+    if (!password_provided) {
+        int idx = wifi_known_find(s_known_list, s_known_count, ssid);
+        if (idx >= 0) {
+            strncpy(pwd_buf, s_known_list[idx].pwd, sizeof(pwd_buf) - 1);
+            pwd_buf[sizeof(pwd_buf) - 1] = '\0';
+            if (pwd_buf[0] != '\0') {
+                password = pwd_buf;
+                password_provided = true;
+            }
+        }
+    }
     
     // Configure WiFi
     wifi_config_t wifi_config = {0};
     strncpy((char*)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
-    if (password != NULL) {
+    if (password_provided && password != NULL) {
         strncpy((char*)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
     }
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
@@ -161,6 +285,12 @@ esp_err_t womo_wifi_connect(const char *ssid, const char *password, uint8_t max_
     
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "Connected to WiFi: %s", ssid);
+        if (password_provided && password != NULL) {
+            // Promote/insert SSID in known list and persist
+            wifi_known_ensure_loaded();
+            wifi_known_promote(s_known_list, &s_known_count, ssid, password);
+            wifi_nvs_save_known(s_known_list, s_known_count);
+        }
         return ESP_OK;
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGE(TAG, "Failed to connect to WiFi: %s", ssid);
@@ -169,6 +299,87 @@ esp_err_t womo_wifi_connect(const char *ssid, const char *password, uint8_t max_
         ESP_LOGE(TAG, "Unexpected WiFi event");
         return ESP_FAIL;
     }
+}
+
+esp_err_t womo_wifi_connect_best_known(uint8_t max_retry)
+{
+    if (s_wifi_event_group == NULL) {
+        ESP_LOGE(TAG, "WiFi not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    wifi_known_ensure_loaded();
+    if (s_known_count == 0) {
+        ESP_LOGI(TAG, "No known WiFi networks stored");
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    wifi_scan_config_t scan_cfg = {
+        .ssid = NULL,
+        .bssid = NULL,
+        .channel = 0,
+        .show_hidden = false,
+        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+        .scan_time.active = {
+            .min = 0,
+            .max = 120,
+        },
+        .scan_time.passive = 0,
+    };
+
+    esp_err_t err = esp_wifi_start();
+    if (err == ESP_ERR_WIFI_CONN || err == ESP_ERR_WIFI_STATE) {
+        err = ESP_OK; // already started/connected
+    }
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    err = esp_wifi_scan_start(&scan_cfg, true);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "WiFi scan failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    uint16_t ap_count = 0;
+    err = esp_wifi_scan_get_ap_num(&ap_count);
+    if (err != ESP_OK || ap_count == 0) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    wifi_ap_record_t *records = calloc(ap_count, sizeof(*records));
+    if (!records) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    uint16_t copy_count = ap_count;
+    err = esp_wifi_scan_get_ap_records(&copy_count, records);
+    if (err != ESP_OK || copy_count == 0) {
+        free(records);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    const char *target_ssid = NULL;
+    for (size_t k = 0; k < s_known_count && !target_ssid; k++) {
+        for (size_t i = 0; i < copy_count; i++) {
+            if (strncmp(s_known_list[k].ssid,
+                        (const char *)records[i].ssid,
+                        sizeof(s_known_list[k].ssid)) == 0) {
+                target_ssid = s_known_list[k].ssid;
+                break;
+            }
+        }
+    }
+
+    free(records);
+
+    if (!target_ssid) {
+        ESP_LOGI(TAG, "No known WiFi found in scan");
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    ESP_LOGI(TAG, "Connecting to known WiFi: %s", target_ssid);
+    return womo_wifi_connect(target_ssid, NULL, max_retry);
 }
 
 esp_err_t womo_wifi_disconnect(void)

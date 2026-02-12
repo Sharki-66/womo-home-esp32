@@ -3,6 +3,7 @@
 #include "sdkconfig.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
+#include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -11,10 +12,9 @@
 #include <string.h>
 #include <stdio.h>
 
-#define OWM_DEFAULT_API_KEY      "0984ac7736baa59683e8b261d764b290"
-#define OWM_DEFAULT_LATITUDE     "50.0260"   // Rodgau (will be GPS-driven later)
-#define OWM_DEFAULT_LONGITUDE    "8.8850"
-#define OWM_DEFAULT_INTERVAL_MIN 15
+#define OM_DEFAULT_LATITUDE     "50.0260"   // Rodgau (will be GPS-driven later)
+#define OM_DEFAULT_LONGITUDE    "8.8850"
+#define OM_DEFAULT_INTERVAL_MIN 5
 
 #define TAG "weather_http"
 
@@ -42,7 +42,6 @@ static esp_err_t weather_http_parse_json(const char *json, womo_weather_http_dat
 static esp_err_t weather_http_build_url(char *out_url, size_t max_len);
 static void weather_http_task(void *arg);
 static esp_err_t weather_http_perform_request(weather_http_response_t *response);
-static const char* weather_http_get_api_key(void);
 static const char* weather_http_get_latitude(void);
 static const char* weather_http_get_longitude(void);
 static uint32_t weather_http_get_interval_minutes(void);
@@ -81,14 +80,8 @@ esp_err_t womo_weather_http_start(womo_weather_http_callback_t callback, void *u
         return ESP_ERR_INVALID_STATE;
     }
 
-    const char *api_key = weather_http_get_api_key();
     const char *latitude = weather_http_get_latitude();
     const char *longitude = weather_http_get_longitude();
-
-    if (!api_key || api_key[0] == '\0') {
-        ESP_LOGW(TAG, "OWM API key empty, skipping online weather updates");
-        return ESP_ERR_INVALID_ARG;
-    }
 
     if (!latitude || !longitude || latitude[0] == '\0' || longitude[0] == '\0') {
         ESP_LOGW(TAG, "Latitude/Longitude not configured");
@@ -101,7 +94,7 @@ esp_err_t womo_weather_http_start(womo_weather_http_callback_t callback, void *u
 
     BaseType_t created = xTaskCreate(
         weather_http_task,
-        "owm_task",
+        "om_task",
         WEATHER_HTTP_TASK_STACK,
         NULL,
         WEATHER_HTTP_TASK_PRIO,
@@ -113,7 +106,7 @@ esp_err_t womo_weather_http_start(womo_weather_http_callback_t callback, void *u
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG, "OpenWeatherMap task started (interval %u min) lat=%s lon=%s",
+    ESP_LOGI(TAG, "Open-Meteo task started (interval %u min) lat=%s lon=%s",
              weather_http_get_interval_minutes(), latitude, longitude);
     return ESP_OK;
 }
@@ -134,7 +127,7 @@ esp_err_t womo_weather_http_stop(void)
 
     s_ctx.callback = NULL;
     s_ctx.user_data = NULL;
-    ESP_LOGI(TAG, "OpenWeatherMap task stopped");
+    ESP_LOGI(TAG, "Open-Meteo task stopped");
     return ESP_OK;
 }
 
@@ -218,6 +211,7 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
         .timeout_ms = 7000,
         .event_handler = http_event_handler,
         .user_data = response,
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -244,7 +238,7 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
     }
 
     if (status != 200) {
-        ESP_LOGW(TAG, "OpenWeatherMap status %d", status);
+        ESP_LOGW(TAG, "Open-Meteo status %d", status);
         return ESP_FAIL;
     }
 
@@ -256,16 +250,6 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
     return ESP_OK;
 }
 
-static const char* weather_http_get_api_key(void)
-{
-#ifdef CONFIG_WOMO_OWM_API_KEY
-    if (CONFIG_WOMO_OWM_API_KEY[0] != '\0') {
-        return CONFIG_WOMO_OWM_API_KEY;
-    }
-#endif
-    return OWM_DEFAULT_API_KEY;
-}
-
 static const char* weather_http_get_latitude(void)
 {
 #ifdef CONFIG_WOMO_OWM_LATITUDE
@@ -273,7 +257,7 @@ static const char* weather_http_get_latitude(void)
         return CONFIG_WOMO_OWM_LATITUDE;
     }
 #endif
-    return OWM_DEFAULT_LATITUDE;
+    return OM_DEFAULT_LATITUDE;
 }
 
 static const char* weather_http_get_longitude(void)
@@ -283,7 +267,7 @@ static const char* weather_http_get_longitude(void)
         return CONFIG_WOMO_OWM_LONGITUDE;
     }
 #endif
-    return OWM_DEFAULT_LONGITUDE;
+    return OM_DEFAULT_LONGITUDE;
 }
 
 static uint32_t weather_http_get_interval_minutes(void)
@@ -293,7 +277,32 @@ static uint32_t weather_http_get_interval_minutes(void)
         return CONFIG_WOMO_OWM_UPDATE_MINUTES;
     }
 #endif
-    return OWM_DEFAULT_INTERVAL_MIN;
+    return OM_DEFAULT_INTERVAL_MIN;
+}
+
+static const char* weather_http_wmo_desc(int code)
+{
+    switch (code) {
+        case 0: return "clear";
+        case 1: case 2: return "partly cloudy";
+        case 3: return "overcast";
+        case 45: case 48: return "fog";
+        case 51: case 53: case 55: return "drizzle";
+        case 56: case 57: return "freezing drizzle";
+        case 61: return "rain light";
+        case 63: return "rain";
+        case 65: return "rain heavy";
+        case 66: case 67: return "freezing rain";
+        case 71: case 73: case 75: return "snow";
+        case 77: return "snow grains";
+        case 80: return "rain shower";
+        case 81: return "rain shower heavy";
+        case 82: return "rain shower violent";
+        case 85: case 86: return "snow shower";
+        case 95: return "thunderstorm";
+        case 96: case 99: return "thunderstorm hail";
+        default: return "unknown";
+    }
 }
 
 static esp_err_t weather_http_parse_json(const char *json, womo_weather_http_data_t *out_data)
@@ -310,42 +319,37 @@ static esp_err_t weather_http_parse_json(const char *json, womo_weather_http_dat
 
     womo_weather_http_data_t data = {0};
     data.valid = true;
+    bool has_weather_code = false;
 
-    const cJSON *main_obj = cJSON_GetObjectItem(root, "main");
-    if (cJSON_IsObject(main_obj)) {
-        const cJSON *temp = cJSON_GetObjectItem(main_obj, "temp");
-        const cJSON *feels_like = cJSON_GetObjectItem(main_obj, "feels_like");
-        const cJSON *pressure = cJSON_GetObjectItem(main_obj, "pressure");
-        const cJSON *humidity = cJSON_GetObjectItem(main_obj, "humidity");
+    const cJSON *current = cJSON_GetObjectItem(root, "current");
+    if (!cJSON_IsObject(current)) {
+        current = cJSON_GetObjectItem(root, "current_weather"); // fallback
+    }
+
+    if (cJSON_IsObject(current)) {
+        const cJSON *temp = cJSON_GetObjectItem(current, "temperature_2m");
+        const cJSON *pressure = cJSON_GetObjectItem(current, "pressure_msl");
+        const cJSON *humidity = cJSON_GetObjectItem(current, "relative_humidity_2m");
+        const cJSON *wind = cJSON_GetObjectItem(current, "wind_speed_10m");
+        const cJSON *wmo = cJSON_GetObjectItem(current, "weather_code");
+        const cJSON *is_day = cJSON_GetObjectItem(current, "is_day");
+
         if (cJSON_IsNumber(temp)) data.temperature_c = (float)temp->valuedouble;
-        if (cJSON_IsNumber(feels_like)) data.feels_like_c = (float)feels_like->valuedouble;
         if (cJSON_IsNumber(pressure)) data.pressure_hpa = (float)pressure->valuedouble;
         if (cJSON_IsNumber(humidity)) data.humidity_percent = (float)humidity->valuedouble;
-    }
-
-    const cJSON *wind_obj = cJSON_GetObjectItem(root, "wind");
-    if (cJSON_IsObject(wind_obj)) {
-        const cJSON *speed = cJSON_GetObjectItem(wind_obj, "speed");
-        if (cJSON_IsNumber(speed)) data.wind_speed_ms = (float)speed->valuedouble;
-    }
-
-    const cJSON *weather_arr = cJSON_GetObjectItem(root, "weather");
-    if (cJSON_IsArray(weather_arr) && cJSON_GetArraySize(weather_arr) > 0) {
-        const cJSON *w = cJSON_GetArrayItem(weather_arr, 0);
-        const cJSON *id = cJSON_GetObjectItem(w, "id");
-        const cJSON *desc = cJSON_GetObjectItem(w, "description");
-        const cJSON *icon = cJSON_GetObjectItem(w, "icon");
-        if (cJSON_IsNumber(id)) data.weather_id = id->valueint;
-        if (cJSON_IsString(desc) && desc->valuestring) {
-            strncpy(data.description, desc->valuestring, sizeof(data.description) - 1);
+        if (cJSON_IsNumber(wind)) data.wind_speed_ms = (float)wind->valuedouble;
+        if (cJSON_IsNumber(wmo)) {
+            data.weather_id = wmo->valueint;
+            has_weather_code = true;
+            strncpy(data.description, weather_http_wmo_desc(data.weather_id), sizeof(data.description) - 1);
         }
-        if (cJSON_IsString(icon) && icon->valuestring && strlen(icon->valuestring) >= 3) {
-            data.is_night = (icon->valuestring[2] == 'n');
+        if (cJSON_IsNumber(is_day)) {
+            data.is_night = (is_day->valueint == 0);
         }
     }
 
-    if (!data.weather_id) {
-        ESP_LOGW(TAG, "No weather id in response");
+    if (!has_weather_code) {
+        ESP_LOGW(TAG, "No weather code in response");
         data.valid = false;
     }
 
@@ -360,15 +364,13 @@ static esp_err_t weather_http_build_url(char *out_url, size_t max_len)
         return ESP_ERR_INVALID_ARG;
     }
 
-    const char *api_key = weather_http_get_api_key();
     const char *latitude = weather_http_get_latitude();
     const char *longitude = weather_http_get_longitude();
 
     int written = snprintf(out_url, max_len,
-                           "http://api.openweathermap.org/data/2.5/weather?lat=%s&lon=%s&units=metric&appid=%s",
+                           "https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s&current=temperature_2m,weather_code,is_day,pressure_msl,relative_humidity_2m,wind_speed_10m&timezone=auto",
                            latitude,
-                           longitude,
-                           api_key);
+                           longitude);
     if (written < 0 || (size_t)written >= max_len) {
         ESP_LOGE(TAG, "URL buffer too small");
         return ESP_ERR_NO_MEM;

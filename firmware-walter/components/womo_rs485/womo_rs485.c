@@ -43,10 +43,15 @@ esp_err_t womo_rs485_init(void)
         return err;
     }
 
+    // DE manuell führen: als GPIO Output Low mit Pulldown, UART nutzt kein RTS-Pin
+    gpio_set_pull_mode(WALTER_RS485_DE_GPIO, GPIO_PULLDOWN_ONLY);
+    gpio_set_direction(WALTER_RS485_DE_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(WALTER_RS485_DE_GPIO, 0);
+
     err = uart_set_pin(s_uart_port,
                        WALTER_RS485_TX_GPIO,
                        WALTER_RS485_RX_GPIO,
-                       WALTER_RS485_DE_GPIO,
+                       UART_PIN_NO_CHANGE,
                        UART_PIN_NO_CHANGE);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set UART pins: %s", esp_err_to_name(err));
@@ -92,12 +97,16 @@ esp_err_t womo_rs485_write(const uint8_t *data, size_t length, TickType_t ticks_
     if (!data || length == 0) {
         return ESP_ERR_INVALID_ARG;
     }
+    // Manuelle DE-Steuerung: Senden -> DE high, danach wieder low
+    gpio_set_level(WALTER_RS485_DE_GPIO, 1);
     int to_write = (int)length;
     int written = uart_write_bytes(s_uart_port, (const char *)data, to_write);
     if (written != to_write) {
+        gpio_set_level(WALTER_RS485_DE_GPIO, 0);
         return ESP_FAIL;
     }
     esp_err_t err = uart_wait_tx_done(s_uart_port, ticks_to_wait);
+    gpio_set_level(WALTER_RS485_DE_GPIO, 0);
     return err;
 }
 

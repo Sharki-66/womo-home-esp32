@@ -41,17 +41,23 @@ static float clampf(float value, float min_value, float max_value)
     return value;
 }
 
-static float map_range(float value,
-                       float in_min,
-                       float in_max,
-                       float out_min,
-                       float out_max)
+static float adc_mv_to_battery_voltage(int mv)
 {
-    if (in_max <= in_min) {
-        return out_min;
+    if (mv <= 0) {
+        return 0.0f;
     }
-    float ratio = (clampf(value, in_min, in_max) - in_min) / (in_max - in_min);
-    return out_min + ratio * (out_max - out_min);
+
+    const float r_high = (float)WALTER_BATTERY_DIVIDER_RHIGH_KOHM;
+    const float r_low = (float)WALTER_BATTERY_DIVIDER_RLOW_KOHM;
+    const float adc_voltage = (float)mv / 1000.0f;  // convert mV at ADC pin to volts
+
+    if (r_low <= 0.0f) {
+        return adc_voltage;
+    }
+
+    const float gain = (r_high + r_low) / r_low;
+    float battery_v = adc_voltage * gain;
+    return clampf(battery_v, 0.0f, 100.0f);
 }
 
 static adc_atten_t get_configured_atten(void)
@@ -279,19 +285,12 @@ esp_err_t womo_analog_read(womo_analog_data_t *out)
     }
 
     memset(out, 0, sizeof(*out));
-    const float battery_adc_min = (float)WALTER_BATTERY_ADC_MIN_MV;
-    const float battery_adc_max = (float)WALTER_BATTERY_ADC_MAX_MV;
-
     int raw = 0;
     if (sample_channel(ANALOG_CH_BATT1, &raw) == ESP_OK) {
         int mv = 0;
         if (raw_to_voltage_mv(s_cali_handles[ANALOG_CH_BATT1], raw, &mv) == ESP_OK) {
             out->battery_mv[0] = mv;
-            out->battery_v[0] = map_range((float)mv,
-                                          battery_adc_min,
-                                          battery_adc_max,
-                                          WALTER_BATTERY_MIN_V,
-                                          WALTER_BATTERY_MAX_V);
+            out->battery_v[0] = adc_mv_to_battery_voltage(mv);
             out->battery_valid[0] = true;
         }
     }
@@ -299,11 +298,7 @@ esp_err_t womo_analog_read(womo_analog_data_t *out)
         int mv = 0;
         if (raw_to_voltage_mv(s_cali_handles[ANALOG_CH_BATT2], raw, &mv) == ESP_OK) {
             out->battery_mv[1] = mv;
-            out->battery_v[1] = map_range((float)mv,
-                                          battery_adc_min,
-                                          battery_adc_max,
-                                          WALTER_BATTERY_MIN_V,
-                                          WALTER_BATTERY_MAX_V);
+            out->battery_v[1] = adc_mv_to_battery_voltage(mv);
             out->battery_valid[1] = true;
         }
     }

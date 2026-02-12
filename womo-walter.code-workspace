@@ -7,6 +7,9 @@
 		{
 			"name": "📺 Display (firmware) - READ-ONLY",
 			"path": "firmware"
+		},
+		{
+			"path": "firmware-Modem"
 		}
 	],
 	"settings": {
@@ -18,7 +21,16 @@
 		"files.associations": {
 			"*.h": "c",
 			"*.c": "c",
-			"*.cpp": "cpp"
+			"*.cpp": "cpp",
+			"array": "cpp",
+			"charconv": "cpp",
+			"compare": "cpp",
+			"functional": "cpp",
+			"ratio": "cpp",
+			"tuple": "cpp",
+			"type_traits": "cpp",
+			"utility": "cpp",
+			"variant": "cpp"
 		},
 		"C_Cpp.default.compilerPath": "${config:idf.toolsPath}/tools/xtensa-esp32s3-elf/esp-13.2.0_20240530/xtensa-esp32s3-elf/bin/xtensa-esp32s3-elf-gcc",
 		"C_Cpp.default.compileCommands": "${workspaceFolder}/firmware-walter/build/compile_commands.json",

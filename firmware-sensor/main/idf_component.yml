@@ -1,0 +1,5 @@
+dependencies:
+  idf: ">=5.0"
+  cmake_utilities: "0.*"
+
+  espressif/i2c_bus: "*"

@@ -3,15 +3,23 @@
  */
 
 #include "womo_sd.h"
+#include "hardware/waveshare_rgb_lcd_port.h"
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
 #include "driver/sdmmc_host.h"
-#include "driver/i2c.h"
 #include <sys/stat.h>
 #include <string.h>
 
 static const char *TAG = "womo_sd";
+
+static void reassert_sd_cs(void)
+{
+    esp_err_t err = womo_ch422g_assert_sd_cs();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "CH422G SD-CS reassert failed: %s", esp_err_to_name(err));
+    }
+}
 
 // SD card handle
 static sdmmc_card_t *sd_card = NULL;
@@ -25,24 +33,6 @@ static spi_host_device_t spi_host = SPI2_HOST;  // Store SPI host for cleanup
 #define PIN_CLK   12
 #define PIN_CS    -1  // CS controlled via I2C GPIO expander
 
-// I2C for GPIO expander (CH422G)
-#define I2C_MASTER_NUM     0
-#define I2C_MASTER_SCL_IO  9
-#define I2C_MASTER_SDA_IO  8
-#define I2C_MASTER_FREQ_HZ 400000
-
-// CH422G I2C addresses for SD card CS control
-#define CH422G_ADDR_1  0x24
-#define CH422G_ADDR_2  0x38
-
-static esp_err_t init_i2c_for_sd(void)
-{
-    // I2C bus is already installed by display initialization
-    // We just use the existing bus - no reinstallation needed
-    ESP_LOGI(TAG, "Using existing I2C bus (installed by display)");
-    return ESP_OK;
-}
-
 esp_err_t womo_sd_init(void)
 {
     ESP_LOGI(TAG, "Initializing SD card");
@@ -53,17 +43,12 @@ esp_err_t womo_sd_init(void)
     }
     
     esp_err_t ret;
-    
-    // Initialize I2C for GPIO expander
-    ret = init_i2c_for_sd();
+
+    // Control CH422G to pull down the CS pin of the SD card (EXIO4) using the shared I2C bus
+    ret = womo_ch422g_assert_sd_cs();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize I2C: %s", esp_err_to_name(ret));
-        return ret;
+        ESP_LOGW(TAG, "Proceeding without CH422G SD-CS assert (may cause SD I/O errors): %s", esp_err_to_name(ret));
     }
-    
-    // Control CH422G to pull down the CS pin of the SD card
-    // TEMPORARILY DISABLED - Testing if this causes display blackout
-    ESP_LOGI(TAG, "CH422G GPIO expander configuration SKIPPED for testing");
     
     // Options for mounting the filesystem
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
@@ -72,8 +57,9 @@ esp_err_t womo_sd_init(void)
         .allocation_unit_size = 16 * 1024
     };
     
-    // Use SPI mode
+    // Use SPI mode (reduce clock to improve signal stability)
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
+    host.max_freq_khz = 5000;  // extra margin for signal integrity
     spi_host = host.slot;  // Store for cleanup in deinit
     
     spi_bus_config_t bus_cfg = {
@@ -151,6 +137,9 @@ bool womo_sd_file_exists(const char *path)
     if (!sd_mounted) {
         return false;
     }
+
+    // Make sure SD-CS stays asserted on the expander before accessing
+    reassert_sd_cs();
     
     char full_path[256];
     if (womo_sd_get_full_path(path, full_path, sizeof(full_path)) != ESP_OK) {

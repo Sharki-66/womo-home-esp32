@@ -1,0 +1,119 @@
+
+{
+  "folders": [
+    {
+      "name": "📺 Display (firmware) - READ-ONLY",
+      "path": "firmware"
+    },
+    {
+      "name": "🔧 Sensor (firmware-sensor)",
+      "path": "firmware-sensor"
+    }
+  ],
+  "settings": {
+    "idf.flashBaudRate": "460800",
+    "idf.port": "/dev/ttyACM2",
+    "idf.flashType": "UART",
+    "idf.openOcdConfigs": [
+      "board/esp32s3-builtin.cfg"
+    ],
+    "files.associations": {
+      "*.h": "c",
+      "*.c": "c"
+    },
+    "C_Cpp.default.compilerPath": "${config:idf.toolsPath}/tools/xtensa-esp32s3-elf/esp-13.2.0_20240530/xtensa-esp32s3-elf/bin/xtensa-esp32s3-elf-gcc",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/firmware-sensor/build/compile_commands.json",
+    "files.defaultLanguage": "c",
+    "explorer.sortOrder": "foldersNestsFiles",
+    "idf.showOnboardingOnInit": false,
+    "idf.notificationSilentMode": false,
+    "idf.enableUpdateSuggestions": true,
+    "idf.enableStatusBar": true,
+    "idf.enableCcache": false
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build Sensor Firmware",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["build"],
+        "options": {
+          "cwd": "${workspaceFolder}/firmware-sensor"
+        },
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        },
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+        }
+      },
+      {
+        "label": "Flash Sensor Firmware",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["-p", "/dev/ttyACM2", "flash"],
+        "options": {
+          "cwd": "${workspaceFolder}/firmware-sensor"
+        },
+        "group": "build",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+        }
+      },
+      {
+        "label": "Monitor Sensor (/dev/ttyACM2)",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["-p", "/dev/ttyACM2", "monitor"],
+        "options": {
+          "cwd": "${workspaceFolder}/firmware-sensor"
+        },
+        "group": "build",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+        }
+      }
+    ]
+  },
+  "extensions": {
+    "recommendations": [
+      "espressif.esp-idf-extension",
+      "ms-vscode.cpptools",
+      "ms-vscode.cmake-tools"
+    ]
+  },
+  "keybindings": [
+    {
+      "key": "ctrl+shift+b",
+      "command": "espIdf.buildProject",
+      "when": "!inDebugMode"
+    },
+    {
+      "key": "ctrl+shift+f",
+      "command": "espIdf.flashDevice",
+      "when": "!inDebugMode"
+    },
+    {
+      "key": "ctrl+shift+m",
+      "command": "espIdf.monitorDevice",
+      "when": "!inDebugMode"
+    },
+    {
+      "key": "ctrl+shift+a",
+      "command": "espIdf.buildFlashMonitor",
+      "when": "!inDebugMode"
+    }
+  ]
+}

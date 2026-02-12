@@ -5,8 +5,7 @@
 			"path": "firmware"
 		},
 		{
-			"name": "🔧 Walter (firmware-walter) - READ-ONLY",
-			"path": "firmware-walter"
+			"path": "firmware-modem"
 		}
 	],
 	"settings": {
@@ -27,7 +26,8 @@
 		"idf.notificationSilentMode": false,
 		"idf.enableUpdateSuggestions": true,
 		"idf.enableStatusBar": true,
-		"idf.enableCcache": false
+		"idf.enableCcache": false,
+		"chat.agent.maxRequests": 50
 	},
 	"tasks": {
 		"version": "2.0.0",

@@ -1,0 +1,34 @@
+idf_component_register(
+    SRCS
+        "app_main.c"
+        "sensors/analog_sensor.c"
+        "network/rs485_modem.c"
+        "network/womo_rs485.c"
+        "web_wifi_imu.c"
+        "sensors/bno055_sensor.c"
+        "hal/sensor_i2c_bus.c"
+        "sensors/bme680_sensor.c"
+        "time/rtc_pcf8523.c"
+        "sensors/hx711_sensor.c"
+        "time/time_sync.c"
+    INCLUDE_DIRS
+        "."
+        "sensors"
+        "time"
+        "network"
+        "hal"
+    REQUIRES
+        bsec
+        bno055
+        nvs_flash
+        esp_wifi
+        esp_app_format
+        esp_adc
+        iot_usbh_modem
+        iot_usbh_cdc
+        modem_at
+        bme680
+        hx711
+        i2c_bus
+        json
+)

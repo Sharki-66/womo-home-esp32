@@ -1,4 +1,0 @@
-# Copilot Instructions
-- Antworten grundsätzlich auf Deutsch.
-- Für jede Hardware im Projekt sind vorhandene Bibliotheken zu verwenden, dies dürfen nicht verändert werden; falls unklar, zunächst nach einer passenden Bibliothek fragen. Keine Eigenimplementierung, wenn die Bibliothek die Funktionalität bietet.
-- Antworten müssen belegbar sein. Keine Vermutungen oder Wahrscheinlichkeiten nennen; bei fehlender Sicherheit Datenblätter konsultieren oder gezielt beim Nutzer nachfragen.

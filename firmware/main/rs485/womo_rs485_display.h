@@ -29,12 +29,29 @@ typedef struct {
     // HX711 Load Cells
     struct {
         bool valid;
+        bool nc;            // true: keine Waage angeschlossen
         float weight_a_kg;
         float weight_b_kg;
         float weight_sum_kg;
     } hx711;
+
+    // Gas summary (Walter)
+    struct {
+        bool valid;
+        int8_t active_idx;   // 0=A/Vorne, 1=B/Hinten
+        float net_kg;        // Netto der aktiven Flasche
+        float rate_kgph_1h;  // Verbrauch kg/h (1h-Glättung)
+        float rate_kgph_2h;  // Verbrauch kg/h (2h-Glättung)
+        float rest_hours;    // Restlaufzeit in Stunden
+        float net_a_kg;      // Netto Flasche A
+        float net_b_kg;      // Netto Flasche B
+        float cap_kg;        // Nennfüllmenge je Flasche (z. B. 11.0)
+        float pct;           // Füllstand aktive Flasche (0-100%, swap-bereinigt)
+        float pct_a;         // Füllstand Flasche A
+        float pct_b;         // Füllstand Flasche B
+    } gas;
     
-    // BME680 Environmental
+    // BME680 Environmental (outdoor/default)
     struct {
         bool valid;
         float temperature_c;
@@ -42,11 +59,37 @@ typedef struct {
         float pressure_hpa;
         float gas_kohm;
         uint16_t iaq;
+        uint8_t iaq_accuracy;
+        float eco2_ppm;
+        float bvoc_ppm;
+        char press_trend_state[12];
+        float press_trend_slope_hpa_h;
+        uint16_t press_trend_samples;
+        uint16_t press_trend_window_min;
     } bme680;
+
+    // BME680 Environmental (indoor, addr 0x76)
+    struct {
+        bool valid;
+        float temperature_c;
+        float humidity_percent;
+        float pressure_hpa;
+        float gas_kohm;
+        uint16_t iaq;
+        uint8_t iaq_accuracy;
+        float eco2_ppm;
+        float bvoc_ppm;
+        char press_trend_state[12];
+        float press_trend_slope_hpa_h;
+        uint16_t press_trend_samples;
+        uint16_t press_trend_window_min;
+    } bme680_indoor;
     
     // Battery voltages
     struct {
         bool valid;
+        bool nc1;
+        bool nc2;
         float battery1_v;
         float battery2_v;
     } battery;
@@ -68,6 +111,9 @@ typedef struct {
         float heading_deg;
         uint8_t satellites;
         float confidence_m;
+        uint32_t ttf_ms;      // Time to fix (ms)
+        int64_t ts;           // GNSS/UTC epoch seconds from modem
+        int64_t last_fix_us;
     } gps;
 
     // LTE modem status
@@ -78,6 +124,14 @@ typedef struct {
         float rsrp_dbm;
         uint8_t signal_percent;
     } lte;
+
+    // Power / control status (from modem ctrl block)
+    struct {
+        bool valid;
+        bool pwr_12v_on;     // 12V Bordnetz aktiv
+        bool radio_on;       // Multimedia/Radio aktiv (nur wenn 12V an)
+        bool ac_present;     // 230V Landstrom angeschlossen
+    } power;
 } womo_sensor_data_t;
 
 // Callback for received sensor data
@@ -106,6 +160,11 @@ esp_err_t womo_rs485_send_level_stop(void);
 esp_err_t womo_rs485_send_tare_a(void);
 esp_err_t womo_rs485_send_tare_b(void);
 esp_err_t womo_rs485_send_display_ready(void);
+esp_err_t womo_rs485_send_wifi_control(bool enable, const char *ssid, const char *password);
+esp_err_t womo_rs485_send_lte_control(bool enable);
+esp_err_t womo_rs485_send_gas_bottle_replace(uint8_t slot, const char *channel);
+esp_err_t womo_rs485_send_pwr_12v(bool enable);
+esp_err_t womo_rs485_send_radio(bool enable);
 
 // Get latest sensor data (non-blocking)
 bool womo_rs485_get_latest_data(womo_sensor_data_t *data);

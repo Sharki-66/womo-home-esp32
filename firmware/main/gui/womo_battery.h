@@ -23,6 +23,7 @@ typedef struct {
     uint8_t charge_percent;      // Calculated charge percentage
     bool show_percent;           // Show percentage label
     bool has_valid_voltage;      // Indicates whether a real voltage has been received
+    bool no_conn;                // Indicates NC state
 } womo_battery_t;
 
 /**
@@ -53,6 +54,11 @@ void womo_battery_set_voltage_range(womo_battery_t *battery, float min_voltage_v
  * @brief Mark battery as having no valid voltage yet (placeholder state)
  */
 void womo_battery_set_no_data(womo_battery_t *battery);
+
+/**
+ * @brief Mark battery as not connected (NC)
+ */
+void womo_battery_set_nc(womo_battery_t *battery);
 
 /**
  * @brief Enable/disable percentage display

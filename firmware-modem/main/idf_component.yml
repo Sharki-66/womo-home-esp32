@@ -1,0 +1,31 @@
+dependencies:
+  idf: ">=5.0"
+  cmake_utilities: "0.*"
+
+  iot_usbh_modem:
+    version: "*"
+    path: ../components/iot_usbh_modem
+
+  web_wifi:
+    version: "*"
+    path: ../components/web_wifi
+
+  network_test:
+    version: "*"
+    path: ../components/network_test
+
+  espressif/modem_at:
+    version: "*"
+    path: ../components/modem_at
+
+  espressif/iot_usbh_cdc:
+    version: "*"
+    path: ../components/iot_usbh_cdc
+
+  espressif/iot_eth:
+    version: "*"
+    path: ../components/iot_eth
+
+  espressif/max17048: "*"
+
+  espressif/i2c_bus: "*"

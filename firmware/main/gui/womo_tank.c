@@ -66,6 +66,31 @@ static lv_color_t water_color_for_type(womo_tank_type_t type)
     return (type == WOMO_TANK_GREY) ? GREY_WATER_COLOR : FRESH_WATER_COLOR;
 }
 
+static void apply_status_colors(womo_tank_t *tank, womo_status_level_t status)
+{
+    if (!tank || !tank->tank_body) {
+        return;
+    }
+
+    lv_color_t body_main = TANK_BODY_COLOR;
+    // Border bleibt immer im Standardgrau
+
+    switch (status) {
+    case WOMO_STATUS_WARNING:
+        body_main = lv_color_hex(0xFFA500); // Orange warning
+        break;
+    case WOMO_STATUS_ERROR:
+    case WOMO_STATUS_CRITICAL:
+        body_main = lv_color_hex(0xE53935); // Red critical/error
+        break;
+    case WOMO_STATUS_OK:
+    default:
+        break;
+    }
+
+    lv_obj_set_style_bg_color(tank->tank_body, body_main, 0);
+}
+
 womo_tank_t *womo_tank_create(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, womo_tank_type_t type)
 {
     if (!parent) {
@@ -91,7 +116,7 @@ womo_tank_t *womo_tank_create(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, womo
     lv_obj_set_style_bg_opa(tank->container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_opa(tank->container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_pad_all(tank->container, 0, 0);
-    lv_obj_clear_flag(tank->container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(tank->container, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     tank->tank_body = lv_obj_create(tank->container);
     lv_obj_set_size(tank->tank_body, TANK_BODY_WIDTH, TANK_BODY_HEIGHT);
@@ -101,7 +126,7 @@ womo_tank_t *womo_tank_create(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, womo
     lv_obj_set_style_border_color(tank->tank_body, TANK_BODY_BORDER_CLR, 0);
     lv_obj_set_style_radius(tank->tank_body, 6, 0);
     lv_obj_set_style_pad_all(tank->tank_body, 0, 0);
-    lv_obj_clear_flag(tank->tank_body, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(tank->tank_body, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     tank->fill = lv_obj_create(tank->tank_body);
     lv_obj_set_style_bg_color(tank->fill, water_color_for_type(type), 0);
@@ -112,7 +137,7 @@ womo_tank_t *womo_tank_create(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, womo
     lv_obj_set_style_border_opa(tank->fill, LV_OPA_TRANSP, 0);
     lv_obj_set_style_radius(tank->fill, 4, 0);
     lv_obj_set_style_pad_all(tank->fill, 0, 0);
-    lv_obj_clear_flag(tank->fill, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(tank->fill, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     tank->inlet = lv_obj_create(tank->container);
     lv_obj_set_size(tank->inlet, INLET_WIDTH, INLET_HEIGHT);
@@ -122,7 +147,7 @@ womo_tank_t *womo_tank_create(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, womo
     lv_obj_set_style_bg_color(tank->inlet, CONNECTOR_COLOR_DARK, 0);
     lv_obj_set_style_border_width(tank->inlet, 0, 0);
     lv_obj_set_style_radius(tank->inlet, 2, 0);
-    lv_obj_clear_flag(tank->inlet, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(tank->inlet, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     tank->outlet_pipe = lv_obj_create(tank->tank_body);
     lv_obj_set_size(tank->outlet_pipe, 0, 0);
@@ -136,8 +161,15 @@ womo_tank_t *womo_tank_create(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, womo
     lv_obj_set_style_bg_color(tank->outlet_spout, CONNECTOR_COLOR_DARK, 0);
     lv_obj_set_style_border_width(tank->outlet_spout, 0, 0);
     lv_obj_set_style_radius(tank->outlet_spout, 2, 0);
-    lv_obj_clear_flag(tank->outlet_spout, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(tank->outlet_spout, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_move_foreground(tank->outlet_spout);
+
+    // Frischwasser: Auslauf ausblenden, Grauwasser: Zulauf ausblenden
+    if (type == WOMO_TANK_FRESH) {
+        lv_obj_add_flag(tank->outlet_spout, LV_OBJ_FLAG_HIDDEN);
+    } else if (type == WOMO_TANK_GREY) {
+        lv_obj_add_flag(tank->inlet, LV_OBJ_FLAG_HIDDEN);
+    }
 
     tank->percent_label = lv_label_create(tank->tank_body);
     lv_label_set_text(tank->percent_label, "-- %");
@@ -233,4 +265,9 @@ void womo_tank_set_pos(womo_tank_t *tank, lv_coord_t x, lv_coord_t y)
     }
 
     lv_obj_set_pos(tank->container, x, y);
+}
+
+void womo_tank_set_status(womo_tank_t *tank, womo_status_level_t status)
+{
+    apply_status_colors(tank, status);
 }

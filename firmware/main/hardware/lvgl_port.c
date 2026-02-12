@@ -27,6 +27,7 @@ static lv_indev_t *touch_indev = NULL;                   // Registered touch inp
 static uint32_t touch_last_activity = 0;
 static uint32_t touch_current_period = TOUCH_NORMAL_PERIOD_MS;
 static bool touch_fast_forced = false;
+static lvgl_touch_wake_cb_t s_touch_wake_cb = NULL;     // Touch-Wake-Callback
 typedef struct {
     bool is_pressed;
     lv_point_t last_point;
@@ -56,6 +57,11 @@ void lvgl_touch_set_fast_mode(bool enable)
     } else if (!touch_state.is_pressed) {
         touch_set_read_period(TOUCH_NORMAL_PERIOD_MS);
     }
+}
+
+void lvgl_touch_set_wake_cb(lvgl_touch_wake_cb_t cb)
+{
+    s_touch_wake_cb = cb;
 }
 
 #if EXAMPLE_LVGL_PORT_ROTATION_DEGREE != 0
@@ -470,27 +476,35 @@ static void touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
     esp_lcd_touch_handle_t tp = (esp_lcd_touch_handle_t)indev_drv->user_data; // Get touchpad handle from user data
     assert(tp); // Ensure touchpad handle is valid
 
-    uint16_t touchpad_x; // Variable for X coordinate
-    uint16_t touchpad_y; // Variable for Y coordinate
-    uint8_t touchpad_cnt = 0; // Variable for touch count
+    esp_lcd_touch_point_data_t point = {0};
+    uint8_t touchpad_cnt = 0;
     uint32_t now = lv_tick_get();
 
     /* Read data from touch controller into memory */
-    esp_lcd_touch_read_data(tp); // Read data from touch controller
+    esp_lcd_touch_read_data(tp);
 
-    /* Read data from touch controller */
-    bool touchpad_pressed = esp_lcd_touch_get_coordinates(tp, &touchpad_x, &touchpad_y, NULL, &touchpad_cnt, 1); // Get touch coordinates
-    if (touchpad_pressed && touchpad_cnt > 0) {
+    /* Read data from touch controller (new API, replaces deprecated get_coordinates) */
+    esp_err_t ret = esp_lcd_touch_get_data(tp, &point, &touchpad_cnt, 1);
+    if (ret == ESP_OK && touchpad_cnt > 0) {
         touch_state.is_pressed = true;
-        touch_state.last_point.x = touchpad_x;
-        touch_state.last_point.y = touchpad_y;
+        touch_state.last_point.x = point.x;
+        touch_state.last_point.y = point.y;
         touch_state.last_sample_tick = now;
-        data->point.x = touchpad_x; // Set the X coordinate
-        data->point.y = touchpad_y; // Set the Y coordinate
-        data->state = LV_INDEV_STATE_PRESSED; // Set state to pressed
-        ESP_LOGD(TAG, "Touch position: %d,%d", touchpad_x, touchpad_y); // Log touch position
+        data->point.x = point.x;
+        data->point.y = point.y;
+        data->state = LV_INDEV_STATE_PRESSED;
+        ESP_LOGD(TAG, "Touch position: %d,%d", point.x, point.y);
         touch_last_activity = lv_tick_get();
         touch_set_read_period(TOUCH_FAST_PERIOD_MS);
+
+        /* ── Touch-Wake-Callback ──────────────────────────────── */
+        /* Wird bei jedem Press aufgerufen.  Gibt der Callback true
+         * zurück (= Display war aus, wurde aufgeweckt), unterdrücken
+         * wir den Touch, damit kein Widget-Event ausgelöst wird. */
+        if (s_touch_wake_cb && s_touch_wake_cb()) {
+            data->state = LV_INDEV_STATE_RELEASED;
+            touch_state.is_pressed = false;
+        }
     } else {
         if (touch_state.is_pressed && lv_tick_elaps(touch_state.last_sample_tick) < TOUCH_RELEASE_FILTER_MS) {
             data->point = touch_state.last_point;

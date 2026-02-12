@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0">
+    <title>WoMoHome</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%23002134'/><text x='50%25' y='52%25' font-family='Arial' font-size='28' fill='white' text-anchor='middle'>W</text></svg>">
+    <script src="js/wlan.js"></script>
+</head>
+
+<body>
+<div class="home-base">
+    <div class="header-base">
+        <div class="header-logo">WoMoHome</div>
+        <div class="header-menu" onclick="menuClick(this)">
+        </div>
+    </div>
+    <div class="content-base flex">
+        <div class="left-base" id="leftMenu">
+<!--            <div class="left-title">系统菜单</div>-->
+            <ul>
+                <li>
+                    <a href="index.html">Systemstatus</a>
+                </li>
+                <li>
+                    <a href="wlan.html" class="content">WLAN-Einstellungen</a>
+                </li>
+            </ul>
+        </div>
+        <div class="right-base">
+            <div class="page-header">
+                <span class="header-title-one" onclick="baseSetting()">Basis</span>
+                <span>/</span>
+                <span class="header-title-two" onclick="advanceSetting()">Erweitert</span>
+            </div>
+            <div class="page-content" id="baseShow">
+                <div class="page-title">Grundlegende WLAN-Konfiguration</div>
+                <div class="page-detail">
+                    <div class="line-base">
+                        <span class="title">Name:</span>
+                        <input class="content" id="wlanName" placeholder="SSID eingeben">
+                    </div>
+                    <div class="line-base">
+                        <span class="title">Passwort:</span>
+                        <input class="content" id="password" placeholder="Passwort eingeben">
+                    </div>
+                    <div class="line-base">
+                        <span class="title">Sicherheit:</span>
+                        <select class="content" id="model" name="chian"><!--下拉列表-->
+                            <option value="OPEN">Offen</option>
+                            <option value="WEP">WEP</option>
+                            <option value="WPA2_PSK" selected="selected">WPA2-PSK</option>
+                            <option value="WPA_WPA2_PSK">WPA/WPA2-PSK</option>
+                        </select>
+                    </div>
+                    <div class="line-base flex flex-ac">
+                        <span class="title">SSID hide:</span>
+                        <input class="content-two" type="checkbox" id="select" name="sel"/>
+                        <span class="content-thr">SSID nicht aussenden; WPS nicht verfügbar</span>
+                    </div>
+                    <div class="line-base-btn">
+                        <button class="save-btn" onclick="baseSave()">Speichern</button>
+                    </div>
+                </div>
+            </div>
+            <div class="page-content" id="highShow">
+                <div class="page-title">Erweiterte WLAN-Einstellungen</div>
+                <div class="page-detail">
+                    <div class="line-base">
+                        <span class="title">Bandbreite:</span>
+                        <select class="content" id="broadband" name="chian"><!--下拉列表-->
+                            <option value="20" selected="selected">20MHz</option>
+                            <option value="40">40MHz</option>
+                        </select>
+                    </div>
+                    <div class="line-base">
+                        <span class="title">Kanal:</span>
+                        <select class="content" id="channel" name="chian"><!--下拉列表-->
+<!--                            <option value="0" selected="selected">自动</option>-->
+                            <option value="1" selected="selected">1</option>
+                            <option value="2" >2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6" >6</option>
+                            <option value="7">7</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10</option>
+                            <option value="11" >11</option>
+                            <option value="12">12</option>
+                            <option value="13">13</option>
+                        </select>
+                    </div>
+                    <div class="line-base-btn">
+                        <button class="save-btn" onclick="highSave()">Speichern</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+  initHash();
+  window.addEventListener('hashchange', function() {
+    initHash();
+  })
+</script>
+</body>
+
+</html>

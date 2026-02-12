@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 static const char *TAG = "gas_bottle";
 
@@ -66,7 +67,7 @@ static void update_fill_visual(womo_gas_bottle_t *bottle)
             lv_obj_set_size(bottle->fill_bar, BOTTLE_WIDTH - 2 * FILL_MARGIN + 3, 0);
         }
         if (bottle->label) {
-            lv_label_set_text(bottle->label, "-- %");
+            lv_label_set_text(bottle->label, bottle->no_conn ? "nc" : "-- %");
         }
         return;
     }
@@ -118,6 +119,7 @@ womo_gas_bottle_t* womo_gas_bottle_create(lv_obj_t *parent, lv_coord_t x, lv_coo
     bottle->current_weight_kg = 10.1f;
     bottle->fill_percent = 0;
     bottle->has_valid_weight = false;
+    bottle->no_conn = false;
     
     // Create main container (taller for all elements, breiter für Skala rechts)
     bottle->container = lv_obj_create(parent);
@@ -128,6 +130,7 @@ womo_gas_bottle_t* womo_gas_bottle_create(lv_obj_t *parent, lv_coord_t x, lv_coo
     lv_obj_set_style_border_opa(bottle->container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_pad_all(bottle->container, 0, 0);
     lv_obj_set_style_clip_corner(bottle->container, false, 0);  // Kein Clipping!
+    lv_obj_add_flag(bottle->container, LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
     
     // Create bottle body (main cylinder with round top, less round bottom)
     bottle->bottle_body = lv_obj_create(bottle->container);
@@ -146,6 +149,7 @@ womo_gas_bottle_t* womo_gas_bottle_create(lv_obj_t *parent, lv_coord_t x, lv_coo
     lv_obj_set_style_shadow_width(bottle->bottle_body, 8, 0);
     lv_obj_set_style_shadow_opa(bottle->bottle_body, LV_OPA_30, 0);
     lv_obj_clear_flag(bottle->bottle_body, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(bottle->bottle_body, LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE | LV_OBJ_FLAG_CLICKABLE);
     
     
     // Create yellow fill bar inside bottle (shows gas level based on weight)
@@ -158,6 +162,7 @@ womo_gas_bottle_t* womo_gas_bottle_create(lv_obj_t *parent, lv_coord_t x, lv_coo
     lv_obj_set_style_radius(bottle->fill_bar, 5, 0);  // Kleiner Radius (5px statt 20px)
     lv_obj_set_style_pad_all(bottle->fill_bar, 0, 0);  // Kein Padding
     lv_obj_clear_flag(bottle->fill_bar, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(bottle->fill_bar, LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE | LV_OBJ_FLAG_CLICKABLE);
     
     // Create ring foot at bottom (8px Radius with black border)
     bottle->ring_foot = lv_obj_create(bottle->container);
@@ -170,6 +175,7 @@ womo_gas_bottle_t* womo_gas_bottle_create(lv_obj_t *parent, lv_coord_t x, lv_coo
     lv_obj_set_style_border_color(bottle->ring_foot, BOTTLE_GREY_DARK, 0);  // Same as bottle body
     lv_obj_set_style_radius(bottle->ring_foot, 8, 0);  // 8px Radius (etwas weniger rund als oben)
     lv_obj_clear_flag(bottle->ring_foot, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(bottle->ring_foot, LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE | LV_OBJ_FLAG_CLICKABLE);
     
     // Create scale markings - horizontal tick marks at bottle edge (no numbers, with intermediate ticks)
     // Tick 100 (top) - REMOVED per user request
@@ -216,6 +222,7 @@ womo_gas_bottle_t* womo_gas_bottle_create(lv_obj_t *parent, lv_coord_t x, lv_coo
     lv_obj_set_style_border_color(bottle->cap_handle, lv_color_hex(0x8B0000), 0);
     lv_obj_set_style_radius(bottle->cap_handle, 4, 0);
     lv_obj_clear_flag(bottle->cap_handle, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(bottle->cap_handle, LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE | LV_OBJ_FLAG_CLICKABLE);
 
     bottle->cap_label = lv_label_create(bottle->cap_handle);
     lv_label_set_text(bottle->cap_label, "");
@@ -250,10 +257,39 @@ void womo_gas_bottle_update_weight(womo_gas_bottle_t *bottle, float weight_kg)
     
     bottle->current_weight_kg = weight_kg;
     bottle->has_valid_weight = true;
+    bottle->no_conn = false;
     bottle->fill_percent = calculate_fill_percent(bottle);
     
     ESP_LOGD(TAG, "Updated weight: %.1f kg, fill: %u%%", weight_kg, bottle->fill_percent);
     
+    update_fill_visual(bottle);
+}
+
+void womo_gas_bottle_set_percent(womo_gas_bottle_t *bottle, float percent)
+{
+    if (!bottle) {
+        ESP_LOGW(TAG, "Gas bottle is NULL");
+        return;
+    }
+
+    if (!isfinite(percent)) {
+        womo_gas_bottle_set_no_data(bottle);
+        return;
+    }
+
+    if (percent < 0.0f) {
+        percent = 0.0f;
+    } else if (percent > 100.0f) {
+        percent = 100.0f;
+    }
+
+    bottle->fill_percent = (uint8_t)(percent + 0.5f);
+    bottle->has_valid_weight = true;
+    bottle->no_conn = false;
+    bottle->no_conn = false;
+
+    ESP_LOGD(TAG, "Updated percent: %.1f%% (rounded %u%%)", percent, bottle->fill_percent);
+
     update_fill_visual(bottle);
 }
 
@@ -265,6 +301,7 @@ void womo_gas_bottle_set_empty_weight(womo_gas_bottle_t *bottle, float empty_wei
     }
     
     bottle->empty_weight_kg = empty_weight_kg;
+    bottle->no_conn = false;
     bottle->fill_percent = calculate_fill_percent(bottle);
     
     ESP_LOGI(TAG, "Set empty weight: %.1f kg", empty_weight_kg);
@@ -280,6 +317,7 @@ void womo_gas_bottle_set_full_weight(womo_gas_bottle_t *bottle, float full_weigh
     }
     
     bottle->full_weight_kg = full_weight_kg;
+    bottle->no_conn = false;
     bottle->fill_percent = calculate_fill_percent(bottle);
     
     ESP_LOGI(TAG, "Set full weight: %.1f kg", full_weight_kg);
@@ -295,6 +333,20 @@ void womo_gas_bottle_set_no_data(womo_gas_bottle_t *bottle)
     }
 
     bottle->has_valid_weight = false;
+    bottle->no_conn = false;
+    bottle->fill_percent = 0;
+    update_fill_visual(bottle);
+}
+
+void womo_gas_bottle_set_nc(womo_gas_bottle_t *bottle)
+{
+    if (!bottle) {
+        ESP_LOGW(TAG, "Gas bottle is NULL");
+        return;
+    }
+
+    bottle->has_valid_weight = false;
+    bottle->no_conn = true;
     bottle->fill_percent = 0;
     update_fill_visual(bottle);
 }
@@ -342,6 +394,50 @@ void womo_gas_bottle_set_visible(womo_gas_bottle_t *bottle, bool visible)
         lv_obj_clear_flag(bottle->container, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(bottle->container, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+void womo_gas_bottle_set_status(womo_gas_bottle_t *bottle, womo_status_level_t status)
+{
+    if (!bottle || !bottle->ring_foot) {
+        return;
+    }
+
+    // Default: neutral grey foot/Rumpf
+    lv_color_t main_color = BOTTLE_GREY;
+    lv_color_t grad_color = BOTTLE_GREY_DARK;
+    lv_color_t fill_color = GAS_FILL_COLOR;
+
+    switch (status) {
+    case WOMO_STATUS_WARNING:
+        main_color = lv_color_hex(0xFFA500); // Orange for warning
+        grad_color = lv_color_hex(0xE68A00);
+        fill_color = main_color;
+        break;
+    case WOMO_STATUS_ERROR:
+    case WOMO_STATUS_CRITICAL:
+        main_color = lv_color_hex(0xE53935); // Red for critical/error
+        grad_color = lv_color_hex(0xC62828);
+        fill_color = main_color;
+        break;
+    case WOMO_STATUS_OK:
+    default:
+        break;
+    }
+
+    // Fuß einfärben
+    lv_obj_set_style_bg_color(bottle->ring_foot, main_color, 0);
+    lv_obj_set_style_bg_grad_color(bottle->ring_foot, grad_color, 0);
+
+    // Rumpf einfärben
+    if (bottle->bottle_body) {
+        lv_obj_set_style_bg_color(bottle->bottle_body, main_color, 0);
+        lv_obj_set_style_bg_grad_color(bottle->bottle_body, grad_color, 0);
+    }
+
+    // Füllstand einfärben
+    if (bottle->fill_bar) {
+        lv_obj_set_style_bg_color(bottle->fill_bar, fill_color, 0);
     }
 }
 

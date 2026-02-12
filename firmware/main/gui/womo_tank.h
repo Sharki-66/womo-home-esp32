@@ -2,6 +2,7 @@
 #define WOMO_TANK_H
 
 #include "lvgl.h"
+#include "gui/womo_theme.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -35,6 +36,7 @@ void womo_tank_set_no_data(womo_tank_t *tank);
 void womo_tank_set_caption(womo_tank_t *tank, const char *text);
 void womo_tank_set_text_color(womo_tank_t *tank, lv_color_t color);
 void womo_tank_set_pos(womo_tank_t *tank, lv_coord_t x, lv_coord_t y);
+void womo_tank_set_status(womo_tank_t *tank, womo_status_level_t status);
 
 #ifdef __cplusplus
 }

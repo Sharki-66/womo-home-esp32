@@ -56,9 +56,9 @@
 // ====================================================================================
 // I2C Bus Configuration
 // ====================================================================================
-#define WALTER_SENSOR_I2C_PORT 0
-#define WALTER_SENSOR_I2C_SDA_GPIO 8
-#define WALTER_SENSOR_I2C_SCL_GPIO 9
+#define WALTER_SENSOR_I2C_PORT 1
+#define WALTER_SENSOR_I2C_SDA_GPIO 11
+#define WALTER_SENSOR_I2C_SCL_GPIO 12
 #define WALTER_SENSOR_I2C_SPEED_HZ 100000
 #define WALTER_SENSOR_I2C_ENABLE_INTERNAL_PULLUPS 1
 
@@ -76,21 +76,26 @@
 // GPS / GNSS via Walter Modem
 // ====================================================================================
 #define WALTER_ENABLE_GPS 1
-#define WALTER_GPS_REQUEST_INTERVAL_MS 180000U   // request a fix every 3 minutes
+#define WALTER_GPS_PAUSE_LTE 0          // LTE bleibt an (blockierende CFUN-Umschaltung vermeiden)
+#define WALTER_GPS_FIRST_DELAY_MS 20000U         // erster Fix nach 20 Sekunden (schnelleres Debugging)
+#define WALTER_GPS_REQUEST_INTERVAL_MS 30000U    // danach alle 60 Sekunden
+#define WALTER_GPS_FIX_TIMEOUT_MS 60000U         // maximal 60 Sekunden auf Fix warten
 #define WALTER_GPS_RETRY_DELAY_MS 15000U         // wait 15s after a failed request
 #define WALTER_GPS_POLL_INTERVAL_MS 1000U        // poll GNSS fix buffer every second
+#define WALTER_GPS_TASK_STACK 12288  // Mehr Stack für GNSS/LTE Sequenzen (Overflow bei 8k gesehen)
+#define WALTER_GPS_TASK_PRIORITY WALTER_SENSOR_TASK_PRIORITY
 
 // ====================================================================================
 // BME680 Environmental Sensor
 // ====================================================================================
 #define WALTER_ENABLE_BME680 1
-#define WALTER_BME680_SENSOR_COUNT 1  // Only outdoor sensor for now
+#define WALTER_BME680_SENSOR_COUNT 2  // Outdoor + indoor BME680
 #define WALTER_BME680_ADDR_0 0x77  // Outdoor sensor
 #define WALTER_BME680_ADDR_1 0x76  // Indoor sensor
 #define WALTER_BME680_HEATER_TEMP_C 280
 #define WALTER_BME680_HEATER_DURATION_MS 250
 #define WALTER_BME680_AMBIENT_TEMP_C 25
-#define WALTER_BME680_POLL_INTERVAL_MS 60000U  // 1 minute - slow environmental changes
+#define WALTER_BME680_POLL_INTERVAL_MS 10000U  // alle 10 sec - slow environmental changes
 #define WALTER_BME680_STARTUP_DELAY_MS 2000U
 
 // BME680 plausibility thresholds
@@ -103,9 +108,6 @@
 #define WALTER_BME680_PRESS_MIN_HPA 300.0f
 #define WALTER_BME680_PRESS_MAX_HPA 1100.0f
 #define WALTER_BME680_PRESS_MAX_DELTA_PER_SEC 0.1f   // 6 hPa per minute
-#define WALTER_BME680_GAS_MIN_KOHM   0.0f
-#define WALTER_BME680_GAS_MAX_KOHM 1200.0f
-#define WALTER_BME680_GAS_MAX_DELTA_PER_SEC 5.0f     // 300 kΩ per minute
 
 // ====================================================================================
 // HX711 Load Cell ADC (Dual Channel)
@@ -123,13 +125,12 @@
 #define WALTER_HX711_ENABLE_CHANNEL_B 1  // Enable once second load cell is connected
 
 // Platform A (wired to HX711 Channel A @128x) - Raw values INCREASE with weight
-#define WALTER_HX711_OFFSET_A -283450  // 0 kg → raw ≈ -283450
-#define WALTER_HX711_SCALE_A 0.0389f   // 28 kg → raw Δ719400 ⇒ 0.039 g/count
-#define WALTER_HX711_INVERT_A 0       // Normal: (raw - OFFSET) * SCALE
+#define WALTER_HX711_OFFSET_A  -275400   // 0 kg → raw ≈ -275400 (neu kalibriert)
+#define WALTER_HX711_SCALE_A 0.0388783f  // 28 kg → raw Δ720197 ⇒ ~0.03888 g/count
 
-// Platform B (wired to HX711 Channel B @32x) - Normal polarity  
-#define WALTER_HX711_OFFSET_B  -72440  // 0 kg → raw ≈ -72440
-#define WALTER_HX711_SCALE_B 0.1553f   // 28 kg → raw Δ180240 ⇒ 0.155 g/count
+// Platform B (wired to HX711 Channel B @32x) - Raw values DECREASE with weight
+#define WALTER_HX711_OFFSET_B    77600   // 0 kg → raw ≈ 77600 (neu kalibriert)
+#define WALTER_HX711_SCALE_B -0.15450f   // 28 kg → raw Δ-181230 ⇒ ~-0.1545 g/count
 
 // HX711 plausibility thresholds (applied after conversion to kilograms)
 #define WALTER_HX711_MIN_KG            -5.0f
@@ -143,8 +144,8 @@
 #define WALTER_RS485_UART_PORT 2  // Changed from 1 to 2 (Walter Modem uses UART1)
 #define WALTER_RS485_BAUDRATE 115200
 #define WALTER_RS485_TX_GPIO 17
-#define WALTER_RS485_RX_GPIO 18
-#define WALTER_RS485_DE_GPIO 15  // Used as RTS for RS485 half-duplex driver enable
+#define WALTER_RS485_RX_GPIO 16
+#define WALTER_RS485_DE_GPIO 15  // DE/RE (RTS) for RS485 half-duplex driver enable
 #define WALTER_RS485_BUFFER_SIZE 512
 #define WALTER_RS485_READ_TIMEOUT_MS 50
 #define WALTER_RS485_HELLO_PENDING_INTERVAL_MS 1000U   // Retry hello every 1s until display_ready
@@ -166,7 +167,19 @@
 #define WALTER_LTE_TCP_PORT 1999
 #define WALTER_LTE_TCP_SECURE 0
 #define WALTER_LTE_SEND_INTERVAL_MS 30000U
+#define WALTER_LTE_STATE_POLL_MS 1000U   // Poll modem registration state at 1s cadence (was 250ms)
 #define WALTER_LTE_TASK_STACK 4096
+
+// ====================================================================================
+// Gasflaschen (HX711 Plattformen A/B)
+// ====================================================================================
+#define WALTER_GAS_TARA_KG            10.1f   // Leergewicht Flasche inkl. Halterung (typisch)
+#define WALTER_GAS_TARA_KG_MAX        10.5f   // Oberes Ende der Toleranz
+#define WALTER_GAS_FILL_KG            11.0f   // Nennfüllmenge pro Flasche
+#define WALTER_GAS_MIN_NET_KG         0.5f    // Unterhalb davon: „leer“
+#define WALTER_GAS_HISTORY_MINUTES    120     // Verlauf im RAM (bei 10s Poll ≈ 720 Samples)
+#define WALTER_GAS_NVS_INTERVAL_MIN   10      // Checkpoints für Persistenz alle 10 Minuten
+#define WALTER_GAS_SWAP_AB            1       // 1: Tausch Ausgabe A<->B (Front/Hinten vertauscht)
 #define WALTER_LTE_TASK_PRIORITY 5
 
 // ====================================================================================
@@ -178,23 +191,23 @@
 
 // ADC Channel/Unit mapping (ESP32-S3: ADC1 supports channels 0..9 on GPIO1..10)
 #define WALTER_BATT1_ADC_UNIT    1
-#define WALTER_BATT1_ADC_CHANNEL 5
+#define WALTER_BATT1_ADC_CHANNEL 7  // GPIO8 (Board Batterie)
 #define WALTER_BATT2_ADC_UNIT    1
-#define WALTER_BATT2_ADC_CHANNEL 6
+#define WALTER_BATT2_ADC_CHANNEL 8  // GPIO9 (KFZ Batterie)
 #define WALTER_TANK1_ADC_UNIT    1
-#define WALTER_TANK1_ADC_CHANNEL 0
+#define WALTER_TANK1_ADC_CHANNEL 5  // GPIO6 (Frischwasser Tank)
 #define WALTER_TANK2_ADC_UNIT    1
-#define WALTER_TANK2_ADC_CHANNEL 1
+#define WALTER_TANK2_ADC_CHANNEL 6  // GPIO7 (Grauwasser Tank)
 
 // Voltage Dividers (kOhm)
 #define WALTER_BATTERY_DIVIDER_RHIGH_KOHM 100
-#define WALTER_BATTERY_DIVIDER_RLOW_KOHM 15
+#define WALTER_BATTERY_DIVIDER_RLOW_KOHM 18.2f // Feintuning: ~0.8% weniger Gain, 12.4 V → ~12.3 V Anzeige
 #define WALTER_TANK_DIVIDER_RHIGH_KOHM 100
 #define WALTER_TANK_DIVIDER_RLOW_KOHM 15
 
 // Tank level calibration (ADC input in mV)
 #define WALTER_TANK_EMPTY_MV 0
-#define WALTER_TANK_FULL_MV 3000
+#define WALTER_TANK_FULL_MV 130   // 1 V vor Teiler ≈130 mV am ADC (100k/15k)
 
 // Battery sensor output range (ADC input in mV)
 #define WALTER_BATTERY_ADC_MIN_MV 0

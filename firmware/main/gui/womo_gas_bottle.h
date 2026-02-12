@@ -2,6 +2,7 @@
 #define WOMO_GAS_BOTTLE_H
 
 #include "lvgl.h"
+#include "gui/womo_theme.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -29,6 +30,7 @@ typedef struct {
     float full_weight_kg;    // Full bottle weight - 21 kg
     uint8_t fill_percent;    // Current fill percentage
     bool has_valid_weight;   // True once we received valid load data
+    bool no_conn;            // True if HX711 meldet nc
 } womo_gas_bottle_t;
 
 /**
@@ -48,6 +50,11 @@ womo_gas_bottle_t* womo_gas_bottle_create(lv_obj_t *parent, lv_coord_t x, lv_coo
 void womo_gas_bottle_update_weight(womo_gas_bottle_t *bottle, float weight_kg);
 
 /**
+ * @brief Update gas bottle with percentage (0-100%) without weight math
+ */
+void womo_gas_bottle_set_percent(womo_gas_bottle_t *bottle, float percent);
+
+/**
  * @brief Set the empty weight (tare) of the bottle
  * @param bottle Pointer to gas bottle structure
  * @param empty_weight_kg Empty bottle weight in kg
@@ -65,6 +72,11 @@ void womo_gas_bottle_set_full_weight(womo_gas_bottle_t *bottle, float full_weigh
  * @brief Mark bottle as having no valid weight data (shows placeholder)
  */
 void womo_gas_bottle_set_no_data(womo_gas_bottle_t *bottle);
+
+/**
+ * @brief Mark bottle as not connected ("nc")
+ */
+void womo_gas_bottle_set_nc(womo_gas_bottle_t *bottle);
 
 /**
  * @brief Get current fill percentage
@@ -98,6 +110,11 @@ void womo_gas_bottle_set_pos(womo_gas_bottle_t *bottle, lv_coord_t x, lv_coord_t
  * @param visible true to show, false to hide
  */
 void womo_gas_bottle_set_visible(womo_gas_bottle_t *bottle, bool visible);
+
+/**
+ * @brief Set status color for the bottle body (fill remains unchanged)
+ */
+void womo_gas_bottle_set_status(womo_gas_bottle_t *bottle, womo_status_level_t status);
 
 #ifdef __cplusplus
 }

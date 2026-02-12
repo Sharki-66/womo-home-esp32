@@ -1,4 +1,4 @@
 (sym_lib_table
   (version 7)
-  (lib (name "WoMoHome")(type "KiCad")(uri "D:/Hajo/womo-home-esp32/hardware/WoMoHome.kicad_sym")(options "")(descr ""))
+  (lib (name "WoMoHome")(type "KiCad")(uri "${KIPRJMOD}/WoMoHome.kicad_sym")(options "")(descr ""))
 )

@@ -36,7 +36,7 @@
 | HX711 SCK | GPIO5 | Clock output from ESP32. |
 | HX711 Gain Mode | Config option | `WALTER_HX711_GAIN_SETTING` (1=128× A, 2=32× B, 3=64× A). |
 | RS485 TX | GPIO17 | UART2 TX by default (can be remapped). |
-| RS485 RX | GPIO18 | UART2 RX. |
+| RS485 RX | GPIO15 | UART2 RX. |
 | RS485 DE/RE | GPIO16 | Drive high during transmit; low keeps transceiver in receive mode. |
 | Battery Sense #1 | GPIO6 (ADC1_CH5) | Sensor outputs 0–3 V mapping to 11.0–14.5 V battery voltage. |
 | Battery Sense #2 | GPIO7 (ADC1_CH6) | Identical 0–3 V → 11.0–14.5 V mapping. |

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0">
+    <title>WoMoHome</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%23002134'/><text x='50%25' y='52%25' font-family='Arial' font-size='28' fill='white' text-anchor='middle'>W</text></svg>">
+</head>
+
+<body>
+<div class="home-base">
+    <div class="header-base">
+        <img class="header-logo" src="./img/logoBlack.png">
+    </div>
+    <div class="login-base">
+        <div class="login-content">
+            <div class="iconfont icon-luyouqi content-router"></div>
+            <div class="login-title">Anmeldung</div>
+            <div class="flex flex-jcc">
+                <div class="password-base flex">
+                    <div class="iconfont icon-mimasuo pwd-one"></div>
+                    <input class="pwd-two" placeholder="Passwort">
+                    <div class="iconfont icon-eye pwd-thr"></div>
+                </div>
+            </div>
+            <div class="flex flex-jcc">
+                <div class="forgot-pwd flex">
+                    <input class="forgot-one" type="checkbox" id="forgot" name="sel"/>
+                    <span class="forgot-two">Passwort speichern</span>
+                </div>
+            </div>
+            <div class="login-btn flex flex-jcc">
+                <button class="save-btn" onclick="login()">Anmelden</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="js/login.js"></script>
+<script>
+  // initHash();
+  // window.addEventListener('hashchange', function() {
+  //   initHash();
+  // })
+</script>
+</body>
+
+</html>

@@ -1,14 +1,19 @@
 #include "womo_weather.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <stdio.h>
+#include "hardware/waveshare_rgb_lcd_port.h"  // for CH422G SD-CS reassert
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include "storage/womo_sd.h"
 
 static const char *TAG = "weather";
 
-// Weather icon base directory on SD card (path: /sdcard/SDCARD/images/weather-icons/)
-#define WEATHER_ICON_BASE_PATH   "/sdcard/SDCARD/images/weather-icons"
+// Weather icon base directory on SD card (path: /sdcard/images/weather-icons/)
+#define WEATHER_ICON_BASE_PATH   "/sdcard/images/weather-icons"
 #define WEATHER_ICON_DIR_BLACK   WEATHER_ICON_BASE_PATH "/black"
 #define WEATHER_ICON_DIR_WHITE   WEATHER_ICON_BASE_PATH "/white"
 
@@ -109,40 +114,51 @@ static void load_weather_icon(womo_weather_t *weather, const char *filename, boo
         ESP_LOGW(TAG, "Invalid parameters for loading weather icon");
         return;
     }
-    
-    const char *color_dir = use_white_theme ? WEATHER_ICON_DIR_WHITE : WEATHER_ICON_DIR_BLACK;
-    ESP_LOGI(TAG, "Using weather icon directory: %s", color_dir);
 
-    // Build full path: /sdcard/SDCARD/images/weather-icons/{black|white}/filename
-    snprintf(weather->icon_path, sizeof(weather->icon_path), "%s/%s", color_dir, filename);
+    if (!womo_sd_is_mounted()) {
+        ESP_LOGW(TAG, "SD card not mounted, cannot load weather icon");
+        return;
+    }
     
+    const char *chosen_dir = use_white_theme ? WEATHER_ICON_DIR_WHITE : WEATHER_ICON_DIR_BLACK;
+    ESP_LOGI(TAG, "Using weather icon directory: %s (theme %s)",
+             chosen_dir,
+             use_white_theme ? "white" : "black");
+
+    snprintf(weather->icon_path, sizeof(weather->icon_path), "%s/%s", chosen_dir, filename);
     ESP_LOGI(TAG, "Loading weather icon: %s", weather->icon_path);
-    
-    // List files in target directory for debugging
-    // Check if file exists first
+
+    womo_ch422g_assert_sd_cs();
     FILE *test_file = fopen(weather->icon_path, "r");
+    if (!test_file && errno == EIO) {
+        ESP_LOGW(TAG, "Weather icon open EIO, retrying once: %s", weather->icon_path);
+        vTaskDelay(pdMS_TO_TICKS(50));
+        womo_ch422g_assert_sd_cs();
+        test_file = fopen(weather->icon_path, "r");
+    }
     if (test_file) {
         fclose(test_file);
         ESP_LOGI(TAG, "Weather icon file exists: %s", weather->icon_path);
     } else {
-        ESP_LOGW(TAG, "Weather icon file NOT FOUND: %s", weather->icon_path);
-        
-        // Try with different case
-        char alt_path[128];
-    snprintf(alt_path, sizeof(alt_path), "%s/chanceregen.png", color_dir);
-        FILE *alt_file = fopen(alt_path, "r");
-        if (alt_file) {
-            fclose(alt_file);
-            ESP_LOGI(TAG, "Alternative file found: %s", alt_path);
-        }
-        
+        int err = errno;
+        ESP_LOGW(TAG, "Weather icon file NOT FOUND: %s (errno=%d: %s)",
+                 weather->icon_path,
+                 err,
+                 strerror(err));
         return;
     }
     
     // Load PNG file into memory (same method as Ducato background)
+    womo_ch422g_assert_sd_cs();
     FILE *fp = fopen(weather->icon_path, "rb");
+    if (!fp && errno == EIO) {
+        ESP_LOGW(TAG, "Weather icon fopen EIO, retrying once: %s", weather->icon_path);
+        vTaskDelay(pdMS_TO_TICKS(50));
+        womo_ch422g_assert_sd_cs();
+        fp = fopen(weather->icon_path, "rb");
+    }
     if (!fp) {
-        ESP_LOGW(TAG, "Failed to open weather icon file");
+        ESP_LOGW(TAG, "Failed to open weather icon file (errno=%d: %s)", errno, strerror(errno));
         return;
     }
     
@@ -166,11 +182,23 @@ static void load_weather_icon(womo_weather_t *weather, const char *filename, boo
     }
     
     // Read file into buffer
+    womo_ch422g_assert_sd_cs();
     size_t bytes_read = fread(png_data, 1, file_size, fp);
+    if (bytes_read != file_size && errno == EIO) {
+        ESP_LOGW(TAG, "Weather icon fread EIO, retrying once");
+        vTaskDelay(pdMS_TO_TICKS(50));
+        fseek(fp, 0, SEEK_SET);
+        womo_ch422g_assert_sd_cs();
+        bytes_read = fread(png_data, 1, file_size, fp);
+    }
     fclose(fp);
     
     if (bytes_read != file_size) {
-        ESP_LOGE(TAG, "Read only %zu of %ld bytes for weather icon", bytes_read, file_size);
+        ESP_LOGE(TAG, "Read only %zu of %ld bytes for weather icon (errno=%d: %s)",
+                 bytes_read,
+                 file_size,
+                 errno,
+                 strerror(errno));
         heap_caps_free(png_data);
         return;
     }
@@ -219,7 +247,7 @@ womo_weather_t* womo_weather_create(lv_obj_t *parent)
     lv_obj_set_size(weather->container, 80, 80);
     // Position 70px from the right edge and 70px from the top edge
     lv_obj_align(weather->container, LV_ALIGN_TOP_RIGHT, -70, 70);
-    lv_obj_clear_flag(weather->container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(weather->container, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_bg_opa(weather->container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_opa(weather->container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_pad_all(weather->container, 2, 0);
@@ -236,8 +264,8 @@ womo_weather_t* womo_weather_create(lv_obj_t *parent)
     
     ESP_LOGI(TAG, "Weather widget created in top-right corner");
     
-    // Load default icon (cloudy as safe fallback, day scheme)
-    load_weather_icon(weather, weather_icon_files[WEATHER_CLOUDY], false);
+    // Load default icon as explicit night-unknown to see later updates clearly
+    load_weather_icon(weather, weather_icon_files[WEATHER_NT_UNKNOWN], true);
     
     return weather;
 }

@@ -63,6 +63,49 @@ static bool is_between_times(uint8_t current_hour, uint8_t current_min,
     return (current_minutes >= start_minutes && current_minutes < end_minutes);
 }
 
+    // Prüft, ob die aktuelle Zeit in der bürgerlichen Dämmerung liegt
+    static bool is_in_civil_twilight_now(void)
+    {
+        struct tm timeinfo;
+
+        if (womo_time_get(&timeinfo) != ESP_OK || timeinfo.tm_year < (2024 - 1900)) {
+            return false; // Ohne valide Zeit kein Twilight-Gradient
+        }
+
+        uint8_t hour = timeinfo.tm_hour;
+        uint8_t minute = timeinfo.tm_min;
+
+        // Start der Morgendämmerung = sunrise - WOMO_CIVIL_TWILIGHT_MINUTES
+        uint8_t morning_start_hour = sun_times.sunrise_hour;
+        uint8_t morning_start_min = sun_times.sunrise_minute;
+        if (morning_start_min >= WOMO_CIVIL_TWILIGHT_MINUTES) {
+            morning_start_min -= WOMO_CIVIL_TWILIGHT_MINUTES;
+        } else {
+            morning_start_min = morning_start_min + 60 - WOMO_CIVIL_TWILIGHT_MINUTES;
+            morning_start_hour = (morning_start_hour > 0) ? morning_start_hour - 1 : 23;
+        }
+
+        // Start der Abenddämmerung = sunset - WOMO_CIVIL_TWILIGHT_MINUTES
+        uint8_t evening_start_hour = sun_times.sunset_hour;
+        uint8_t evening_start_min = sun_times.sunset_minute;
+        if (evening_start_min >= WOMO_CIVIL_TWILIGHT_MINUTES) {
+            evening_start_min -= WOMO_CIVIL_TWILIGHT_MINUTES;
+        } else {
+            evening_start_min = evening_start_min + 60 - WOMO_CIVIL_TWILIGHT_MINUTES;
+            evening_start_hour = (evening_start_hour > 0) ? evening_start_hour - 1 : 23;
+        }
+
+        bool in_morning = is_between_times(hour, minute,
+                                           morning_start_hour, morning_start_min,
+                                           sun_times.sunrise_hour, sun_times.sunrise_minute);
+
+        bool in_evening = is_between_times(hour, minute,
+                                           evening_start_hour, evening_start_min,
+                                           sun_times.sunset_hour, sun_times.sunset_minute);
+
+        return in_morning || in_evening;
+    }
+
 // Initialize twilight colors lookup table (called once at startup)
 static void init_twilight_colors(void)
 {
@@ -123,9 +166,9 @@ womo_theme_mode_t womo_theme_update(womo_status_level_t status)
         return current_mode;
     }
     
-    // Get current time
-    if (womo_time_get(&timeinfo) != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to get time, using day mode");
+    // Get current time; if clock is uninitialized (e.g. 1970), default to DAY
+    if (womo_time_get(&timeinfo) != ESP_OK || timeinfo.tm_year < (2024 - 1900)) {
+        ESP_LOGW(TAG, "Time invalid or not set, defaulting to DAY mode");
         current_mode = WOMO_THEME_DAY;
         return current_mode;
     }
@@ -373,8 +416,8 @@ bool womo_theme_is_daytime(void)
 {
     struct tm timeinfo;
     
-    if (womo_time_get(&timeinfo) != ESP_OK) {
-        return true; // Default to day if time not available
+    if (womo_time_get(&timeinfo) != ESP_OK || timeinfo.tm_year < (2024 - 1900)) {
+        return true; // Default to day if time not available or clearly invalid
     }
     
     uint8_t hour = timeinfo.tm_hour;
@@ -392,7 +435,24 @@ void womo_theme_apply_to_screen(lv_obj_t *screen)
     }
     
     lv_color_t bg_color = womo_theme_get_background_color();
-    lv_obj_set_style_bg_color(screen, bg_color, 0);
+
+    // Gradient nur während bürgerlicher Dämmerung (oder wenn Modus SUNRISE/SUNSET aktiv) und Status OK
+    bool twilight_now = is_in_civil_twilight_now();
+    bool gradient_allowed = (current_status == WOMO_STATUS_OK) &&
+                            (twilight_now || current_mode == WOMO_THEME_SUNRISE || current_mode == WOMO_THEME_SUNSET);
+
+    // Verwende vertikalen Verlauf: oben Tagesblau, unten Nachtblau
+    if (gradient_allowed) {
+        lv_obj_set_style_bg_grad_dir(screen, LV_GRAD_DIR_VER, 0);
+        lv_obj_set_style_bg_color(screen, WOMO_COLOR_DAY_NORMAL, 0);      // oben
+        lv_obj_set_style_bg_grad_color(screen, WOMO_COLOR_NIGHT_NORMAL, 0); // unten
+        lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
+    } else {
+        lv_obj_set_style_bg_grad_dir(screen, LV_GRAD_DIR_NONE, 0);
+        lv_obj_set_style_bg_color(screen, bg_color, 0);
+        lv_obj_set_style_bg_grad_color(screen, bg_color, 0);
+        lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
+    }
     
     ESP_LOGI(TAG, "Applied theme to screen - Mode: %d, Status: %d", 
              current_mode, current_status);

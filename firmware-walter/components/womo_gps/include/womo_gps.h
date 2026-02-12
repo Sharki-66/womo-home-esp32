@@ -53,6 +53,25 @@ esp_err_t womo_gps_init(void);
 esp_err_t womo_gps_request_fix(void);
 
 /**
+ * @brief Führe einen kompletten GNSS-Zyklus aus (LTE an, Zeit/Assistance holen, LTE aus, Fix holen, LTE wieder an)
+ *
+ * Blockiert bis ein neuer Fix eintrifft oder das Timeout erreicht ist. LTE wird am Ende
+ * immer wieder eingeschaltet (auch bei Fehler/Timeout), sofern die Laufzeitsteuerung erreichbar ist.
+ *
+ * @param timeout_ms  Timeout in Millisekunden für den GNSS-Fix
+ * @param[out] out_fix  Optionaler Pointer für den neuen Fix (nur bei ESP_OK befüllt)
+ * @return ESP_OK bei Erfolg, ESP_ERR_TIMEOUT bei Timeout, sonst Fehlercode
+ */
+esp_err_t womo_gps_run_cycle(uint32_t timeout_ms, womo_gps_data_t *out_fix);
+
+/**
+ * @brief Cancel any ongoing GPS fix request
+ * 
+ * @return ESP_OK on success
+ */
+esp_err_t womo_gps_cancel_fix(void);
+
+/**
  * @brief Get the last received GPS fix
  * 
  * @param[out] data Pointer to GPS data structure to fill

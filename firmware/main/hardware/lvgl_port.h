@@ -161,6 +161,28 @@ bool lvgl_port_notify_rgb_vsync(void);
  */
 void lvgl_touch_set_fast_mode(bool enable);
 
+/**
+ * @brief Touch-Wake-Callback-Typ.
+ *
+ * Wird bei jeder erkannten Touch-Berührung aus touchpad_read aufgerufen
+ * (LVGL-Task-Kontext, Mutex gehalten).
+ *
+ * @return true  → Touch soll unterdrückt werden (z. B. Display war aus)
+ * @return false → Touch normal weiterleiten
+ */
+typedef bool (*lvgl_touch_wake_cb_t)(void);
+
+/**
+ * @brief Registriert einen Touch-Wake-Callback.
+ *
+ * Der Callback wird bei JEDEM Touch-Press aufgerufen, noch bevor LVGL das
+ * Event an ein Widget dispatcht.  Gibt er true zurück, wird der Touch als
+ * RELEASED an LVGL gemeldet (→ kein Widget-Event).
+ *
+ * @param[in] cb  Callback oder NULL zum Deregistrieren.
+ */
+void lvgl_touch_set_wake_cb(lvgl_touch_wake_cb_t cb);
+
 #ifdef __cplusplus
 }
 #endif

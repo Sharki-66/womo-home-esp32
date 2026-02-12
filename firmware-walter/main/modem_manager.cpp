@@ -37,11 +37,11 @@ static esp_err_t wait_for_lte_state(bool want_active, TickType_t timeout_ticks)
         }
 
         ESP_LOGD(TAG,
-                 "Waiting for LTE state %s (active=%s reg=%d)",
-                 want_active ? "ON" : "OFF",
-                 active ? "ON" : "OFF",
-                 (int)reg);
-        vTaskDelay(pdMS_TO_TICKS(250));
+             "Waiting for LTE state %s (active=%s reg=%d)",
+             want_active ? "ON" : "OFF",
+             active ? "ON" : "OFF",
+             (int)reg);
+        vTaskDelay(pdMS_TO_TICKS(WALTER_LTE_STATE_POLL_MS));
     }
     return ESP_ERR_TIMEOUT;
 }

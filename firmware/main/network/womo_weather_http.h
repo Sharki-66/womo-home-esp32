@@ -9,18 +9,18 @@ extern "C" {
 #endif
 
 /**
- * @brief Parsed weather data from OpenWeatherMap current weather API.
+ * @brief Parsed weather data from Open-Meteo current API.
  */
 typedef struct {
     bool valid;                 ///< True when the HTTP request and JSON parse succeeded
-    int weather_id;             ///< OpenWeatherMap weather condition ID (e.g. 200, 800, ...)
-    bool is_night;              ///< True when API reports a night icon ("**n")
+    int weather_id;             ///< WMO weather code from Open-Meteo (e.g. 0, 3, 61, 95)
+    bool is_night;              ///< True when API reports is_day == 0
     float temperature_c;        ///< Current temperature in °C
-    float feels_like_c;         ///< Feels-like temperature in °C
-    float pressure_hpa;         ///< Atmospheric pressure in hPa
-    float humidity_percent;     ///< Relative humidity in %
-    float wind_speed_ms;        ///< Wind speed in m/s
-    char description[48];       ///< Lowercase description text from the API (UTF-8)
+    float feels_like_c;         ///< Not provided by Open-Meteo (kept for compatibility, set 0)
+    float pressure_hpa;         ///< Atmospheric pressure in hPa (pressure_msl)
+    float humidity_percent;     ///< Relative humidity in % (relative_humidity_2m)
+    float wind_speed_ms;        ///< Wind speed in m/s (wind_speed_10m)
+    char description[48];       ///< Short text derived from WMO code (ASCII)
 } womo_weather_http_data_t;
 
 typedef void (*womo_weather_http_callback_t)(const womo_weather_http_data_t *data, void *user_data);
