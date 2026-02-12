@@ -46,3 +46,9 @@ Jedes Firmware-Projekt hat eigene Dokumente:
 | [hardware/datasheets/](../hardware/datasheets/) | Datenblätter, Schaltpläne (PDF) |
 | [sdcard/](../sdcard/) | SD-Karten-Inhalt für das Display (Ducato-Bilder, Wetter-Icons, Config) |
 | [tests/](../tests/) | Hardware-Test-Sketche (I2C, SPI, LVGL, Touch, …) |
+
+## 🔗 Externe Referenzen
+
+| Ressource | Beschreibung |
+|-----------|-------------|
+| [espressif/esp-iot-solution](https://github.com/espressif/esp-iot-solution) | Espressif-Beispiele für viele Hardware-Komponenten (LCD, Touch, Sensoren, USB, …). War früher als Submodul im Repo – jetzt nur noch als Referenz. |
