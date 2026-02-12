@@ -10,7 +10,6 @@
 #include "esp_check.h"
 #include "esp_log.h"
 #include "esp_system.h"
-#include "driver/gpio.h"
 #include "nvs_flash.h"
 #include "sensor_config.h"
 #include "sensors/analog_sensor.h"
@@ -25,30 +24,6 @@ static const char *TAG = "sensor_main";
 
 void app_main(void)
 {
-#ifdef CONFIG_ESP32_S3_USB_OTG
-    const gpio_config_t host_sel_cfg = {
-        .pin_bit_mask = BIT64(GPIO_NUM_18),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE
-    };
-    ESP_ERROR_CHECK(gpio_config(&host_sel_cfg));
-    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_18, 1));
-
-    // GPIO13 schaltet USB-Device-Power (GPIO12/17 bleiben frei für RS485)
-    const gpio_config_t usb_power_cfg = {
-        .pin_bit_mask = BIT64(GPIO_NUM_13),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE
-    };
-    ESP_ERROR_CHECK(gpio_config(&usb_power_cfg));
-    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_13, 0));
-    vTaskDelay(pdMS_TO_TICKS(10));
-    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_13, 1));
-#endif
 
     // RS485 Debug-Logging aktivieren
     esp_log_level_set("rs485_modem", ESP_LOG_DEBUG);

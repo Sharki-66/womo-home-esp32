@@ -24,9 +24,6 @@ idf_component_register(
         esp_wifi
         esp_app_format
         esp_adc
-        iot_usbh_modem
-        iot_usbh_cdc
-        modem_at
         bme680
         hx711
         i2c_bus

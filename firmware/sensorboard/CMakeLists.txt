@@ -11,4 +11,4 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 add_compile_options(-fdiagnostics-color=always)
 
-project(usb_cdc_4g_module)
+project(womo_sensorboard)

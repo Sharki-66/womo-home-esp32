@@ -110,3 +110,14 @@
 #define SENSOR_MULTIMEDIA_PWR_GPIO 11  // Schaltausgang: Multimedia Power
 
 // ====================================================================================
+
+// =============================================================================
+// Gas Consumption Calculation (EMA-based rate tracking)
+// =============================================================================
+#define SENSOR_GAS_FILL_KG          11.0f    // Netto-Inhalt einer vollen 11-kg-Flasche
+#define SENSOR_GAS_TARE_KG          10.5f    // Tara-Gewicht der leeren Flasche
+#define SENSOR_GAS_ACTIVE_DEFAULT   -1       // -1 = Auto-Erkennung (A oder B)
+#define SENSOR_GAS_RATE_ALPHA_1H    0.2f     // EMA-Glättungsfaktor (1h-Fenster)
+#define SENSOR_GAS_RATE_ALPHA_2H    0.1f     // EMA-Glättungsfaktor (2h-Fenster)
+#define SENSOR_GAS_RATE_MIN_DT_SEC  30       // Minimaler Messpunkt-Abstand (Sek)
+#define SENSOR_GAS_ACTIVE_EPS_KG    0.05f    // Mindest-Änderung für Verbrauchserkennung

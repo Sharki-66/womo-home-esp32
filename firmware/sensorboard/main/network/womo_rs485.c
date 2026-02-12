@@ -3,7 +3,14 @@
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "esp_log.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "sensor_config.h"
+
+// Mindest-Pause nach jedem TX, damit DE sicher deassertiert und der Bus
+// sich stabilisiert, bevor der nächste Frame beginnt (RS485 Bus-Settle).
+#define RS485_POST_TX_SETTLE_US  1500
 
 static const char *TAG = "womo_rs485";
 static bool s_initialized = false;
@@ -103,7 +110,12 @@ esp_err_t womo_rs485_write(const uint8_t *data, size_t length, TickType_t ticks_
         return ESP_FAIL;
     }
 
-    return uart_wait_tx_done(s_uart_port, ticks_to_wait);
+    esp_err_t tx_err = uart_wait_tx_done(s_uart_port, ticks_to_wait);
+    if (tx_err == ESP_OK) {
+        // Post-TX Bus-Settle: kurze Pause damit DE deassertiert
+        esp_rom_delay_us(RS485_POST_TX_SETTLE_US);
+    }
+    return tx_err;
 }
 
 int womo_rs485_read(uint8_t *buffer, size_t max_length, TickType_t ticks_to_wait)
