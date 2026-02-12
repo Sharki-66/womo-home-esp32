@@ -5,9 +5,19 @@ sdkconfig.old
 dependencies.lock
 managed_components/
 
+# Große eingebettete Repos (lokal vorhanden, nicht getrackt)
+esp-iot-solution/
+
 # Python
 __pycache__/
 *.pyc
+
+# KiCad
+*-backups/
+*.kicad_sch-bak
+*.bak
+fp-info-cache
+ERC.rpt
 
 # Editor
 .vscode/

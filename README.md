@@ -1,64 +1,105 @@
-# WoMo Home Control - ESP32-S3
+# WoMo Home Control – ESP32-S3
 
-🚐 **Professionelles Wohnmobil Steuerungs- und Monitoring-System**
+🚐 **Wohnmobil Steuerungs- und Monitoring-System**
 
-Intelligente Steuerung und Überwachung für dein Wohnmobil mit ESP32-S3, LTE-M/NB-IoT, GPS und 7" LCD Touch Display.
-
----
-
-## 📋 Übersicht
-
-Dieses Projekt kombiniert zwei ESP32-S3 Module für ein leistungsstarkes WoMo-Kontrollsystem:
-
-- **Waveshare ESP32-S3 Touch LCD 7"** - 800×480 IPS Display & User Interface
-- **Walter Modem** - LTE-M/NB-IoT, GPS, Sensorenanbindung
-
-### Hauptfunktionen
-
-✅ 7" IPS LCD Touch-Display (800×480)
-✅ LTE-M/NB-IoT Konnektivität  
-✅ GPS/GLONASS Tracking  
-✅ Klima-Monitoring (Innen/Außen)  
-✅ Batterie & Solar-Überwachung  
-✅ Füllstands-Sensoren (Wasser, Gas)  
-✅ 9-Achsen Lagesensor  
-✅ WiFi Hotspot & Netzwerk-Management  
-✅ Relais-Steuerung (Licht, Pumpe, etc.)
+Intelligente Steuerung und Überwachung für ein Fiat Ducato Wohnmobil mit ESP32-S3, RS485-Bus, 7" Touch-Display und Teltonika RUTX11 Router (LTE/WLAN/GNSS).
 
 ---
 
-## 🛠️ Hardware
+## 📋 Überblick
 
-### Zentrale Module
-- **Waveshare ESP32-S3 Touch LCD 7"** (800×480 IPS Display & Touch)
-- **DPTechnics Walter Modem** (ESP32-S3 + Sequans Monarch 2 LTE-M/NB-IoT + GPS)
+| Modul | Board | Funktion |
+|-------|-------|----------|
+| **Display** | Waveshare ESP32-S3 Touch LCD 7" (800×480) | GUI, LVGL v8, Router-Anbindung (HTTP/SSH) |
+| **Sensorboard** | Heemol ESP32-S3 N16R8 DevKitC-1 | Sensorik, Aktorik, RS485-TX |
+| **Router** | Teltonika RUTX11 | WLAN, LTE, GNSS, Hotspot |
 
-### Sensoren
-- 2x **BME280** (Temperatur, Luftfeuchtigkeit, Luftdruck)
-- 2x **INA226** (Strom/Spannungsmessung mit 75mV/50A Shunts)
-- 1x **BNO055** (9-Achsen IMU + Magnetometer)
-- 1x **ADS1115** (16-bit ADC)
-- 2x **Votronic Tank-Sensoren** (Frischwasser/Grauwasser)
-- 2x **HX711 + Wägezellen** (Gas-Flaschen Füllstand)
+Kommunikation Display ↔ Sensorboard: **RS485 Half-Duplex** (115200 8N1, JSON-Lines, Topic-basiert).
 
-### I2C Infrastructure
-- **PCA9548A** I2C Multiplexer (8 Kanäle)
-- **PCF8575** GPIO Expander (16 Ports für Relais & Aktoren)
+### Sensoren & Aktoren
 
-### Stromversorgung
-- Bauer Electronics DC/DC 5V 3A USB-C (Waveshare)
-- DC-DC Buck 12V→5V 3A (Walter)
-- Multifunktions-Dachantenne (2x LTE + GPS)
-
-📖 **[Detaillierte Hardware-Dokumentation →](docs/hardware/overview.md)**
+- 2× BME680 (Temperatur, Feuchte, Druck, Gas – innen/außen)
+- BNO055 (9-Achsen IMU + Kompass)
+- 2× HX711 + Wägezellen (Gasfüllstand in kg)
+- 2× Votronic Tanksensoren (Frisch-/Grauwasser, kapazitiv)
+- 2× Batterie-Messung (Board/Kfz)
+- Relais-Steuerung (12V Bordnetz, Radio)
 
 ---
 
-## 💻 Software
+## 📁 Projektstruktur
 
-### Entwicklungsumgebung
-- **ESP-IDF v5.x** (Espressif IoT Development Framework)
-- **VS Code** mit ESP-IDF Extension
-- **C/C++** (native ESP32 Entwicklung)
+```
+womo-home-esp32/
+├── firmware/
+│   ├── display/          ← Waveshare 7" LCD Firmware (LVGL, Router-Poll)
+│   └── sensorboard/      ← Sensorboard Firmware (RS485-TX, Sensoren)
+├── hardware/
+│   ├── schematics/        ← KiCad-Schaltpläne (HAT-Board)
+│   └── datasheets/        ← PDFs, Datenblätter, Schaltpläne
+├── docs/                  ← Dokumentation mit Querverweisen
+│   ├── README.md          ← Doku-Index
+│   ├── hardware/          ← Hardware-Beschreibungen (.md)
+│   └── software-architecture.md
+├── sdcard/                ← SD-Karten-Inhalt fürs Display
+│   ├── images/            ← Ducato-Bilder, Wetter-Icons
+│   └── config/            ← Konfigurationsdateien
+├── tests/                 ← Hardware-Test-Sketche (I2C, SPI, LVGL, …)
+├── archive/               ← Abgelöste Firmware-Versionen
+│   ├── firmware-modem/    ← USB-Modem-Version (→ RS485 3.3V Käfer)
+│   └── firmware-walter/   ← DPTechnics Walter v1.0 (abgelöst)
+├── .github/
+│   └── copilot-instructions.md  ← KI-Regeln, RS485-Protokoll v2
+├── womo-sensor.code-workspace   ← VS Code Workspace (Sensorboard)
+└── womo-display.code-workspace  ← VS Code Workspace (Display)
+```
 
-### Architektur
+---
+
+## 🚀 Schnellstart
+
+### Voraussetzungen
+- [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/get-started/)
+- VS Code + [ESP-IDF Extension](https://marketplace.visualstudio.com/items?itemName=espressif.esp-idf-extension)
+
+### Sensorboard bauen & flashen
+```bash
+cd firmware/sensorboard
+idf.py set-target esp32s3
+idf.py build flash monitor -p /dev/ttyACM2
+```
+
+### Display bauen & flashen
+```bash
+cd firmware/display
+idf.py set-target esp32s3
+idf.py build flash monitor -p COM5
+```
+
+Oder: entsprechenden `.code-workspace` öffnen → Tasks nutzen (Ctrl+Shift+B).
+
+---
+
+## 📖 Dokumentation
+
+→ **[docs/README.md](docs/README.md)** — Kompletter Doku-Index mit Querverweisen
+
+Wichtige Einstiegspunkte:
+- [Hardware Interconnection Matrix](docs/hardware/CONNECTION_MATRIX.md)
+- [RS485-Protokoll v2 (Topic-basiert)](.github/copilot-instructions.md)
+- [Software-Architektur](docs/software-architecture.md)
+
+---
+
+## 🔧 VS Code Workspaces
+
+| Workspace | Zweck |
+|-----------|-------|
+| `womo-sensor.code-workspace` | Sensorboard-Entwicklung (MAIN) + Display (REF) |
+| `womo-display.code-workspace` | Display-Entwicklung (MAIN) + Sensorboard (REF) |
+
+---
+
+## 📜 Lizenz
+
+Siehe [LICENSE](LICENSE).
