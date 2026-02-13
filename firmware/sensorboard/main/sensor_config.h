@@ -121,3 +121,22 @@
 #define SENSOR_GAS_RATE_ALPHA_2H    0.1f     // EMA-Glättungsfaktor (2h-Fenster)
 #define SENSOR_GAS_RATE_MIN_DT_SEC  30       // Minimaler Messpunkt-Abstand (Sek)
 #define SENSOR_GAS_ACTIVE_EPS_KG    0.05f    // Mindest-Änderung für Verbrauchserkennung
+
+// =============================================================================
+// WiFi STA Configuration (Verbindung zum RUTX11 Router)
+// =============================================================================
+#define SENSOR_WIFI_DEFAULT_SSID    "Malibu-622"
+#define SENSOR_WIFI_DEFAULT_PASS    ""          // Default leer; per NVS/RS485 änderbar
+#define SENSOR_WIFI_NVS_NAMESPACE   "wifi_cfg"
+#define SENSOR_WIFI_NVS_KEY_SSID    "ssid"
+#define SENSOR_WIFI_NVS_KEY_PASS    "pass"
+#define SENSOR_WIFI_HOSTNAME        "womo-sensor"
+#define SENSOR_WIFI_MDNS_INSTANCE   "WoMoHome Sensor Board"
+#define SENSOR_WIFI_RETRY_MAX       5           // Verbindungsversuche bevor Pause
+#define SENSOR_WIFI_RETRY_PAUSE_MS  30000       // 30s Pause nach fehlgeschlagenen Versuchen
+
+// HTTP Server (Parkhilfe / Horizont)
+#define SENSOR_HTTP_PORT            80
+#define SENSOR_SPIFFS_BASE_PATH     "/spiffs"
+#define SENSOR_SPIFFS_PARTITION     "storage"
+#define SENSOR_SPIFFS_MAX_FILES     5

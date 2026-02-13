@@ -4,6 +4,8 @@ idf_component_register(
         "sensors/analog_sensor.c"
         "network/rs485_modem.c"
         "network/womo_rs485.c"
+        "network/wifi/sensor_wifi.c"
+        "network/wifi/sensor_http.c"
         "web_wifi_imu.c"
         "sensors/bno055_sensor.c"
         "hal/sensor_i2c_bus.c"
@@ -16,12 +18,17 @@ idf_component_register(
         "sensors"
         "time"
         "network"
+        "network/wifi"
         "hal"
     REQUIRES
         bsec
         bno055
         nvs_flash
         esp_wifi
+        esp_netif
+        esp_http_server
+        mdns
+        spiffs
         esp_app_format
         esp_adc
         bme680

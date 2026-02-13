@@ -10,6 +10,8 @@
 #include "network/rs485_modem.h"
 
 #include "network/womo_rs485.h"
+#include "network/wifi/sensor_wifi.h"
+#include "network/wifi/sensor_http.h"
 
 #include "cJSON.h"
 #include "driver/gpio.h"
@@ -816,8 +818,26 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
 
     if (strcmp(cmd_str, "display_ready") == 0) {
         rs485_handle_display_ready();
-    } else if (strcmp(cmd_str, "level_start") == 0 || strcmp(cmd_str, "level_stop") == 0) {
-        ESP_LOGI(TAG, "Level command: %s", cmd_str);
+    } else if (strcmp(cmd_str, "level_start") == 0) {
+        ESP_LOGI(TAG, "Parkhilfe START: WiFi + HTTP-Server");
+        sensor_wifi_init();
+        sensor_http_start();
+    } else if (strcmp(cmd_str, "level_stop") == 0) {
+        ESP_LOGI(TAG, "Parkhilfe STOP: HTTP-Server beenden");
+        sensor_http_stop();
+        sensor_wifi_deinit();
+    } else if (strcmp(cmd_str, "wifi_config") == 0) {
+        const cJSON *j_ssid = cJSON_GetObjectItem(root, "ssid");
+        const cJSON *j_pass = cJSON_GetObjectItem(root, "pass");
+        const char *new_ssid = cJSON_IsString(j_ssid) ? j_ssid->valuestring : NULL;
+        const char *new_pass = cJSON_IsString(j_pass) ? j_pass->valuestring : NULL;
+        if (new_ssid) {
+            cmd_err = sensor_wifi_set_credentials(new_ssid, new_pass ? new_pass : "");
+            ESP_LOGI(TAG, "WiFi-Credentials aktualisiert: SSID=%s", new_ssid);
+        } else {
+            ESP_LOGW(TAG, "wifi_config: kein 'ssid' Feld");
+            cmd_err = ESP_ERR_INVALID_ARG;
+        }
     } else if (strcmp(cmd_str, "tare_a") == 0 || strcmp(cmd_str, "tare_b") == 0) {
         ESP_LOGI(TAG, "Tare command: %s", cmd_str);
         s_gas_state = (gas_state_t){0};

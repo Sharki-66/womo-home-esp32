@@ -3,3 +3,4 @@ dependencies:
   cmake_utilities: "0.*"
 
   espressif/i2c_bus: "*"
+  espressif/mdns: "*"
