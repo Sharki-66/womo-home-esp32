@@ -133,6 +133,19 @@ bool womo_wifi_is_scan_in_progress(void);
  * @param max_retry Maximale Verbindungsversuche (0 = unendlich)
  * @return ESP_OK bei erfolgreicher Verbindung, ESP_ERR_NOT_FOUND wenn kein bekanntes Netz in Reichweite
  */
+/**
+ * @brief Gibt das gespeicherte Passwort für eine bekannte SSID zurück.
+ *
+ * Sucht in der NVS-Known-List nach der SSID und kopiert das Passwort.
+ *
+ * @param ssid        SSID für die das Passwort gesucht wird
+ * @param pwd_out     Puffer für das Passwort
+ * @param pwd_out_sz  Größe des Puffers
+ * @return ESP_OK bei Erfolg, ESP_ERR_NOT_FOUND wenn SSID unbekannt
+ */
+esp_err_t womo_wifi_get_known_credentials(const char *ssid,
+                                           char *pwd_out, size_t pwd_out_sz);
+
 esp_err_t womo_wifi_connect_best_known(uint8_t max_retry);
 
 #endif // WOMO_WIFI_H

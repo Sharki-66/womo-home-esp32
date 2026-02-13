@@ -577,3 +577,22 @@ bool womo_wifi_is_scan_in_progress(void)
 {
     return (s_wifi_scan_task != NULL);
 }
+
+esp_err_t womo_wifi_get_known_credentials(const char *ssid,
+                                           char *pwd_out, size_t pwd_out_sz)
+{
+    if (!ssid || !pwd_out || pwd_out_sz == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    pwd_out[0] = '\0';
+
+    wifi_known_ensure_loaded();
+
+    int idx = wifi_known_find(s_known_list, s_known_count, ssid);
+    if (idx < 0) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    strncpy(pwd_out, s_known_list[idx].pwd, pwd_out_sz - 1);
+    pwd_out[pwd_out_sz - 1] = '\0';
+    return ESP_OK;
+}

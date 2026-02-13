@@ -11,6 +11,7 @@
 #include <strings.h>
 #include <stdlib.h>
 #include <math.h>
+#include "network/womo_wifi.h"
 
 static const char *TAG = "rs485_display";
 
@@ -775,6 +776,31 @@ esp_err_t womo_rs485_send_wifi_control(bool enable, const char *ssid, const char
     return disable_err;
 }
 
+esp_err_t womo_rs485_send_wifi_credentials(const char *ssid, const char *pass)
+{
+    if (!ssid || ssid[0] == '\0') {
+        ESP_LOGW(TAG, "wifi_credentials: kein SSID angegeben");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+
+    cJSON_AddStringToObject(root, "cmd", "wifi_config");
+    cJSON_AddStringToObject(root, "ssid", ssid);
+    cJSON_AddStringToObject(root, "pass", pass ? pass : "");
+
+    esp_err_t err = rs485_send_frame(root, "wifi_config");
+    cJSON_Delete(root);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "WiFi-Credentials an Sensor gesendet: SSID='%s'", ssid);
+    } else {
+        ESP_LOGW(TAG, "WiFi-Credentials senden fehlgeschlagen: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+
 esp_err_t womo_rs485_send_lte_control(bool enable)
 {
     const char *cmd = enable ? "lte_enable" : "lte_disable";
@@ -1198,6 +1224,36 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         cJSON_Delete(root);
         return;
     }
+
+    // ── WiFi Passwort-Anfrage vom Sensor ──────────────────────────────
+    if (strcmp(type, "wifi_pass_request") == 0) {
+        ESP_LOGI(TAG, "Sensor fragt nach WiFi-Passwort");
+        // Aktuell verbundene SSID holen
+        char ssid[33] = "";
+        esp_err_t ssid_err = womo_wifi_get_ssid(ssid, sizeof(ssid));
+        if (ssid_err == ESP_OK && ssid[0] != '\0') {
+            // Passwort aus NVS Known-List holen
+            char pwd[64] = "";
+            esp_err_t pwd_err = womo_wifi_get_known_credentials(ssid, pwd, sizeof(pwd));
+            if (pwd_err == ESP_OK && pwd[0] != '\0') {
+                ESP_LOGI(TAG, "Sende Credentials an Sensor: SSID='%s'", ssid);
+                womo_rs485_send_wifi_credentials(ssid, pwd);
+                ack_success = true;
+            } else {
+                ESP_LOGW(TAG, "Kein Passwort für SSID '%s' im NVS gefunden", ssid);
+                ack_error = "no password stored";
+            }
+        } else {
+            ESP_LOGW(TAG, "Display nicht mit WiFi verbunden – kann kein Passwort liefern");
+            ack_error = "display not connected";
+        }
+        if (ack_needed) {
+            rs485_send_ack(seq_value, ack_success, "wifi_pass_request", ack_error);
+        }
+        cJSON_Delete(root);
+        return;
+    }
+
 
     // ── Topic-basierte Verarbeitung (Merge in s_latest_data) ──
     // Jedes Topic aktualisiert nur seinen Teil; der Rest bleibt erhalten.

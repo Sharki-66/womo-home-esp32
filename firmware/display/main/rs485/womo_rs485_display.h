@@ -162,6 +162,7 @@ esp_err_t womo_rs485_send_tare_b(void);
 esp_err_t womo_rs485_send_display_ready(void);
 esp_err_t womo_rs485_send_wifi_control(bool enable, const char *ssid, const char *password);
 esp_err_t womo_rs485_send_lte_control(bool enable);
+esp_err_t womo_rs485_send_wifi_credentials(const char *ssid, const char *pass);
 esp_err_t womo_rs485_send_gas_bottle_replace(uint8_t slot, const char *channel);
 esp_err_t womo_rs485_send_pwr_12v(bool enable);
 esp_err_t womo_rs485_send_radio(bool enable);

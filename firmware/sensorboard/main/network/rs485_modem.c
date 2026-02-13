@@ -372,6 +372,7 @@ esp_err_t rs485_modem_request_wifi_pass(void)
     ESP_LOGI(TAG, "→ Frage Display nach WiFi-Passwort...");
     cJSON *root = cJSON_CreateObject();
     if (!root) return ESP_ERR_NO_MEM;
+    cJSON_AddStringToObject(root, "type", "wifi_pass_request");
     cJSON_AddStringToObject(root, "cmd", "wifi_pass_request");
     esp_err_t err = rs485_send_frame("wifi_pass_request", root, true);
     return err;
