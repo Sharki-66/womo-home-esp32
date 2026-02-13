@@ -14,6 +14,8 @@
 #include "esp_spiffs.h"
 #include "sensor_config.h"
 #include "web_wifi_imu.h"
+#include "sensors/bno055_sensor.h"
+#include "sensors/bno055_sensor.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -71,6 +73,14 @@ static const char *content_type_for(const char *path)
 
 static esp_err_t imu_get_handler(httpd_req_t *req)
 {
+    // Jeder /api/imu-Aufruf hält den BNO055 im Fast-Mode (2s Fenster, 500ms)
+    // Solange die horizon.html pollt (alle 500ms), bleibt der Sensor schnell.
+    bno055_app_request_fast(2000, 500);
+
+    // Jeder /api/imu-Aufruf hält den BNO055 im Fast-Mode (2s Fenster, 500ms)
+    // Solange die horizon.html pollt (alle 500ms), bleibt der Sensor schnell.
+    bno055_app_request_fast(2000, 500);
+
     web_wifi_imu_snapshot_t snap;
     bool ok = web_wifi_imu_get_snapshot(&snap);
 

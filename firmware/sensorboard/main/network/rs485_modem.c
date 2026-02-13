@@ -10,8 +10,9 @@
 #include "network/rs485_modem.h"
 
 #include "network/womo_rs485.h"
+#include "sensors/bno055_sensor.h"
 #include "network/wifi/sensor_wifi.h"
-#include "network/wifi/sensor_http.h"
+#include "network/wifi/sensor_wifi.h"
 
 #include "cJSON.h"
 #include "driver/gpio.h"
@@ -363,6 +364,23 @@ static esp_err_t rs485_send_hello(void)
     cJSON_Delete(hello);
     if (err == ESP_OK) s_hello_sent++;
     return err;
+}
+
+// ── WiFi Passwort-Anfrage ans Display ─────────────────────────────────
+esp_err_t rs485_modem_request_wifi_pass(void)
+{
+    ESP_LOGI(TAG, "→ Frage Display nach WiFi-Passwort...");
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+    cJSON_AddStringToObject(root, "cmd", "wifi_pass_request");
+    esp_err_t err = rs485_send_frame("wifi_pass_request", root, true);
+    return err;
+}
+
+// Void-Wrapper für den Auth-Failure-Callback (erwartet void(void))
+static void rs485_wifi_auth_fail_cb(void)
+{
+    rs485_modem_request_wifi_pass();
 }
 
 static esp_err_t rs485_send_heartbeat(void)
@@ -819,13 +837,12 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
     if (strcmp(cmd_str, "display_ready") == 0) {
         rs485_handle_display_ready();
     } else if (strcmp(cmd_str, "level_start") == 0) {
-        ESP_LOGI(TAG, "Parkhilfe START: WiFi + HTTP-Server");
-        sensor_wifi_init();
-        sensor_http_start();
+        ESP_LOGI(TAG, "Parkhilfe: IMU Fast-Mode (500ms, 10min)");
+        bno055_app_request_fast(600000, 500);   // 10 Minuten, 500ms Intervall
     } else if (strcmp(cmd_str, "level_stop") == 0) {
-        ESP_LOGI(TAG, "Parkhilfe STOP: HTTP-Server beenden");
-        sensor_http_stop();
-        sensor_wifi_deinit();
+        ESP_LOGI(TAG, "Parkhilfe: IMU zurück auf Normal-Modus");
+        // Fast-Mode läuft aus; sofort beenden durch duration=0 trick
+        bno055_app_request_fast(1, 5000);
     } else if (strcmp(cmd_str, "wifi_config") == 0) {
         const cJSON *j_ssid = cJSON_GetObjectItem(root, "ssid");
         const cJSON *j_pass = cJSON_GetObjectItem(root, "pass");
@@ -1134,6 +1151,10 @@ esp_err_t rs485_modem_init(void)
     if (tx_created != pdPASS) {
         return ESP_FAIL;
     }
+
+    // WiFi Auth-Failure-Callback registrieren: bei Verbindungsproblem
+    // wird das Display nach dem Passwort gefragt
+    sensor_wifi_set_auth_fail_cb(rs485_wifi_auth_fail_cb);
 
     ESP_LOGI(TAG, "RS485 sensor link ready (UART%d)", (int)SENSOR_RS485_UART_PORT);
     return ESP_OK;

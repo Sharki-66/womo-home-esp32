@@ -34,6 +34,7 @@ static esp_netif_t       *s_sta_netif        = NULL;
 static bool               s_initialized      = false;
 static int                s_retry_count       = 0;
 static char               s_ip_str[16]        = "";
+static sensor_wifi_auth_fail_cb_t s_auth_fail_cb = NULL;
 
 // ── NVS Credentials ─────────────────────────────────────────────────────
 
@@ -99,10 +100,15 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
                      s_retry_count, SENSOR_WIFI_RETRY_MAX);
             esp_wifi_connect();
         } else {
-            ESP_LOGW(TAG, "Max Retries erreicht, Pause %d ms",
-                     SENSOR_WIFI_RETRY_PAUSE_MS);
+            ESP_LOGW(TAG, "Max Retries erreicht – Passwort falsch?");
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
-            // Reconnect-Task wird nach Pause neu versuchen
+            // Callback aufrufen (z.B. RS485 Passwort-Anfrage ans Display)
+            if (s_auth_fail_cb) {
+                ESP_LOGI(TAG, "→ Auth-Failure-Callback wird aufgerufen");
+                s_auth_fail_cb();
+            }
+            // Nach Pause erneut versuchen (evtl. mit neuem Passwort)
+            ESP_LOGI(TAG, "Pause %d ms, dann neuer Versuch...", SENSOR_WIFI_RETRY_PAUSE_MS);
             vTaskDelay(pdMS_TO_TICKS(SENSOR_WIFI_RETRY_PAUSE_MS));
             s_retry_count = 0;
             esp_wifi_connect();
@@ -263,4 +269,9 @@ esp_err_t sensor_wifi_set_credentials(const char *ssid, const char *pass)
 const char *sensor_wifi_get_ip_str(void)
 {
     return s_ip_str;
+}
+
+void sensor_wifi_set_auth_fail_cb(sensor_wifi_auth_fail_cb_t cb)
+{
+    s_auth_fail_cb = cb;
 }

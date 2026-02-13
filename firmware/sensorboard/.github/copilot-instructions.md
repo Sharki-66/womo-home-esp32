@@ -1,0 +1,1 @@
+/home/hajo/womo-home-esp32/.github/copilot-instructions.md

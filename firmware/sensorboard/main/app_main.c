@@ -19,6 +19,8 @@
 #include "time/rtc_pcf8523.h"
 #include "time/time_sync.h"
 #include "network/rs485_modem.h"
+#include "network/wifi/sensor_wifi.h"
+#include "network/wifi/sensor_http.h"
 
 static const char *TAG = "sensor_main";
 
@@ -32,6 +34,18 @@ void app_main(void)
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ESP_ERROR_CHECK(nvs_flash_init());
+    }
+
+    // WiFi-Verbindung zum RUTX11 herstellen (bleibt dauerhaft aktiv)
+    esp_err_t wifi_err = sensor_wifi_init();
+    if (wifi_err != ESP_OK) {
+        ESP_LOGW(TAG, "WiFi nicht gestartet: %s", esp_err_to_name(wifi_err));
+    }
+
+    // HTTP-Server für Parkhilfe (womo-sensor.local)
+    esp_err_t http_err = sensor_http_start();
+    if (http_err != ESP_OK) {
+        ESP_LOGW(TAG, "HTTP-Server nicht gestartet: %s", esp_err_to_name(http_err));
     }
 
     // Zeit-Synchronisation initialisieren (liest RTC beim Boot)
