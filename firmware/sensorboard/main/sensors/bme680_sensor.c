@@ -20,6 +20,19 @@
 #define BSEC_NVS_NAMESPACE "bsec"
 #define BSEC_NVS_KEY_INDOOR "state_in"
 
+// Luftdruck-Trend
+#define PRESS_HISTORY_SIZE 96            // 24h @ 15min Intervall
+#define PRESS_SAMPLE_INTERVAL_US (15 * 60 * 1000000LL)  // 15 Minuten
+#define PRESS_TREND_WINDOW_SAMPLES 12    // 3h = 12× 15min
+#define PRESS_NVS_NAMESPACE "bme680"
+#define PRESS_NVS_KEY "press_hist"
+
+// Trend-Schwellwerte (hPa pro 3 Stunden)
+#define PRESS_TREND_FALLING_FAST_THRESHOLD -2.5f
+#define PRESS_TREND_FALLING_THRESHOLD -0.5f
+#define PRESS_TREND_STEADY_THRESHOLD 0.5f
+#define PRESS_TREND_RISING_THRESHOLD 2.5f
+
 // Plausibilitätsgrenzen (aus Bosch BME680 Datasheet)
 #define BME680_TEMP_MIN_C -40.0f
 #define BME680_TEMP_MAX_C 85.0f
@@ -83,6 +96,145 @@ typedef struct {
 } bsec_output_snapshot_t;
 
 static bsec_output_snapshot_t s_bsec_out_indoor = {0};
+
+// Luftdruck-Historie für Trend-Berechnung (nur outdoor)
+typedef struct {
+    float pressure_hpa;
+    int64_t timestamp_us;
+} press_history_entry_t;
+
+typedef struct {
+    press_history_entry_t samples[PRESS_HISTORY_SIZE];
+    uint8_t write_index;
+    uint8_t count;
+    int64_t last_sample_us;
+} press_history_t;
+
+static press_history_t s_press_history = {0};
+static bool s_press_history_loaded = false;
+
+// ── Luftdruck-Trend Funktionen ──────────────────────────────────────────
+
+static void press_history_load_from_nvs(void)
+{
+    if (s_press_history_loaded) {
+        return;
+    }
+    s_press_history_loaded = true;
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(PRESS_NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "Druck-Historie NVS nicht gefunden, starte mit leerer Historie");
+        return;
+    }
+
+    size_t size = sizeof(s_press_history);
+    err = nvs_get_blob(handle, PRESS_NVS_KEY, &s_press_history, &size);
+    nvs_close(handle);
+
+    if (err == ESP_OK && size == sizeof(s_press_history)) {
+        ESP_LOGI(TAG, "Druck-Historie aus NVS geladen (%u Werte)", s_press_history.count);
+    } else {
+        ESP_LOGW(TAG, "Druck-Historie NVS-Fehler: %s", esp_err_to_name(err));
+        memset(&s_press_history, 0, sizeof(s_press_history));
+    }
+}
+
+static void press_history_save_to_nvs(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(PRESS_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Druck-Historie NVS open failed: %s", esp_err_to_name(err));
+        return;
+    }
+
+    err = nvs_set_blob(handle, PRESS_NVS_KEY, &s_press_history, sizeof(s_press_history));
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Druck-Historie NVS save failed: %s", esp_err_to_name(err));
+    }
+}
+
+static void press_history_add_sample(float pressure_hpa, int64_t timestamp_us)
+{
+    if (!s_press_history_loaded) {
+        press_history_load_from_nvs();
+    }
+
+    // Zeitprüfung: nur alle 15 min samplen
+    if (s_press_history.last_sample_us > 0) {
+        int64_t delta_us = timestamp_us - s_press_history.last_sample_us;
+        if (delta_us < PRESS_SAMPLE_INTERVAL_US) {
+            return;  // Zu früh
+        }
+    }
+
+    s_press_history.samples[s_press_history.write_index].pressure_hpa = pressure_hpa;
+    s_press_history.samples[s_press_history.write_index].timestamp_us = timestamp_us;
+    s_press_history.write_index = (s_press_history.write_index + 1) % PRESS_HISTORY_SIZE;
+    if (s_press_history.count < PRESS_HISTORY_SIZE) {
+        s_press_history.count++;
+    }
+    s_press_history.last_sample_us = timestamp_us;
+
+    // Alle 10 Samples (2,5h) speichern
+    if (s_press_history.count % 10 == 0) {
+        press_history_save_to_nvs();
+    }
+}
+
+static bool press_history_calculate_trend(float *trend_hpa_h, bme680_pressure_trend_t *state)
+{
+    if (!s_press_history_loaded) {
+        press_history_load_from_nvs();
+    }
+
+    if (s_press_history.count < PRESS_TREND_WINDOW_SAMPLES) {
+        return false;  // Nicht genug Daten (< 3h)
+    }
+
+    // Aktuellster Wert
+    uint8_t newest_idx = (s_press_history.write_index + PRESS_HISTORY_SIZE - 1) % PRESS_HISTORY_SIZE;
+    float press_now = s_press_history.samples[newest_idx].pressure_hpa;
+    int64_t time_now = s_press_history.samples[newest_idx].timestamp_us;
+
+    // Wert von vor 3 Stunden (12 Samples zurück)
+    uint8_t old_idx = (newest_idx + PRESS_HISTORY_SIZE - PRESS_TREND_WINDOW_SAMPLES) % PRESS_HISTORY_SIZE;
+    float press_old = s_press_history.samples[old_idx].pressure_hpa;
+    int64_t time_old = s_press_history.samples[old_idx].timestamp_us;
+
+    // Trend berechnen (hPa pro Stunde)
+    float delta_hpa = press_now - press_old;
+    float delta_h = (float)(time_now - time_old) / 3600000000.0f;  // us → Stunden
+    if (delta_h < 0.1f) {
+        return false;  // Keine sinnvolle Zeitdifferenz
+    }
+    *trend_hpa_h = delta_hpa / delta_h;
+
+    // Delta über 3h für State-Klassifikation
+    float delta_3h = delta_hpa;
+    if (delta_3h < PRESS_TREND_FALLING_FAST_THRESHOLD) {
+        *state = BME680_TREND_FALLING_FAST;
+    } else if (delta_3h < PRESS_TREND_FALLING_THRESHOLD) {
+        *state = BME680_TREND_FALLING;
+    } else if (delta_3h <= PRESS_TREND_STEADY_THRESHOLD) {
+        *state = BME680_TREND_STEADY;
+    } else if (delta_3h <= PRESS_TREND_RISING_THRESHOLD) {
+        *state = BME680_TREND_RISING;
+    } else {
+        *state = BME680_TREND_RISING_FAST;
+    }
+
+    return true;
+}
+
+// ────────────────────────────────────────────────────────────────────────
 
 static bool bme680_check_plausibility(float temp_c, float hum_pct, float press_hpa, const char *label)
 {
@@ -535,6 +687,18 @@ esp_err_t bme680_app_get_snapshot(bme680_snapshot_t *out)
         out->outdoor.gas_valid = s_plausibility_outdoor.gas_valid;
         out->outdoor.heater_stable = s_plausibility_outdoor.heater_stable;
         out->outdoor.timestamp_us = s_plausibility_outdoor.timestamp_us;
+
+        // Luftdruck-Trend berechnen
+        float trend_hpa_h = 0.0f;
+        bme680_pressure_trend_t trend_state = BME680_TREND_STEADY;
+        out->outdoor.press_trend_valid = press_history_calculate_trend(&trend_hpa_h, &trend_state);
+        if (out->outdoor.press_trend_valid) {
+            out->outdoor.press_trend_hpa_h = trend_hpa_h;
+            out->outdoor.press_trend_state = trend_state;
+        }
+
+        // Sample für Historie hinzufügen
+        press_history_add_sample(s_plausibility_outdoor.pressure_hpa, s_plausibility_outdoor.timestamp_us);
     }
 
     return (out->indoor.valid || out->outdoor.valid) ? ESP_OK : ESP_ERR_INVALID_STATE;
