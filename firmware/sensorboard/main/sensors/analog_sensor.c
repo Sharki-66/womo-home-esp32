@@ -44,11 +44,10 @@ esp_err_t analog_init(void)
     ESP_RETURN_ON_ERROR(adc_oneshot_new_unit(&init_cfg, &s_adc_handle), TAG, "ADC oneshot init fehlgeschlagen");
 
     // 12 dB deckt bis ca. 3.3 V ab
-    configure_channel(ADC_CHANNEL_0); // GPIO1
-    configure_channel(ADC_CHANNEL_5); // GPIO6 (Batt1)
-    configure_channel(ADC_CHANNEL_6); // GPIO7 (Batt2)
-    configure_channel(ADC_CHANNEL_7); // GPIO8 (Tank1)
-    configure_channel(ADC_CHANNEL_8); // GPIO9 (Tank2)
+    configure_channel(ADC_CHANNEL_3); // GPIO4 (Batt1 Kfz)
+    configure_channel(ADC_CHANNEL_4); // GPIO5 (Batt2 Board)
+    configure_channel(ADC_CHANNEL_0); // GPIO1 (Tank1 Frisch)
+    configure_channel(ADC_CHANNEL_1); // GPIO2 (Tank2 Grau)
 
     s_initialized = true;
     ESP_LOGI(TAG, "ADC init done (12dB, 12bit, Vref=1100mV)");
@@ -90,7 +89,12 @@ esp_err_t analog_read_mv(int channel, int *mv_out)
     if (mv_out == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    int mv = (raw * 3300) / 4095;
+    // ADC-Spannung (0-3.3V bei 12-bit)
+    int adc_mv = (raw * 3300) / 4095;
+    
+    // ALLE Kanäle nutzen Spannungsteiler 82kΩ/15kΩ (Verpolungsschutz!)
+    // Faktor 97/15: ADC sieht 15/97 der Eingangsspannung
+    int mv = (adc_mv * 97) / 15;
     *mv_out = mv;
     return ESP_OK;
 }
