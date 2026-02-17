@@ -401,6 +401,7 @@ static void build_modal(lv_obj_t *parent)
     lv_obj_t *ap_col = lv_obj_create(cols);
     lv_obj_remove_style_all(ap_col);
     lv_obj_set_width(ap_col, 0);
+    lv_obj_set_height(ap_col, LV_PCT(100));
     lv_obj_set_flex_grow(ap_col, 1);
     lv_obj_set_flex_flow(ap_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(ap_col, 4, 0);
@@ -423,6 +424,12 @@ static void build_modal(lv_obj_t *parent)
     lv_obj_set_flex_grow(ap_title, 1);
 
     s_ctx.ap_led = create_status_led(ap_hdr, s_latest_snapshot.ap_enabled);
+
+    /* Trennlinie unter Header */
+    lv_obj_set_style_border_side(ap_hdr, LV_BORDER_SIDE_BOTTOM, 0);
+    lv_obj_set_style_border_width(ap_hdr, 1, 0);
+    lv_obj_set_style_border_color(ap_hdr, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
+    lv_obj_set_style_pad_bottom(ap_hdr, 6, 0);
 
     /* AP Status-Label (SSID oder Inaktiv) */
     s_ctx.ap_status_label = lv_label_create(ap_col);
@@ -481,6 +488,12 @@ static void build_modal(lv_obj_t *parent)
     lv_obj_set_flex_grow(wifi_title, 1);
 
     s_ctx.wifi_led = create_status_led(wifi_hdr, s_latest_snapshot.wifi_connected);
+
+    /* Trennlinie unter Header */
+    lv_obj_set_style_border_side(wifi_hdr, LV_BORDER_SIDE_BOTTOM, 0);
+    lv_obj_set_style_border_width(wifi_hdr, 1, 0);
+    lv_obj_set_style_border_color(wifi_hdr, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
+    lv_obj_set_style_pad_bottom(wifi_hdr, 6, 0);
 
     /* WiFi Status-Label (SSID + Signal oder Disconnected) */
     s_ctx.wifi_status_label = lv_label_create(wifi_col);
@@ -577,6 +590,7 @@ static void build_modal(lv_obj_t *parent)
     lv_obj_t *lte_col = lv_obj_create(cols);
     lv_obj_remove_style_all(lte_col);
     lv_obj_set_width(lte_col, 0);
+    lv_obj_set_height(lte_col, LV_PCT(100));
     lv_obj_set_flex_grow(lte_col, 1);
     lv_obj_set_flex_flow(lte_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(lte_col, 4, 0);
@@ -606,6 +620,12 @@ static void build_modal(lv_obj_t *parent)
 
     s_ctx.lte_led = create_status_led(lte_hdr,
         s_latest_snapshot.lte_valid && s_latest_snapshot.lte_registered);
+
+    /* Trennlinie unter Header */
+    lv_obj_set_style_border_side(lte_hdr, LV_BORDER_SIDE_BOTTOM, 0);
+    lv_obj_set_style_border_width(lte_hdr, 1, 0);
+    lv_obj_set_style_border_color(lte_hdr, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
+    lv_obj_set_style_pad_bottom(lte_hdr, 6, 0);
 
     /* LTE Status-Label (Provider + Signal oder Offline) */
     s_ctx.lte_status_label = lv_label_create(lte_col);

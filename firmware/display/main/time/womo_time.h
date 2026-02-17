@@ -19,7 +19,8 @@ typedef enum {
     TIME_SOURCE_NONE = 0,
     TIME_SOURCE_INTERNAL_RTC,
     TIME_SOURCE_NTP,
-    TIME_SOURCE_GPS
+    TIME_SOURCE_GPS,
+    TIME_SOURCE_RS485
 } womo_time_source_t;
 
 // Time sync configuration
@@ -55,6 +56,16 @@ esp_err_t womo_time_sync_ntp(bool wait_for_sync);
  * @return ESP_OK on successful sync
  */
 esp_err_t womo_time_sync_gps(time_t gps_time);
+
+/**
+ * @brief Mark time as synced from RS485 sensor
+ * 
+ * Call this after successfully receiving timestamp from RS485 sensor
+ * and updating system time via settimeofday()
+ * 
+ * @return ESP_OK on success
+ */
+esp_err_t womo_time_mark_synced_rs485(void);
 
 /**
  * @brief Get current time

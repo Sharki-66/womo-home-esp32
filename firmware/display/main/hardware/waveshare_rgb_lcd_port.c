@@ -8,6 +8,9 @@
 #include "esp_check.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <string.h>
+#include "esp_lcd_panel_rgb.h"
+#include "womo_theme.h"
 
 static const char *TAG = "womo_display";
 
@@ -15,7 +18,7 @@ static const char *TAG = "womo_display";
 static i2c_master_bus_handle_t s_i2c_bus = NULL;
 static i2c_master_dev_handle_t s_ch422g_cfg_handle = NULL;
 static i2c_master_dev_handle_t s_ch422g_data_handle = NULL;
-static bool s_ch422g_backlight_on = true; // gespiegelt, damit CH422G-Schreibzugriffe (z. B. SD-CS) den BL-Zustand respektieren
+static bool s_ch422g_backlight_on = false; // Boot mit BL=off; wird erst nach dem ersten vollständigen LVGL-Render true
 
 #define GT911_I2C_FREQ_HZ        400000
 
@@ -157,7 +160,9 @@ void waveshare_esp32_s3_touch_reset()
     }
 
     // Reset the touch screen. It is recommended to reset the touch screen before using it.
-    write_buf = 0x2C;
+    // EXIO2 = Backlight: Bit 2 bewusst LOW lassen (0x28 statt 0x2C),
+    // damit das Backlight während des Boot-Vorgangs aus bleibt.
+    write_buf = 0x28;
     if (ch422g_write_byte(s_ch422g_data_handle, write_buf) != ESP_OK)
     {
         ESP_LOGW(TAG, "Reset command 0x%02X failed", write_buf);
@@ -165,7 +170,7 @@ void waveshare_esp32_s3_touch_reset()
     esp_rom_delay_us(100 * 1000);
     gpio_set_level(GPIO_INPUT_IO_4, 0);
     esp_rom_delay_us(100 * 1000);
-    write_buf = 0x2E;
+    write_buf = 0x2A;
     if (ch422g_write_byte(s_ch422g_data_handle, write_buf) != ESP_OK)
     {
         ESP_LOGW(TAG, "Exit reset command 0x%02X failed", write_buf);
@@ -255,6 +260,41 @@ esp_err_t waveshare_esp32_s3_rgb_lcd_init()
 
     ESP_LOGI(TAG, "Initialize RGB LCD panel"); // Log the initialization of the RGB LCD panel
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle)); // Initialize the LCD panel
+
+    // ── Framebuffer mit Theme-Hintergrundfarbe vorfüllen ──────────────
+    // Das LCD-Panel streamt jetzt bereits aus den PSRAM-Framebuffern via
+    // DMA.  Ohne Prefill wäre der Inhalt schwarz (calloc).  Wir füllen
+    // beide Framebuffer mit der aktuellen Theme-Farbe (Tag=Hellblau,
+    // Nacht=Dunkelblau), sodass das LCD von Beginn an die richtige Farbe
+    // zeigt – auch bevor LVGL überhaupt gestartet wird.
+    {
+        lv_color_t bg = womo_theme_get_background_color();
+        // lv_color_t bei LV_COLOR_DEPTH=16 ist bereits RGB565
+        uint16_t rgb565 = bg.full;
+
+        size_t fb_size_bytes = EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES * sizeof(uint16_t);
+#if LVGL_PORT_LCD_RGB_BUFFER_NUMS >= 2
+        void *fb0 = NULL, *fb1 = NULL;
+        esp_lcd_rgb_panel_get_frame_buffer(panel_handle, 2, &fb0, &fb1);
+        if (fb0) {
+            uint16_t *p = (uint16_t *)fb0;
+            for (size_t i = 0; i < fb_size_bytes / 2; i++) p[i] = rgb565;
+        }
+        if (fb1) {
+            uint16_t *p = (uint16_t *)fb1;
+            for (size_t i = 0; i < fb_size_bytes / 2; i++) p[i] = rgb565;
+        }
+        ESP_LOGI(TAG, "Framebuffer prefilled with theme color 0x%04X", rgb565);
+#else
+        void *fb0 = NULL;
+        esp_lcd_rgb_panel_get_frame_buffer(panel_handle, 1, &fb0);
+        if (fb0) {
+            uint16_t *p = (uint16_t *)fb0;
+            for (size_t i = 0; i < fb_size_bytes / 2; i++) p[i] = rgb565;
+        }
+        ESP_LOGI(TAG, "Framebuffer prefilled with theme color 0x%04X", rgb565);
+#endif
+    }
 
     esp_lcd_touch_handle_t tp_handle = NULL; // Declare a handle for the touch panel
 #if CONFIG_EXAMPLE_LCD_TOUCH_CONTROLLER_GT911

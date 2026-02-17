@@ -356,9 +356,8 @@ lv_color_t womo_theme_get_background_color(void)
     else if (current_status == WOMO_STATUS_CRITICAL) {
         return WOMO_COLOR_CRITICAL;
     }
-    else if (current_status == WOMO_STATUS_WARNING) {
-        return WOMO_COLOR_WARNING;
-    }
+    // WARNING ändert den Hintergrund NICHT – die betroffenen Widgets
+    // (Tank, Batterie) zeigen ihren Warnstatus selbst per Farbe an.
     
     // Normal status - use smooth twilight transitions for day/night modes
     switch (current_mode) {

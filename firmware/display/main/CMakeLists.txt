@@ -32,6 +32,7 @@ idf_component_register(
         "storage"
         "rs485"
         "hardware"
+        "${CMAKE_CURRENT_LIST_DIR}/../../shared"
     REQUIRES
         fatfs
         esp_wifi

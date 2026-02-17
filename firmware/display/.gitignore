@@ -11,6 +11,9 @@ managed_components/
 # Demo projects (not part of main application)
 demo/
 
+# Copilot instructions symlink (original in repo root .github/)
+.github/
+
 # IDE
 .vscode/
 .idea/

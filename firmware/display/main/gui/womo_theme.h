@@ -39,7 +39,6 @@ typedef enum {
 // Civil twilight duration (minutes before/after sun times for smooth transitions)
 #define WOMO_CIVIL_TWILIGHT_MINUTES 24  // Civil twilight: 24 minutes
 
-#define WOMO_COLOR_WARNING          lv_color_hex(0xFFA500)  // Orange
 #define WOMO_COLOR_ERROR            lv_color_hex(0xFF0000)  // Red (helles Rot)
 #define WOMO_COLOR_CRITICAL         lv_color_hex(0x8B0000)  // Dark Red (dunkles Rot)
 

@@ -1083,6 +1083,31 @@ esp_err_t womo_router_wifi_scan(womo_router_scan_result_t *results,
 
     *out_count = count;
     cJSON_Delete(data);
+
+    /* ── Deduplizierung: pro SSID nur den stärksten AP behalten ──────
+     * Mehrere APs (Repeater, Mesh) mit gleicher SSID liefern separate
+     * Einträge.  Für den Nutzer ist nur der stärkste relevant.
+     */
+    for (size_t i = 0; i < *out_count; i++) {
+        for (size_t j = i + 1; j < *out_count; ) {
+            if (strcmp(results[i].ssid, results[j].ssid) == 0) {
+                /* Gleiche SSID → den schwächeren entfernen */
+                if (results[j].rssi > results[i].rssi) {
+                    /* j ist stärker → nach i kopieren */
+                    results[i] = results[j];
+                }
+                /* j-Eintrag entfernen: letzten an Position j schieben */
+                (*out_count)--;
+                if (j < *out_count) {
+                    results[j] = results[*out_count];
+                }
+                /* j nicht inkrementieren – neuer Eintrag an j muss auch geprüft werden */
+            } else {
+                j++;
+            }
+        }
+    }
+
     return ESP_OK;
 }
 

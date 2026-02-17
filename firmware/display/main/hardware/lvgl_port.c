@@ -14,6 +14,7 @@
 #include "esp_log.h"
 #include "lvgl.h"
 #include "lvgl_port.h"
+#include "womo_theme.h"
 
 static const char *TAG = "lv_port";                      // Tag for logging
 static SemaphoreHandle_t lvgl_mux;                       // LVGL mutex for synchronization
@@ -585,6 +586,16 @@ esp_err_t lvgl_port_init(esp_lcd_panel_handle_t lcd_handle, esp_lcd_touch_handle
 
     lv_disp_t *disp = display_init(lcd_handle); // Initialize the display
     assert(disp); // Ensure the display initialization was successful
+
+    // ── LVGL-Default-Screen sofort auf Theme-Farbe setzen ─────────
+    // Ohne das rendert lv_timer_handler() beim ersten Aufruf den
+    // Default-Screen mit bg_color=weiß → sichtbarer weißer Blitz.
+    {
+        lv_obj_t *scr = lv_scr_act();
+        lv_color_t bg = womo_theme_get_background_color();
+        lv_obj_set_style_bg_color(scr, bg, 0);
+        lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+    }
 
     if (tp_handle) {
         lv_indev_t *indev = indev_init(tp_handle); // Initialize the touchpad input device

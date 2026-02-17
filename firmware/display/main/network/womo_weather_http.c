@@ -5,16 +5,33 @@
 #include "esp_log.h"
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
+#include "nvs_flash.h"
+#include "nvs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <stdlib.h>
+#include <math.h>
 
 #include <string.h>
 #include <stdio.h>
 
-#define OM_DEFAULT_LATITUDE     "50.0260"   // Rodgau (will be GPS-driven later)
-#define OM_DEFAULT_LONGITUDE    "8.8850"
 #define OM_DEFAULT_INTERVAL_MIN 5
+
+/* NVS: letzte bekannte GPS-Position (überlebt Reboot) */
+#define NVS_NAMESPACE       "weather_gps"
+#define NVS_KEY_LAT         "lat"
+#define NVS_KEY_LON         "lon"
+#define NVS_SAVE_DELTA_DEG  0.005   /* ~550 m – NVS-Write nur bei signifikanter Bewegung */
+
+/* Live-GPS-Koordinaten (Thread-safe via Spinlock) */
+static portMUX_TYPE s_gps_lock = portMUX_INITIALIZER_UNLOCKED;
+static char s_gps_lat[16] = "";   // leer = kein Live-Fix
+static char s_gps_lon[16] = "";
+
+/* NVS-Cache: letzte gespeicherte Position (für Delta-Check) */
+static double s_nvs_lat = 0.0;
+static double s_nvs_lon = 0.0;
+static bool   s_nvs_loaded = false;
 
 #define TAG "weather_http"
 
@@ -45,6 +62,8 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
 static const char* weather_http_get_latitude(void);
 static const char* weather_http_get_longitude(void);
 static uint32_t weather_http_get_interval_minutes(void);
+static void weather_nvs_load(void);
+static void weather_nvs_save(double lat, double lon);
 
 static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
@@ -80,13 +99,8 @@ esp_err_t womo_weather_http_start(womo_weather_http_callback_t callback, void *u
         return ESP_ERR_INVALID_STATE;
     }
 
-    const char *latitude = weather_http_get_latitude();
-    const char *longitude = weather_http_get_longitude();
-
-    if (!latitude || !longitude || latitude[0] == '\0' || longitude[0] == '\0') {
-        ESP_LOGW(TAG, "Latitude/Longitude not configured");
-        return ESP_ERR_INVALID_ARG;
-    }
+    /* NVS-Position laden (falls vorhanden) */
+    weather_nvs_load();
 
     s_ctx.callback = callback;
     s_ctx.user_data = user_data;
@@ -106,8 +120,9 @@ esp_err_t womo_weather_http_start(womo_weather_http_callback_t callback, void *u
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG, "Open-Meteo task started (interval %u min) lat=%s lon=%s",
-             weather_http_get_interval_minutes(), latitude, longitude);
+    ESP_LOGI(TAG, "Open-Meteo task started (interval %u min), GPS: %s",
+             weather_http_get_interval_minutes(),
+             weather_http_get_latitude() ? "OK" : "wartet auf Fix");
     return ESP_OK;
 }
 
@@ -149,6 +164,17 @@ static void weather_http_task(void *arg)
     }
 
     while (!s_ctx.stop_requested) {
+        /* Auf GPS-Position warten (Live oder NVS) */
+        const char *lat = weather_http_get_latitude();
+        const char *lon = weather_http_get_longitude();
+        if (!lat || !lon) {
+            ESP_LOGD(TAG, "Keine GPS-Position bekannt – Wetter-Abfrage übersprungen");
+            if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(15000)) > 0) {
+                continue;
+            }
+            continue;
+        }
+
         womo_weather_http_data_t data = {0};
         esp_err_t err = weather_http_fetch(&data);
         if (err == ESP_OK && data.valid) {
@@ -156,7 +182,14 @@ static void weather_http_task(void *arg)
                 s_ctx.callback(&data, s_ctx.user_data);
             }
         } else {
-            ESP_LOGW(TAG, "Weather fetch failed (%s)", esp_err_to_name(err));
+            ESP_LOGW(TAG, "Weather fetch failed (%s) – retry in 10 s",
+                     esp_err_to_name(err));
+            /* Bei Fehler (DNS noch nicht bereit, kein Internet, etc.)
+             * kurz warten und erneut versuchen statt die vollen 5 min. */
+            if (!s_ctx.stop_requested) {
+                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10000));
+            }
+            continue;
         }
 
         if (s_ctx.stop_requested) {
@@ -250,24 +283,106 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
     return ESP_OK;
 }
 
+/* ── NVS-Helfer ─────────────────────────────────────────── */
+
+static void weather_nvs_load(void)
+{
+    if (s_nvs_loaded) return;
+    s_nvs_loaded = true;
+
+    nvs_handle_t h;
+    if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &h) != ESP_OK) return;
+
+    char buf[16] = "";
+    size_t len = sizeof(buf);
+    if (nvs_get_str(h, NVS_KEY_LAT, buf, &len) == ESP_OK) {
+        s_nvs_lat = strtod(buf, NULL);
+        taskENTER_CRITICAL(&s_gps_lock);
+        if (s_gps_lat[0] == '\0') {          /* Nur füllen wenn noch kein Live-GPS */
+            memcpy(s_gps_lat, buf, sizeof(s_gps_lat));
+        }
+        taskEXIT_CRITICAL(&s_gps_lock);
+    }
+    len = sizeof(buf);
+    if (nvs_get_str(h, NVS_KEY_LON, buf, &len) == ESP_OK) {
+        s_nvs_lon = strtod(buf, NULL);
+        taskENTER_CRITICAL(&s_gps_lock);
+        if (s_gps_lon[0] == '\0') {
+            memcpy(s_gps_lon, buf, sizeof(s_gps_lon));
+        }
+        taskEXIT_CRITICAL(&s_gps_lock);
+    }
+    nvs_close(h);
+
+    if (s_nvs_lat != 0.0 || s_nvs_lon != 0.0) {
+        ESP_LOGI(TAG, "Letzte GPS-Position aus NVS: %.6f / %.6f", s_nvs_lat, s_nvs_lon);
+    } else {
+        ESP_LOGW(TAG, "Keine gespeicherte GPS-Position – Wetter wartet auf ersten Fix");
+    }
+}
+
+static void weather_nvs_save(double lat, double lon)
+{
+    /* Nur schreiben wenn signifikante Bewegung (Flash schonen) */
+    if (s_nvs_loaded &&
+        fabs(lat - s_nvs_lat) < NVS_SAVE_DELTA_DEG &&
+        fabs(lon - s_nvs_lon) < NVS_SAVE_DELTA_DEG) {
+        return;
+    }
+
+    nvs_handle_t h;
+    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &h) != ESP_OK) return;
+
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%.6f", lat);
+    nvs_set_str(h, NVS_KEY_LAT, buf);
+    snprintf(buf, sizeof(buf), "%.6f", lon);
+    nvs_set_str(h, NVS_KEY_LON, buf);
+    nvs_commit(h);
+    nvs_close(h);
+
+    s_nvs_lat = lat;
+    s_nvs_lon = lon;
+    ESP_LOGI(TAG, "GPS-Position im NVS gespeichert: %.6f / %.6f", lat, lon);
+}
+
+/* ── Thread-safe Getter ─────────────────────────────────── */
+static char s_lat_copy[16];
+static char s_lon_copy[16];
+
 static const char* weather_http_get_latitude(void)
 {
-#ifdef CONFIG_WOMO_OWM_LATITUDE
-    if (CONFIG_WOMO_OWM_LATITUDE[0] != '\0') {
-        return CONFIG_WOMO_OWM_LATITUDE;
-    }
-#endif
-    return OM_DEFAULT_LATITUDE;
+    weather_nvs_load();   /* Lazy-Init beim ersten Aufruf */
+    taskENTER_CRITICAL(&s_gps_lock);
+    bool have = (s_gps_lat[0] != '\0');
+    if (have) memcpy(s_lat_copy, s_gps_lat, sizeof(s_lat_copy));
+    taskEXIT_CRITICAL(&s_gps_lock);
+    return have ? s_lat_copy : NULL;
 }
 
 static const char* weather_http_get_longitude(void)
 {
-#ifdef CONFIG_WOMO_OWM_LONGITUDE
-    if (CONFIG_WOMO_OWM_LONGITUDE[0] != '\0') {
-        return CONFIG_WOMO_OWM_LONGITUDE;
-    }
-#endif
-    return OM_DEFAULT_LONGITUDE;
+    weather_nvs_load();
+    taskENTER_CRITICAL(&s_gps_lock);
+    bool have = (s_gps_lon[0] != '\0');
+    if (have) memcpy(s_lon_copy, s_gps_lon, sizeof(s_lon_copy));
+    taskEXIT_CRITICAL(&s_gps_lock);
+    return have ? s_lon_copy : NULL;
+}
+
+void womo_weather_http_set_location(double lat, double lon)
+{
+    char lat_buf[16], lon_buf[16];
+    snprintf(lat_buf, sizeof(lat_buf), "%.6f", lat);
+    snprintf(lon_buf, sizeof(lon_buf), "%.6f", lon);
+
+    taskENTER_CRITICAL(&s_gps_lock);
+    memcpy(s_gps_lat, lat_buf, sizeof(s_gps_lat));
+    memcpy(s_gps_lon, lon_buf, sizeof(s_gps_lon));
+    taskEXIT_CRITICAL(&s_gps_lock);
+
+    /* Ins NVS persistieren (nur bei signifikanter Änderung) */
+    weather_nvs_save(lat, lon);
 }
 
 static uint32_t weather_http_get_interval_minutes(void)

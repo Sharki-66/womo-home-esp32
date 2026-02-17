@@ -166,6 +166,7 @@ esp_err_t womo_rs485_send_wifi_credentials(const char *ssid, const char *pass);
 esp_err_t womo_rs485_send_gas_bottle_replace(uint8_t slot, const char *channel);
 esp_err_t womo_rs485_send_pwr_12v(bool enable);
 esp_err_t womo_rs485_send_radio(bool enable);
+esp_err_t womo_rs485_send_imu_zero(void);
 
 // Get latest sensor data (non-blocking)
 bool womo_rs485_get_latest_data(womo_sensor_data_t *data);

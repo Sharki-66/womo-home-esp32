@@ -48,6 +48,18 @@ esp_err_t womo_weather_http_stop(void);
  */
 bool womo_weather_http_is_running(void);
 
+/**
+ * @brief Update the GPS coordinates used for weather queries.
+ *
+ * Call this whenever a valid GPS fix is obtained. The next weather
+ * fetch will use these coordinates instead of the default (Rodgau).
+ * Thread-safe (called from router_poll_task, consumed by weather task).
+ *
+ * @param lat  Latitude  in decimal degrees
+ * @param lon  Longitude in decimal degrees
+ */
+void womo_weather_http_set_location(double lat, double lon);
+
 #ifdef __cplusplus
 }
 #endif

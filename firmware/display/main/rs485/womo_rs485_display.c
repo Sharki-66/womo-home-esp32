@@ -1,4 +1,5 @@
 #include "womo_rs485_display.h"
+#include "womo_config.h"
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
@@ -11,7 +12,9 @@
 #include <strings.h>
 #include <stdlib.h>
 #include <math.h>
+#include <sys/time.h>
 #include "network/womo_wifi.h"
+#include "time/womo_time.h"
 
 static const char *TAG = "rs485_display";
 
@@ -20,13 +23,12 @@ static const char *TAG = "rs485_display";
 #define RS485_TX_GPIO       16  // Hardware connector pin (Waveshare: TXD=16)
 #define RS485_RX_GPIO       15  // Hardware connector pin (Waveshare: RXD=15)
 #define RS485_DE_GPIO       -1  // DE handled by onboard transistor logic
-#define RS485_BAUD_RATE     115200
+#define RS485_BAUD_RATE     WOMO_RS485_BAUDRATE
 #define RS485_BUF_SIZE      16384
 #define RS485_LINE_MAX      16384
 // Maximale Länge für ein unvollständiges Fragment, bevor wir es verwerfen
 #define RS485_FRAGMENT_MAX_KEEP 4096
 #define RS485_RX_IDLE_GUARD_US   30000   // TX-Sperre nach RX für ca. 30 ms
-#define RS485_TX_IDLE_WAIT_MS    300     // Max. Wartezeit bis TX freigegeben wird (inkl. RX-pending)
 #define RS485_LINE_STALE_US      200000  // 200 ms: line_buffer-Daten ohne CRLF verwerfen
 #define RS485_FRAG_STALE_US      500000  // 500 ms: Fragment-Buffer verwerfen
     
@@ -55,9 +57,9 @@ static const char *TAG = "rs485_display";
         }
     }
 
-#define RS485_HEARTBEAT_INTERVAL_MS   2000
-#define RS485_COMMAND_TIMEOUT_MS      3000
-#define RS485_MAX_PENDING_CMDS        4
+#define RS485_HEARTBEAT_INTERVAL_MS   WOMO_RS485_HEARTBEAT_INTERVAL_MS
+#define RS485_COMMAND_TIMEOUT_MS      WOMO_RS485_COMMAND_TIMEOUT_MS
+#define RS485_MAX_PENDING_CMDS        WOMO_RS485_MAX_PENDING_CMDS
 
 // State
 static bool s_initialized = false;
@@ -110,7 +112,6 @@ static void rs485_process_line(char *line_buffer, size_t captured_len);
 static bool rs485_find_json_end(const char *start, char **end_ptr);
 static void parse_json_packet(const char *json_str, size_t raw_line_len, bool truncated_before_parse);
 static bool rs485_recent_rx_activity(void);
-static bool rs485_wait_for_idle(int max_wait_ms);
 static esp_err_t rs485_write_and_wait(const char *payload);
 static esp_err_t rs485_send_simple_command(const char *cmd);
 static uint32_t rs485_next_seq(void);
@@ -134,22 +135,6 @@ static bool rs485_recent_rx_activity(void)
     return (now - s_last_rx_activity_us) < RS485_RX_IDLE_GUARD_US;
 }
 
-static bool rs485_wait_for_idle(int max_wait_ms)
-{
-    const int64_t deadline = esp_timer_get_time() + ((int64_t)max_wait_ms * 1000);
-
-    while (rs485_recent_rx_activity() || s_rx_line_pending) {
-        if (esp_timer_get_time() >= deadline) {
-            ESP_LOGD(TAG, "wait_for_idle: timeout (rx_active=%d, line_pending=%d)",
-                     rs485_recent_rx_activity(), (int)s_rx_line_pending);
-            return false;
-        }
-        vTaskDelay(pdMS_TO_TICKS(2));
-    }
-
-    return true;
-}
-
 static esp_err_t rs485_write_and_wait(const char *payload)
 {
     if (!s_initialized || !payload) {
@@ -161,32 +146,43 @@ static esp_err_t rs485_write_and_wait(const char *payload)
         return ESP_OK;
     }
 
-    // Warte, bis nach RX wieder Bus-Leerlauf herrscht (inkl. line_pending)
-    if (!rs485_wait_for_idle(RS485_TX_IDLE_WAIT_MS)) {
-        ESP_LOGW(TAG, "TX: bus not idle after %d ms, forcing send", RS485_TX_IDLE_WAIT_MS);
+    // ── Auto-DE Preamble ──────────────────────────────────────────────
+    // Der Auto-DE-Transistor auf dem Waveshare-Board toggelt DE bei
+    // JEDEM Stop-Bit (TX→HIGH für ~8,7 µs bei 115200 Baud).
+    // Dadurch wechselt der Transceiver bei jedem Byte kurz auf RX und
+    // der Bus geht in den (undefinierten) Idle-Zustand → Framing-Errors.
+    // Workaround: 32 Null-Bytes als Preamble senden, damit der Empfänger
+    // genug Transitionen sieht, um sich einzusynchronisieren.
+    // Der Sensor-Parser ignoriert Bytes außerhalb 0x20–0x7E automatisch.
+    static const uint8_t preamble[32] = {0};
+    size_t total = sizeof(preamble) + len;
+    char *tx_buf = malloc(total);
+    if (!tx_buf) {
+        return ESP_ERR_NO_MEM;
     }
+    memcpy(tx_buf, preamble, sizeof(preamble));
+    memcpy(tx_buf + sizeof(preamble), payload, len);
 
-    s_tx_active = true;
+    int written = uart_write_bytes(RS485_UART_NUM, tx_buf, total);
+    free(tx_buf);
 
-    int written = uart_write_bytes(RS485_UART_NUM, payload, len);
     if (written <= 0) {
-        s_tx_active = false;
         return ESP_FAIL;
     }
 
-    esp_err_t wait_err = uart_wait_tx_done(RS485_UART_NUM, pdMS_TO_TICKS(100));
-
-    // Half-duplex Echo-Cleanup: TX-Echo aus dem RX-Buffer entfernen.
-    // Der Auto-DE-Transistor legt unsere TX-Bytes auch auf RX.
-    // Ohne Flush werden diese Echo-Bytes als Walter-Paket fehl-
-    // interpretiert und korrumpieren den gesamten Datenstrom.
-    uart_flush_input(RS485_UART_NUM);
-    s_tx_active = false;
-
+    // Timeout muss groß genug sein für die aktuelle Baudrate.
+    // Bei 9600 Baud braucht ein 200-Byte-Paket ~210 ms → 500 ms Timeout.
+    // Bei 115200 Baud braucht es ~17 ms → 500 ms schadet nicht.
+    esp_err_t wait_err = uart_wait_tx_done(RS485_UART_NUM, pdMS_TO_TICKS(WOMO_RS485_TX_WAIT_TIMEOUT_MS));
     if (wait_err != ESP_OK) {
         ESP_LOGW(TAG, "uart_wait_tx_done failed: %s", esp_err_to_name(wait_err));
         return wait_err;
     }
+
+    // Auto-DE-Transistor: TX-Echo landet im RX-Buffer.
+    // Half-Duplex: Sensor wartet 150 ms nach RX vor eigenem TX,
+    // daher sind direkt nach unserem TX keine Sensor-Bytes im Buffer.
+    uart_flush_input(RS485_UART_NUM);
 
     return ESP_OK;
 }
@@ -425,7 +421,7 @@ static esp_err_t rs485_send_ack(uint32_t rx_seq, bool ok, const char *cmd, const
     }
 
     cJSON_AddStringToObject(root, "type", "ack");
-    cJSON_AddNumberToObject(root, "ack", (double)rx_seq);
+    cJSON_AddNumberToObject(root, "ack_seq", (double)rx_seq);
     cJSON_AddStringToObject(root, "status", ok ? "ok" : "err");
     cJSON_AddBoolToObject(root, "need_ack", false);
     if (cmd && cmd[0] != '\0') {
@@ -500,9 +496,12 @@ static void rs485_handle_ack_packet(const cJSON *root)
         return;
     }
 
-    const cJSON *ack_val = cJSON_GetObjectItem(root, "ack");
+    const cJSON *ack_val = cJSON_GetObjectItem(root, "ack_seq");
     if (!cJSON_IsNumber(ack_val)) {
-        ESP_LOGW(TAG, "ACK packet missing numeric ack");
+        ack_val = cJSON_GetObjectItem(root, "ack");   /* Fallback */
+    }
+    if (!cJSON_IsNumber(ack_val)) {
+        ESP_LOGW(TAG, "ACK packet missing numeric ack_seq/ack");
         return;
     }
 
@@ -573,10 +572,10 @@ esp_err_t womo_rs485_display_init(void)
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,  // APB (80 MHz) wie Modem-Seite
+        .source_clk = UART_SCLK_DEFAULT,  // DEFAULT (wie alte Version + Waveshare-Demo)
     };
     
-    // Install driver first (RX buffer + TX buffer)
+    // Install driver (RX buffer, TX buffer=0 wie alte Version + Waveshare-Demo)
     esp_err_t err = uart_driver_install(RS485_UART_NUM, RS485_BUF_SIZE * 2, 0, 0, NULL, 0);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to install UART driver: %s", esp_err_to_name(err));
@@ -618,8 +617,40 @@ esp_err_t womo_rs485_display_init(void)
     ESP_LOGI(TAG, "UART pins configured: TX=%d RX=%d (TX controls DE/RE via transistor)", 
              RS485_TX_GPIO, RS485_RX_GPIO);
     
-    // Only set RS485 mode if we have a DE pin, otherwise use normal UART
-    ESP_LOGI(TAG, "RS485 DE pin not configured - using plain UART mode (transistor auto-DE)");
+    // HINWEIS: UART_SIGNAL_TXD_INV darf NICHT gesetzt werden!
+    // Der Auto-DE-Transistor auf dem Waveshare-Board erkennt TX-Aktivität
+    // am Pin-Level (idle=HIGH→RX, active=LOW→TX). Bei invertiertem TX
+    // ist idle=LOW → Transceiver permanent im TX-Modus → RX tot.
+
+    // Plain UART-Modus (wie alte funktionierende Version + Waveshare-Demo):
+    // Kein uart_set_mode, kein uart_set_rx_timeout, kein RS485 Half-Duplex.
+    // Auto-DE-Transistor steuert DE/RE über TX-Pin-Aktivität.
+
+    // ── Loopback-Diagnose: UART intern kurzschließen (TX→RX ohne Hardware) ──
+    {
+        uart_set_loop_back(RS485_UART_NUM, true);
+        uart_flush_input(RS485_UART_NUM);
+        const char *test_msg = "LOOPBACK_OK\r\n";
+        int test_len = (int)strlen(test_msg);
+        uart_write_bytes(RS485_UART_NUM, test_msg, test_len);
+        uart_wait_tx_done(RS485_UART_NUM, pdMS_TO_TICKS(100));
+
+        uint8_t lb_buf[32];
+        int lb_read = uart_read_bytes(RS485_UART_NUM, lb_buf, sizeof(lb_buf) - 1,
+                                      pdMS_TO_TICKS(100));
+        if (lb_read > 0) {
+            lb_buf[lb_read] = '\0';
+            ESP_LOGI(TAG, "LOOPBACK OK: sent %d, recv %d bytes → UART%d TX+RX funktioniert",
+                     test_len, lb_read, RS485_UART_NUM);
+        } else {
+            ESP_LOGE(TAG, "LOOPBACK FAIL: sent %d, recv 0 bytes → UART%d TX defekt!",
+                     test_len, RS485_UART_NUM);
+        }
+        uart_set_loop_back(RS485_UART_NUM, false);
+        uart_flush_input(RS485_UART_NUM);
+    }
+
+    ESP_LOGI(TAG, "RS485 plain UART mode (auto-DE transistor, post-TX echo flush)");
     
     // Start RX task with large stack (16KB for JSON parsing + LVGL callback + buffers)
     BaseType_t task_created = xTaskCreate(rs485_rx_task, "rs485_rx", 16384, NULL, 5, NULL);
@@ -870,6 +901,17 @@ esp_err_t womo_rs485_send_radio(bool enable)
     return err;
 }
 
+esp_err_t womo_rs485_send_imu_zero(void)
+{
+    esp_err_t err = rs485_send_simple_command("imu_zero");
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Sent imu_zero command (Pitch/Roll nullen)");
+    } else {
+        ESP_LOGW(TAG, "Failed to send imu_zero: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
 static void rs485_flush_line(char *line_buffer, size_t *line_pos)
 {
     if (*line_pos == 0) {
@@ -954,7 +996,11 @@ static void rs485_process_line(char *line_buffer, size_t captured_len)
             break;
         }
 
-        while (*cursor && *cursor != '{' && *cursor != '[') {
+        // Unser Protokoll: jedes JSON-Objekt beginnt mit {"type":...
+        // Daher nur {" als gültigen Start akzeptieren.
+        // Garbled Bytes vom Auto-DE-Transistor (z.B. {7\xBF...) werden so übersprungen.
+        while (*cursor) {
+            if (*cursor == '{' && *(cursor + 1) == '"') break;
             ++cursor;
         }
         if (*cursor == '\0') {
@@ -1160,6 +1206,30 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         seq_value = (uint32_t)seq_obj->valuedouble;
         have_seq = true;
         rs485_record_rx_seq(seq_value);
+    }
+
+    // Systemzeit vom Sensor übernehmen, wenn unsere Zeit ungültig ist (vor NTP-Sync)
+    const cJSON *ts_obj = cJSON_GetObjectItem(root, "ts");
+    if (cJSON_IsNumber(ts_obj)) {
+        time_t now;
+        time(&now);
+        struct tm timeinfo;
+        localtime_r(&now, &timeinfo);
+        // Wenn Systemzeit < 2024 (ungültig), vom Sensor übernehmen
+        if (timeinfo.tm_year < (2024 - 1900)) {
+            int64_t sensor_ts_ms = (int64_t)ts_obj->valuedouble;
+            struct timeval tv = {
+                .tv_sec = sensor_ts_ms / 1000,
+                .tv_usec = (sensor_ts_ms % 1000) * 1000
+            };
+            if (settimeofday(&tv, NULL) == 0) {
+                ESP_LOGI(TAG, "Systemzeit vom Sensor übernommen: %lld ms", sensor_ts_ms);
+                // Zeit als synced markieren damit Weather-Task starten kann
+                womo_time_mark_synced_rs485();
+            } else {
+                ESP_LOGW(TAG, "settimeofday fehlgeschlagen");
+            }
+        }
     }
 
     bool need_ack = true;

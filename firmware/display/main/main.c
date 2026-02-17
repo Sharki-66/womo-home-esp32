@@ -135,6 +135,7 @@ static uint8_t *bg_png_data = NULL;  // Loaded background PNG buffer
 static size_t bg_png_size = 0;       // Size of loaded PNG
 static int bg_last_day_state = -1;   // -1 unknown, 0 night, 1 day
 static lv_obj_t *rs485_debug_label = NULL; // RS485 debug status
+static lv_obj_t *imu_zero_modal = NULL;     // IMU calibration modal
 static womo_weather_t *weather_widget = NULL; // Weather widget
 static womo_battery_t *main_battery = NULL;   // Battery 1 widget
 static womo_battery_t *secondary_battery = NULL; // Battery 2 widget
@@ -153,40 +154,6 @@ static int64_t s_pwr_cmd_sent_us = 0;     // Grace-Period nach 12V-Befehl
 static int64_t s_radio_cmd_sent_us = 0;   // Grace-Period nach Radio-Befehl
 #define CTRL_GRACE_PERIOD_US  5000000      // 5 s: ctrl-Daten nicht überschreiben
 static TaskHandle_t wifi_autoretry_handle = NULL; // Periodischer Reconnect-Versuch
-
-typedef enum {
-    WOMO_IMU_ORIENTATION_FRONT = 0,
-    WOMO_IMU_ORIENTATION_RIGHT = 1,
-    WOMO_IMU_ORIENTATION_LEFT = 2,
-    WOMO_IMU_ORIENTATION_INVERTED = 3,
-    WOMO_IMU_ORIENTATION_MAX
-} womo_imu_orientation_t;
-
-typedef struct {
-    float roll_from_roll;
-    float roll_from_pitch;
-    float pitch_from_roll;
-    float pitch_from_pitch;
-} imu_orientation_matrix_t;
-
-static const imu_orientation_matrix_t imu_orientation_matrices[WOMO_IMU_ORIENTATION_MAX] = {
-    [WOMO_IMU_ORIENTATION_FRONT] = {1.0f, 0.0f, 0.0f, 1.0f},
-    [WOMO_IMU_ORIENTATION_RIGHT] = {0.0f, 1.0f, -1.0f, 0.0f},
-    [WOMO_IMU_ORIENTATION_LEFT] = {0.0f, -1.0f, 1.0f, 0.0f},
-    [WOMO_IMU_ORIENTATION_INVERTED] = {-1.0f, 0.0f, 0.0f, -1.0f},
-};
-
-static const char *imu_orientation_names[WOMO_IMU_ORIENTATION_MAX] = {
-    [WOMO_IMU_ORIENTATION_FRONT] = "front",
-    [WOMO_IMU_ORIENTATION_RIGHT] = "right",
-    [WOMO_IMU_ORIENTATION_LEFT] = "left",
-    [WOMO_IMU_ORIENTATION_INVERTED] = "inverted",
-};
-
-static const char *IMU_ORIENTATION_NVS_NAMESPACE = "display_cfg";
-static const char *IMU_ORIENTATION_NVS_KEY = "imu_orientation";
-static const womo_imu_orientation_t IMU_ORIENTATION_DEFAULT = WOMO_IMU_ORIENTATION_RIGHT;
-static womo_imu_orientation_t imu_orientation = WOMO_IMU_ORIENTATION_FRONT;
 
 typedef struct {
     bool valid;
@@ -297,16 +264,16 @@ static void router_poll_task(void *arg);
 static bool is_quiet_hours(const struct tm *timeinfo);
 static void backlight_set(bool on);
 static void connectivity_snapshot_fill(womo_connectivity_snapshot_t *snapshot);
-static void imu_orientation_set(womo_imu_orientation_t orientation, bool persist);
-static esp_err_t imu_orientation_store_to_nvs(uint8_t value);
-static void imu_orientation_apply(float *roll_deg, float *pitch_deg);
-static void imu_orientation_load_from_nvs(void);
 static void rs485_event_handler(womo_rs485_event_t event, void *user_data);
 static void gas_replace_show_modal(uint8_t slot);
 static void gas_replace_close_modal(void);
 static void gas_replace_msgbox_event_cb(lv_event_t *event);
 static void gas_bottle_clicked_cb(lv_event_t *event);
 static void gas_replace_send_timer_cb(lv_timer_t *timer);
+static void imu_zero_show_modal(void);
+static void imu_zero_close_modal(void);
+static void imu_zero_msgbox_event_cb(lv_event_t *event);
+static void imu_zero_area_cb(lv_event_t *event);
 
 static void imu_labels_update(bool has_data,
                               float roll_deg,
@@ -916,102 +883,6 @@ static void system_status_apply_sensor_level(womo_status_level_t level)
     system_status_sensor_level = level;
 }
 
-static esp_err_t imu_orientation_store_to_nvs(uint8_t value)
-{
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open(IMU_ORIENTATION_NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    err = nvs_set_u8(handle, IMU_ORIENTATION_NVS_KEY, value);
-    if (err == ESP_OK) {
-        err = nvs_commit(handle);
-    }
-
-    nvs_close(handle);
-    return err;
-}
-
-static void imu_orientation_set(womo_imu_orientation_t orientation, bool persist)
-{
-    if (orientation >= WOMO_IMU_ORIENTATION_MAX) {
-        ESP_LOGW(TAG, "Invalid IMU orientation request: %d", orientation);
-        return;
-    }
-
-    if (imu_orientation == orientation && !persist) {
-        return;
-    }
-
-    bool changed = (imu_orientation != orientation);
-    imu_orientation = orientation;
-
-    const char *name = imu_orientation_names[imu_orientation];
-    if (changed) {
-        ESP_LOGI(TAG, "IMU orientation set to %s (%d)", name ? name : "unknown", imu_orientation);
-    }
-
-    if (persist) {
-        esp_err_t err = imu_orientation_store_to_nvs((uint8_t)imu_orientation);
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to persist IMU orientation: %s", esp_err_to_name(err));
-        }
-    }
-}
-
-static void imu_orientation_apply(float *roll_deg, float *pitch_deg)
-{
-    if (!roll_deg || !pitch_deg) {
-        return;
-    }
-
-    if (imu_orientation >= WOMO_IMU_ORIENTATION_MAX) {
-        imu_orientation = WOMO_IMU_ORIENTATION_FRONT;
-    }
-
-    const imu_orientation_matrix_t *matrix = &imu_orientation_matrices[imu_orientation];
-    float roll = *roll_deg;
-    float pitch = *pitch_deg;
-
-    *roll_deg = roll * matrix->roll_from_roll + pitch * matrix->roll_from_pitch;
-    *pitch_deg = roll * matrix->pitch_from_roll + pitch * matrix->pitch_from_pitch;
-}
-
-static void imu_orientation_load_from_nvs(void)
-{
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open(IMU_ORIENTATION_NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "NVS open failed for IMU orientation: %s", esp_err_to_name(err));
-        imu_orientation_set(IMU_ORIENTATION_DEFAULT, false);
-        return;
-    }
-
-    uint8_t stored = IMU_ORIENTATION_DEFAULT;
-    err = nvs_get_u8(handle, IMU_ORIENTATION_NVS_KEY, &stored);
-    nvs_close(handle);
-
-    if (err == ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGW(TAG, "IMU orientation not set in NVS - defaulting to %s",
-                 imu_orientation_names[IMU_ORIENTATION_DEFAULT]);
-        imu_orientation_set(IMU_ORIENTATION_DEFAULT, true);
-        return;
-    } else if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to read IMU orientation: %s", esp_err_to_name(err));
-        imu_orientation_set(IMU_ORIENTATION_DEFAULT, true);
-        return;
-    }
-
-    if (stored >= WOMO_IMU_ORIENTATION_MAX) {
-        ESP_LOGW(TAG, "Invalid IMU orientation value %u in NVS - resetting to default", stored);
-        imu_orientation_set(IMU_ORIENTATION_DEFAULT, true);
-        return;
-    }
-
-    imu_orientation_set((womo_imu_orientation_t)stored, false);
-}
-
 static void rs485_event_handler(womo_rs485_event_t event, void *user_data)
 {
     (void)user_data;
@@ -1476,9 +1347,6 @@ static void ui_update_timer_cb(lv_timer_t *timer)
     float disp_pitch = snapshot.bno.pitch_deg;
     float heading_deg = snapshot.bno.heading_deg;
     bool imu_valid = snapshot.bno.valid;
-    if (imu_valid) {
-        imu_orientation_apply(&disp_roll, &disp_pitch);
-    }
 
     imu_labels_update(imu_valid, disp_roll, disp_pitch, heading_deg, snapshot.bno.direction);
 
@@ -2176,9 +2044,12 @@ static void time_update_timer_cb(lv_timer_t *timer)
 
         if (quiet_now && !last_quiet_state) {
             ESP_LOGI(TAG, "Quiet hours start %02d:%02d (backlight_on=%d)", timeinfo.tm_hour, timeinfo.tm_min, backlight_on);
-            backlight_stop_quiet_timer();
             if (backlight_on) {
-                backlight_set(false);
+                // Backlight für QUIET_TOUCH_TIMEOUT_MS anlassen, dann aus.
+                // Gilt sowohl beim Übergang 21:59→22:00 als auch beim
+                // Boot während der Quiet Hours (last_quiet_state startet
+                // als false, daher greift dieser Zweig beim ersten Mal).
+                backlight_start_quiet_timer();
             }
         } else if (!quiet_now && last_quiet_state) {
             ESP_LOGI(TAG, "Quiet hours end %02d:%02d (backlight_on=%d)", timeinfo.tm_hour, timeinfo.tm_min, backlight_on);
@@ -2392,8 +2263,7 @@ static void router_poll_task(void *arg)
     const TickType_t interval = pdMS_TO_TICKS(ROUTER_POLL_INTERVAL_MS);
     static int poll_count = 0;
 
-    /* Kurz warten bis WiFi zum Router steht */
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    /* Erste Poll-Abfrage sofort wenn WiFi connected */
 
     for (;;) {
         if (!womo_wifi_is_connected()) {
@@ -2480,6 +2350,9 @@ static void router_poll_task(void *arg)
 
             latest_data_valid = true;
             taskEXIT_CRITICAL(&display_data_spinlock);
+
+            /* Wetter-Modul mit aktuellen GPS-Koordinaten versorgen */
+            womo_weather_http_set_location(gps_tmp.latitude, gps_tmp.longitude);
         } else if (g_err != ESP_OK && poll_count <= 3) {
             ESP_LOGW(TAG, "Router GPS fehlgeschlagen: %s", esp_err_to_name(g_err));
         }
@@ -2591,6 +2464,78 @@ static void gas_replace_send_timer_cb(lv_timer_t *timer)
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "RS485 gas_bottle_replace (slot=%u) failed: %s", (unsigned)slot, esp_err_to_name(err));
     }
+}
+
+// ── IMU Zero (Pitch/Roll Kalibrierung) ──────────────────────────────
+
+static void imu_zero_close_modal(void)
+{
+    if (imu_zero_modal) {
+        lv_obj_t *to_close = imu_zero_modal;
+        imu_zero_modal = NULL;
+        lv_msgbox_close(to_close);
+    }
+}
+
+static void imu_zero_send_timer_cb(lv_timer_t *timer)
+{
+    (void)timer;
+    esp_err_t err = womo_rs485_send_imu_zero();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "RS485 imu_zero failed: %s", esp_err_to_name(err));
+    }
+}
+
+static void imu_zero_msgbox_event_cb(lv_event_t *event)
+{
+    if (!event || lv_event_get_code(event) != LV_EVENT_VALUE_CHANGED) {
+        return;
+    }
+
+    lv_obj_t *msgbox = lv_event_get_current_target(event);
+    if (!msgbox || msgbox != imu_zero_modal) {
+        return;
+    }
+
+    uint16_t btn_id = lv_msgbox_get_active_btn(msgbox);
+    if (btn_id == LV_BTNMATRIX_BTN_NONE) {
+        return;
+    }
+
+    imu_zero_close_modal();
+
+    if (btn_id == 0) {
+        // "OK" geklickt → Command senden (aus Timer-Kontext, nicht aus Event)
+        lv_timer_t *t = lv_timer_create(imu_zero_send_timer_cb, 0, NULL);
+        if (t) {
+            lv_timer_set_repeat_count(t, 1);
+        } else {
+            womo_rs485_send_imu_zero();
+        }
+    }
+}
+
+static void imu_zero_show_modal(void)
+{
+    imu_zero_close_modal();
+
+    static const char *btns[] = { "OK", "Abbrechen", "" };
+
+    imu_zero_modal = lv_msgbox_create(NULL,
+                                      "Neigung kalibrieren",
+                                      "Pitch und Roll auf Null setzen?\n"
+                                      "Das Fahrzeug sollte waagerecht stehen.",
+                                      btns, false);
+    lv_obj_center(imu_zero_modal);
+    lv_obj_add_event_cb(imu_zero_modal, imu_zero_msgbox_event_cb,
+                        LV_EVENT_VALUE_CHANGED, NULL);
+}
+
+static void imu_zero_area_cb(lv_event_t *event)
+{
+    if (!event) return;
+    if (lv_event_get_code(event) != LV_EVENT_LONG_PRESSED) return;
+    imu_zero_show_modal();
 }
 
 static void wifi_label_event_cb(lv_event_t *event)
@@ -2990,11 +2935,6 @@ void app_main()
     // Initialize WiFi
     ESP_LOGI(TAG, "Initializing WiFi...");
     womo_wifi_init();
-    imu_orientation_load_from_nvs();
-    if (imu_orientation != WOMO_IMU_ORIENTATION_RIGHT) {
-        ESP_LOGI(TAG, "Forcing IMU orientation to RIGHT for lateral display mounting");
-        imu_orientation_set(WOMO_IMU_ORIENTATION_RIGHT, true);
-    }
     
     // Initialize theme (default location: Central Europe)
     // TODO: Get location from GPS (Walter Modem)
@@ -3006,17 +2946,24 @@ void app_main()
     // Initialize display (uses I2C for touch controller)
     waveshare_esp32_s3_rgb_lcd_init();
 
-    // Ensure backlight is turned on after panel init (CH422G-controlled)
-    backlight_set(true);
-    
-    // NOW initialize SD card (will use existing I2C bus for CH422G GPIO expander)
+    // ── LVGL sofort sperren ──────────────────────────────────────────
+    // Nach lvgl_port_init() läuft der LVGL-Task bereits und würde den
+    // Default-Screen (weiß) rendern.  Mutex sofort nehmen, damit kein
+    // Frame gerendert wird, bevor Theme + Hintergrundbild stehen.
+    // SD- und RS485-Init passieren innerhalb des Locks – sie nutzen
+    // kein LVGL und blockieren daher niemanden.
+    ESP_LOGI(TAG, "Display WoMo Home Control with Dynamic Theme");
+
+    if (lvgl_port_lock(-1)) {
+
+    // Initialize SD card (needed for background image loading)
     ESP_LOGI(TAG, "Initializing SD card...");
     if (womo_sd_init() == ESP_OK) {
         ESP_LOGI(TAG, "SD card mounted successfully");
     } else {
         ESP_LOGW(TAG, "SD card mount failed - continuing without SD");
     }
-    
+
     // Initialize RS485 communication (receives data from Walter)
     ESP_LOGI(TAG, "Initializing RS485 display receiver...");
     if (womo_rs485_display_init() == ESP_OK) {
@@ -3027,11 +2974,6 @@ void app_main()
     } else {
         ESP_LOGW(TAG, "RS485 init failed - continuing without external sensors");
     }
-    
-    ESP_LOGI(TAG, "Display WoMo Home Control with Dynamic Theme");
-    
-    // Lock the mutex due to the LVGL APIs are not thread-safe
-    if (lvgl_port_lock(-1)) {
         
         // Get main screen and enable touch events
         lv_obj_t *screen = lv_scr_act();
@@ -3042,14 +2984,15 @@ void app_main()
         // Touch-Wake-Callback: feuert bei JEDEM Touch, noch vor LVGL-Events
         lvgl_touch_set_wake_cb(touch_wake_cb);
         
-        // Apply initial theme and load matching background (day/night)
-        womo_theme_mode_t initial_mode = womo_theme_update(WOMO_STATUS_OK);
-        load_background_image(screen, theme_mode_is_daylike(initial_mode));
-        if (bg_img != NULL) {
-            // Screen background stays SOLID (LV_OPA_COVER) to show theme colors
-            // Ducato image is semi-transparent (LV_OPA_60) to let colors through
-            lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
-        }
+        // Initiales Theme setzen (Farbe für BG-Screen).
+        // Ducato-PNG wird hier NICHT geladen!  Ohne gültige Uhrzeit
+        // (NTP/RS485) weiß das Theme nicht, ob Tag oder Nacht →
+        // es würde den Day-Ducato laden und müsste ihn nach NTP-Sync
+        // sofort wieder durch den Night-Ducato ersetzen = sichtbarer
+        // Blitz.  Stattdessen wird der Ducato erst nach WiFi+NTP
+        // geladen, direkt bevor das Backlight eingeschaltet wird.
+        womo_theme_update(WOMO_STATUS_OK);
+        lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
         womo_theme_apply_to_screen(screen);
         
         // Initialize locale system
@@ -3310,6 +3253,18 @@ void app_main()
     lv_obj_set_style_text_color(imu_heading_label, lv_color_white(), 0);
     lv_obj_align(imu_heading_label, LV_ALIGN_TOP_RIGHT, -right_margin, top_offset + (line_spacing * 2));
 
+    // Unsichtbarer Touch-Bereich über Pitch/Roll/Heading für Long-Press → Kalibrierung
+    {
+        lv_obj_t *imu_touch = lv_btn_create(screen);
+        lv_obj_set_size(imu_touch, 180, line_spacing * 3 + 10);
+        lv_obj_align(imu_touch, LV_ALIGN_TOP_RIGHT, -right_margin + 10, top_offset - 5);
+        lv_obj_set_style_bg_opa(imu_touch, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_opa(imu_touch, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_shadow_opa(imu_touch, LV_OPA_TRANSP, 0);
+        lv_obj_clear_flag(imu_touch, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_event_cb(imu_touch, imu_zero_area_cb, LV_EVENT_LONG_PRESSED, NULL);
+    }
+
     gps_label = lv_label_create(screen);
     lv_label_set_text(gps_label, "GPS");
     lv_obj_set_style_text_font(gps_label, &lv_font_montserrat_14, 0); // gleiche Schriftgröße wie Status-Label
@@ -3364,6 +3319,7 @@ void app_main()
     } else {
         ESP_LOGW(TAG, "Failed to create fresh water tank widget");
     }
+
 
     grey_water_tank = womo_tank_create(screen, 185, 110, WOMO_TANK_GREY);
     if (grey_water_tank) {
@@ -3557,34 +3513,51 @@ void app_main()
     // Ensure text colors match the initial day/night theme
     apply_text_theme_colors();
         
-        // Release the mutex
+        // Release the mutex – LVGL-Task rendert jetzt das initiale UI im Hintergrund
         lvgl_port_unlock();
     }
 
-    // Connect to fixed Router-AP (RUTX11 "Malibu-622")
+    // ── WiFi + NTP VOR Backlight ──────────────────────────────────────
+    // Backlight bleibt AUS während WiFi verbindet und NTP die Uhrzeit
+    // synchronisiert.  In dieser Zeit (3-8 s) rendert der LVGL-Task im
+    // Hintergrund das initiale UI und der 1 s-Timer aktualisiert nach
+    // NTP-Sync automatisch Theme + Hintergrundbild (Tag/Nacht).
+    // Erst danach wird Backlight eingeschaltet → der Nutzer sieht
+    // sofort das korrekte Endbild, ohne sichtbare Zwischenzustände.
     ESP_LOGI(TAG, "Connecting to Router-AP: %s", WIFI_SSID);
     esp_err_t wifi_err = womo_wifi_connect(WIFI_SSID, WIFI_PASSWORD, WIFI_MAX_RETRY);
 
     if (wifi_err == ESP_OK) {
         ESP_LOGI(TAG, "WiFi connected to Router-AP: %s", WIFI_SSID);
 
-        // Backlight initial einschalten
-        backlight_set(true);
-
-        // Reverse-Geocoding wird erst nach dem ersten GPS-Fix on-demand ausgelöst
-
         // Sync time via NTP (non-blocking)
-        if (womo_time_sync_ntp(true) == ESP_OK) {
-            ESP_LOGI(TAG, "Time synchronized via NTP");
+        if (womo_time_sync_ntp(false) == ESP_OK) {
+            ESP_LOGI(TAG, "NTP sync started (background)");
         } else {
-            ESP_LOGW(TAG, "NTP sync failed, using internal RTC");
+            ESP_LOGW(TAG, "NTP sync start failed, using internal RTC");
         }
     } else {
         ESP_LOGW(TAG, "WiFi connection to Router-AP failed (%s) - RUTX11 eingeschaltet?",
                  esp_err_to_name(wifi_err));
     }
 
-    // Router UCI Client initialisieren + Poll-Task starten
+    // ── Theme + Ducato mit korrekter Uhrzeit aktualisieren ────────────
+    // Jetzt ist NTP (hoffentlich) synchronisiert.  Wir aktualisieren
+    // Theme, Hintergrundbild und Textfarben sofort, BEVOR das Backlight
+    // eingeschaltet wird.  So sieht der Nutzer keine Zwischenzustände.
+    if (lvgl_port_lock(-1)) {
+        womo_theme_mode_t boot_mode = womo_theme_update(WOMO_STATUS_OK);
+        bool boot_is_day = theme_mode_is_daylike(boot_mode);
+
+        load_background_image(lv_scr_act(), boot_is_day);
+        apply_text_theme_colors();
+        womo_theme_apply_to_screen(NULL);
+
+        lvgl_port_unlock();
+    }
+
+    // Router UCI Client initialisieren + Poll-Task VOR Backlight starten
+    // damit Connectivity-Modal schneller Daten hat
     womo_router_uci_init();
     s_router_mutex = xSemaphoreCreateMutex();
     if (s_router_mutex) {
@@ -3599,6 +3572,11 @@ void app_main()
             ESP_LOGW(TAG, "Router-Poll-Task konnte nicht gestartet werden");
         }
     }
+
+    // Kurz warten damit LVGL den finalen Frame in beide Framebuffer
+    // (Direct Mode) gerendert hat, dann Backlight einschalten.
+    vTaskDelay(pdMS_TO_TICKS(150));
+    backlight_set(true);
 
     if (wifi_autoretry_handle == NULL) {
         BaseType_t created = xTaskCreate(wifi_autoretry_task,
