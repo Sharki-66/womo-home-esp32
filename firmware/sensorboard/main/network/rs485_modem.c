@@ -12,7 +12,6 @@
 #include "network/womo_rs485.h"
 #include "sensors/bno055_sensor.h"
 #include "network/wifi/sensor_wifi.h"
-#include "network/wifi/sensor_wifi.h"
 
 #include "cJSON.h"
 #include "driver/gpio.h"
@@ -35,13 +34,15 @@
 #include <string.h>
 #include <sys/time.h>
 
+#include "womo_config.h"
+
 #define TAG "rs485_modem"
 
 // ── Protokollparameter ──────────────────────────────────────────────────
 #define RS485_BUF_SIZE                4096
 #define RS485_LINE_MAX                4096
-#define RS485_MAX_PENDING_CMDS        4
-#define RS485_COMMAND_TIMEOUT_MS      3000
+#define RS485_MAX_PENDING_CMDS        WOMO_RS485_MAX_PENDING_CMDS
+#define RS485_COMMAND_TIMEOUT_MS      WOMO_RS485_COMMAND_TIMEOUT_MS
 #define RS485_MIN_IDLE_US             150000   // 150 ms TX-Sperre nach RX
 #define RS485_IDLE_WAIT_MAX_US        400000
 
@@ -83,6 +84,16 @@ static TaskHandle_t s_rx_task       = NULL;
 static uint8_t  s_rx_buffer[RS485_BUF_SIZE];
 static char     s_rx_line_buffer[RS485_LINE_MAX];
 
+// ── Forward-Deklarationen ───────────────────────────────────────────────
+
+static void rs485_publish_ctrl(void);
+static void rs485_publish_imu(void);
+static void rs485_publish_bat(void);
+static void rs485_publish_tank(void);
+static void rs485_publish_hx(void);
+static void rs485_publish_gas(void);
+static void rs485_publish_bme(void);
+
 // ── Hilfsfunktionen ─────────────────────────────────────────────────────
 
 static const char *heading_to_compass(float heading_deg)
@@ -98,9 +109,10 @@ static const char *heading_to_compass(float heading_deg)
 
 static inline int adc_mv_to_percent(int mv)
 {
+    // Tank-Sensoren: 0-1V = 0-100%
     if (mv < 0) mv = 0;
-    if (mv > 3300) mv = 3300;
-    return (mv * 100) / 3300;
+    if (mv > 1000) mv = 1000;
+    return (mv * 100) / 1000;
 }
 
 static TickType_t ms_to_ticks(uint32_t ms)
@@ -138,48 +150,6 @@ static double ts_us_to_epoch_ms(int64_t ts_us)
         delta_ms = 0.0;
     }
     return round2(now_ms - delta_ms);
-}
-
-// ── Pressure Trend (nur Outdoor) ────────────────────────────────────────
-
-typedef struct {
-    double last_press_hpa;
-    int64_t last_ts_us;
-    double trend_hpa_per_h;
-} press_trend_state_t;
-
-static press_trend_state_t s_press_trend_out = {0};
-
-static double update_pressure_trend(double press_hpa, int64_t ts_us, press_trend_state_t *state)
-{
-    if (!state || ts_us <= 0) {
-        return 0.0;
-    }
-    if (state->last_ts_us > 0 && ts_us > state->last_ts_us) {
-        double dt_h  = (double)(ts_us - state->last_ts_us) / 3600000000.0;
-        double delta = press_hpa - state->last_press_hpa;
-        const double min_dt_h       = 0.25;   // mindestens 15 Minuten Abstand
-        const double min_delta_hpa  = 0.05;   // mindestens 0.05 hPa Änderung
-        if (dt_h >= min_dt_h && fabs(delta) >= min_delta_hpa) {
-            double inst = delta / dt_h;
-            const double alpha = 0.2;
-            state->trend_hpa_per_h = state->trend_hpa_per_h * (1.0 - alpha) + inst * alpha;
-        } else {
-            state->trend_hpa_per_h = 0.0;
-        }
-    }
-    state->last_press_hpa = press_hpa;
-    state->last_ts_us     = ts_us;
-    return state->trend_hpa_per_h;
-}
-
-static const char *pressure_trend_state(double trend_hpa_per_h)
-{
-    if (trend_hpa_per_h >=  0.5) return "rise_fast";
-    if (trend_hpa_per_h >=  0.1) return "rise_slow";
-    if (trend_hpa_per_h <= -0.5) return "fall_fast";
-    if (trend_hpa_per_h <= -0.1) return "fall_slow";
-    return "steady";
 }
 
 // ── Sequence Tracking ───────────────────────────────────────────────────
@@ -320,7 +290,7 @@ static esp_err_t rs485_send_frame(const char *label, cJSON *payload, bool need_a
         return ESP_FAIL;
     }
 
-    ESP_LOGD(TAG, "TX %s seq=%u len=%zu tx_ms=%u", label, (unsigned)seq, pos, (unsigned)tx_time_ms);
+    ESP_LOGI(TAG, "TX %s seq=%u len=%zu tx_ms=%u", label, (unsigned)seq, pos, (unsigned)tx_time_ms);
 
     if (need_ack) {
         rs485_register_pending(seq, label);
@@ -436,6 +406,23 @@ static void rs485_handle_display_ready(void)
     s_display_ready_seen++;
     s_last_rx_heartbeat_us = esp_timer_get_time();
     ESP_LOGI(TAG, "Display ready (count=%u)", (unsigned)s_display_ready_seen);
+    
+    // Initial-Burst: Alle Topics sofort einmal senden
+    ESP_LOGI(TAG, "Sende initiale Sensor-Daten...");
+    rs485_publish_ctrl();
+    vTaskDelay(pdMS_TO_TICKS(20));
+    rs485_publish_imu();
+    vTaskDelay(pdMS_TO_TICKS(20));
+    rs485_publish_bat();
+    vTaskDelay(pdMS_TO_TICKS(20));
+    rs485_publish_tank();
+    vTaskDelay(pdMS_TO_TICKS(20));
+    rs485_publish_hx();
+    vTaskDelay(pdMS_TO_TICKS(20));
+    rs485_publish_gas();
+    vTaskDelay(pdMS_TO_TICKS(20));
+    rs485_publish_bme();
+    ESP_LOGI(TAG, "Initiale Sensor-Daten gesendet");
 }
 
 // ── Power / GPIO ────────────────────────────────────────────────────────
@@ -614,18 +601,27 @@ static void rs485_publish_bme(void)
     }
     cJSON_AddItemToObject(root, "0x76", in);
 
-    // Outdoor (0x77)
+    // Outdoor (0x77) – mit 5-stufigem Trend
     cJSON *out = cJSON_CreateObject();
     if (bme.outdoor.valid) {
         cJSON_AddNumberToObject(out, "temp_c", round2(bme.outdoor.temperature_c));
         cJSON_AddNumberToObject(out, "rh_pct", round2(bme.outdoor.humidity_pct));
         cJSON_AddNumberToObject(out, "press_hpa", round2(bme.outdoor.pressure_hpa));
-        double trend_out = update_pressure_trend(bme.outdoor.pressure_hpa, bme.outdoor.timestamp_us, &s_press_trend_out);
-        cJSON_AddNumberToObject(out, "press_trend_hpa_h", round2(trend_out));
-        const char *trend_state_out = pressure_trend_state(trend_out);
-        if (trend_state_out) {
-            cJSON_AddStringToObject(out, "press_trend_state", trend_state_out);
+        
+        // Luftdruck-Trend (5 Zustände)
+        if (bme.outdoor.press_trend_valid) {
+            cJSON_AddNumberToObject(out, "press_trend_hpa_h", round2(bme.outdoor.press_trend_hpa_h));
+            const char *trend_str = "steady";
+            switch (bme.outdoor.press_trend_state) {
+                case BME680_TREND_FALLING_FAST: trend_str = "falling_fast"; break;
+                case BME680_TREND_FALLING:      trend_str = "falling"; break;
+                case BME680_TREND_STEADY:       trend_str = "steady"; break;
+                case BME680_TREND_RISING:       trend_str = "rising"; break;
+                case BME680_TREND_RISING_FAST:  trend_str = "rising_fast"; break;
+            }
+            cJSON_AddStringToObject(out, "press_trend_state", trend_str);
         }
+        
         if (bme.outdoor.gas_valid)
             cJSON_AddNumberToObject(out, "gas_kohm", round2(bme.outdoor.gas_kohm));
         cJSON_AddNumberToObject(out, "ts", ts_us_to_epoch_ms(bme.outdoor.timestamp_us));
@@ -635,11 +631,6 @@ static void rs485_publish_bme(void)
         cJSON_AddNumberToObject(out, "press_hpa", 0.0);
     }
     cJSON_AddItemToObject(root, "0x77", out);
-
-    ESP_LOGI(TAG, "BME TX: out press=%.2f trend=%.2f state=%s",
-             bme.outdoor.valid ? bme.outdoor.pressure_hpa : 0.0,
-             round2(s_press_trend_out.trend_hpa_per_h),
-             pressure_trend_state(s_press_trend_out.trend_hpa_per_h));
 
     rs485_send_frame("bme", root, false);
     cJSON_Delete(root);
@@ -652,13 +643,17 @@ static void rs485_publish_bat(void)
     if (!root) return;
     cJSON_AddStringToObject(root, "type", "bat");
 
+    // Batterie 1 (Kfz): <1V = nicht angeschlossen → nc=true
     bool batt1_ok = (analog_read_mv(SENSOR_BATT1_ADC_CHANNEL, &mv) == ESP_OK);
-    cJSON_AddNumberToObject(root, "b1", round2(batt1_ok ? (double)mv / 1000.0 : 0.0));
-    cJSON_AddBoolToObject(root, "nc1", !batt1_ok);
+    bool batt1_connected = batt1_ok && (mv > 1000);  // > 1V = verbunden
+    cJSON_AddNumberToObject(root, "b1", round2(batt1_connected ? (double)mv / 1000.0 : 0.0));
+    cJSON_AddBoolToObject(root, "nc1", !batt1_connected);
 
+    // Batterie 2 (Board): <1V = nicht angeschlossen → nc=true
     bool batt2_ok = (analog_read_mv(SENSOR_BATT2_ADC_CHANNEL, &mv) == ESP_OK);
-    cJSON_AddNumberToObject(root, "b2", round2(batt2_ok ? (double)mv / 1000.0 : 0.0));
-    cJSON_AddBoolToObject(root, "nc2", !batt2_ok);
+    bool batt2_connected = batt2_ok && (mv > 1000);  // > 1V = verbunden
+    cJSON_AddNumberToObject(root, "b2", round2(batt2_connected ? (double)mv / 1000.0 : 0.0));
+    cJSON_AddBoolToObject(root, "nc2", !batt2_connected);
 
     rs485_send_frame("bat", root, false);
     cJSON_Delete(root);
@@ -812,13 +807,13 @@ typedef struct {
 } rs485_topic_t;
 
 static rs485_topic_t s_topics[] = {
-    { "ctrl",  2000,  0, rs485_publish_ctrl },
-    { "imu",   5000,  0, rs485_publish_imu  },
-    { "bat",  10000,  0, rs485_publish_bat  },
-    { "tank", 10000,  0, rs485_publish_tank },
-    { "hx",   10000,  0, rs485_publish_hx   },
-    { "gas",  10000,  0, rs485_publish_gas  },
-    { "bme",  15000,  0, rs485_publish_bme  },
+    { "ctrl",  WOMO_TOPIC_CTRL_INTERVAL_MS, 0, rs485_publish_ctrl },
+    { "imu",   WOMO_TOPIC_IMU_INTERVAL_MS,  0, rs485_publish_imu  },
+    { "bat",   WOMO_TOPIC_BAT_INTERVAL_MS,  0, rs485_publish_bat  },
+    { "tank",  WOMO_TOPIC_TANK_INTERVAL_MS, 0, rs485_publish_tank },
+    { "hx",    WOMO_TOPIC_HX_INTERVAL_MS,   0, rs485_publish_hx   },
+    { "gas",   WOMO_TOPIC_GAS_INTERVAL_MS,  0, rs485_publish_gas  },
+    { "bme",   WOMO_TOPIC_BME_INTERVAL_MS,  0, rs485_publish_bme  },
 };
 #define RS485_TOPIC_COUNT (sizeof(s_topics) / sizeof(s_topics[0]))
 static size_t s_topic_rr = 0;
@@ -837,13 +832,8 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
 
     if (strcmp(cmd_str, "display_ready") == 0) {
         rs485_handle_display_ready();
-    } else if (strcmp(cmd_str, "level_start") == 0) {
-        ESP_LOGI(TAG, "Parkhilfe: IMU Fast-Mode (500ms, 10min)");
-        bno055_app_request_fast(600000, 500);   // 10 Minuten, 500ms Intervall
-    } else if (strcmp(cmd_str, "level_stop") == 0) {
-        ESP_LOGI(TAG, "Parkhilfe: IMU zurück auf Normal-Modus");
-        // Fast-Mode läuft aus; sofort beenden durch duration=0 trick
-        bno055_app_request_fast(1, 5000);
+    // level_start/level_stop entfernt – Fast-Mode wird automatisch über
+    // /api/imu gesteuert (horizon.html pollt → Fast, Seite zu → Normal)
     } else if (strcmp(cmd_str, "wifi_config") == 0) {
         const cJSON *j_ssid = cJSON_GetObjectItem(root, "ssid");
         const cJSON *j_pass = cJSON_GetObjectItem(root, "pass");
@@ -887,6 +877,8 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
     } else if (strcmp(cmd_str, "radio_off") == 0) {
         cmd_err = rs485_set_radio(false);
         s_ctrl_immediate = true;
+    } else if (strcmp(cmd_str, "imu_zero") == 0) {
+        cmd_err = bno055_app_zero_pitch_roll();
     } else {
         handled = false;
         cmd_err = ESP_ERR_INVALID_ARG;
@@ -1045,7 +1037,8 @@ static void rs485_rx_task(void *arg)
                         line_pos = 0;
                     }
                 } else {
-                    line_pos = 0;  // Ignore noise/non-ASCII
+                    // Ignore noise/non-ASCII
+                    line_pos = 0;
                 }
             }
         }

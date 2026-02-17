@@ -20,6 +20,7 @@ idf_component_register(
         "network"
         "network/wifi"
         "hal"
+        "${CMAKE_CURRENT_LIST_DIR}/../../shared"
     REQUIRES
         bsec
         bno055
