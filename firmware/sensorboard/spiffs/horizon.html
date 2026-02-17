@@ -243,7 +243,7 @@
       const oneCycleWidth=bandInfo.oneCycleWidth;
       let rawOffset=(headingDeg*pxPerDeg)%oneCycleWidth;
       if(rawOffset<0) rawOffset+=oneCycleWidth;
-      const translateX=(oneCycleWidth/2)-rawOffset;
+      const translateX=-rawOffset;
       headingBand.setAttribute('transform',`translate(${translateX},${bandY})`);
     }
     function setLeftMarker(marker,mag,up){
@@ -305,7 +305,7 @@
       }
     }
     refresh();
-    setInterval(refresh,500);
+    setInterval(refresh,200);
   </script>
 </body>
 </html>

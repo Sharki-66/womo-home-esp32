@@ -73,13 +73,10 @@ static const char *content_type_for(const char *path)
 
 static esp_err_t imu_get_handler(httpd_req_t *req)
 {
-    // Jeder /api/imu-Aufruf hält den BNO055 im Fast-Mode (2s Fenster, 500ms)
-    // Solange die horizon.html pollt (alle 500ms), bleibt der Sensor schnell.
-    bno055_app_request_fast(2000, 500);
-
-    // Jeder /api/imu-Aufruf hält den BNO055 im Fast-Mode (2s Fenster, 500ms)
-    // Solange die horizon.html pollt (alle 500ms), bleibt der Sensor schnell.
-    bno055_app_request_fast(2000, 500);
+    // Auto-Fast-Mode: Jeder /api/imu-Aufruf verlängert das 2s-Fenster.
+    // Solange horizon.html pollt (alle 500ms), bleibt der BNO055 schnell.
+    // Wird die Seite geschlossen → kein Poll mehr → Fast-Mode läuft nach 2s aus.
+    bno055_app_request_fast(2000, 200);
 
     web_wifi_imu_snapshot_t snap;
     bool ok = web_wifi_imu_get_snapshot(&snap);
