@@ -31,11 +31,79 @@ static bno055_t s_bno = {0};
 static TaskHandle_t s_task = NULL;
 static portMUX_TYPE s_fast_mux = portMUX_INITIALIZER_UNLOCKED;
 static int64_t s_fast_until_us = 0;
-static uint32_t s_fast_interval_ms = 500;
+static uint32_t s_fast_interval_ms = 200;
 static bool s_offset_cache_valid = false;
 static sensor_offset_t s_cached_offsets = {};
 static bool s_restore_attempted = false;
 static int64_t s_last_persist_check_us = 0;
+
+// ── Pitch/Roll Einbau-Offset (Nullpunkt-Kalibrierung) ───────────────────
+#define BNO055_NVS_ZERO_KEY "pr_zero"
+#define BNO055_ZERO_VERSION 1
+
+typedef struct {
+    uint32_t version;
+    float pitch_offset;
+    float roll_offset;
+} bno055_zero_blob_t;
+
+static float s_pitch_offset = 0.0f;
+static float s_roll_offset  = 0.0f;
+
+static void bno055_load_zero_offsets(void)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(BNO055_NVS_NAMESPACE, NVS_READONLY, &h);
+    if (err != ESP_OK) return;
+
+    bno055_zero_blob_t blob = {0};
+    size_t sz = sizeof(blob);
+    err = nvs_get_blob(h, BNO055_NVS_ZERO_KEY, &blob, &sz);
+    nvs_close(h);
+
+    if (err == ESP_OK && sz == sizeof(blob) && blob.version == BNO055_ZERO_VERSION) {
+        s_pitch_offset = blob.pitch_offset;
+        s_roll_offset  = blob.roll_offset;
+        ESP_LOGI(TAG, "Pitch/Roll Offset aus NVS: pitch=%.2f° roll=%.2f°",
+                 s_pitch_offset, s_roll_offset);
+    }
+}
+
+static esp_err_t bno055_save_zero_offsets(void)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(BNO055_NVS_NAMESPACE, NVS_READWRITE, &h);
+    if (err != ESP_OK) return err;
+
+    bno055_zero_blob_t blob = {
+        .version = BNO055_ZERO_VERSION,
+        .pitch_offset = s_pitch_offset,
+        .roll_offset  = s_roll_offset,
+    };
+    err = nvs_set_blob(h, BNO055_NVS_ZERO_KEY, &blob, sizeof(blob));
+    if (err == ESP_OK) err = nvs_commit(h);
+    nvs_close(h);
+    return err;
+}
+
+esp_err_t bno055_app_zero_pitch_roll(void)
+{
+    web_wifi_imu_snapshot_t snap;
+    if (!web_wifi_imu_get_snapshot(&snap) || !snap.valid) {
+        ESP_LOGW(TAG, "imu_zero: kein gültiger IMU-Snapshot");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // Aktuellen RAW-Wert (VOR bestehender Offset-Korrektur) als neuen Offset nehmen
+    s_pitch_offset = snap.pitch_deg + s_pitch_offset;
+    s_roll_offset  = snap.roll_deg  + s_roll_offset;
+
+    esp_err_t err = bno055_save_zero_offsets();
+    ESP_LOGI(TAG, "Pitch/Roll Nullpunkt gesetzt: pitch=%.2f° roll=%.2f° (NVS %s)",
+             s_pitch_offset, s_roll_offset,
+             (err == ESP_OK) ? "OK" : esp_err_to_name(err));
+    return err;
+}
 
 static bool bno055_offsets_equal(const sensor_offset_t *lhs, const sensor_offset_t *rhs)
 {
@@ -47,13 +115,11 @@ static esp_err_t bno055_apply_axis_map(bno055_t *imu)
     if (!imu) {
         return ESP_ERR_INVALID_ARG;
     }
-    // Fahrzeugkoordinaten: X→vorne, Y→links, Z→oben
-    // Sensor-Montage: +X nach oben, +Y nach hinten, +Z nach rechts
-    // Mapping: Fahrzeug X = -Sensor Y, Fahrzeug Y = +Sensor Z, Fahrzeug Z = +Sensor X
+    // Achsen-Mapping aus sensor_config.h (anpassbar an Einbaulage)
     bno055_axes_t axes = {
-        .x = NEGATIVE_Y,
-        .y = POSITIVE_Z,
-        .z = POSITIVE_X,
+        .x = SENSOR_BNO055_AXIS_X,
+        .y = SENSOR_BNO055_AXIS_Y,
+        .z = SENSOR_BNO055_AXIS_Z,
     };
     return bno055_remap_axis(imu, &axes);
 }
@@ -176,8 +242,8 @@ static void bno055_task(void *arg)
                 .valid = true,
                 .calibrated = s_bno.config.is_calibrated,
                 .yaw_deg = s_bno.euler_angle.yaw,
-                .roll_deg = s_bno.euler_angle.roll,
-                .pitch_deg = s_bno.euler_angle.pitch,
+                .roll_deg = s_bno.euler_angle.roll - s_roll_offset,
+                .pitch_deg = s_bno.euler_angle.pitch - s_pitch_offset,
                 .temperature_c = s_bno.temperature,
                 .cal_sys = s_bno.config.calibration.sys,
                 .cal_gyro = s_bno.config.calibration.gyro,
@@ -210,6 +276,19 @@ static void bno055_task(void *arg)
             int64_t now_us = esp_timer_get_time();
             if (now_us - s_last_persist_check_us >= 60000000LL) {
                 s_last_persist_check_us = now_us;
+                
+                // Bei totalem Kalibrierungsverlust (SYS=0 oder 1): gespeicherte Offsets neu laden
+                if (err_cal == ESP_OK && s_bno.config.calibration.sys <= 1 && s_offset_cache_valid) {
+                    ESP_LOGW(TAG, "BNO055 calibration lost (SYS=%u), restoring from NVS", s_bno.config.calibration.sys);
+                    i2c_bus_lock();
+                    bool restored = bno055_restore_calibration(&s_bno);
+                    i2c_bus_unlock();
+                    if (!restored) {
+                        ESP_LOGW(TAG, "Failed to restore calibration");
+                    }
+                }
+                
+                // Bei guter Kalibrierung (SYS=3): Offsets speichern falls geändert
                 if (s_bno.config.is_calibrated) {
                     bno055_persist_calibration_if_needed(&s_bno);
                 }
@@ -310,6 +389,9 @@ esp_err_t bno055_app_start(void)
     if (!restored) {
         ESP_LOGI(TAG, "BNO055 starting without stored calibration");
     }
+
+    // Pitch/Roll-Nullpunkt aus NVS laden
+    bno055_load_zero_offsets();
 
     BaseType_t r = xTaskCreatePinnedToCore(bno055_task, "bno055_task", 4096, NULL, 4, &s_task, 0);
     if (r != pdPASS) {

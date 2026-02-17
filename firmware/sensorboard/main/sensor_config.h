@@ -1,5 +1,7 @@
 #pragma once
 
+#include "womo_config.h"
+
 /* WoMoHome ESP32 Sensor Board Configuration
  * Sensor Board Configuration (ESP32-S3 DevKitC-1, N16R8)
  * Stand: Feb 2026 — Pinbelegung gemäß DevKitC-1 Header-Block
@@ -19,13 +21,13 @@
  *     (ADC2_CH4, RTC, GPIO15) I2C SCL | I/O/T|  🟨 |   15 | 8          3         8 | 40   | 🟩  | I/O/T | MTDO, GPIO40
  *     (ADC2_CH5, RTC, GPIO16) I2C SDA | I/O/T|  🟨 |   16 | 9          -         9 | 39   | 🟩  | I/O/T | MTCK, GPIO39
  *        ADC2_CH6, U1TXD, RTC, GPIO17 | I/O/T|  ⬜ |   17 | 10         W        10 | 38   | 🟨  | I/O/T | RGB_LED  (GPIO38)
- *        ADC2_CH7, U1RXD, RTC, GPIO18 | I/O/T|  ⬜ |   18 | 11         R        11 | 37   | 🟨  | I/O/T | RS485 RX (GPIO37)
- *                ADC1_CH7, RTC, GPIO8 | I/O/T|  ⬜ |    8 | 12         O        12 | 36   | 🟨  | I/O/T | RS485 DE/RTS (GPIO36)
- *                ADC1_CH2, RTC, GPIO3 | I/O/T|  ⬜ |    3 | 13         O        13 | 35   | 🟨  | I/O/T | RS485 TX (GPIO35)
+ *        ADC2_CH7, U1RXD, RTC, GPIO18 | I/O/T|  ⬜ |   18 | 11         R        11 | 37   | 🟥  | I/O/T | ⚠ PSRAM (GPIO37, nicht nutzbar!)
+ *  (ADC1_CH7, RTC) RS485 DE/RTS GPIO8 | I/O/T|  🟨 |    8 | 12         O        12 | 36   | 🟥  | I/O/T | ⚠ PSRAM (GPIO36, nicht nutzbar!)
+ *                ADC1_CH2, RTC, GPIO3 | I/O/T|  ⬜ |    3 | 13         O        13 | 35   | 🟥  | I/O/T | ⚠ PSRAM (GPIO35, nicht nutzbar!)
  *                   GPIO46, STRAP/LOG | I/O/T|  🟩 |   46 | 14         M        14 | 0    | 🟩  | I/O/T | BOOT/STRAP, GPIO0
- *                ADC1_CH8, RTC, GPIO9 | I/O/T|  ⬜ |    9 | 15         -        15 | 45   | 🟩  | I/O/T | VSPI/STRAP, GPIO45
- *               ADC1_CH9, RTC, GPIO10 | I/O/T|  ⬜ |   10 | 16         1        16 | 48   | 🟨  | I/O/T | HX711 DOUT (GPIO48)
- *  (ADC2_CH0, RTC, GPIO11) Multimedia | I/O/T|  🟨 |   11 | 17                  17 | 47   | 🟨  | I/O/T | HX711 SCK (GPIO47)
+ *     (ADC1_CH8, RTC) RS485 TX, GPIO9 | I/O/T|  🟨 |    9 | 15         -        15 | 45   | 🟨  | I/O/T | HX711 SCK (GPIO45)
+ *    (ADC1_CH9, RTC) RS485 RX, GPIO10 | I/O/T|  🟨 |   10 | 16         1        16 | 48   | 🟩  | I/O/T | Onboard WS2812 RGB-LED (GPIO48)
+ *  (ADC2_CH0, RTC, GPIO11) Multimedia | I/O/T|  🟨 |   11 | 17                  17 | 47   | 🟨  | I/O/T | HX711 DOUT (GPIO47)
  *     (ADC2_CH1, RTC, GPIO12) 12V EIN | I/O/T|  🟨 |   12 | 18                  18 | 21   | 🟨  | I/O/T | AC 220V Sence (GPIO21, RTC)
  *     (ADC2_CH2, RTC, GPIO13) 12V AUS | I/O/T|  🟨 |   13 | 19                  19 | 20   | 🟩  | I/O/T | USB_D+, GPIO20, RTC
  *   (ADC2_CH3, RTC, GPIO14) 12V Sence | I/O/T|  🟨 |   14 | 20                  20 | 19   | 🟩  | I/O/T | USB_D-, GPIO19, RTC
@@ -56,8 +58,8 @@
 // ====================================================================================
 // HX711 Load Cell ADC (Dual Channel for Gas Bottles)
 // ====================================================================================
-#define SENSOR_HX711_DOUT_GPIO 48
-#define SENSOR_HX711_SCK_GPIO 47
+#define SENSOR_HX711_DOUT_GPIO 47
+#define SENSOR_HX711_SCK_GPIO 45
 #define SENSOR_HX711_READY_TIMEOUT_MS 200U
 #define SENSOR_HX711_READY_RETRY_COUNT 2
 #define SENSOR_HX711_READY_BACKOFF_MS 50U
@@ -66,43 +68,71 @@
 #define SENSOR_HX711_AVG_SAMPLES 3U
 #define SENSOR_HX711_ENABLE_CHANNEL_B 1
 
-// Kalibrierwerte (Platzhalter; bei Bedarf anpassen)
-#define SENSOR_HX711_OFFSET_A -275400
-#define SENSOR_HX711_SCALE_A 0.0388783f
-#define SENSOR_HX711_OFFSET_B 77600
-#define SENSOR_HX711_SCALE_B -0.15450f
+// Kalibrierwerte (Kalibriert 2026-02-13, Referenz: 5×3.6 kg = 18.0 kg)
+#define SENSOR_HX711_OFFSET_A -275500
+#define SENSOR_HX711_SCALE_A 0.04004f
+#define SENSOR_HX711_OFFSET_B 77056
+#define SENSOR_HX711_SCALE_B -0.15674f
 
 // ====================================================================================
 // RS485 Communication (Display Link)
-// Belegung gemäß Pinout-Tabelle (J3): RX=GPIO37, TX=GPIO36, DE/RTS=GPIO35
+// Belegung gemäß Pinout-Tabelle (J1): TX=GPIO9, RX=GPIO10, DE=GPIO8
+// GPIO35-37 sind beim N16R8-Modul intern vom Octal-PSRAM belegt!
 // ====================================================================================
 #define SENSOR_RS485_UART_PORT 2
-#define SENSOR_RS485_BAUDRATE 115200
-#define SENSOR_RS485_TX_GPIO 35
-#define SENSOR_RS485_RX_GPIO 37
-#define SENSOR_RS485_DE_GPIO 36
+#define SENSOR_RS485_BAUDRATE WOMO_RS485_BAUDRATE
+#define SENSOR_RS485_TX_GPIO 9
+#define SENSOR_RS485_RX_GPIO 10
+#define SENSOR_RS485_DE_GPIO 8
 #define SENSOR_RS485_RTS_GPIO SENSOR_RS485_DE_GPIO
 #define SENSOR_RS485_BUFFER_SIZE 4096
 #define SENSOR_RS485_READ_TIMEOUT_MS 50
-#define SENSOR_RS485_HELLO_PENDING_INTERVAL_MS 1000U
-#define SENSOR_RS485_HELLO_READY_INTERVAL_MS 10000U
-#define SENSOR_RS485_HEARTBEAT_INTERVAL_MS 2000U
+#define SENSOR_RS485_HELLO_PENDING_INTERVAL_MS WOMO_RS485_HELLO_PENDING_MS
+#define SENSOR_RS485_HELLO_READY_INTERVAL_MS   WOMO_RS485_HELLO_READY_MS
+#define SENSOR_RS485_HEARTBEAT_INTERVAL_MS     WOMO_RS485_HEARTBEAT_INTERVAL_MS
+
+// ====================================================================================
+// BNO055 IMU – Achsen-Remapping für Einbaulage
+// ====================================================================================
+// Mögliche Werte (aus bno055.h axis_t enum):
+//   POSITIVE_X (0x00), NEGATIVE_X (0x04)
+//   POSITIVE_Y (0x01), NEGATIVE_Y (0x05)
+//   POSITIVE_Z (0x02), NEGATIVE_Z (0x06)
+//
+// Fahrzeugkoordinaten: X→vorne, Y→links, Z→oben
+// Hier eintragen, welche Sensor-Achse der jeweiligen Fahrzeug-Achse entspricht.
+// WICHTIG: Die drei Achsen MÜSSEN ein rechtshändiges System bilden!
+//   Prüfung: new_X × new_Y = new_Z (Kreuzprodukt)
+//   Sonst liefert der BNO055-Fusion fehlerhafte Euler-Winkel.
+//
+// Einbaulage Sensorboard im Fahrzeug (physische Messung):
+//   Sensor-X zeigt nach OBEN (Fahrzeug-Hochachse)
+//   Sensor-Y zeigt in FAHRTRICHTUNG (Fahrzeug-Längsachse, vorne)
+//   Sensor-Z zeigt nach RECHTS/LINKS (Fahrzeug-Querachse)
+//
+// BNO055 Euler: Roll um X-Achse, Pitch um Y-Achse, Heading um Z-Achse
+// → Mapping: Sensor-Z→logisch X (Roll/Quer), Sensor-Y→logisch Y (Pitch/Längs), Sensor-X→logisch Z (Heading/Hoch)
+//   Rechte-Hand-Check: Z × (−Y) = X ✓
+#define SENSOR_BNO055_AXIS_X  POSITIVE_Z
+#define SENSOR_BNO055_AXIS_Y  NEGATIVE_Y
+#define SENSOR_BNO055_AXIS_Z  POSITIVE_X
 
 // ====================================================================================
 // Analog ADC (Battery & Tank Sensors)
 // ====================================================================================
 #define SENSOR_BATT1_ADC_UNIT 1
-#define SENSOR_BATT1_ADC_CHANNEL 3     // GPIO1 (Batt1 Kfz)
+#define SENSOR_BATT1_ADC_CHANNEL 3     // GPIO4 (Batt1 Kfz)
 #define SENSOR_BATT2_ADC_UNIT 1
-#define SENSOR_BATT2_ADC_CHANNEL 4     // GPIO2 (Batt2 Board)
+#define SENSOR_BATT2_ADC_CHANNEL 4     // GPIO5 (Batt2 Board)
 #define SENSOR_TANK1_ADC_UNIT 1
-#define SENSOR_TANK1_ADC_CHANNEL 0     // GPIO4 (Frischwasser)
+#define SENSOR_TANK1_ADC_CHANNEL 0     // GPIO1 (Frischwasser)
 #define SENSOR_TANK2_ADC_UNIT 1
-#define SENSOR_TANK2_ADC_CHANNEL 1     // GPIO5 (Grauwasser)
+#define SENSOR_TANK2_ADC_CHANNEL 1     // GPIO2 (Grauwasser)
 
 // ====================================================================================
 // Board Power / Multimedia GPIOs
 // ====================================================================================
+#define SENSOR_RGB_LED_GPIO 48             // Onboard WS2812 RGB-LED (GPIO48, bestätigt)
 #define SENSOR_PWR_12V_ON_GPIO 12      // Schaltausgang: Boardspannung EIN
 #define SENSOR_PWR_12V_OFF_GPIO 13     // Schaltausgang: Boardspannung AUS
 #define SENSOR_PWR_12V_SENSE_GPIO 14   // Eingang: Boardspannung Feedback
@@ -125,8 +155,8 @@
 // =============================================================================
 // WiFi STA Configuration (Verbindung zum RUTX11 Router)
 // =============================================================================
-#define SENSOR_WIFI_DEFAULT_SSID    "Malibu-622"
-#define SENSOR_WIFI_DEFAULT_PASS    ""          // Default leer; per NVS/RS485 änderbar
+#define SENSOR_WIFI_DEFAULT_SSID    WOMO_WIFI_DEFAULT_SSID
+#define SENSOR_WIFI_DEFAULT_PASS    WOMO_WIFI_DEFAULT_PASS
 #define SENSOR_WIFI_NVS_NAMESPACE   "wifi_cfg"
 #define SENSOR_WIFI_NVS_KEY_SSID    "ssid"
 #define SENSOR_WIFI_NVS_KEY_PASS    "pass"

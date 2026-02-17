@@ -503,7 +503,8 @@ esp_err_t bno055_get_calibration_status(bno055_t *imu)
 
     ESP_LOGD(BNO055_TAG, "Calibration status - Acc: %d, Gyro: %d, Mag: %d, Sys: %d", imu->config.calibration.xl, imu->config.calibration.gyro, imu->config.calibration.mag, imu->config.calibration.sys);
 
-    imu->config.is_calibrated = (imu->config.calibration.xl == 3) && (imu->config.calibration.gyro == 3) && (imu->config.calibration.mag == 3) && (imu->config.calibration.sys == 3);
+    // System-Kalibrierung = 3 ist ausreichend (BNO055 Fusion bereits stabil)
+    imu->config.is_calibrated = (imu->config.calibration.sys == 3);
 
     return ESP_OK;
 }
@@ -1074,9 +1075,9 @@ esp_err_t bno055_remap_axis(bno055_t *imu, bno055_axes_t *axes_config)
         return ret;
     }
     vTaskDelay(pdMS_TO_TICKS(10));
-    /* Assign axis sign values */
+    /* Assign axis sign values (Bit2=X sign, Bit1=Y sign, Bit0=Z sign) */
     write_buffer[0] = AXIS_MAP_SIGN;
-    write_buffer[1] = (axes_config->x >> 2) | (axes_config->y >> 2) | (axes_config->z >> 2);
+    write_buffer[1] = ((axes_config->x >> 2) << 2) | ((axes_config->y >> 2) << 1) | (axes_config->z >> 2);
     /* Transmit data axis sign data */
     ret = i2c_master_transmit(imu->config.slave_handle, write_buffer, sizeof(write_buffer), 100);
     if (ret != ESP_OK)
