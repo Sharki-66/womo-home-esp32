@@ -19,6 +19,7 @@
 #include "gui/womo_fonts_german.h"
 #include "network/womo_wifi.h"
 #include "network/womo_weather_http.h"
+#include "network/womo_meteoalarm.h"
 #include "network/womo_geocode.h"
 #include "network/womo_router_uci.h"
 #include "storage/womo_sd.h"
@@ -47,7 +48,8 @@ static const char *PLACEHOLDER_BVOC = "bVOC --.- ppm";
 static const char *PLACEHOLDER_HUMIDITY = "--.-- %";
 static const char *PLACEHOLDER_TEMPERATURE = "--.- °C";
 static const char *PLACEHOLDER_GPS = "GPS : ---";
-#define GEOCODE_MIN_INTERVAL_US (60LL * 1000000LL) // min. 60s zwischen Reverse-Geocode-Requests
+#define GEOCODE_MIN_INTERVAL_US       (60LL * 1000000LL) // 60s nach Erfolg
+#define GEOCODE_RETRY_INTERVAL_US      (30LL * 1000000LL) // 30s nach Fehler
 #define GEOCODE_MIN_DELTA_DEG   0.01
 #define QUIET_HOUR_START 22
 #define QUIET_HOUR_END   8
@@ -139,10 +141,16 @@ static lv_obj_t *imu_zero_modal = NULL;     // IMU calibration modal
 static womo_weather_t *weather_widget = NULL; // Weather widget
 static womo_battery_t *main_battery = NULL;   // Battery 1 widget
 static womo_battery_t *secondary_battery = NULL; // Battery 2 widget
+/* Meteoalarm ─────────────────────────────────────────────────────── */
+static bool  meteoalarm_started = false;        // Task einmalig gestartet
+static lv_obj_t *meteoalarm_popup = NULL;       // aktuelles Warnungs-Popup (NULL = geschlossen)
 static lv_timer_t *ui_update_timer = NULL; // Periodic UI/IMU refresh timer
 static int64_t last_time_sync_try_us = 0; // Throttle multi-source time sync attempts
 static const uint32_t UI_UPDATE_INTERVAL_DEFAULT_MS = 500;
 static bool geocode_in_progress = false;
+static bool geocode_last_failed  = false; // steuert Retry- vs. Normal-Intervall
+static bool perf_monitor_visible = true;    // Performance monitor visibility
+static lv_obj_t *perf_monitor_label = NULL;  // Performance monitor label reference
 static int64_t geocode_last_request_us = 0;
 static double geocode_last_lat = NAN;
 static double geocode_last_lon = NAN;
@@ -185,6 +193,7 @@ static bool gas_nc_active = false; // true, wenn HX711 als nicht angeschlossen g
 // Water tank widgets
 static womo_tank_t *fresh_water_tank = NULL;
 static womo_tank_t *grey_water_tank = NULL;
+static lv_obj_t *tank_info_label = NULL;  // Tank-Verbrauch (L/h) + Restlaufzeit
 
 // RS485 packet counter
 static uint32_t rs485_packet_count = 0;
@@ -238,6 +247,7 @@ static void imu_labels_update(bool has_data,
                               const char *direction);
 static const char *press_trend_arrow(const char *state);
 static void openweather_update_cb(const womo_weather_http_data_t *data, void *user_data);
+static void meteoalarm_update_cb(const womo_meteoalarm_result_t *result, void *user_data);
 static womo_weather_condition_t map_openweather_condition(int weather_id, bool is_night);
 static womo_weather_condition_t map_day_condition_to_night(womo_weather_condition_t condition);
 static void update_connectivity_label(void);
@@ -273,6 +283,7 @@ static void gas_replace_send_timer_cb(lv_timer_t *timer);
 static void imu_zero_show_modal(void);
 static void imu_zero_close_modal(void);
 static void imu_zero_msgbox_event_cb(lv_event_t *event);
+static void perf_monitor_toggle_event_cb(lv_event_t *e);
 static void imu_zero_area_cb(lv_event_t *event);
 
 static void imu_labels_update(bool has_data,
@@ -507,11 +518,16 @@ static void gps_format_coordinate(double value, bool is_latitude, char *out, siz
 static void geocode_result_cb(const womo_geocode_result_t *result, void *user_data)
 {
     geocode_in_progress = false;
-    geocode_last_request_us = esp_timer_get_time();
 
     if (!result || !result->valid || !location_label) {
+        /* Bei Fehler: kurzes Retry-Intervall, Koordinaten zurücksetzen */
+        geocode_last_failed = true;
+        geocode_last_lat = NAN;
+        geocode_last_lon = NAN;
         return;
     }
+    /* Erfolg: normales Intervall */
+    geocode_last_failed = false;
 
     if (lvgl_port_lock(-1)) {
         const char *text = result->short_name[0] ? result->short_name : result->display_name;
@@ -535,6 +551,11 @@ static void geocode_trigger_if_needed(const womo_sensor_data_t *snapshot)
         return; // benötigt Internet
     }
 
+    /* TLS-Zertifikate werden gegen die Systemzeit geprüft → erst nach NTP-Sync */
+    if (!womo_time_is_synced()) {
+        return;
+    }
+
     if (geocode_in_progress) {
         return;
     }
@@ -551,7 +572,8 @@ static void geocode_trigger_if_needed(const womo_sensor_data_t *snapshot)
     }
 
     int64_t now_us = esp_timer_get_time();
-    if (geocode_last_request_us > 0 && (now_us - geocode_last_request_us) < GEOCODE_MIN_INTERVAL_US) {
+    int64_t min_interval = geocode_last_failed ? GEOCODE_RETRY_INTERVAL_US : GEOCODE_MIN_INTERVAL_US;
+    if (geocode_last_request_us > 0 && (now_us - geocode_last_request_us) < min_interval) {
         return;
     }
 
@@ -564,6 +586,10 @@ static void geocode_trigger_if_needed(const womo_sensor_data_t *snapshot)
     }
 
     geocode_in_progress = true;
+    /* Zeitstempel VOR dem Request setzen – verhindert parallele Requests
+     * auch wenn der Callback sehr schnell zurückkommt. Bei Fehler wird
+     * der Zeitstempel im Callback auf Retry-Intervall angepasst. */
+    geocode_last_request_us = esp_timer_get_time();
     const char *accept_lang = (womo_locale_get() == WOMO_LOCALE_DE) ? "de" : "en";
     esp_err_t err = womo_geocode_reverse_request(snapshot->gps.latitude,
                                                  snapshot->gps.longitude,
@@ -574,6 +600,7 @@ static void geocode_trigger_if_needed(const womo_sensor_data_t *snapshot)
         geocode_in_progress = false;
         geocode_last_lat = NAN;
         geocode_last_lon = NAN;
+        geocode_last_failed = true;
         ESP_LOGW(TAG, "Geocode-Request fehlgeschlagen: %s", esp_err_to_name(err));
     } else {
         geocode_last_lat = snapshot->gps.latitude;
@@ -1027,9 +1054,6 @@ static void gps_hide_timer_cb(lv_timer_t *timer)
     (void)timer;
     gps_details_visible = false;
     lv_label_set_text(gps_label, "GPS");
-    if (gps_button) {
-        lv_obj_clear_flag(gps_button, LV_OBJ_FLAG_HIDDEN);
-    }
     if (location_label) {
         lv_obj_clear_flag(location_label, LV_OBJ_FLAG_HIDDEN);
     }
@@ -1045,11 +1069,6 @@ static void gps_label_event_cb(lv_event_t *e)
     gps_details_visible = true;
     const char *text = (last_gps_text[0] != '\0') ? last_gps_text : PLACEHOLDER_GPS;
     lv_label_set_text(gps_label, text);
-
-    // Rahmen ausblenden, solange Details dargestellt werden
-    if (gps_button) {
-        lv_obj_add_flag(gps_button, LV_OBJ_FLAG_HIDDEN);
-    }
 
     // Ortsname ausblenden, solange Details im Vordergrund sind
     if (location_label) {
@@ -1703,6 +1722,42 @@ static void ui_update_timer_cb(lv_timer_t *timer)
 
 gas_done:
 
+    // Tank summary (Frischwasser: Verbrauch L/h, Restlaufzeit)
+    if (snapshot.tank.valid && tank_info_label) {
+        static float last_tank1_liters = NAN;
+        static float last_tank1_rate1h = NAN;
+        static float last_tank1_rest_h = NAN;
+
+        float liters = snapshot.tank.tank1_liters;
+        float rate = snapshot.tank.tank1_rate1h;  // negativ=Verbrauch
+        float rest = snapshot.tank.tank1_rest_h;
+
+        if (!isfinite(liters)) liters = NAN;
+        if (!isfinite(rate)) rate = NAN;
+        if (!isfinite(rest)) rest = NAN;
+
+        // Refresh nur bei Änderungen (oder initialer Aufruf)
+        bool changed = !isfinite(last_tank1_liters) ||  // Erster Aufruf
+                       (!isnan(liters) && fabsf(liters - last_tank1_liters) > 0.5f) ||
+                       (!isnan(rate) && (!isfinite(last_tank1_rate1h) || fabsf(rate - last_tank1_rate1h) > 0.05f)) ||
+                       (!isnan(rest) && (!isfinite(last_tank1_rest_h) || fabsf(rest - last_tank1_rest_h) > 0.5f));
+
+        if (changed) {
+            char buf[80];
+            snprintf(buf, sizeof(buf),
+                     "Frisch:\n%.1f L\n%.2f L/h\n%.1f h",
+                     isnan(liters) ? 0.0f : liters,
+                     isnan(rate) ? 0.0f : rate,
+                     isnan(rest) ? 0.0f : rest);
+            lv_label_set_text(tank_info_label, buf);
+            last_tank1_liters = liters;
+            last_tank1_rate1h = rate;
+            last_tank1_rest_h = rest;
+        }
+    } else if (tank_info_label) {
+        lv_label_set_text(tank_info_label, "Frisch:\n--- L\n--.-- L/h\n--.- h");
+    }
+
     // Battery widgets
     if (main_battery || secondary_battery) {
         static bool battery_has_data = false;
@@ -1968,10 +2023,9 @@ gas_done:
                     lv_label_set_text(gps_label, last_gps_text);
                 }
             }
-            if (location_label && location_last_text[0]) {
-                lv_label_set_text(location_label, "");
-                location_last_text[0] = '\0';
-            }
+            /* Location-Text absichtlich NICHT löschen: bei kurzem GPS-Ausfall
+             * soll der zuletzt bekannte Ortsname stehen bleiben. Er wird erst
+             * überschrieben wenn ein neuer Geocode-Treffer vorliegt. */
         }
     }
 }
@@ -2020,6 +2074,16 @@ static void time_update_timer_cb(lv_timer_t *timer)
             ESP_LOGW(TAG, "Online weather updates disabled: %s", esp_err_to_name(weather_err));
         } else {
             weather_started = true;
+        }
+    }
+
+    // Meteoalarm: nach WiFi + Zeitsync starten (wie Wetter)
+    if (!meteoalarm_started && womo_wifi_is_connected() && womo_time_is_synced()) {
+        esp_err_t ma_err = womo_meteoalarm_start(meteoalarm_update_cb, NULL);
+        if (ma_err != ESP_OK) {
+            ESP_LOGW(TAG, "Meteoalarm-Task nicht gestartet: %s", esp_err_to_name(ma_err));
+        } else {
+            meteoalarm_started = true;
         }
     }
 
@@ -2232,6 +2296,147 @@ static void openweather_update_cb(const womo_weather_http_data_t *data, void *us
     }
 }
 
+/* ── Meteoalarm: gespeicherte Warnungen für das Popup ─────────── */
+static womo_meteoalarm_result_t s_meteoalarm_latest = {0};
+
+/* Event-Callback zum Schließen des Popups (OK-Button) */
+static void meteoalarm_popup_close_cb(lv_event_t *e)
+{
+    (void)e;
+    if (meteoalarm_popup) {
+        lv_msgbox_close(meteoalarm_popup);
+        meteoalarm_popup = NULL;
+    }
+}
+
+/* Schließt das offene Meteoalarm-Popup (falls vorhanden) */
+static void meteoalarm_popup_close(void)
+{
+    if (meteoalarm_popup) {
+        lv_msgbox_close(meteoalarm_popup);
+        meteoalarm_popup = NULL;
+    }
+}
+
+/* Öffnet ein Popup mit den aktuellen Warnungen */
+static void meteoalarm_popup_open(void)
+{
+    if (meteoalarm_popup) {
+        /* Bereits offen – schließen und neu aufbauen */
+        meteoalarm_popup_close();
+    }
+
+    /* Nachrichten-Text aufbauen */
+    static char msg_buf[512];
+    msg_buf[0] = '\0';
+
+    /* Standort/Region als erste Zeile:
+     * 1) Meteoalarm-Region aus API (Warngebiet z.B. "Chiemgauer Alpen")
+     * 2) Fallback: Geocode-Ortsname (z.B. "Schleching, Bayern") */
+    const char *region_src = NULL;
+    if (s_meteoalarm_latest.region[0]) {
+        region_src = s_meteoalarm_latest.region;
+    } else if (location_last_text[0]) {
+        region_src = location_last_text;
+    }
+    if (region_src) {
+        char loc_line[96];
+        snprintf(loc_line, sizeof(loc_line), "Standort: %s\n\n", region_src);
+        strlcat(msg_buf, loc_line, sizeof(msg_buf));
+    }
+
+    if (s_meteoalarm_latest.count == 0) {
+        strlcat(msg_buf, "Keine aktiven Warnungen.", sizeof(msg_buf));
+    } else {
+        for (uint8_t i = 0; i < s_meteoalarm_latest.count; i++) {
+            const womo_meteoalarm_warning_t *w = &s_meteoalarm_latest.warnings[i];
+            const char *sev_mark;
+            if (w->severity >= WOMO_WARN_SEV_SEVERE) {
+                sev_mark = "! ";     // Rot / Extreme+Severe
+            } else {
+                sev_mark = "* ";     // Orange / Moderate
+            }
+            char line[200];
+            if (w->region[0] && w->expires[0]) {
+                snprintf(line, sizeof(line), "%s%s\n%s | bis %s\n\n",
+                         sev_mark, w->headline, w->region, w->expires);
+            } else if (w->region[0]) {
+                snprintf(line, sizeof(line), "%s%s\n%s\n\n",
+                         sev_mark, w->headline, w->region);
+            } else if (w->expires[0]) {
+                snprintf(line, sizeof(line), "%s%s\nbis %s\n\n",
+                         sev_mark, w->headline, w->expires);
+            } else {
+                snprintf(line, sizeof(line), "%s%s\n\n", sev_mark, w->headline);
+            }
+            strlcat(msg_buf, line, sizeof(msg_buf));
+        }
+    }
+
+    /* Hinweis auf Meteoalarm-Webseite */
+    strlcat(msg_buf, "meteoalarm.org", sizeof(msg_buf));
+
+    static const char *btns[] = { "OK", "" };
+    meteoalarm_popup = lv_msgbox_create(NULL, "Unwetterwarnungen", msg_buf, btns, false);
+    lv_obj_set_width(meteoalarm_popup, 520);
+    lv_obj_center(meteoalarm_popup);
+
+    /* Schließen per OK-Button – VALUE_CHANGED wird bei Buttonklick gesendet */
+    lv_obj_add_event_cb(meteoalarm_popup, meteoalarm_popup_close_cb,
+                        LV_EVENT_VALUE_CHANGED, NULL);
+}
+
+/* Click-Handler auf dem Wetter-Widget */
+static void weather_widget_click_cb(lv_event_t *e)
+{
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    meteoalarm_popup_open();
+}
+
+/* Meteoalarm-Callback (kommt aus FreeRTOS-Task → braucht LVGL-Lock) */
+static void meteoalarm_update_cb(const womo_meteoalarm_result_t *result, void *user_data)
+{
+    (void)user_data;
+    if (!result) return;
+
+    ESP_LOGI(TAG, "Meteoalarm: valid=%d count=%u max_sev=%u",
+             result->valid, result->count, result->max_severity);
+
+    uint8_t prev_max_sev = s_meteoalarm_latest.max_severity;
+    uint8_t prev_count   = s_meteoalarm_latest.count;
+
+    /* Snapshot speichern (für späteres Popup-Öffnen) */
+    s_meteoalarm_latest = *result;
+
+    /* Auto-Popup: nur wenn neue Warnungen aufgetaucht sind oder Schwere
+     * gestiegen ist (nicht bei bloßem Verschwinden oder unverand. Stand) */
+    bool auto_open = result->count > 0 &&
+                     result->max_severity >= WOMO_WARN_SEV_MODERATE &&
+                     (prev_count == 0 || result->max_severity > prev_max_sev);
+
+    if (!weather_widget) return;
+
+    if (lvgl_port_lock(-1)) {
+        womo_weather_set_warnings(weather_widget, result->count, result->max_severity);
+        /* Click-Handler nur beim ersten Mal registrieren */
+        static bool click_registered = false;
+        if (!click_registered && weather_widget->container) {
+            lv_obj_add_flag(weather_widget->container, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_add_event_cb(weather_widget->container,
+                                weather_widget_click_cb,
+                                LV_EVENT_CLICKED,
+                                NULL);
+            click_registered = true;
+        }
+        if (auto_open) {
+            ESP_LOGI(TAG, "Meteoalarm Auto-Popup (count=%u sev=%u)",
+                     result->count, result->max_severity);
+            meteoalarm_popup_open();
+        }
+        lvgl_port_unlock();
+    }
+}
+
 static void wifi_autoretry_task(void *arg)
 {
     (void)arg;
@@ -2353,6 +2558,8 @@ static void router_poll_task(void *arg)
 
             /* Wetter-Modul mit aktuellen GPS-Koordinaten versorgen */
             womo_weather_http_set_location(gps_tmp.latitude, gps_tmp.longitude);
+            /* Meteoalarm mit gleichen Koordinaten versorgen */
+            womo_meteoalarm_set_location(gps_tmp.latitude, gps_tmp.longitude);
         } else if (g_err != ESP_OK && poll_count <= 3) {
             ESP_LOGW(TAG, "Router GPS fehlgeschlagen: %s", esp_err_to_name(g_err));
         }
@@ -2594,6 +2801,54 @@ static void status_label_event_cb(lv_event_t *event)
 
     // Theme/Label sofort aktualisieren
     system_status_apply(true);
+}
+
+static void perf_monitor_toggle_event_cb(lv_event_t *e)
+{
+    if (!e || lv_event_get_code(e) != LV_EVENT_CLICKED) {
+        return;
+    }
+
+    perf_monitor_visible = !perf_monitor_visible;
+    
+    // Suche das Performance Monitor Label im System Layer
+    if (!perf_monitor_label) {
+        lv_obj_t *sys_layer = lv_layer_sys();
+        if (sys_layer) {
+            uint32_t child_count = lv_obj_get_child_cnt(sys_layer);
+            for (uint32_t i = 0; i < child_count; i++) {
+                lv_obj_t *child = lv_obj_get_child(sys_layer, i);
+                // Performance Monitor ist ein Label mit schwarzem Hintergrund
+                if (child && lv_obj_check_type(child, &lv_label_class)) {
+                    lv_color_t bg = lv_obj_get_style_bg_color(child, 0);
+                    if (bg.full == lv_color_black().full) {
+                        perf_monitor_label = child;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    if (perf_monitor_label) {
+        if (perf_monitor_visible) {
+            lv_obj_clear_flag(perf_monitor_label, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(perf_monitor_label, LV_OBJ_FLAG_HIDDEN);
+        }
+        ESP_LOGI(TAG, "Performance Monitor %s", perf_monitor_visible ? "eingeblendet" : "ausgeblendet");
+    } else {
+        ESP_LOGW(TAG, "Performance Monitor Label nicht gefunden");
+    }
+    
+    // RS485 Debug Label auch mit togglen
+    if (rs485_debug_label) {
+        if (perf_monitor_visible) {
+            lv_obj_clear_flag(rs485_debug_label, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(rs485_debug_label, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
 }
 
 static void backlight_update_label(void)
@@ -2971,6 +3226,12 @@ void app_main()
         womo_rs485_set_data_callback(rs485_data_received, NULL);
         womo_rs485_set_event_callback(rs485_event_handler, NULL);
         rs485_waiting_for_handshake = true;
+        
+        // Display-Ready sofort senden damit Sensorboard mit Datenübertragung beginnt
+        // (nicht erst auf hello warten - das kann 30-60s dauern wenn Sensorboard später bootet)
+        vTaskDelay(pdMS_TO_TICKS(100)); // Kurz warten damit RS485 bereit ist
+        womo_rs485_send_display_ready();
+        ESP_LOGI(TAG, "Sent initial display_ready to trigger sensor data transmission");
     } else {
         ESP_LOGW(TAG, "RS485 init failed - continuing without external sensors");
     }
@@ -3265,38 +3526,31 @@ void app_main()
         lv_obj_add_event_cb(imu_touch, imu_zero_area_cb, LV_EVENT_LONG_PRESSED, NULL);
     }
 
-    gps_label = lv_label_create(screen);
-    lv_label_set_text(gps_label, "GPS");
-    lv_obj_set_style_text_font(gps_label, &lv_font_montserrat_14, 0); // gleiche Schriftgröße wie Status-Label
-    lv_obj_set_style_text_color(gps_label, lv_color_black(), 0);
-    lv_obj_set_width(gps_label, 360);
-    lv_label_set_long_mode(gps_label, LV_LABEL_LONG_WRAP);
-    lv_obj_set_style_text_align(gps_label, LV_TEXT_ALIGN_LEFT, 0);
+    /* GPS-Label: zeigt "GPS" oder Koordinaten, mit Rahmen wie status_label.
+     * gps_button ist ein Alias auf dasselbe Objekt für die Theme-Farb-Logik. */
     lv_coord_t gps_offset_x = disp_w / 5;
     if (gps_offset_x < 0) {
         gps_offset_x = 0;
     }
-    lv_obj_align(gps_label, LV_ALIGN_BOTTOM_LEFT, gps_offset_x, -20); // gleiche Höhe wie Datum
+    gps_label = lv_label_create(screen);
+    lv_label_set_text(gps_label, "GPS");
+    lv_obj_set_style_text_font(gps_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(gps_label, lv_color_black(), 0);
+    lv_obj_set_style_text_align(gps_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_border_width(gps_label, 2, 0);
+    lv_obj_set_style_border_color(gps_label, lv_color_black(), 0);
+    lv_obj_set_style_radius(gps_label, 6, 0);
+    lv_obj_set_style_pad_all(gps_label, 6, 0);
+    lv_obj_set_style_bg_color(gps_label, lv_color_hex(0xE0E0E0), 0);
+    lv_obj_set_style_bg_opa(gps_label, LV_OPA_30, 0);
+    lv_obj_add_flag(gps_label, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_align(gps_label, LV_ALIGN_BOTTOM_LEFT, gps_offset_x, -20);
+    lv_obj_add_event_cb(gps_label, gps_label_event_cb, LV_EVENT_CLICKED, NULL);
+    gps_button = gps_label; // Alias für Theme-Farb-Updates in apply_text_theme_colors()
 
-    // Button deckungsgleich mit dem Label-Bereich, Größe wie Status-Button (Font 14 + Padding)
-    lv_point_t gps_text_size;
-    lv_txt_get_size(&gps_text_size, "GPS", &lv_font_montserrat_14, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-    lv_coord_t gps_btn_w = gps_text_size.x + 12; // Padding analog Status (6px pro Seite)
-    lv_coord_t gps_btn_h = gps_text_size.y + 12; // Höhe analog Status (Pad 6 oben/unten)
-    if (gps_btn_w < 48) gps_btn_w = 48;
-    if (gps_btn_h < 24) gps_btn_h = 24;
-    gps_button = lv_btn_create(screen);
-    lv_obj_set_size(gps_button, gps_btn_w, gps_btn_h);
-    lv_obj_set_style_radius(gps_button, 6, 0);
-    lv_obj_set_style_border_width(gps_button, 2, 0);
-    lv_obj_set_style_bg_opa(gps_button, LV_OPA_30, 0); // leicht durchscheinend wie Status
-    // Button links-mittig am Label ausrichten, damit Text mittig im Rahmen liegt
-    lv_obj_align_to(gps_button, gps_label, LV_ALIGN_LEFT_MID, -6, 0);
-    lv_obj_add_event_cb(gps_button, gps_label_event_cb, LV_EVENT_CLICKED, NULL);
-
-    // Ortsname rechts neben dem GPS-Button anordnen
+    // Ortsname rechts neben dem GPS-Label anordnen
     if (location_label) {
-        lv_obj_align_to(location_label, gps_button, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
+        lv_obj_align_to(location_label, gps_label, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
     }
 
     // cm → Pixel Umrechnung (anpassbar für physische Displaymaße)
@@ -3391,6 +3645,19 @@ void app_main()
             lv_obj_align_to(gas_info_label, gas_bottle_a->container, LV_ALIGN_OUT_LEFT_MID, -8, 0);
         } else {
             lv_obj_align(gas_info_label, LV_ALIGN_TOP_LEFT, 10, 120);
+        }
+    }
+
+    if (!tank_info_label) {
+        tank_info_label = lv_label_create(screen);
+        lv_label_set_text(tank_info_label, "Frisch:\n--- L\n--.-- L/h\n--.- h");
+        lv_obj_set_style_text_font(tank_info_label, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(tank_info_label, lv_color_black(), 0);
+        lv_obj_set_style_text_align(tank_info_label, LV_TEXT_ALIGN_RIGHT, 0);
+        if (fresh_water_tank && fresh_water_tank->container) {
+            lv_obj_align_to(tank_info_label, fresh_water_tank->container, LV_ALIGN_OUT_LEFT_MID, -8, 0);
+        } else {
+            lv_obj_align(tank_info_label, LV_ALIGN_TOP_LEFT, 260, 120);
         }
     }
     
@@ -3502,6 +3769,15 @@ void app_main()
         lv_obj_add_flag(status_label, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(status_label, status_label_event_cb, LV_EVENT_CLICKED, NULL);
         lv_obj_align(status_label, LV_ALIGN_BOTTOM_LEFT, 543, -10);  // 10px weiter nach links
+        
+        // Unsichtbarer Touch-Bereich unten rechts zum Ein-/Ausblenden des Performance Monitors
+        lv_obj_t *perf_toggle_btn = lv_obj_create(screen);
+        lv_obj_set_size(perf_toggle_btn, 120, 80);
+        lv_obj_align(perf_toggle_btn, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+        lv_obj_set_style_bg_opa(perf_toggle_btn, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(perf_toggle_btn, 0, 0);
+        lv_obj_add_flag(perf_toggle_btn, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(perf_toggle_btn, perf_monitor_toggle_event_cb, LV_EVENT_CLICKED, NULL);
         
     // Create LVGL timer to update time every second
     lv_timer_create(time_update_timer_cb, 1000, NULL);

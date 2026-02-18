@@ -18,6 +18,7 @@ idf_component_register(
         "gui/fonts/lv_font_montserrat_24_german.c"
         "network/womo_wifi.c"
         "network/womo_weather_http.c"
+        "network/womo_meteoalarm.c"
         "network/womo_geocode.c"
         "network/womo_router_uci.c"
         "storage/womo_sd.c"

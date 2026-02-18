@@ -58,9 +58,12 @@ typedef struct {
     lv_obj_t *container;          // Main container
     lv_obj_t *weather_icon;       // Weather icon image
     lv_obj_t *temp_label;         // Temperature label
+    lv_obj_t *warn_badge;         // Unwarnungs-Badge (rot/orange, nur sichtbar wenn Warnungen aktiv)
     womo_weather_condition_t condition;  // Current weather condition
     int16_t temperature_c;        // Temperature in Celsius
     bool is_night;               // Day/night mode
+    uint8_t warn_count;           // Anzahl aktiver Warnungen (0 = kein Badge)
+    uint8_t warn_max_severity;    // Höchste Severity (0=keine, 2=orange, 3/4=rot)
     char icon_path[128];         // Current icon file path
 } womo_weather_t;
 
@@ -106,6 +109,21 @@ void womo_weather_set_visible(womo_weather_t *weather, bool visible);
  * @param weather Weather widget instance
  */
 void womo_weather_delete(womo_weather_t *weather);
+
+/**
+ * @brief Unwarnungs-Badge aktualisieren.
+ *
+ * Zeigt ein farbiges Ausrufezeichen-Badge am Wetter-Icon an.
+ * count == 0  → Badge wird ausgeblendet.
+ * max_severity >= 4 → rot (Extreme), 3 → rot, 2 → orange.
+ *
+ * MUSS unter lvgl_port_lock() aufgerufen werden.
+ *
+ * @param weather      Widget-Instanz
+ * @param count        Anzahl aktiver Warnungen
+ * @param max_severity Höchste Severity (WOMO_WARN_SEV_* Wert)
+ */
+void womo_weather_set_warnings(womo_weather_t *weather, uint8_t count, uint8_t max_severity);
 
 /**
  * @brief Get weather condition name for debugging

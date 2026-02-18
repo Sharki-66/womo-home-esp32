@@ -1526,8 +1526,30 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             s_latest_data.tank.valid = true;
             cJSON *t1 = cJSON_GetObjectItem(root, "t1");
             cJSON *t2 = cJSON_GetObjectItem(root, "t2");
+            cJSON *nc1 = cJSON_GetObjectItem(root, "nc1");
+            cJSON *nc2 = cJSON_GetObjectItem(root, "nc2");
+            cJSON *t1_l = cJSON_GetObjectItem(root, "t1_l");
+            cJSON *t2_l = cJSON_GetObjectItem(root, "t2_l");
+            cJSON *t1_rate1h = cJSON_GetObjectItem(root, "t1_rate1h");
+            cJSON *t1_rate2h = cJSON_GetObjectItem(root, "t1_rate2h");
+            cJSON *t1_rest_h = cJSON_GetObjectItem(root, "t1_rest_h");
+            cJSON *t2_rate1h = cJSON_GetObjectItem(root, "t2_rate1h");
+            cJSON *t2_rate2h = cJSON_GetObjectItem(root, "t2_rate2h");
+            cJSON *t2_rest_h = cJSON_GetObjectItem(root, "t2_rest_h");
+            
             if (t1) s_latest_data.tank.tank1_percent = (uint8_t)t1->valueint;
             if (t2) s_latest_data.tank.tank2_percent = (uint8_t)t2->valueint;
+            if (nc1 && cJSON_IsBool(nc1)) s_latest_data.tank.nc1 = cJSON_IsTrue(nc1);
+            if (nc2 && cJSON_IsBool(nc2)) s_latest_data.tank.nc2 = cJSON_IsTrue(nc2);
+            if (t1_l && cJSON_IsNumber(t1_l)) s_latest_data.tank.tank1_liters = (float)t1_l->valuedouble;
+            if (t2_l && cJSON_IsNumber(t2_l)) s_latest_data.tank.tank2_liters = (float)t2_l->valuedouble;
+            if (t1_rate1h && cJSON_IsNumber(t1_rate1h)) s_latest_data.tank.tank1_rate1h = (float)t1_rate1h->valuedouble;
+            if (t1_rate2h && cJSON_IsNumber(t1_rate2h)) s_latest_data.tank.tank1_rate2h = (float)t1_rate2h->valuedouble;
+            if (t1_rest_h && cJSON_IsNumber(t1_rest_h)) s_latest_data.tank.tank1_rest_h = (float)t1_rest_h->valuedouble;
+            if (t2_rate1h && cJSON_IsNumber(t2_rate1h)) s_latest_data.tank.tank2_rate1h = (float)t2_rate1h->valuedouble;
+            if (t2_rate2h && cJSON_IsNumber(t2_rate2h)) s_latest_data.tank.tank2_rate2h = (float)t2_rate2h->valuedouble;
+            if (t2_rest_h && cJSON_IsNumber(t2_rest_h)) s_latest_data.tank.tank2_rest_h = (float)t2_rest_h->valuedouble;
+            
             notify_snapshot = s_latest_data;
             xSemaphoreGive(s_data_mutex);
             topic_handled = true;

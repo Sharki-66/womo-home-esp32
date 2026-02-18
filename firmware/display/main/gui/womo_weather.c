@@ -369,3 +369,54 @@ const char* womo_weather_get_condition_name(womo_weather_condition_t condition)
     const char *name = weather_condition_names[condition];
     return name ? name : "Unknown";
 }
+
+void womo_weather_set_warnings(womo_weather_t *weather, uint8_t count, uint8_t max_severity)
+{
+    if (!weather || !weather->container) {
+        return;
+    }
+
+    weather->warn_count        = count;
+    weather->warn_max_severity = max_severity;
+
+    /* Badge erstmalig erzeugen */
+    if (!weather->warn_badge) {
+        weather->warn_badge = lv_label_create(weather->container);
+        lv_obj_set_style_text_font(weather->warn_badge, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_bg_opa(weather->warn_badge, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(weather->warn_badge, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_pad_hor(weather->warn_badge, 4, 0);
+        lv_obj_set_style_pad_ver(weather->warn_badge, 1, 0);
+        /* Rechts oben am Icon, knapp über dem Container-Rand */
+        lv_obj_align(weather->warn_badge, LV_ALIGN_TOP_RIGHT, 2, -2);
+        lv_obj_set_style_text_color(weather->warn_badge, lv_color_white(), 0);
+    }
+
+    if (count == 0) {
+        lv_obj_add_flag(weather->warn_badge, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+
+    /* Farbe je nach Stufe */
+    lv_color_t badge_color;
+    if (max_severity >= 4) {
+        badge_color = lv_color_make(200, 0, 0);   // Rot (Extreme)
+    } else if (max_severity == 3) {
+        badge_color = lv_color_make(200, 0, 0);   // Rot (Severe)
+    } else {
+        badge_color = lv_color_make(230, 100, 0); // Orange (Moderate)
+    }
+
+    lv_obj_set_style_bg_color(weather->warn_badge, badge_color, 0);
+
+    char buf[8];
+    if (count <= 9) {
+        snprintf(buf, sizeof(buf), " %u ", count);
+    } else {
+        snprintf(buf, sizeof(buf), " 9+ ");
+    }
+    lv_label_set_text(weather->warn_badge, buf);
+    lv_obj_clear_flag(weather->warn_badge, LV_OBJ_FLAG_HIDDEN);
+
+    ESP_LOGI(TAG, "Warn-Badge: %u Warnungen, Stufe %u", count, max_severity);
+}

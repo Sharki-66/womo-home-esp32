@@ -99,6 +99,16 @@ typedef struct {
         bool valid;
         uint8_t tank1_percent;
         uint8_t tank2_percent;
+        bool nc1;
+        bool nc2;
+        float tank1_liters;
+        float tank2_liters;
+        float tank1_rate1h;  // L/h (1h-Fenster, negativ=Verbrauch)
+        float tank1_rate2h;  // L/h (2h-Fenster)
+        float tank1_rest_h;  // Restlaufzeit Stunden
+        float tank2_rate1h;  // L/h (1h-Fenster, positiv=Füllrate)
+        float tank2_rate2h;  // L/h (2h-Fenster)
+        float tank2_rest_h;  // Zeit bis voll Stunden
     } tank;
     
     // GPS/GNSS

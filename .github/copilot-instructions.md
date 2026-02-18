@@ -4,6 +4,8 @@
 - Antworten immer auf Deutsch, inkl. Code-Reviews und Commit-Beschreibungen.
 - Hardwarezugriffe ausschließlich über die vorhandenen komponentenspezifischen Bibliotheken (z. B. LVGL, esp_lcd). Keine Eigenimplementierungen solange eine Bibliothek die Funktion bereits anbietet.
 - Build, Flash und Monitor werden vom Nutzer gestartet (siehe VS Code Tasks "Build/Flash/Monitor Display Firmware"). Nur erklären, keine Befehle ausführen.
+Bei Änderungen am Code die aktuelle README.md (*.md) prüfen / gegebenenfalls bearbeiten.
+Git regelmäsig updaten -> Nutzer fragen.
 
 ## Projektüberblick
 - Ziel: Anzeige und Steuerung von Wohnmobil-Daten. Router liefert WLAN/LTE/GNSS; Display visualisiert; Sensorboard sammelt analoge/digitale Messwerte. Kommunikation zwischen Display und Sensorboard per RS485.
