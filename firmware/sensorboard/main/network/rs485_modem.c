@@ -18,8 +18,8 @@
 #include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "nvs.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "sensor_config.h"
 #include "sensors/bme680_sensor.h"
@@ -430,7 +430,7 @@ static void rs485_handle_display_ready(void)
 static bool s_radio_on = false;
 static bool s_power_gpio_inited = false;
 
-// Gas-Verbrauchsstate (einfacher Laufzeitspeicher, keine NVS-Persistenz)
+// Gas-Verbrauchsstate (mit NVS-Persistenz)
 typedef struct {
     double last_net_a;
     double last_net_b;
@@ -441,6 +441,73 @@ typedef struct {
 
 static gas_state_t s_gas_state = {0};
 static int s_gas_active_override = SENSOR_GAS_ACTIVE_DEFAULT; // -1 = auto
+
+#define GAS_NVS_NAMESPACE "gas_state"
+#define GAS_NVS_KEY       "gas"
+
+static void gas_state_load_from_nvs(void)
+{
+    nvs_handle_t handle;
+    if (nvs_open(GAS_NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return;
+    size_t size = sizeof(gas_state_t);
+    nvs_get_blob(handle, GAS_NVS_KEY, &s_gas_state, &size);
+    nvs_close(handle);
+}
+
+static void gas_state_save_to_nvs(void)
+{
+    nvs_handle_t handle;
+    if (nvs_open(GAS_NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return;
+    nvs_set_blob(handle, GAS_NVS_KEY, &s_gas_state, sizeof(gas_state_t));
+    nvs_commit(handle);
+    nvs_close(handle);
+}
+
+// Tank-Verbrauchsstate (mit NVS-Persistenz)
+// Frischwasser: Verbrauch → rest_h = wie lange hält der Vorrat
+// Grauwasser: Füllrate → rest_h = wie lange bis voll
+typedef struct {
+    double last_liters;      // Letzter Füllstand in Litern
+    int64_t last_ts_us;      // Zeitstempel der letzten Messung
+    double rate1h;           // L/h über 1h Fenster (negativ=Verbrauch, positiv=Füllung)
+    double rate2h;           // L/h über 2h Fenster
+} tank_state_t;
+
+static tank_state_t s_tank1_state = {0}; // Frischwasser (100L)
+static tank_state_t s_tank2_state = {0}; // Grauwasser (92L)
+
+#define TANK_NVS_NAMESPACE "tank_state"
+#define TANK1_NVS_KEY "tank1"
+#define TANK2_NVS_KEY "tank2"
+
+static void tank_state_load_from_nvs(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(TANK_NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        return;
+    }
+
+    size_t size = sizeof(tank_state_t);
+    nvs_get_blob(handle, TANK1_NVS_KEY, &s_tank1_state, &size);
+    size = sizeof(tank_state_t);
+    nvs_get_blob(handle, TANK2_NVS_KEY, &s_tank2_state, &size);
+    nvs_close(handle);
+}
+
+static void tank_state_save_to_nvs(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(TANK_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        return;
+    }
+
+    nvs_set_blob(handle, TANK1_NVS_KEY, &s_tank1_state, sizeof(tank_state_t));
+    nvs_set_blob(handle, TANK2_NVS_KEY, &s_tank2_state, sizeof(tank_state_t));
+    nvs_commit(handle);
+    nvs_close(handle);
+}
 
 static void rs485_power_gpio_init(void)
 {
@@ -681,6 +748,12 @@ static void rs485_publish_hx(void)
 
 static void rs485_publish_gas(void)
 {
+    static bool s_gas_nvs_loaded = false;
+    if (!s_gas_nvs_loaded) {
+        gas_state_load_from_nvs();
+        s_gas_nvs_loaded = true;
+    }
+
     hx711_snapshot_t hx = {0};
     hx711_app_get_snapshot(&hx);
 
@@ -742,6 +815,7 @@ static void rs485_publish_gas(void)
             s_gas_state.last_ts_us  = hx.timestamp_us;
             s_gas_state.rate1h      = rate1h;
             s_gas_state.rate2h      = rate2h;
+            gas_state_save_to_nvs();
         }
     } else if (s_gas_state.last_ts_us == 0 && hx.timestamp_us > 0) {
         s_gas_state.last_net_a = net_a;
@@ -773,12 +847,22 @@ static void rs485_publish_gas(void)
     cJSON_AddNumberToObject(root, "pct", round2(pct));
     cJSON_AddNumberToObject(root, "pct_a", round2(pct_a));
     cJSON_AddNumberToObject(root, "pct_b", round2(pct_b));
+    
+    ESP_LOGI(TAG, "GAS: active=%d, %.2f kg (%.0f%%), A=%.2f kg, B=%.2f kg, rate=%.3f/%.3f kg/h, rest=%.1f h",
+             active, fill_kg, pct, net_a, net_b, rate1h, rate2h, rest_h);
+    
     rs485_send_frame("gas", root, false);
     cJSON_Delete(root);
 }
 
 static void rs485_publish_tank(void)
 {
+    static bool s_tank_nvs_loaded = false;
+    if (!s_tank_nvs_loaded) {
+        tank_state_load_from_nvs();
+        s_tank_nvs_loaded = true;
+    }
+
     int mv = 0;
     cJSON *root = cJSON_CreateObject();
     if (!root) return;
@@ -789,10 +873,86 @@ static void rs485_publish_tank(void)
     bool tank2_ok = (analog_read_mv(SENSOR_TANK2_ADC_CHANNEL, &mv) == ESP_OK);
     int tank2_pct = tank2_ok ? adc_mv_to_percent(mv) : 0;
 
+    // Verbrauchsberechnung Frischwasser (100L, Verbrauch negativ)
+    double tank1_liters = tank1_ok ? (tank1_pct / 100.0) * 100.0 : 0.0;
+    double tank1_rate1h = 0.0, tank1_rate2h = 0.0, tank1_rest_h = 0.0;
+    int64_t now_us = esp_timer_get_time();
+    bool tank1_state_changed = false;
+    if (tank1_ok && s_tank1_state.last_ts_us > 0) {
+        double dt_h = (now_us - s_tank1_state.last_ts_us) / 3600000000.0;
+        if (dt_h > 0.01) {
+            double delta_l = tank1_liters - s_tank1_state.last_liters;
+            double rate = delta_l / dt_h;
+            if (dt_h < 1.5) {
+                s_tank1_state.rate1h = rate;
+                tank1_state_changed = true;
+            }
+            if (dt_h < 2.5) {
+                s_tank1_state.rate2h = rate;
+                tank1_state_changed = true;
+            }
+            tank1_rate1h = s_tank1_state.rate1h;
+            tank1_rate2h = s_tank1_state.rate2h;
+            // Restlaufzeit: Negativ bei Verbrauch
+            if (tank1_rate2h < -0.1 && tank1_liters > 0) {
+                tank1_rest_h = tank1_liters / (-tank1_rate2h);
+            }
+        }
+    }
+    s_tank1_state.last_liters = tank1_liters;
+    s_tank1_state.last_ts_us = now_us;
+
+    // Füllratenberechnung Grauwasser (92L, Füllung positiv)
+    double tank2_liters = tank2_ok ? (tank2_pct / 100.0) * 92.0 : 0.0;
+    double tank2_rate1h = 0.0, tank2_rate2h = 0.0, tank2_rest_h = 0.0;
+    bool tank2_state_changed = false;
+    if (tank2_ok && s_tank2_state.last_ts_us > 0) {
+        double dt_h = (now_us - s_tank2_state.last_ts_us) / 3600000000.0;
+        if (dt_h > 0.01) {
+            double delta_l = tank2_liters - s_tank2_state.last_liters;
+            double rate = delta_l / dt_h;
+            if (dt_h < 1.5) {
+                s_tank2_state.rate1h = rate;
+                tank2_state_changed = true;
+            }
+            if (dt_h < 2.5) {
+                s_tank2_state.rate2h = rate;
+                tank2_state_changed = true;
+            }
+            tank2_rate1h = s_tank2_state.rate1h;
+            tank2_rate2h = s_tank2_state.rate2h;
+            // Zeit bis voll: Positiv bei Füllung
+            double remaining_l = 92.0 - tank2_liters;
+            if (tank2_rate2h > 0.1 && remaining_l > 0) {
+                tank2_rest_h = remaining_l / tank2_rate2h;
+            }
+        }
+    }
+    s_tank2_state.last_liters = tank2_liters;
+    s_tank2_state.last_ts_us = now_us;
+
+    // NVS speichern wenn State aktualisiert wurde
+    if (tank1_state_changed || tank2_state_changed) {
+        tank_state_save_to_nvs();
+    }
+
     cJSON_AddNumberToObject(root, "t1", tank1_pct);
     cJSON_AddNumberToObject(root, "t2", tank2_pct);
     cJSON_AddBoolToObject(root, "nc1", !tank1_ok);
     cJSON_AddBoolToObject(root, "nc2", !tank2_ok);
+    cJSON_AddNumberToObject(root, "t1_l", round2(tank1_liters));
+    cJSON_AddNumberToObject(root, "t2_l", round2(tank2_liters));
+    cJSON_AddNumberToObject(root, "t1_rate1h", round2(tank1_rate1h));
+    cJSON_AddNumberToObject(root, "t1_rate2h", round2(tank1_rate2h));
+    cJSON_AddNumberToObject(root, "t1_rest_h", round2(tank1_rest_h));
+    cJSON_AddNumberToObject(root, "t2_rate1h", round2(tank2_rate1h));
+    cJSON_AddNumberToObject(root, "t2_rate2h", round2(tank2_rate2h));
+    cJSON_AddNumberToObject(root, "t2_rest_h", round2(tank2_rest_h));
+    
+    ESP_LOGI(TAG, "TANK: Frisch=%d%% (%.1fL), rate=%.2f/%.2f L/h, rest=%.1fh | Grau=%d%% (%.1fL), rate=%.2f/%.2f L/h, rest=%.1fh",
+             tank1_pct, tank1_liters, tank1_rate1h, tank1_rate2h, tank1_rest_h,
+             tank2_pct, tank2_liters, tank2_rate1h, tank2_rate2h, tank2_rest_h);
+    
     rs485_send_frame("tank", root, false);
     cJSON_Delete(root);
 }
@@ -849,6 +1009,7 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
     } else if (strcmp(cmd_str, "tare_a") == 0 || strcmp(cmd_str, "tare_b") == 0) {
         ESP_LOGI(TAG, "Tare command: %s", cmd_str);
         s_gas_state = (gas_state_t){0};
+        gas_state_save_to_nvs();
     } else if (strcmp(cmd_str, "gas_bottle_replace") == 0) {
         const cJSON *slot    = cJSON_GetObjectItem(root, "slot");
         const cJSON *channel = cJSON_GetObjectItem(root, "channel");
@@ -864,6 +1025,7 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
 
         s_gas_active_override = override;
         s_gas_state = (gas_state_t){0};
+        gas_state_save_to_nvs();
         ESP_LOGI(TAG, "Gas bottle replace: slot=%d channel=%s -> active_override=%d", slot_idx, chan, override);
     } else if (strcmp(cmd_str, "pwr_12v_on") == 0) {
         cmd_err = rs485_set_12v_power(true);

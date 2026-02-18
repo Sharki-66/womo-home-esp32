@@ -1,14 +1,11 @@
 #include "sensors/analog_sensor.h"
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_check.h"
 #include "esp_log.h"
 
 static const char *TAG = "analog";
 static bool s_initialized = false;
-static TaskHandle_t s_log_task = NULL;
 static adc_oneshot_unit_handle_t s_adc_handle = NULL;
 static bool s_channel_configured[10] = {0};
 
@@ -99,37 +96,4 @@ esp_err_t analog_read_mv(int channel, int *mv_out)
     return ESP_OK;
 }
 
-esp_err_t analog_read_bat_gpio1_mv(int *mv_out)
-{
-    int mv = 0;
-    esp_err_t err = analog_read_mv(ADC_CHANNEL_0, &mv);
-    if (err != ESP_OK) {
-        return err;
-    }
-    // Teiler 200k (oben) / 100k (unten): ADC sieht 1/3 der Batteriespannung
-    *mv_out = mv * 3;
-    return ESP_OK;
-}
 
-static void analog_log_task(void *arg)
-{
-    while (1) {
-        int mv = 0;
-        if (analog_read_bat_gpio1_mv(&mv) == ESP_OK) {
-            ESP_LOGI(TAG, "GPIO1/BAT: %d mV", mv);
-        }
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }
-}
-
-void analog_start_logging(void)
-{
-    if (s_log_task) {
-        return;
-    }
-    BaseType_t r = xTaskCreatePinnedToCore(analog_log_task, "analog_log", 2048, NULL, 4, &s_log_task, 0);
-    if (r != pdPASS) {
-        ESP_LOGW(TAG, "Analog-Log-Task konnte nicht gestartet werden");
-        s_log_task = NULL;
-    }
-}
