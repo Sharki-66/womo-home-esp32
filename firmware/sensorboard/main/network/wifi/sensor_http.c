@@ -13,7 +13,7 @@
 #include "esp_log.h"
 #include "esp_spiffs.h"
 #include "sensor_config.h"
-#include "web_wifi_imu.h"
+#include "sensors/bno055_sensor.h"
 #include "sensors/bno055_sensor.h"
 #include "sensors/bno055_sensor.h"
 

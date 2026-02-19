@@ -33,10 +33,14 @@ typedef struct {
 	float run_in;
 	float stab;
 
-	// Luftdruck-Trend (nur outdoor)
-	bool press_trend_valid;
-	float press_trend_hpa_h;         // hPa/Stunde
-	bme680_pressure_trend_t press_trend_state;
+	// Luftdruck-Trend (nur outdoor); 1h ab 4 Samples, 3h ab 12 Samples verfügbar
+	bool press_trend_1h_valid;
+	float press_trend_1h_hpa_h;
+	bme680_pressure_trend_t press_trend_1h_state;
+
+	bool press_trend_3h_valid;
+	float press_trend_3h_hpa_h;
+	bme680_pressure_trend_t press_trend_3h_state;
 } bme680_reading_t;
 
 typedef struct {

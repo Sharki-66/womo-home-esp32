@@ -6,7 +6,6 @@ idf_component_register(
         "network/womo_rs485.c"
         "network/wifi/sensor_wifi.c"
         "network/wifi/sensor_http.c"
-        "web_wifi_imu.c"
         "sensors/bno055_sensor.c"
         "hal/sensor_i2c_bus.c"
         "sensors/bme680_sensor.c"

@@ -14,9 +14,27 @@
 #include "bno055.h"
 #include "sensor_config.h"
 #include "hal/sensor_i2c_bus.h"
-#include "web_wifi_imu.h"
 
 static const char *TAG = "bno055_app";
+
+// ── IMU-Snapshot (interner Shared-State für RS485-Modem) ─────────────────
+static web_wifi_imu_snapshot_t s_imu_last = {0};
+
+void web_wifi_imu_update(const web_wifi_imu_snapshot_t *snap)
+{
+    if (!snap) return;
+    s_imu_last = *snap;
+    if (s_imu_last.timestamp_us == 0) {
+        s_imu_last.timestamp_us = esp_timer_get_time();
+    }
+}
+
+bool web_wifi_imu_get_snapshot(web_wifi_imu_snapshot_t *out)
+{
+    if (!out) return false;
+    *out = s_imu_last;
+    return true;
+}
 
 #define BNO055_NVS_NAMESPACE "bno055"
 #define BNO055_NVS_KEY "calib"

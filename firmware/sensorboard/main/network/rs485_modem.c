@@ -25,7 +25,6 @@
 #include "sensors/bme680_sensor.h"
 #include "sensors/hx711_sensor.h"
 #include "sensors/analog_sensor.h"
-#include "web_wifi_imu.h"
 
 #include <math.h>
 #include <stdbool.h>
@@ -675,18 +674,31 @@ static void rs485_publish_bme(void)
         cJSON_AddNumberToObject(out, "rh_pct", round2(bme.outdoor.humidity_pct));
         cJSON_AddNumberToObject(out, "press_hpa", round2(bme.outdoor.pressure_hpa));
         
-        // Luftdruck-Trend (5 Zustände)
-        if (bme.outdoor.press_trend_valid) {
-            cJSON_AddNumberToObject(out, "press_trend_hpa_h", round2(bme.outdoor.press_trend_hpa_h));
-            const char *trend_str = "steady";
-            switch (bme.outdoor.press_trend_state) {
-                case BME680_TREND_FALLING_FAST: trend_str = "falling_fast"; break;
-                case BME680_TREND_FALLING:      trend_str = "falling"; break;
-                case BME680_TREND_STEADY:       trend_str = "steady"; break;
-                case BME680_TREND_RISING:       trend_str = "rising"; break;
-                case BME680_TREND_RISING_FAST:  trend_str = "rising_fast"; break;
+        // Luftdruck-Trend 1h (ab 4 Samples = 1h Laufzeit)
+        if (bme.outdoor.press_trend_1h_valid) {
+            cJSON_AddNumberToObject(out, "press_trend_1h_hpa_h", round2(bme.outdoor.press_trend_1h_hpa_h));
+            const char *s = "steady";
+            switch (bme.outdoor.press_trend_1h_state) {
+                case BME680_TREND_FALLING_FAST: s = "falling_fast"; break;
+                case BME680_TREND_FALLING:      s = "falling"; break;
+                case BME680_TREND_STEADY:       s = "steady"; break;
+                case BME680_TREND_RISING:       s = "rising"; break;
+                case BME680_TREND_RISING_FAST:  s = "rising_fast"; break;
             }
-            cJSON_AddStringToObject(out, "press_trend_state", trend_str);
+            cJSON_AddStringToObject(out, "press_trend_1h", s);
+        }
+        // Luftdruck-Trend 3h (ab 12 Samples = 3h Laufzeit)
+        if (bme.outdoor.press_trend_3h_valid) {
+            cJSON_AddNumberToObject(out, "press_trend_3h_hpa_h", round2(bme.outdoor.press_trend_3h_hpa_h));
+            const char *s = "steady";
+            switch (bme.outdoor.press_trend_3h_state) {
+                case BME680_TREND_FALLING_FAST: s = "falling_fast"; break;
+                case BME680_TREND_FALLING:      s = "falling"; break;
+                case BME680_TREND_STEADY:       s = "steady"; break;
+                case BME680_TREND_RISING:       s = "rising"; break;
+                case BME680_TREND_RISING_FAST:  s = "rising_fast"; break;
+            }
+            cJSON_AddStringToObject(out, "press_trend_3h", s);
         }
         
         if (bme.outdoor.gas_valid)

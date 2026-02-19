@@ -23,7 +23,8 @@
 // Luftdruck-Trend
 #define PRESS_HISTORY_SIZE 96            // 24h @ 15min Intervall
 #define PRESS_SAMPLE_INTERVAL_US (15 * 60 * 1000000LL)  // 15 Minuten
-#define PRESS_TREND_WINDOW_SAMPLES 12    // 3h = 12× 15min
+#define PRESS_TREND_WINDOW_1H_SAMPLES 4  // 1h = 4× 15min
+#define PRESS_TREND_WINDOW_3H_SAMPLES 12 // 3h = 12× 15min
 #define PRESS_NVS_NAMESPACE "bme680"
 #define PRESS_NVS_KEY "press_hist"
 
@@ -189,47 +190,45 @@ static void press_history_add_sample(float pressure_hpa, int64_t timestamp_us)
     }
 }
 
-static bool press_history_calculate_trend(float *trend_hpa_h, bme680_pressure_trend_t *state)
+// window_samples: Anzahl 15-min-Schritte zurück (4 = 1h, 12 = 3h)
+// threshold_scale: Faktor für Schwellwerte (1.0 für 3h-Deltas, 1/3 für 1h-Deltas)
+static bool press_history_calculate_trend_window(uint8_t window_samples, float threshold_scale,
+                                                  float *trend_hpa_h, bme680_pressure_trend_t *state)
 {
     if (!s_press_history_loaded) {
         press_history_load_from_nvs();
     }
 
-    if (s_press_history.count < PRESS_TREND_WINDOW_SAMPLES) {
-        return false;  // Nicht genug Daten (< 3h)
+    if (s_press_history.count < window_samples) {
+        return false;
     }
 
-    // Aktuellster Wert
     uint8_t newest_idx = (s_press_history.write_index + PRESS_HISTORY_SIZE - 1) % PRESS_HISTORY_SIZE;
     float press_now = s_press_history.samples[newest_idx].pressure_hpa;
     int64_t time_now = s_press_history.samples[newest_idx].timestamp_us;
 
-    // Wert von vor 3 Stunden (12 Samples zurück)
-    uint8_t old_idx = (newest_idx + PRESS_HISTORY_SIZE - PRESS_TREND_WINDOW_SAMPLES) % PRESS_HISTORY_SIZE;
+    uint8_t old_idx = (newest_idx + PRESS_HISTORY_SIZE - window_samples) % PRESS_HISTORY_SIZE;
     float press_old = s_press_history.samples[old_idx].pressure_hpa;
     int64_t time_old = s_press_history.samples[old_idx].timestamp_us;
 
-    // Trend berechnen (hPa pro Stunde)
     float delta_hpa = press_now - press_old;
-    float delta_h = (float)(time_now - time_old) / 3600000000.0f;  // us → Stunden
+    float delta_h = (float)(time_now - time_old) / 3600000000.0f;
     if (delta_h < 0.1f) {
-        return false;  // Keine sinnvolle Zeitdifferenz
+        return false;
     }
     *trend_hpa_h = delta_hpa / delta_h;
 
-    // Delta über 3h für State-Klassifikation
-    float delta_3h = delta_hpa;
-    if (delta_3h < PRESS_TREND_FALLING_FAST_THRESHOLD) {
-        *state = BME680_TREND_FALLING_FAST;
-    } else if (delta_3h < PRESS_TREND_FALLING_THRESHOLD) {
-        *state = BME680_TREND_FALLING;
-    } else if (delta_3h <= PRESS_TREND_STEADY_THRESHOLD) {
-        *state = BME680_TREND_STEADY;
-    } else if (delta_3h <= PRESS_TREND_RISING_THRESHOLD) {
-        *state = BME680_TREND_RISING;
-    } else {
-        *state = BME680_TREND_RISING_FAST;
-    }
+    // Schwellwerte skaliert auf das gewählte Zeitfenster
+    float d = delta_hpa;
+    float ff = PRESS_TREND_FALLING_FAST_THRESHOLD * threshold_scale;
+    float f  = PRESS_TREND_FALLING_THRESHOLD      * threshold_scale;
+    float s  = PRESS_TREND_STEADY_THRESHOLD       * threshold_scale;
+    float r  = PRESS_TREND_RISING_THRESHOLD       * threshold_scale;
+    if      (d < ff) *state = BME680_TREND_FALLING_FAST;
+    else if (d < f)  *state = BME680_TREND_FALLING;
+    else if (d <= s) *state = BME680_TREND_STEADY;
+    else if (d <= r) *state = BME680_TREND_RISING;
+    else             *state = BME680_TREND_RISING_FAST;
 
     return true;
 }
@@ -688,13 +687,24 @@ esp_err_t bme680_app_get_snapshot(bme680_snapshot_t *out)
         out->outdoor.heater_stable = s_plausibility_outdoor.heater_stable;
         out->outdoor.timestamp_us = s_plausibility_outdoor.timestamp_us;
 
-        // Luftdruck-Trend berechnen
-        float trend_hpa_h = 0.0f;
-        bme680_pressure_trend_t trend_state = BME680_TREND_STEADY;
-        out->outdoor.press_trend_valid = press_history_calculate_trend(&trend_hpa_h, &trend_state);
-        if (out->outdoor.press_trend_valid) {
-            out->outdoor.press_trend_hpa_h = trend_hpa_h;
-            out->outdoor.press_trend_state = trend_state;
+        // Luftdruck-Trend 1h (ab 4 Samples)
+        float trend1h_hpa_h = 0.0f;
+        bme680_pressure_trend_t trend1h_state = BME680_TREND_STEADY;
+        out->outdoor.press_trend_1h_valid = press_history_calculate_trend_window(
+            PRESS_TREND_WINDOW_1H_SAMPLES, 1.0f / 3.0f, &trend1h_hpa_h, &trend1h_state);
+        if (out->outdoor.press_trend_1h_valid) {
+            out->outdoor.press_trend_1h_hpa_h = trend1h_hpa_h;
+            out->outdoor.press_trend_1h_state = trend1h_state;
+        }
+
+        // Luftdruck-Trend 3h (ab 12 Samples)
+        float trend3h_hpa_h = 0.0f;
+        bme680_pressure_trend_t trend3h_state = BME680_TREND_STEADY;
+        out->outdoor.press_trend_3h_valid = press_history_calculate_trend_window(
+            PRESS_TREND_WINDOW_3H_SAMPLES, 1.0f, &trend3h_hpa_h, &trend3h_state);
+        if (out->outdoor.press_trend_3h_valid) {
+            out->outdoor.press_trend_3h_hpa_h = trend3h_hpa_h;
+            out->outdoor.press_trend_3h_state = trend3h_state;
         }
 
         // Sample für Historie hinzufügen
