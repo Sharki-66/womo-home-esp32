@@ -31,9 +31,7 @@
 
 /* ── Konfiguration ────────────────────────────────────────── */
 
-#ifndef CONFIG_WOMO_ROUTER_IP
-#define CONFIG_WOMO_ROUTER_IP "192.168.10.1"
-#endif
+// CONFIG_WOMO_ROUTER_IP ist jetzt in womo_router_uci.h definiert
 #ifndef CONFIG_WOMO_ROUTER_USERNAME
 #define CONFIG_WOMO_ROUTER_USERNAME "admin"
 #endif

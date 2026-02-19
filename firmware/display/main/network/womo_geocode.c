@@ -3,9 +3,13 @@
 #include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
+#include "esp_system.h"
+#include "esp_heap_caps.h"
 #include "cJSON.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "womo_http_mutex.h"
+#include "isrg_root_x1_pem.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -135,13 +139,17 @@ static esp_err_t geocode_perform_request(geocode_response_t *response)
         return err;
     }
 
+    ESP_LOGI(TAG, "Heap vor TLS: total=%lu internal=%lu",
+             (unsigned long)esp_get_free_heap_size(),
+             (unsigned long)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+
     esp_http_client_config_t config = {
         .url = url,
         .method = HTTP_METHOD_GET,
         .timeout_ms = 8000,
         .event_handler = geocode_http_event_handler,
         .user_data = response,
-        .crt_bundle_attach = esp_crt_bundle_attach,
+        .cert_pem = isrg_root_x1_pem,   // direkt PEM statt crt_bundle (umgeht 0x4290)
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -149,28 +157,35 @@ static esp_err_t geocode_perform_request(geocode_response_t *response)
         return ESP_ERR_NO_MEM;
     }
 
-    esp_http_client_set_header(client, "Accept-Language", s_ctx.language);
-    esp_http_client_set_header(client, "User-Agent", "womo-home-esp32/1.0 (reverse geocode)");
+    esp_http_client_set_header(client, "Accept", "application/json");
+    esp_http_client_set_header(client, "User-Agent", "WoMoHome-ESP32/1.0");
 
     response->length = 0;
     response->last_error = ESP_OK;
 
-    err = esp_http_client_perform(client);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "HTTP request failed: %s", esp_err_to_name(err));
+    /* TLS-Mutex: nur eine HTTPS-Session gleichzeitig (Heap-Limit).
+     * cleanup() MUSS im Mutex-Scope liegen, damit TLS-RAM frei ist
+     * bevor der nächste Client den Mutex bekommt. */
+    if (womo_http_mutex_acquire() != ESP_OK) {
         esp_http_client_cleanup(client);
-        return err;
+        return ESP_ERR_TIMEOUT;
     }
-
+    err = esp_http_client_perform(client);
     int status = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
+    womo_http_mutex_release();
+
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "HTTP request failed: %s", esp_err_to_name(err));
+        return err;
+    }
 
     if (response->last_error != ESP_OK) {
         return response->last_error;
     }
 
     if (status != 200) {
-        ESP_LOGW(TAG, "Nominatim Status %d", status);
+        ESP_LOGW(TAG, "Geocode HTTP Status %d", status);
         return ESP_FAIL;
     }
 
@@ -188,11 +203,9 @@ static esp_err_t geocode_build_url(char *out_url, size_t max_len)
         return ESP_ERR_INVALID_ARG;
     }
 
-    int written = snprintf(out_url,
-                           max_len,
-                           "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=%.6f&lon=%.6f&zoom=14",
-                           s_ctx.lat,
-                           s_ctx.lon);
+    int written = snprintf(out_url, max_len,
+                           "https://nominatim.openstreetmap.org/reverse?lat=%.6f&lon=%.6f&format=jsonv2&accept-language=%s&zoom=10",
+                           s_ctx.lat, s_ctx.lon, s_ctx.language);
     if (written < 0 || (size_t)written >= max_len) {
         return ESP_ERR_NO_MEM;
     }
@@ -226,38 +239,6 @@ static esp_err_t geocode_http_event_handler(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
-static const char* geocode_select_primary(const cJSON *address)
-{
-    if (!address) {
-        return NULL;
-    }
-
-    const char *keys[] = {"city", "town", "village", "hamlet", "municipality", "suburb"};
-    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
-        const cJSON *val = cJSON_GetObjectItem(address, keys[i]);
-        if (cJSON_IsString(val) && val->valuestring && val->valuestring[0] != '\0') {
-            return val->valuestring;
-        }
-    }
-    return NULL;
-}
-
-static const char* geocode_select_secondary(const cJSON *address)
-{
-    if (!address) {
-        return NULL;
-    }
-
-    const char *keys[] = {"state", "county", "region", "country"};
-    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
-        const cJSON *val = cJSON_GetObjectItem(address, keys[i]);
-        if (cJSON_IsString(val) && val->valuestring && val->valuestring[0] != '\0') {
-            return val->valuestring;
-        }
-    }
-    return NULL;
-}
-
 static esp_err_t geocode_parse_json(const char *json, womo_geocode_result_t *out_result)
 {
     if (!json || !out_result) {
@@ -271,27 +252,34 @@ static esp_err_t geocode_parse_json(const char *json, womo_geocode_result_t *out
 
     womo_geocode_result_t result = {0};
 
-    const cJSON *display = cJSON_GetObjectItem(root, "display_name");
-    if (cJSON_IsString(display) && display->valuestring) {
-        strlcpy(result.display_name, display->valuestring, sizeof(result.display_name));
-    }
-
+    // Nominatim jsonv2: address.city|town|village (Ort), address.state (Bundesland)
     const cJSON *address = cJSON_GetObjectItem(root, "address");
-    const char *primary = geocode_select_primary(address);
-    const char *secondary = geocode_select_secondary(address);
+    if (address) {
+        /* Ortsname: city > town > village > municipality */
+        const cJSON *city = cJSON_GetObjectItem(address, "city");
+        if (!cJSON_IsString(city)) city = cJSON_GetObjectItem(address, "town");
+        if (!cJSON_IsString(city)) city = cJSON_GetObjectItem(address, "village");
+        if (!cJSON_IsString(city)) city = cJSON_GetObjectItem(address, "municipality");
+        const cJSON *state = cJSON_GetObjectItem(address, "state");
 
-    if (primary && secondary) {
-        snprintf(result.short_name, sizeof(result.short_name), "%s, %s", primary, secondary);
-    } else if (primary) {
-        strlcpy(result.short_name, primary, sizeof(result.short_name));
-    } else if (result.display_name[0]) {
-        strlcpy(result.short_name, result.display_name, sizeof(result.short_name));
+        const char *primary   = (cJSON_IsString(city)  && city->valuestring[0])  ? city->valuestring  : NULL;
+        const char *secondary = (cJSON_IsString(state) && state->valuestring[0]) ? state->valuestring : NULL;
+
+        if (primary && secondary)
+            snprintf(result.short_name, sizeof(result.short_name), "%s, %s", primary, secondary);
+        else if (primary)
+            strlcpy(result.short_name, primary, sizeof(result.short_name));
     }
 
-    if (result.short_name[0] != '\0') {
-        result.valid = true;
+    /* display_name direkt von Nominatim (vollständige Adresse) */
+    const cJSON *disp = cJSON_GetObjectItem(root, "display_name");
+    if (cJSON_IsString(disp) && disp->valuestring[0]) {
+        strlcpy(result.display_name, disp->valuestring, sizeof(result.display_name));
+    } else if (result.short_name[0]) {
+        strlcpy(result.display_name, result.short_name, sizeof(result.display_name));
     }
 
+    result.valid = (result.short_name[0] != '\0');
     *out_result = result;
     cJSON_Delete(root);
     return result.valid ? ESP_OK : ESP_FAIL;

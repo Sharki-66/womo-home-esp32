@@ -91,22 +91,29 @@ esp_err_t womo_time_sync_ntp(bool wait_for_sync)
 
 esp_err_t womo_time_sync_gps(time_t gps_time)
 {
-    // Future implementation with Walter Modem
-    ESP_LOGI(TAG, "GPS time sync - not yet implemented");
-    
+    // Plausibilitätsprüfung: GPS-Zeit muss >= 2024 sein
+    struct tm check;
+    gmtime_r(&gps_time, &check);
+    if (check.tm_year < (2024 - 1900)) {
+        ESP_LOGW(TAG, "GPS time not plausible (year=%d), ignoring", check.tm_year + 1900);
+        return ESP_FAIL;
+    }
+
     struct timeval tv = {
         .tv_sec = gps_time,
         .tv_usec = 0
     };
-    
+
     settimeofday(&tv, NULL);
-    
+
     last_sync_time = gps_time;
     last_sync_source = TIME_SOURCE_GPS;
     time_synced = true;
-    
-    ESP_LOGI(TAG, "Time synced from GPS");
-    
+
+    char buf[32];
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &check);
+    ESP_LOGI(TAG, "Time synced from GPS: %s UTC", buf);
+
     return ESP_OK;
 }
 

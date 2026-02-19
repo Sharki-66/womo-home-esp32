@@ -3,12 +3,16 @@
 #include "sdkconfig.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "esp_crt_bundle.h"
+#include "esp_heap_caps.h"
+#include "isrg_root_x1_pem.h"
 #include "cJSON.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "womo_http_mutex.h"
 #include <stdlib.h>
 #include <math.h>
 
@@ -238,13 +242,17 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
         return err;
     }
 
+    ESP_LOGI(TAG, "Heap vor TLS: total=%lu internal=%lu",
+             (unsigned long)esp_get_free_heap_size(),
+             (unsigned long)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+
     esp_http_client_config_t config = {
         .url = url,
         .method = HTTP_METHOD_GET,
         .timeout_ms = 7000,
         .event_handler = http_event_handler,
         .user_data = response,
-        .crt_bundle_attach = esp_crt_bundle_attach,
+        .cert_pem = isrg_root_x1_pem,   // direkt PEM statt crt_bundle (umgeht 0x4290)
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -256,15 +264,22 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
     response->length = 0;
     response->last_error = ESP_OK;
 
-    err = esp_http_client_perform(client);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "HTTP request failed: %s", esp_err_to_name(err));
+    /* TLS-Mutex: nur eine HTTPS-Session gleichzeitig (Heap-Limit).
+     * cleanup() MUSS im Mutex-Scope liegen, damit TLS-RAM frei ist
+     * bevor der nächste Client den Mutex bekommt. */
+    if (womo_http_mutex_acquire() != ESP_OK) {
         esp_http_client_cleanup(client);
-        return err;
+        return ESP_ERR_TIMEOUT;
     }
-
+    err = esp_http_client_perform(client);
     int status = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
+    womo_http_mutex_release();
+
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "HTTP request failed: %s", esp_err_to_name(err));
+        return err;
+    }
 
     if (response->last_error != ESP_OK) {
         return response->last_error;
@@ -484,8 +499,7 @@ static esp_err_t weather_http_build_url(char *out_url, size_t max_len)
 
     int written = snprintf(out_url, max_len,
                            "https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s&current=temperature_2m,weather_code,is_day,pressure_msl,relative_humidity_2m,wind_speed_10m&timezone=auto",
-                           latitude,
-                           longitude);
+                           latitude, longitude);
     if (written < 0 || (size_t)written >= max_len) {
         ESP_LOGE(TAG, "URL buffer too small");
         return ESP_ERR_NO_MEM;

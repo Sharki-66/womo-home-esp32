@@ -38,6 +38,7 @@
 #include "esp_crt_bundle.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "womo_http_mutex.h"
 #include "freertos/semphr.h"
 #include "cJSON.h"
 
@@ -215,12 +216,21 @@ static esp_err_t ma_fetch(double lat, double lon, womo_meteoalarm_result_t *out)
     resp->len      = 0;
     resp->last_err = ESP_OK;
 
+    /* TLS-Mutex: nur eine HTTPS-Session gleichzeitig (Heap-Limit).
+     * cleanup() MUSS im Mutex-Scope liegen, damit TLS-RAM frei ist
+     * bevor der nächste Client den Mutex bekommt. */
+    if (womo_http_mutex_acquire() != ESP_OK) {
+        esp_http_client_cleanup(client);
+        free(resp);
+        return ESP_ERR_TIMEOUT;
+    }
     esp_err_t err = esp_http_client_perform(client);
     int status    = 0;
     if (err == ESP_OK) {
         status = esp_http_client_get_status_code(client);
     }
     esp_http_client_cleanup(client);
+    womo_http_mutex_release();
 
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "HTTP request failed: %s", esp_err_to_name(err));

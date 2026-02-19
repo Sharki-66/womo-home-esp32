@@ -13,6 +13,11 @@
 #ifndef WOMO_ROUTER_UCI_H
 #define WOMO_ROUTER_UCI_H
 
+/* Standard-IP des RUTX11 – via Kconfig überschreibbar */
+#ifndef CONFIG_WOMO_ROUTER_IP
+#define CONFIG_WOMO_ROUTER_IP "192.168.10.1"
+#endif
+
 #include "esp_err.h"
 #include <stdbool.h>
 #include <stddef.h>

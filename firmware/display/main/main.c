@@ -22,6 +22,7 @@
 #include "network/womo_meteoalarm.h"
 #include "network/womo_geocode.h"
 #include "network/womo_router_uci.h"
+#include "network/womo_http_mutex.h"
 #include "storage/womo_sd.h"
 #include "rs485/womo_rs485_display.h"
 #include "i2cdev.h"  // i2cdev for CH422G GPIO expander on display
@@ -49,7 +50,8 @@ static const char *PLACEHOLDER_HUMIDITY = "--.-- %";
 static const char *PLACEHOLDER_TEMPERATURE = "--.- °C";
 static const char *PLACEHOLDER_GPS = "GPS : ---";
 #define GEOCODE_MIN_INTERVAL_US       (60LL * 1000000LL) // 60s nach Erfolg
-#define GEOCODE_RETRY_INTERVAL_US      (30LL * 1000000LL) // 30s nach Fehler
+#define GEOCODE_RETRY_INTERVAL_US      (10LL * 1000000LL) // 10s nach Fehler (TLS-Kollision)
+// Boot-Delay entfernt – HTTPS-Mutex (womo_http_mutex) serialisiert TLS-Sessions
 #define GEOCODE_MIN_DELTA_DEG   0.01
 #define QUIET_HOUR_START 22
 #define QUIET_HOUR_END   8
@@ -388,9 +390,8 @@ static void apply_text_theme_colors(void)
     if (gps_label) lv_obj_set_style_text_color(gps_label, text_color, 0);
     if (gps_button) {
         lv_color_t border = womo_theme_is_daytime() ? lv_color_black() : lv_color_white();
-        lv_color_t bg = womo_theme_is_daytime() ? lv_color_hex(0xE0E0E0) : lv_color_hex(0x404040);
         lv_obj_set_style_border_color(gps_button, border, 0);
-        lv_obj_set_style_bg_color(gps_button, bg, 0);
+        lv_obj_set_style_bg_color(gps_button, lv_color_hex(0xE0E0E0), 0);
         lv_obj_set_style_bg_opa(gps_button, LV_OPA_30, 0);
     }
     if (location_label) lv_obj_set_style_text_color(location_label, text_color, 0);
@@ -521,11 +522,16 @@ static void geocode_result_cb(const womo_geocode_result_t *result, void *user_da
 
     if (!result || !result->valid || !location_label) {
         /* Bei Fehler: kurzes Retry-Intervall, Koordinaten zurücksetzen */
+        ESP_LOGW(TAG, "Geocode fehlgeschlagen (result=%s valid=%s label=%s)",
+                 result ? "ok" : "NULL",
+                 (result && result->valid) ? "yes" : "no",
+                 location_label ? "ok" : "NULL");
         geocode_last_failed = true;
         geocode_last_lat = NAN;
         geocode_last_lon = NAN;
         return;
     }
+    ESP_LOGI(TAG, "Geocode OK: '%s'", result->short_name);
     /* Erfolg: normales Intervall */
     geocode_last_failed = false;
 
@@ -548,11 +554,13 @@ static void geocode_trigger_if_needed(const womo_sensor_data_t *snapshot)
     }
 
     if (!womo_wifi_is_connected()) {
+        ESP_LOGD(TAG, "Geocode: kein WiFi");
         return; // benötigt Internet
     }
 
     /* TLS-Zertifikate werden gegen die Systemzeit geprüft → erst nach NTP-Sync */
     if (!womo_time_is_synced()) {
+        ESP_LOGD(TAG, "Geocode: NTP noch nicht sync");
         return;
     }
 
@@ -562,12 +570,14 @@ static void geocode_trigger_if_needed(const womo_sensor_data_t *snapshot)
 
     const bool gps_ok = snapshot->gps.valid;
     if (!gps_ok) {
+        ESP_LOGD(TAG, "Geocode: GPS nicht valid");
         return;
     }
 
     const bool coords_finite = isfinite(snapshot->gps.latitude) && isfinite(snapshot->gps.longitude);
     const bool coords_nonzero = fabs(snapshot->gps.latitude) + fabs(snapshot->gps.longitude) > 0.0001;
     if (!coords_finite || !coords_nonzero) {
+        ESP_LOGD(TAG, "Geocode: Koordinaten ungültig (finite=%d nonzero=%d)", coords_finite, coords_nonzero);
         return;
     }
 
@@ -584,6 +594,8 @@ static void geocode_trigger_if_needed(const womo_sensor_data_t *snapshot)
             return; // keine relevante Bewegung
         }
     }
+
+    ESP_LOGI(TAG, "Geocode: starte Request (lat=%.5f lon=%.5f)", snapshot->gps.latitude, snapshot->gps.longitude);
 
     geocode_in_progress = true;
     /* Zeitstempel VOR dem Request setzen – verhindert parallele Requests
@@ -1054,6 +1066,7 @@ static void gps_hide_timer_cb(lv_timer_t *timer)
     (void)timer;
     gps_details_visible = false;
     lv_label_set_text(gps_label, "GPS");
+    lv_obj_set_style_bg_opa(gps_label, LV_OPA_30, 0);
     if (location_label) {
         lv_obj_clear_flag(location_label, LV_OBJ_FLAG_HIDDEN);
     }
@@ -1069,6 +1082,8 @@ static void gps_label_event_cb(lv_event_t *e)
     gps_details_visible = true;
     const char *text = (last_gps_text[0] != '\0') ? last_gps_text : PLACEHOLDER_GPS;
     lv_label_set_text(gps_label, text);
+
+    lv_obj_set_style_bg_opa(gps_label, LV_OPA_30, 0);
 
     // Ortsname ausblenden, solange Details im Vordergrund sind
     if (location_label) {
@@ -1953,6 +1968,14 @@ gas_done:
         }
 
         if (gps_ready) {
+            /* Einmalig loggen: GPS bereit, Status der Geocode-Voraussetzungen */
+            static bool geocode_status_logged = false;
+            if (!geocode_status_logged) {
+                ESP_LOGI(TAG, "GPS ready! WiFi=%d NTP=%d geocode_in_progress=%d last_req=%" PRId64 " loc_label=%p",
+                         womo_wifi_is_connected(), womo_time_is_synced(),
+                         geocode_in_progress, geocode_last_request_us, (void*)location_label);
+                geocode_status_logged = true;
+            }
             char lat_buf[24];
             char lon_buf[24];
             gps_format_coordinate(snapshot.gps.latitude, true, lat_buf, sizeof(lat_buf));
@@ -2340,7 +2363,7 @@ static void meteoalarm_popup_open(void)
         region_src = location_last_text;
     }
     if (region_src) {
-        char loc_line[96];
+        char loc_line[144];
         snprintf(loc_line, sizeof(loc_line), "Standort: %s\n\n", region_src);
         strlcat(msg_buf, loc_line, sizeof(msg_buf));
     }
@@ -2373,11 +2396,8 @@ static void meteoalarm_popup_open(void)
         }
     }
 
-    /* Hinweis auf Meteoalarm-Webseite */
-    strlcat(msg_buf, "meteoalarm.org", sizeof(msg_buf));
-
     static const char *btns[] = { "OK", "" };
-    meteoalarm_popup = lv_msgbox_create(NULL, "Unwetterwarnungen", msg_buf, btns, false);
+    meteoalarm_popup = lv_msgbox_create(NULL, "Unwetterwarnungen (www.meteoalarm.org)", msg_buf, btns, false);
     lv_obj_set_width(meteoalarm_popup, 520);
     lv_obj_center(meteoalarm_popup);
 
@@ -2405,7 +2425,9 @@ static void meteoalarm_update_cb(const womo_meteoalarm_result_t *result, void *u
     uint8_t prev_max_sev = s_meteoalarm_latest.max_severity;
     uint8_t prev_count   = s_meteoalarm_latest.count;
 
-    /* Snapshot speichern (für späteres Popup-Öffnen) */
+    /* Snapshot speichern (für späteres Popup-Öffnen).
+     * Keine Region aus alten Fetches behalten – das Wohnmobil bewegt sich,
+     * der Fallback auf location_last_text (Geocode, GPS-aktuell) ist korrekt. */
     s_meteoalarm_latest = *result;
 
     /* Auto-Popup: nur wenn neue Warnungen aufgetaucht sind oder Schwere
@@ -3412,15 +3434,6 @@ void app_main()
     lv_obj_set_style_text_align(temp_label, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_align(temp_label, LV_ALIGN_TOP_RIGHT, -10, 85);
 
-    // Ortsname neben dem GPS-Button platzieren
-    location_label = lv_label_create(screen);
-    lv_label_set_text(location_label, "");
-    lv_obj_set_style_text_font(location_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(location_label, lv_color_black(), 0);
-    lv_obj_set_style_text_align(location_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_width(location_label, 240);
-    lv_label_set_long_mode(location_label, LV_LABEL_LONG_WRAP);
-
     // IMU-Werte als freistehende Labels (ca. 40% von oben, 30% vom rechten Rand)
     lv_coord_t disp_w = lv_disp_get_hor_res(NULL);
     lv_coord_t disp_h = lv_disp_get_ver_res(NULL);
@@ -3548,10 +3561,19 @@ void app_main()
     lv_obj_add_event_cb(gps_label, gps_label_event_cb, LV_EVENT_CLICKED, NULL);
     gps_button = gps_label; // Alias für Theme-Farb-Updates in apply_text_theme_colors()
 
-    // Ortsname rechts neben dem GPS-Label anordnen
-    if (location_label) {
-        lv_obj_align_to(location_label, gps_label, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
-    }
+    /* Ortsname rechts neben GPS-Label.
+     * Da gps_label per LV_ALIGN_BOTTOM_LEFT positioniert ist, kann
+     * lv_obj_align_to() die absolute Position im ersten Frame nicht kennen.
+     * → Gleiche Ausrichtung verwenden, x-Offset = gps_offset_x + geschätzte GPS-Button-Breite.
+     * GPS-Button: "GPS" (3 Zeichen × ~9px) + 2×pad(6) + 2×border(2) ≈ 43px */
+    location_label = lv_label_create(screen);
+    lv_label_set_text(location_label, "Standort...");
+    lv_obj_set_style_text_font(location_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(location_label, lv_color_black(), 0);
+    lv_obj_set_style_text_align(location_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_width(location_label, 220);
+    lv_label_set_long_mode(location_label, LV_LABEL_LONG_DOT);
+    lv_obj_align(location_label, LV_ALIGN_BOTTOM_LEFT, gps_offset_x + 50, -24);
 
     // cm → Pixel Umrechnung (anpassbar für physische Displaymaße)
     const float DISP_WIDTH_CM = 15.5f;
@@ -3792,6 +3814,9 @@ void app_main()
         // Release the mutex – LVGL-Task rendert jetzt das initiale UI im Hintergrund
         lvgl_port_unlock();
     }
+
+    // ── HTTPS-Mutex initialisieren (vor allen HTTP-Tasks) ─────────────
+    womo_http_mutex_init();
 
     // ── WiFi + NTP VOR Backlight ──────────────────────────────────────
     // Backlight bleibt AUS während WiFi verbindet und NTP die Uhrzeit

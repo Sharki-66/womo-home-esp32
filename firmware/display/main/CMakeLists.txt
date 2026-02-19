@@ -21,6 +21,7 @@ idf_component_register(
         "network/womo_meteoalarm.c"
         "network/womo_geocode.c"
         "network/womo_router_uci.c"
+        "network/womo_http_mutex.c"
         "storage/womo_sd.c"
         "rs485/womo_rs485_display.c"
         "hardware/lvgl_port.c"
