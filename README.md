@@ -1,105 +1,89 @@
-# WoMo Home Control – ESP32-S3
+# WoMo Home – Bordcomputer für's Wohnmobil
 
-🚐 **Wohnmobil Steuerungs- und Monitoring-System**
+> Alle wichtigen Betriebsdaten auf einen Blick – immer wissen, was im Fahrzeug los ist.
 
-Intelligente Steuerung und Überwachung für ein Fiat Ducato Wohnmobil mit ESP32-S3, RS485-Bus, 7" Touch-Display und Teltonika RUTX11 Router (LTE/WLAN/GNSS).
+## 🚐 Worum geht es?
 
----
+Wer mit dem Wohnmobil unterwegs ist, kennt das Problem: Wie viel Gas ist noch in der Flasche? Reicht der Strom? Ist der Frischwassertank bald leer? Wie kalt wird es draußen über Nacht? Die serienmäßigen Anzeigen im Fahrzeug sind oft ungenau, schlecht ablesbar oder schlicht nicht vorhanden.
 
-## 📋 Überblick
+**WoMo Home** ersetzt das klassische EBL-Panel durch ein selbstgebautes System, das alle Betriebsdaten des Wohnmobils erfasst, intelligent aufbereitet und auf einem 7-Zoll-Touchdisplay darstellt – jederzeit aktuell, übersichtlich und von überall im Fahrzeug erreichbar.
 
-| Modul | Board | Funktion |
-|-------|-------|----------|
-| **Display** | Waveshare ESP32-S3 Touch LCD 7" (800×480) | GUI, LVGL v8, Router-Anbindung (HTTP/SSH) |
-| **Sensorboard** | Heemol ESP32-S3 N16R8 DevKitC-1 | Sensorik, Aktorik, RS485-TX |
-| **Router** | Teltonika RUTX11 | WLAN, LTE, GNSS, Hotspot |
+## 🎯 Was wird überwacht?
 
-Kommunikation Display ↔ Sensorboard: **RS485 Half-Duplex** (115200 8N1, JSON-Lines, Topic-basiert).
+### Energie
+- **Bordbatterie & Starterbatterie** – Spannung, Ladezustand, Trend
+- **Landstrom** – Erkennung, ob 230V angeschlossen sind
+- **12V-Bordnetz** – Ein/Aus per Touch, Übersicht aller Verbraucher
 
-### Sensoren & Aktoren
+### Gas
+- **Füllstandsmessung per Waage** – Zwei Gasflaschen, Anzeige in kg und Prozent
+- **Verbrauchsberechnung** – Hochrechnung „Wie lange reicht das Gas noch?" auf Basis der letzten Stunden
+- **Flaschenwechsel-Erkennung** – Automatisches Zurücksetzen beim Tausch
 
-- 2× BME680 (Temperatur, Feuchte, Druck, Gas – innen/außen)
-- BNO055 (9-Achsen IMU + Kompass)
-- 2× HX711 + Wägezellen (Gasfüllstand in kg)
-- 2× Votronic Tanksensoren (Frisch-/Grauwasser, kapazitiv)
-- 2× Batterie-Messung (Board/Kfz)
-- Relais-Steuerung (12V Bordnetz, Radio)
+### Wasser
+- **Frischwasser** (100 L) und **Grauwasser** (92 L) – Pegelstand in Prozent und Litern
+- **Verbrauchstrend** – Restlaufzeit-Prognose
 
----
+### Klima & Umgebung
+- **Innenraumklima** – Temperatur, Luftfeuchte, Luftqualität (IAQ)
+- **Außenklima** – Temperatur, Luftfeuchte, Luftdrucktrend
+- **Wettervorhersage** – Aktuelles Wetter und 3-Tage-Prognose vom Internet
+- **Unwetterwarnungen** – Automatisch vom europäischen Meteoalarm-System
+
+### Navigation & Lage
+- **GPS-Position** – Standort, Geschwindigkeit, Höhe über dem Router
+- **Kompass & Neigung** – Fahrzeugausrichtung, Pitch/Roll (Nivellierung beim Aufstellen)
+- **Reverse Geocoding** – Automatische Ortsbestimmung (z. B. „Berchtesgaden, Bayern")
+
+### Konnektivität
+- **WLAN** – Verbindung zu Campingplatz-Netzen oder Hotspots
+- **LTE** – Mobiles Internet über den Router
+- **Hotspot** – Eigenes WLAN für alle Geräte im Fahrzeug
+- Steuerung und Statusanzeige direkt am Touchscreen
+
+## 🏗️ Wie ist das System aufgebaut?
+
+Das System besteht aus drei Komponenten:
+
+**Sensorboard** – Ein kleiner Mikrocontroller, der sämtliche Sensoren und Aktoren bedient: Waagen, Temperatursensoren, Batteriespannungen, Tankpegel, Kompass. Er sitzt versteckt hinter dem EBL-Schrank und ersetzt dort das originale Anzeigepanel.
+
+**Touchdisplay** – Ein 7-Zoll-Farbbildschirm mit Touch, eingebaut an einer gut sichtbaren Stelle. Hier laufen alle Informationen zusammen und werden grafisch aufbereitet. Über den Touchscreen lassen sich auch Funktionen steuern (Bordnetz ein/aus, Radio, WLAN).
+
+**Router** – Ein Teltonika RUTX11 sorgt für die Verbindung zur Außenwelt: LTE-Internet unterwegs, WLAN auf dem Campingplatz, GPS-Ortung und ein eigener Hotspot für Laptops und Smartphones an Bord.
+
+Sensorboard und Display kommunizieren über einen robusten RS485-Bus – ein industrietaugliches Protokoll, das unempfindlich gegen die elektrischen Störungen im Fahrzeug ist.
+
+## 💡 Warum selbst bauen?
+
+- **Genauigkeit** – Die Gasflaschen-Waage zeigt den Füllstand in Gramm statt „irgendwo zwischen halb und voll". Die Tankpegel werden kalibriert statt geschätzt.
+- **Alles an einem Ort** – Kein Aufstehen mehr, um am EBL-Panel nachzuschauen. Kein separates Thermometer, keine Extra-App für den Router.
+- **Intelligente Prognosen** – Das System rechnet mit: Wie lange reicht das Gas bei aktuellem Verbrauch? Wann ist der Tank leer? Wie entwickelt sich der Luftdruck?
+- **Offenes System** – Komplett Open Source auf ESP32-Basis. Erweiterbar, anpassbar, reparierbar. Kein Cloud-Zwang, keine Abo-Kosten.
+- **Robustheit** – Industriekomponenten (RS485, Metallgehäuse-Router), für den 12V-Betrieb ausgelegt. Funktioniert auch ohne Internet.
 
 ## 📁 Projektstruktur
 
 ```
 womo-home-esp32/
 ├── firmware/
-│   ├── display/          ← Waveshare 7" LCD Firmware (LVGL, Router-Poll)
-│   └── sensorboard/      ← Sensorboard Firmware (RS485-TX, Sensoren)
+│   ├── display/            ← Firmware für das Touchdisplay
+│   └── sensorboard/        ← Firmware für das Sensorboard
 ├── hardware/
-│   ├── schematics/        ← KiCad-Schaltpläne (HAT-Board)
-│   └── datasheets/        ← PDFs, Datenblätter, Schaltpläne
-├── docs/                  ← Dokumentation mit Querverweisen
-│   ├── README.md          ← Doku-Index
-│   ├── hardware/          ← Hardware-Beschreibungen (.md)
-│   └── software-architecture.md
-├── sdcard/                ← SD-Karten-Inhalt fürs Display
-│   ├── images/            ← Ducato-Bilder, Wetter-Icons
-│   └── config/            ← Konfigurationsdateien
-├── tests/                 ← Hardware-Test-Sketche (I2C, SPI, LVGL, …)
-├── archive/               ← Abgelöste Firmware-Versionen
-│   ├── firmware-modem/    ← USB-Modem-Version (→ RS485 3.3V Käfer)
-│   └── firmware-walter/   ← DPTechnics Walter v1.0 (abgelöst)
-├── .github/
-│   └── copilot-instructions.md  ← KI-Regeln, RS485-Protokoll v2
-├── womo-sensor.code-workspace   ← VS Code Workspace (Sensorboard)
-└── womo-display.code-workspace  ← VS Code Workspace (Display)
+│   ├── schematics/          ← Schaltpläne
+│   └── datasheets/          ← Datenblätter der Komponenten
+├── docs/                    ← Ausführliche Dokumentation
+└── tests/                   ← Einzelne Hardware-Tests
 ```
 
----
+Technische Details (Pinbelegungen, Protokoll, Build-Anleitung) finden sich in den jeweiligen Unterordnern und in [docs/README.md](docs/README.md).
 
-## 🚀 Schnellstart
+## 🔧 Entwicklung
 
-### Voraussetzungen
-- [ESP-IDF v5.5.x](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/get-started/)
-- VS Code + [ESP-IDF Extension](https://marketplace.visualstudio.com/items?itemName=espressif.esp-idf-extension)
+Das Projekt nutzt das [Espressif ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/get-started/) Framework. Für jeden Firmware-Teil gibt es einen eigenen VS Code Workspace mit vorkonfigurierten Build/Flash/Monitor-Tasks:
 
-### Sensorboard bauen & flashen
-```bash
-cd firmware/sensorboard
-idf.py set-target esp32s3
-idf.py build flash monitor -p /dev/ttyACM2
-```
-
-### Display bauen & flashen
-```bash
-cd firmware/display
-idf.py set-target esp32s3
-idf.py build flash monitor -p COM5
-```
-
-Oder: entsprechenden `.code-workspace` öffnen → Tasks nutzen (Ctrl+Shift+B).
-
----
-
-## 📖 Dokumentation
-
-→ **[docs/README.md](docs/README.md)** — Kompletter Doku-Index mit Querverweisen
-
-Wichtige Einstiegspunkte:
-- [Hardware Interconnection Matrix](docs/hardware/CONNECTION_MATRIX.md)
-- [RS485-Protokoll v2 (Topic-basiert)](.github/copilot-instructions.md)
-- [Software-Architektur](docs/software-architecture.md)
-
----
-
-## 🔧 VS Code Workspaces
-
-| Workspace | Zweck |
-|-----------|-------|
-| `womo-sensor.code-workspace` | Sensorboard-Entwicklung (MAIN) + Display (REF) |
-| `womo-display.code-workspace` | Display-Entwicklung (MAIN) + Sensorboard (REF) |
-
----
+- `womo-sensor.code-workspace` – Sensorboard-Entwicklung
+- `womo-display.code-workspace` – Display-Entwicklung
 
 ## 📜 Lizenz
 
-Siehe [LICENSE](LICENSE).
+Privates Projekt. Siehe [LICENSE](LICENSE).
