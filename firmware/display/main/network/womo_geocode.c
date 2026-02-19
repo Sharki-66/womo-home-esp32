@@ -1,10 +1,7 @@
 #include "womo_geocode.h"
 
-#include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
-#include "esp_system.h"
-#include "esp_heap_caps.h"
 #include "cJSON.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -138,10 +135,6 @@ static esp_err_t geocode_perform_request(geocode_response_t *response)
     if (err != ESP_OK) {
         return err;
     }
-
-    ESP_LOGI(TAG, "Heap vor TLS: total=%lu internal=%lu",
-             (unsigned long)esp_get_free_heap_size(),
-             (unsigned long)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 
     esp_http_client_config_t config = {
         .url = url,

@@ -39,7 +39,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "womo_http_mutex.h"
-#include "freertos/semphr.h"
 #include "cJSON.h"
 
 static const char *TAG = "meteoalarm";
@@ -260,18 +259,6 @@ static esp_err_t ma_fetch(double lat, double lon, womo_meteoalarm_result_t *out)
     }
 
     out->valid = true;
-
-    /* Debug: Top-Level-Keys der API-Antwort loggen */
-    {
-        cJSON *child = root->child;
-        char keys[128] = "";
-        while (child) {
-            strlcat(keys, child->string ? child->string : "?", sizeof(keys));
-            strlcat(keys, " ", sizeof(keys));
-            child = child->next;
-        }
-        ESP_LOGI(TAG, "API root keys: [%s]", keys);
-    }
 
     /* Meteoalarm-Region des Standorts: top-level 'area'-Objekt (falls vorhanden) */
     cJSON *root_area = cJSON_GetObjectItem(root, "area");

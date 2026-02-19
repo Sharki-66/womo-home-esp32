@@ -26,9 +26,9 @@ typedef struct {
 typedef void (*womo_weather_http_callback_t)(const womo_weather_http_data_t *data, void *user_data);
 
 /**
- * @brief Start periodic weather updates from OpenWeatherMap.
+ * @brief Start periodic weather updates from Open-Meteo.
  *
- * Requires Wi-Fi to be connected. Configuration values (API key, coordinates,
+ * Requires Wi-Fi to be connected. Configuration values (coordinates,
  * refresh interval) are read from sdkconfig (menuconfig).
  *
  * @param callback Function invoked on every successful update (may be NULL).

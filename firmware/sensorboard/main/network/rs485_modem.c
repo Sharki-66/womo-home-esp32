@@ -28,12 +28,9 @@
 
 #include <math.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
-
-#include "womo_config.h"
 
 #define TAG "rs485_modem"
 
@@ -602,12 +599,12 @@ static void rs485_publish_ctrl(void)
 
 static void rs485_publish_imu(void)
 {
-    web_wifi_imu_snapshot_t imu = {0};
+    bno055_imu_snapshot_t imu = {0};
     cJSON *root = cJSON_CreateObject();
     if (!root) return;
     cJSON_AddStringToObject(root, "type", "imu");
 
-    if (web_wifi_imu_get_snapshot(&imu) && imu.valid) {
+    if (bno055_imu_get_snapshot(&imu) && imu.valid) {
         cJSON_AddNumberToObject(root, "yaw_deg", round2(imu.yaw_deg));
         cJSON_AddNumberToObject(root, "pitch_deg", round2(imu.pitch_deg));
         cJSON_AddNumberToObject(root, "roll_deg", round2(imu.roll_deg));

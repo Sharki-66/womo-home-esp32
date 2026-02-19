@@ -18,9 +18,9 @@
 static const char *TAG = "bno055_app";
 
 // ── IMU-Snapshot (interner Shared-State für RS485-Modem) ─────────────────
-static web_wifi_imu_snapshot_t s_imu_last = {0};
+static bno055_imu_snapshot_t s_imu_last = {0};
 
-void web_wifi_imu_update(const web_wifi_imu_snapshot_t *snap)
+void bno055_imu_update(const bno055_imu_snapshot_t *snap)
 {
     if (!snap) return;
     s_imu_last = *snap;
@@ -29,7 +29,7 @@ void web_wifi_imu_update(const web_wifi_imu_snapshot_t *snap)
     }
 }
 
-bool web_wifi_imu_get_snapshot(web_wifi_imu_snapshot_t *out)
+bool bno055_imu_get_snapshot(bno055_imu_snapshot_t *out)
 {
     if (!out) return false;
     *out = s_imu_last;
@@ -106,8 +106,8 @@ static esp_err_t bno055_save_zero_offsets(void)
 
 esp_err_t bno055_app_zero_pitch_roll(void)
 {
-    web_wifi_imu_snapshot_t snap;
-    if (!web_wifi_imu_get_snapshot(&snap) || !snap.valid) {
+    bno055_imu_snapshot_t snap;
+    if (!bno055_imu_get_snapshot(&snap) || !snap.valid) {
         ESP_LOGW(TAG, "imu_zero: kein gültiger IMU-Snapshot");
         return ESP_ERR_INVALID_STATE;
     }
@@ -256,7 +256,7 @@ static void bno055_task(void *arg)
         i2c_bus_unlock();
 
         if (err == ESP_OK && err_acc == ESP_OK && err_gyr == ESP_OK && err_mag == ESP_OK && err_tmp == ESP_OK) {
-            web_wifi_imu_snapshot_t snap = {
+            bno055_imu_snapshot_t snap = {
                 .valid = true,
                 .calibrated = s_bno.config.is_calibrated,
                 .yaw_deg = s_bno.euler_angle.yaw,
@@ -269,7 +269,7 @@ static void bno055_task(void *arg)
                 .cal_mag = s_bno.config.calibration.mag,
                 .timestamp_us = esp_timer_get_time(),
             };
-            web_wifi_imu_update(&snap);
+            bno055_imu_update(&snap);
             ESP_LOGI(TAG,
                      "Euler: roll=%.2f pitch=%.2f yaw=%.2f | Acc=%.2f/%.2f/%.2f m/s² | Gyro=%.2f/%.2f/%.2f dps | Mag=%.2f/%.2f/%.2f uT | Temp=%.1f°C | Calib S/G/A/M=%u/%u/%u/%u",
                      s_bno.euler_angle.roll,
@@ -312,12 +312,12 @@ static void bno055_task(void *arg)
                 }
             }
         } else {
-            web_wifi_imu_snapshot_t snap = {
+            bno055_imu_snapshot_t snap = {
                 .valid = false,
                 .calibrated = false,
                 .timestamp_us = esp_timer_get_time(),
             };
-            web_wifi_imu_update(&snap);
+            bno055_imu_update(&snap);
             ESP_LOGW(TAG, "BNO055 read failed: eul=%s acc=%s gyr=%s mag=%s tmp=%s",
                      esp_err_to_name(err),
                      esp_err_to_name(err_acc),

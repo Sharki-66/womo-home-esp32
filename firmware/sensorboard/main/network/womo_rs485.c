@@ -8,10 +8,6 @@
 #include "freertos/task.h"
 #include "sensor_config.h"
 
-// Mindest-Pause nach jedem TX, damit DE sicher deassertiert und der Bus
-// sich stabilisiert, bevor der nächste Frame beginnt (RS485 Bus-Settle).
-#define RS485_POST_TX_SETTLE_US  1500
-
 static const char *TAG = "womo_rs485";
 static bool s_initialized = false;
 static const uart_port_t s_uart_port = SENSOR_RS485_UART_PORT;

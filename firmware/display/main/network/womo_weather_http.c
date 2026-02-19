@@ -3,9 +3,6 @@
 #include "sdkconfig.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
-#include "esp_system.h"
-#include "esp_crt_bundle.h"
-#include "esp_heap_caps.h"
 #include "isrg_root_x1_pem.h"
 #include "cJSON.h"
 #include "nvs_flash.h"
@@ -241,10 +238,6 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
     if (err != ESP_OK) {
         return err;
     }
-
-    ESP_LOGI(TAG, "Heap vor TLS: total=%lu internal=%lu",
-             (unsigned long)esp_get_free_heap_size(),
-             (unsigned long)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 
     esp_http_client_config_t config = {
         .url = url,

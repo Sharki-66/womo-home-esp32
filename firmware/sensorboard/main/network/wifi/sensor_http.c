@@ -14,8 +14,6 @@
 #include "esp_spiffs.h"
 #include "sensor_config.h"
 #include "sensors/bno055_sensor.h"
-#include "sensors/bno055_sensor.h"
-#include "sensors/bno055_sensor.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -78,8 +76,8 @@ static esp_err_t imu_get_handler(httpd_req_t *req)
     // Wird die Seite geschlossen → kein Poll mehr → Fast-Mode läuft nach 2s aus.
     bno055_app_request_fast(2000, 200);
 
-    web_wifi_imu_snapshot_t snap;
-    bool ok = web_wifi_imu_get_snapshot(&snap);
+    bno055_imu_snapshot_t snap;
+    bool ok = bno055_imu_get_snapshot(&snap);
 
     char buf[256];
     int len = snprintf(buf, sizeof(buf),
