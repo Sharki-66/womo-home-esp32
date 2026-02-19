@@ -1,54 +1,29 @@
 # Dokumentation – WoMo Home ESP32
 
-Übersicht über alle Projektdokumente mit Querverweisen.
-
-## 📐 Hardware
+## Hardware
 
 | Dokument | Beschreibung |
 |----------|-------------|
-| [CONNECTION_MATRIX.md](hardware/CONNECTION_MATRIX.md) | Verkabelung zwischen den drei ESP32-S3 Boards |
-| [MODEM_BOARD.md](hardware/MODEM_BOARD.md) | WaveShare ESP32-S3-A + SIM7670G Hardware-Notizen |
-| [esp32-s3-touch-lcd-7.md](hardware/esp32-s3-touch-lcd-7.md) | Waveshare Display-Board Übersicht |
-| [Hardware-Übersicht](hardware/docs_hardware_overview_Version2.md) | Systemweite Hardware-Beschreibung |
-| [Komponenten](hardware/docs_hardware_components_Version2.md) | Detaillierte Komponentenliste |
-| [Verdrahtung](hardware/docs_hardware_wiring_Version2.md) | Pin-Belegungen und Verkabelung |
-| [Waveshare LCD Specs](hardware/WAVESHARE_ESP32_S3_LCD_SPECS.md) | LCD-Spezifikationen |
-| [Waveshare ESP32 Specs](hardware/WAVESHARE_ESP32_S3_SPECS.md) | ESP32-S3 Modul-Spezifikationen |
+| [ESP32-S3-Touch-LCD-7](hardware/esp32-s3-touch-lcd-7.md) | Waveshare Display-Board (800×480, GT911 Touch) |
+| [LCD-Spezifikationen](hardware/WAVESHARE_ESP32_S3_LCD_SPECS.md) | Display-Panel, RGB-Interface, Timing |
+| [ESP32-S3 Modul-Specs](hardware/WAVESHARE_ESP32_S3_SPECS.md) | ESP32-S3-WROOM-1, Pinout, PSRAM |
+| [Verifizierte Specs](hardware/WAVESHARE_ESP32_S3_VERIFIED_SPECS.md) | Aus Demo-Code bestätigte Werte |
 
-→ Datenblätter (PDFs) und Schaltpläne liegen in [hardware/datasheets/](../hardware/datasheets/).
-
-## 💻 Software
+## Firmware
 
 | Dokument | Beschreibung |
 |----------|-------------|
-| [Software-Architektur](software-architecture.md) | Gesamtarchitektur des Systems |
-| [Copilot Instructions](../.github/copilot-instructions.md) | Regeln für KI-Assistenz, RS485-Protokoll v2, Geplante LVGL v9 Migration |
+| [Sensorboard README](../firmware/sensorboard/README.md) | Hardware, Pins, RS485-Protokoll, NVS, Projektstruktur |
+| [Display README](../firmware/display/README.md) | Display-Firmware Übersicht |
+| [Display Projektstruktur](../firmware/display/docs/PROJECT_STRUCTURE.md) | Datei- und Modulübersicht |
 
-## 🔗 Firmware-Dokumentation
+## System
 
-Jedes Firmware-Projekt hat eigene Dokumente:
+| Komponente | Hardware | Funktion |
+|---|---|---|
+| **Display** | Waveshare ESP32-S3-Touch-LCD-7 | LVGL-GUI, Touch, RS485-Empfang, Router-Anbindung |
+| **Sensorboard** | Heemol ESP32-S3 N16R8 DevKitC-1 | Sensoren (BME680, BNO055, HX711, ADC), RS485-Sender |
+| **Router** | Teltonika RUTX11 | WLAN, LTE, GNSS, Hotspot |
 
-- **Display**: [firmware/display/](../firmware/display/) — Waveshare 7" Touch LCD, LVGL v8
-- **Sensorboard**: [firmware/sensorboard/](../firmware/sensorboard/) — Heemol ESP32-S3, Sensoren, RS485
-
-## 🗄️ Archiv
-
-Ältere/abgelöste Projekte:
-
-- [archive/firmware-modem/](../archive/firmware-modem/) — USB-Modem-Version (wird durch RS485 3.3V abgelöst)
-- [archive/firmware-walter/](../archive/firmware-walter/) — DPTechnics Walter v1.0 (Dez 2025, abgelöst)
-
-## 📁 Weitere Ressourcen
-
-| Ordner | Beschreibung |
-|--------|-------------|
-| [hardware/schematics/](../hardware/schematics/) | KiCad-Schaltpläne |
-| [hardware/datasheets/](../hardware/datasheets/) | Datenblätter, Schaltpläne (PDF) |
-| [sdcard/](../sdcard/) | SD-Karten-Inhalt für das Display (Ducato-Bilder, Wetter-Icons, Config) |
-| [tests/](../tests/) | Hardware-Test-Sketche (I2C, SPI, LVGL, Touch, …) |
-
-## 🔗 Externe Referenzen
-
-| Ressource | Beschreibung |
-|-----------|-------------|
-| [espressif/esp-iot-solution](https://github.com/espressif/esp-iot-solution) | Espressif-Beispiele für viele Hardware-Komponenten (LCD, Touch, Sensoren, USB, …). War früher als Submodul im Repo – jetzt nur noch als Referenz. |
+Kommunikation: Display ↔ Sensorboard per RS485 (JSON, 115200 8N1).
+Router wird vom Display per HTTP/UCI angesprochen.
