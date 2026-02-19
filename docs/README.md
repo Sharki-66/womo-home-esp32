@@ -14,8 +14,7 @@
 | Dokument | Beschreibung |
 |----------|-------------|
 | [Sensorboard README](../firmware/sensorboard/README.md) | Hardware, Pins, RS485-Protokoll, NVS, Projektstruktur |
-| [Display README](../firmware/display/README.md) | Display-Firmware Übersicht |
-| [Display Projektstruktur](../firmware/display/docs/PROJECT_STRUCTURE.md) | Datei- und Modulübersicht |
+| [Display README](../firmware/display/README.md) | Hardware, Funktionen, Externe APIs, Projektstruktur |
 
 ## System
 
