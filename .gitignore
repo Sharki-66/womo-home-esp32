@@ -28,3 +28,13 @@ ERC.rpt
 # OS
 .DS_Store
 Thumbs.db
+
+# Dokumentation / Assets (lokal, nicht im Repo)
+docs/Logo/
+hardware/datasheets/
+
+# Alte Test-/Prototyp-Dateien
+tests/08_lvgl_Porting/main/gas_bottle*
+
+# Alte Workspace-Datei
+womo-modem.code-workspace
