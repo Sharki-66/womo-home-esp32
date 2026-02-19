@@ -1,0 +1,93 @@
+{
+  "folders": [
+    {
+      "name": "🔧 Sensor (firmware/sensorboard) - MAIN",
+      "path": "firmware/sensorboard"
+    },
+    {
+      "name": "📺 Display (firmware/display) - REF",
+      "path": "firmware/display"
+    }
+  ],
+  "settings": {
+    "idf.flashBaudRate": "460800",
+    "idf.port": "/dev/ttyACM2",
+    "idf.flashType": "UART",
+    "idf.openOcdConfigs": ["board/esp32s3-builtin.cfg"],
+    "files.associations": { "*.h": "c", "*.c": "c" },
+    "C_Cpp.default.compilerPath": "${config:idf.toolsPath}/tools/xtensa-esp32s3-elf/esp-13.2.0_20240530/xtensa-esp32s3-elf/bin/xtensa-esp32s3-elf-gcc",
+    "C_Cpp.default.compileCommands": "${workspaceFolder:🔧 Sensor (firmware/sensorboard) - MAIN}/build/compile_commands.json",
+    "files.defaultLanguage": "c",
+    "explorer.sortOrder": "foldersNestsFiles",
+    "idf.showOnboardingOnInit": false,
+    "idf.notificationSilentMode": false,
+    "idf.enableUpdateSuggestions": true,
+    "idf.enableStatusBar": true,
+    "idf.enableCcache": false,
+    "chat.agent.maxRequests": 50
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build Sensor Firmware",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["build"],
+        "options": { "cwd": "${workspaceFolder:🔧 Sensor (firmware/sensorboard) - MAIN}" },
+        "group": { "kind": "build", "isDefault": true },
+        "problemMatcher": ["$gcc"],
+        "presentation": { "echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": false }
+      },
+      {
+        "label": "Flash Sensor Firmware",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["-p", "/dev/ttyACM2", "flash"],
+        "options": { "cwd": "${workspaceFolder:🔧 Sensor (firmware/sensorboard) - MAIN}" },
+        "group": "build",
+        "problemMatcher": [],
+        "presentation": { "echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": false }
+      },
+      {
+        "label": "Monitor Sensor (/dev/ttyACM2)",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["-p", "/dev/ttyACM2", "monitor"],
+        "options": { "cwd": "${workspaceFolder:🔧 Sensor (firmware/sensorboard) - MAIN}" },
+        "group": "build",
+        "isBackground": true,
+        "problemMatcher": [],
+        "presentation": { "echo": true, "reveal": "always", "focus": true, "panel": "dedicated", "showReuseMessage": false, "clear": false }
+      },
+      {
+        "label": "Build + Flash + Monitor Sensor",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["-p", "/dev/ttyACM2", "build", "flash", "monitor"],
+        "options": { "cwd": "${workspaceFolder:🔧 Sensor (firmware/sensorboard) - MAIN}" },
+        "group": "build",
+        "isBackground": true,
+        "problemMatcher": ["$gcc"],
+        "presentation": { "echo": true, "reveal": "always", "focus": true, "panel": "dedicated", "showReuseMessage": false, "clear": false }
+      },
+      {
+        "label": "Clean Sensor Build",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["fullclean"],
+        "options": { "cwd": "${workspaceFolder:🔧 Sensor (firmware/sensorboard) - MAIN}" },
+        "group": "build",
+        "problemMatcher": [],
+        "presentation": { "echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": false }
+      }
+    ]
+  },
+  "extensions": {
+    "recommendations": [
+      "espressif.esp-idf-extension",
+      "ms-vscode.cpptools",
+      "ms-vscode.cmake-tools"
+    ]
+  }
+}

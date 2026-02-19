@@ -1,0 +1,3 @@
+# Keep local datasheets out of version control
+# Place vendor PDFs or large datasheet bundles inside datasheets/
+datasheets/

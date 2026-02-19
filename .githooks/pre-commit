@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Git pre-commit hook: Projektstruktur prüfen
+# Bricht den Commit bei Fehlern ab (Warnungen sind OK)
+
+echo "🔍 Prüfe Projektstruktur..."
+"$(git rev-parse --show-toplevel)/tools/check-structure.sh"

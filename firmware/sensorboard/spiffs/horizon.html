@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>WoMoHome : Parkhilfe</title>
+  <style>
+    :root{--muted:#9aa6ad;color-scheme:dark;}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;background:linear-gradient(#0d1113,#0b0f11);color:#e6eef2;}
+    .wrap{padding:24px;display:flex;justify-content:center;}
+    .card{width:min(640px,96vw);background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:18px;border:1px solid rgba(255,255,255,0.03);}
+    h1{margin:4px 0 6px;font-size:20px;text-align:center;}
+    .gauge{width:100%;max-width:560px;aspect-ratio:1/1;margin:6px auto;}
+    .info-row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:10px;}
+    .info{background: rgba(255,255,255,0.02);padding:10px 12px;border-radius:10px;min-width:86px;text-align:center;}
+    .info .val{font-weight:700;font-size:18px;color:#fff;}
+    .cal-row{margin-top:12px;background:rgba(255,255,255,0.02);padding:10px 12px;border-radius:10px;}
+    .cal-label{font-size:12px;color:var(--muted);margin-bottom:4px;}
+    .cal-values{display:flex;gap:8px;font-weight:700;font-size:18px;align-items:center;}
+    .cal-0{color:#ff4d4f;}
+    .cal-1{color:#ffb347;}
+    .cal-2{color:#ffe156;}
+    .cal-3{color:#00c853;}
+    .status{margin-top:10px;text-align:center;font-size:14px;color:#e6eef2;min-height:20px;}
+    @media (max-width:420px){h1{font-size:18px}.info .val{font-size:16px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" role="region" aria-label="WoMoHome : Parkhilfe">
+      <h1>WoMoHome : Parkhilfe</h1>
+      <div class="gauge">
+        <svg id="svg" viewBox="0 0 400 400" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="WoMoHome Parkhilfe Anzeige">
+          <defs>
+            <clipPath id="circleClip"><circle cx="200" cy="200" r="185" /></clipPath>
+            <linearGradient id="skyGrad" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" stop-color="#9fe0ff"/><stop offset="1" stop-color="#7fd1ff"/>
+            </linearGradient>
+          </defs>
+          <circle cx="200" cy="200" r="196" fill="#1a1f22" opacity="0.95"/>
+          <circle cx="200" cy="200" r="188" fill="#0f1416"/>
+          <circle cx="200" cy="200" r="186" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+          <g clip-path="url(#circleClip)">
+            <g id="horizon" transform="rotate(0 200 200) translate(0,0)">
+              <rect x="-800" y="-800" width="2400" height="1600" fill="url(#skyGrad)"/>
+              <rect x="-800" y="200" width="2400" height="1200" fill="#be7326"/>
+            </g>
+            <g id="heading-clip-group">
+              <g id="heading-band" transform="translate(0,52)"></g>
+            </g>
+            <g id="vscale" transform="translate(200,200)" fill="#fff" font-family="Inter,Arial,Helvetica,sans-serif"></g>
+            <g id="roll-scale-left"></g>
+            <circle cx="200" cy="200" r="185" fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="12"/>
+            <circle cx="200" cy="200" r="186" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="1"/>
+          </g>
+          <g id="axis-rot" transform="rotate(0 200 200)">
+            <g transform="translate(200,200)">
+              <line x1="-178" x2="178" y1="0" y2="0" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.98"/>
+              <rect x="-2" y="-8" width="4" height="16" rx="2" fill="#ffffff"></rect>
+            </g>
+          </g>
+          <circle cx="200" cy="200" r="2.6" fill="#dcdcdc" stroke="rgba(0,0,0,0.18)" stroke-width="0.9"></circle>
+        </svg>
+      </div>
+      <div class="info-row">
+        <div class="info"><div style="font-size:12px;color:var(--muted)">HEADING</div><div class="val" id="headingVal">--.-&deg;</div></div>
+        <div class="info"><div style="font-size:12px;color:var(--muted)">ROLL</div><div class="val" id="rollVal">--.-&deg;</div></div>
+        <div class="info"><div style="font-size:12px;color:var(--muted)">PITCH</div><div class="val" id="pitchVal">--.-&deg;</div></div>
+      </div>
+      <div class="cal-row">
+        <div class="cal-label">Kalibrierung (SYS / G / A / M)</div>
+        <div class="cal-values">
+          <span class="cal-0" id="calSys">-</span> /
+          <span class="cal-0" id="calGyro">-</span> /
+          <span class="cal-0" id="calAccel">-</span> /
+          <span class="cal-0" id="calMag">-</span>
+        </div>
+      </div>
+      <div class="status" id="status">Verbinde...</div>
+    </div>
+  </div>
+  <script>
+    const SVG_NS='http://www.w3.org/2000/svg';
+    const cx=200,cy=200;
+    const headingValBox=document.getElementById('headingVal');
+    const rollValBox=document.getElementById('rollVal');
+    const pitchValBox=document.getElementById('pitchVal');
+    const calSys=document.getElementById('calSys');
+    const calGyro=document.getElementById('calGyro');
+    const calAccel=document.getElementById('calAccel');
+    const calMag=document.getElementById('calMag');
+    const statusEl=document.getElementById('status');
+    const headingBand=document.getElementById('heading-band');
+    const horizon=document.getElementById('horizon');
+    const axisRot=document.getElementById('axis-rot');
+    const vscale=document.getElementById('vscale');
+    const rollScaleLeft=document.getElementById('roll-scale-left');
+    const pitchFactor=6;
+    const maxScaleValue=15;
+    const halfArc=45;
+    const anglePerUnit=halfArc/maxScaleValue;
+    const scaleR=170;
+    const innerR=154;
+    const labelInnerR=innerR-12;
+    const compass=['N','NNO','NO','ONO','O','OSO','SO','SSO','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    const pxPerDeg=5.0;
+    const bandY=52;
+    const bandHeight=32;
+    const cycles=6;
+    const pitchLimit=30;
+    const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
+    function degToRad(d){return d*Math.PI/180;}
+    function buildVScale(){
+      while(vscale.firstChild) vscale.removeChild(vscale.firstChild);
+      for(let deg=-15;deg<=15;deg++){
+        const y=-deg*pitchFactor;
+        const isMajor=(deg%5===0);
+        const x1=-(isMajor?10:4);
+        const x2=(isMajor?10:4);
+        const line=document.createElementNS(SVG_NS,'line');
+        line.setAttribute('x1',x1);line.setAttribute('y1',y);
+        line.setAttribute('x2',x2);line.setAttribute('y2',y);
+        line.setAttribute('stroke','#ffffff');
+        line.setAttribute('stroke-width',isMajor?'1.2':'1.0');
+        line.setAttribute('stroke-linecap','round');
+        vscale.appendChild(line);
+        if(isMajor){
+          const text=document.createElementNS(SVG_NS,'text');
+          text.setAttribute('x',22);text.setAttribute('y',y+4);
+          text.setAttribute('fill','#ffffff');
+          text.setAttribute('font-size','14');
+          text.setAttribute('text-anchor','start');
+          text.textContent=`${deg}\u00b0`;
+          vscale.appendChild(text);
+        }
+      }
+      const dot=document.createElementNS(SVG_NS,'circle');
+      dot.setAttribute('cx',0);dot.setAttribute('cy',0);
+      dot.setAttribute('r',1.8);
+      dot.setAttribute('fill','#dcdcdc');
+      dot.setAttribute('stroke','#000000');
+      dot.setAttribute('stroke-opacity',0.08);
+      dot.setAttribute('stroke-width',0.6);
+      vscale.appendChild(dot);
+    }
+    function buildLeftRollScale(){
+      while(rollScaleLeft.firstChild) rollScaleLeft.removeChild(rollScaleLeft.firstChild);
+      const theta0=degToRad(180);
+      const xOuter0=cx+scaleR*Math.cos(theta0),yOuter0=cy-scaleR*Math.sin(theta0);
+      const xInner0=cx+innerR*Math.cos(theta0),yInner0=cy-innerR*Math.sin(theta0);
+      const line0=document.createElementNS(SVG_NS,'line');
+      line0.setAttribute('x1',xInner0);line0.setAttribute('y1',yInner0);
+      line0.setAttribute('x2',xOuter0);line0.setAttribute('y2',yOuter0);
+      line0.setAttribute('stroke','#fff');line0.setAttribute('stroke-width','3');line0.setAttribute('stroke-linecap','round');
+      rollScaleLeft.appendChild(line0);
+      const lx0=cx+labelInnerR*Math.cos(theta0),ly0=cy-labelInnerR*Math.sin(theta0);
+      const t0=document.createElementNS(SVG_NS,'text');
+      t0.setAttribute('x',lx0);t0.setAttribute('y',ly0);t0.setAttribute('fill','#ffffff');t0.setAttribute('font-size','12');t0.setAttribute('text-anchor','middle');t0.setAttribute('dominant-baseline','middle');t0.textContent='0\u00b0';
+      rollScaleLeft.appendChild(t0);
+      for(let v=1;v<=maxScaleValue;v++){
+        const angleDegUp=180-v*anglePerUnit;
+        const thetaUp=degToRad(angleDegUp);
+        const xOuterUp=cx+scaleR*Math.cos(thetaUp);const yOuterUp=cy-scaleR*Math.sin(thetaUp);
+        const xInnerUp=cx+innerR*Math.cos(thetaUp);const yInnerUp=cy-innerR*Math.sin(thetaUp);
+        const lineUp=document.createElementNS(SVG_NS,'line');
+        lineUp.setAttribute('x1',xInnerUp);lineUp.setAttribute('y1',yInnerUp);
+        lineUp.setAttribute('x2',xOuterUp);lineUp.setAttribute('y2',yOuterUp);
+        lineUp.setAttribute('stroke',(v%5===0)?'#fff':'rgba(255,255,255,0.6)');
+        lineUp.setAttribute('stroke-width',(v%5===0)?'3':'1.2');
+        lineUp.setAttribute('stroke-linecap','round');
+        rollScaleLeft.appendChild(lineUp);
+        if(v%5===0){
+          const lx=cx+labelInnerR*Math.cos(thetaUp);
+          const ly=cy-labelInnerR*Math.sin(thetaUp);
+          const text=document.createElementNS(SVG_NS,'text');
+          text.setAttribute('x',lx);text.setAttribute('y',ly);
+          text.setAttribute('fill','#ffffff');text.setAttribute('font-size','14');
+          text.setAttribute('text-anchor','middle');text.setAttribute('dominant-baseline','middle');
+          text.textContent=`+${v}\u00b0`;
+          rollScaleLeft.appendChild(text);
+        }
+      }
+      for(let v=1;v<=maxScaleValue;v++){
+        const angleDegDown=180+v*anglePerUnit;
+        const thetaDown=degToRad(angleDegDown);
+        const xOuterDown=cx+scaleR*Math.cos(thetaDown);const yOuterDown=cy-scaleR*Math.sin(thetaDown);
+        const xInnerDown=cx+innerR*Math.cos(thetaDown);const yInnerDown=cy-innerR*Math.sin(thetaDown);
+        const lineDown=document.createElementNS(SVG_NS,'line');
+        lineDown.setAttribute('x1',xInnerDown);lineDown.setAttribute('y1',yInnerDown);
+        lineDown.setAttribute('x2',xOuterDown);lineDown.setAttribute('y2',yOuterDown);
+        lineDown.setAttribute('stroke',(v%5===0)?'#fff':'rgba(255,255,255,0.6)');
+        lineDown.setAttribute('stroke-width',(v%5===0)?'3':'1.2');
+        lineDown.setAttribute('stroke-linecap','round');
+        rollScaleLeft.appendChild(lineDown);
+        if(v%5===0){
+          const lx=cx+labelInnerR*Math.cos(thetaDown);
+          const ly=cy-labelInnerR*Math.sin(thetaDown);
+          const text=document.createElementNS(SVG_NS,'text');
+          text.setAttribute('x',lx);text.setAttribute('y',ly);
+          text.setAttribute('fill','#ffffff');text.setAttribute('font-size','14');
+          text.setAttribute('text-anchor','middle');
+          text.setAttribute('dominant-baseline','middle');
+          text.textContent=`-${v}\u00b0`;
+          rollScaleLeft.appendChild(text);
+        }
+      }
+      const markerUp=document.createElementNS(SVG_NS,'circle');markerUp.setAttribute('r','6');markerUp.setAttribute('fill','#ffffff');markerUp.setAttribute('id','marker-up');markerUp.setAttribute('opacity','0');rollScaleLeft.appendChild(markerUp);
+      const markerDown=document.createElementNS(SVG_NS,'circle');markerDown.setAttribute('r','6');markerDown.setAttribute('fill','#ffffff');markerDown.setAttribute('id','marker-down');markerDown.setAttribute('opacity','0');rollScaleLeft.appendChild(markerDown);
+      return {markerUp,markerDown};
+    }
+    function buildHeadingBand(){
+      while(headingBand.firstChild) headingBand.removeChild(headingBand.firstChild);
+      const oneCycleWidth=360*pxPerDeg;
+      const totalWidth=oneCycleWidth*cycles;
+      const startX=cx-totalWidth/2;
+      const bg=document.createElementNS(SVG_NS,'rect');
+      bg.setAttribute('x',startX);bg.setAttribute('y',-bandHeight/2);
+      bg.setAttribute('width',totalWidth);bg.setAttribute('height',bandHeight);
+      bg.setAttribute('rx',8);
+      bg.style.fill='rgba(90,180,230,0.9)';
+      bg.style.stroke='rgba(6,40,60,0.14)';
+      bg.style.strokeWidth='1.2';
+      headingBand.appendChild(bg);
+      for(let cycle=0;cycle<cycles;cycle++){
+        for(let deg=0;deg<360;deg+=22.5){
+          const idx=Math.round(deg/22.5)%16;
+          const x=startX+(cycle*360+deg)*pxPerDeg;
+          const text=document.createElementNS(SVG_NS,'text');
+          text.setAttribute('x',x);
+          text.setAttribute('y',0);
+          text.setAttribute('fill','#ffffff');
+          text.setAttribute('font-size','16');
+          text.setAttribute('font-weight','700');
+          text.setAttribute('text-anchor','middle');
+          text.setAttribute('dominant-baseline','middle');
+          text.textContent=compass[idx];
+          headingBand.appendChild(text);
+        }
+      }
+      return {oneCycleWidth,totalWidth,startX};
+    }
+    function updateHeadingBandTransform(headingDeg,bandInfo){
+      const oneCycleWidth=bandInfo.oneCycleWidth;
+      let rawOffset=(headingDeg*pxPerDeg)%oneCycleWidth;
+      if(rawOffset<0) rawOffset+=oneCycleWidth;
+      const translateX=-rawOffset;
+      headingBand.setAttribute('transform',`translate(${translateX},${bandY})`);
+    }
+    function setLeftMarker(marker,mag,up){
+      const clamped=Math.min(Math.abs(mag),maxScaleValue);
+      const angleDeg=up?(180-clamped*anglePerUnit):(180+clamped*anglePerUnit);
+      const theta=degToRad(angleDeg);
+      const mx=cx+scaleR*Math.cos(theta);
+      const my=cy-scaleR*Math.sin(theta);
+      marker.setAttribute('cx',mx);
+      marker.setAttribute('cy',my);
+      marker.setAttribute('opacity',(Math.abs(mag)>maxScaleValue)?'0.6':'0.98');
+    }
+    buildVScale();
+    const {markerUp,markerDown}=buildLeftRollScale();
+    const bandInfo=buildHeadingBand();
+    function updateAll(heading,roll,pitch){
+      const rollClamped=clamp(roll,-maxScaleValue,maxScaleValue);
+      const pitchClamped=clamp(pitch,-pitchLimit,pitchLimit);
+      updateHeadingBandTransform(heading,bandInfo);
+      headingValBox.textContent=heading.toFixed(1)+'\u00b0';
+      horizon.setAttribute('transform',`rotate(${rollClamped} 200 200) translate(0, ${Math.round(pitchClamped*pitchFactor)})`);
+      axisRot.setAttribute('transform',`rotate(${rollClamped} 200 200)`);
+      if(roll>0){
+        setLeftMarker(markerUp,roll,true);
+        markerUp.setAttribute('opacity',(Math.abs(roll)>maxScaleValue)?'0.6':'0.98');
+        markerDown.setAttribute('opacity','0');
+      }else if(roll<0){
+        setLeftMarker(markerDown,roll,false);
+        markerDown.setAttribute('opacity',(Math.abs(roll)>maxScaleValue)?'0.6':'0.98');
+        markerUp.setAttribute('opacity','0');
+      }else{
+        markerUp.setAttribute('opacity','0');
+        markerDown.setAttribute('opacity','0');
+      }
+      rollValBox.textContent=roll.toFixed(1)+'\u00b0';
+      pitchValBox.textContent=pitch.toFixed(1)+'\u00b0';
+    }
+    async function refresh(){
+      try{
+        const rsp=await fetch('/api/imu',{cache:'no-store'});
+        if(!rsp.ok) throw new Error('HTTP '+rsp.status);
+        const data=await rsp.json();
+        if(!data.ok){statusEl.textContent='Keine IMU-Daten verf&uuml;gbar';return;}
+        updateAll(data.yaw_deg, data.roll_deg, data.pitch_deg);
+        if(data.cal && data.cal.length===4){
+          const vals=[Number(data.cal[0]),Number(data.cal[1]),Number(data.cal[2]),Number(data.cal[3])];
+          const clampVal=v=>Math.max(0,Math.min(3,isFinite(v)?v:0));
+          const colors=['cal-0','cal-1','cal-2','cal-3'];
+          const setCal=(el,val)=>{const v=clampVal(val);colors.forEach(c=>el.classList.remove(c));el.classList.add(colors[v]);el.textContent=v;};
+          setCal(calSys,vals[0]);
+          setCal(calGyro,vals[1]);
+          setCal(calAccel,vals[2]);
+          setCal(calMag,vals[3]);
+        }
+        statusEl.textContent=data.calibrated?'Kalibriert':'Nicht kalibriert';
+      }catch(err){
+        statusEl.textContent='Verbindung fehlgeschlagen';
+        console.warn('Verbindung fehlgeschlagen',err);
+      }
+    }
+    refresh();
+    setInterval(refresh,200);
+  </script>
+</body>
+</html>

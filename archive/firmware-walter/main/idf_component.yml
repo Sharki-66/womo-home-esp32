@@ -1,0 +1,23 @@
+dependencies:
+  idf:
+    version: '>=5.1.0'
+
+  esp-idf-lib/i2cdev:
+    version: ^2
+
+  esp-idf-lib/esp_idf_lib_helpers:
+    version: ^1
+
+  esp-idf-lib/hx711: '*'
+
+  k0i05/esp_bme680:
+    version: ^1.2.7
+    override_path: ../components/k0i05__esp_bme680
+
+  adithya-187326/bno055:
+    version: ^1.0.1
+    override_path: ../components/adithya-187326__bno055
+
+  dptechnics/walter-modem:
+    version: '*'
+    git: https://github.com/QuickSpot/walter-esp-idf.git

@@ -1,0 +1,58 @@
+Hinweis: Verarbeite Symbol "R11:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "C1:Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder".
+Hinweis: Verarbeite Symbol "J10:Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Horizontal".
+Hinweis: Verarbeite Symbol "L1:Inductor_SMD_Wurth:L_Wurth_WE-LQSH-4020".
+Hinweis: Verarbeite Symbol "R1:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "R2:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "R3:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "R4:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "R5:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "R6:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "R7:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "R8:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "R9:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "R10:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "J9:Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical".
+Hinweis: Verarbeite Symbol "R12:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "R13:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "R14:Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder".
+Hinweis: Verarbeite Symbol "SW1:Button_Switch_THT:SW_PUSH_6mm".
+Hinweis: Verarbeite Symbol "U1:Package_DIP:DIP-16_W7.62mm".
+Hinweis: Verarbeite Symbol "U2:Package_DIP:DIP-8_W7.62mm".
+Hinweis: Verarbeite Symbol "U3:WoMoHome:SIM7600X-ESP32".
+Hinweis: Verarbeite Symbol "U4:Package_SO:Infineon_PG-DSO-8-43".
+Hinweis: Verarbeite Symbol "U5:Package_SO:Infineon_PG-DSO-8-43".
+Hinweis: Verarbeite Symbol "U6:Package_SO:Infineon_PG-DSO-8-43".
+Hinweis: Verarbeite Symbol "U7:Package_TO_SOT_SMD:TSOT-23-6".
+Hinweis: Warnungen insgesamt: 4, Fehler insgesamt: 1.
+Hinweis: Verarbeite Symbol "F1:Fuse:Fuse_1210_3225Metric_Pad1.42x2.65mm_HandSolder".
+Hinweis: Verarbeite Symbol "C2:Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder".
+Hinweis: Verarbeite Symbol "C3:Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder".
+Hinweis: Verarbeite Symbol "C4:Capacitor_SMD:C_1206_3216Metric_Pad1.33x1.80mm_HandSolder".
+Hinweis: Verarbeite Symbol "C6:Capacitor_SMD:C_1206_3216Metric_Pad1.33x1.80mm_HandSolder".
+Hinweis: Verarbeite Symbol "D1:Diode_SMD:D_MiniMELF".
+Hinweis: Verarbeite Symbol "D2:Diode_SMD:D_MiniMELF".
+Hinweis: Verarbeite Symbol "D3:Diode_SMD:D_MiniMELF".
+Hinweis: Verarbeite Symbol "D4:Diode_SMD:D_MiniMELF".
+Hinweis: Verarbeite Symbol "D5:Diode_SMD:D_MiniMELF".
+Hinweis: Verarbeite Symbol "D6:Diode_SMD:D_MiniMELF".
+Hinweis: Verarbeite Symbol "D7:Diode_SMD:D_SMA".
+Hinweis: Verarbeite Symbol "J8:TerminalBlock_Phoenix:TerminalBlock_Phoenix_PT-1,5-3-5.0-H_1x03_P5.00mm_Horizontal".
+Hinweis: Verarbeite Symbol "J1:Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Horizontal".
+Hinweis: Verarbeite Symbol "J2:Connector_JST:JST_XH_S4B-XH-A-1_1x04_P2.50mm_Horizontal".
+Hinweis: Verarbeite Symbol "J3:Connector_JST:JST_XH_S4B-XH-A-1_1x04_P2.50mm_Horizontal".
+Hinweis: Verarbeite Symbol "J4:Connector_JST:JST_XH_S4B-XH-A-1_1x02_P2.50mm_Horizontal".
+Hinweis: Verarbeite Symbol "J5:Connector_JST:JST_XH_S4B-XH-A-1_1x04_P2.50mm_Horizontal".
+Hinweis: Verarbeite Symbol "J6:TerminalBlock_Phoenix:TerminalBlock_Phoenix_PT-1,5-3-5.0-H_1x03_P5.00mm_Horizontal".
+Hinweis: Verarbeite Symbol "J7:Connector_Molex:Molex_Micro-Fit_3.0_43045-1000_2x05_P3.00mm_Horizontal".
+Footprint F1 von "Connector_JST:JST_XH_S4B-XH-A-1_1x04_P2.50mm_Horizontal" in "Fuse:Fuse_1210_3225Metric_Pad1.42x2.65mm_HandSolder" ändern.
+
+
+Warnung: Kein Netz für Komponente F1 Pad 3 gefunden (kein Pin 3 in Symbol).
+Warnung: Kein Netz für Komponente F1 Pad 4 gefunden (kein Pin 4 in Symbol).
+Warnung: Kein Netz für Komponente J4 Pad 4 gefunden (kein Pin 4 in Symbol).
+Warnung: Kein Netz für Komponente J4 Pad 3 gefunden (kein Pin 3 in Symbol).
+Fehler: Kann J4 nicht aktualisieren (Footprint "Connector_JST:JST_XH_S4B-XH-A-1_1x02_P2.50mm_Horizontal" nicht gefunden).
+
+
+Hinweis: Warnungen insgesamt: 4, Fehler insgesamt: 1.

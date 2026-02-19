@@ -1,0 +1,26 @@
+# ESP-IDF Build artifacts
+build/
+sdkconfig.old
+*.pyc
+__pycache__/
+
+# Dependencies
+dependencies.lock
+managed_components/
+
+# Demo projects (not part of main application)
+demo/
+
+# Copilot instructions symlink (original in repo root .github/)
+.github/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
