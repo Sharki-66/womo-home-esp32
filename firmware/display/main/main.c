@@ -132,6 +132,8 @@ static lv_obj_t *gps_label = NULL;    // GPS position
 static char last_gps_text[256] = ""; // Zuletzt berechneter GPS-Text (Detailansicht)
 static bool gps_details_visible = false;
 static lv_timer_t *gps_hide_timer = NULL;
+static lv_obj_t *gps_popup_panel = NULL;      // Separates Detail-Panel neben GPS-Button
+static lv_obj_t *gps_popup_text_label = NULL; // Text-Label im GPS-Popup-Panel
 static lv_timer_t *backlight_quiet_timer = NULL;
 static bool quiet_hours_active = false;
 static lv_obj_t *bg_img = NULL;  // Background image
@@ -275,6 +277,7 @@ static void wifi_autoretry_task(void *arg);
 static void router_poll_task(void *arg);
 static bool is_quiet_hours(const struct tm *timeinfo);
 static void backlight_set(bool on);
+static void full_theme_refresh(void);
 static void connectivity_snapshot_fill(womo_connectivity_snapshot_t *snapshot);
 static void rs485_event_handler(womo_rs485_event_t event, void *user_data);
 static void gas_replace_show_modal(uint8_t slot);
@@ -395,6 +398,13 @@ static void apply_text_theme_colors(void)
         lv_obj_set_style_bg_opa(gps_button, LV_OPA_30, 0);
     }
     if (location_label) lv_obj_set_style_text_color(location_label, text_color, 0);
+    if (gps_popup_panel && gps_popup_text_label) {
+        bool day = womo_theme_is_daytime();
+        lv_obj_set_style_bg_color(gps_popup_panel,
+                                  day ? lv_color_hex(0xE0E0E0) : lv_color_hex(0x303030), 0);
+        lv_obj_set_style_border_color(gps_popup_panel, text_color, 0);
+        lv_obj_set_style_text_color(gps_popup_text_label, text_color, 0);
+    }
     lv_color_t tank_label_color = lv_color_black();
     if (fresh_water_tank) womo_tank_set_text_color(fresh_water_tank, tank_label_color);
     if (grey_water_tank) womo_tank_set_text_color(grey_water_tank, tank_label_color);
@@ -407,7 +417,7 @@ static void apply_text_theme_colors(void)
         update_classic_icon(classic_color, classic_on);
     }
     if (radio_btn && radio_label) {
-        simple_toggle_button_update(radio_btn, radio_label, radio_on, "Radio", radio_color);
+        simple_toggle_button_update(radio_btn, radio_label, radio_on, "MM", radio_color);
         update_radio_icon(radio_color, radio_on);
     }
     if (shore_label) {
@@ -853,7 +863,7 @@ static void system_status_apply(bool force_label_update)
 
     womo_theme_set_status(resolved);
     if (level_changed) {
-        womo_theme_apply_to_screen(NULL);
+        full_theme_refresh();
     }
 
     if (resolved_source == SYSTEM_STATUS_SOURCE_SENSOR && sensor_detail_text[0] != '\0') {
@@ -928,7 +938,7 @@ static void rs485_event_handler(womo_rs485_event_t event, void *user_data)
 
     switch (event) {
         case WOMO_RS485_EVENT_HELLO:
-            ESP_LOGI(TAG, "RS485 hello empfangen - Walter ist bereit");
+            ESP_LOGI(TAG, "RS485 hello empfangen - Sensorboard ist bereit");
             if (rs485_waiting_for_handshake) {
                 rs485_waiting_for_handshake = false;
             }
@@ -1065,14 +1075,16 @@ static void gps_hide_timer_cb(lv_timer_t *timer)
 {
     (void)timer;
     gps_details_visible = false;
-    lv_label_set_text(gps_label, "GPS");
-    lv_obj_set_style_bg_opa(gps_label, LV_OPA_30, 0);
+    // GPS-Button bleibt "GPS" – Popup-Panel ausblenden
+    if (gps_popup_panel) {
+        lv_obj_add_flag(gps_popup_panel, LV_OBJ_FLAG_HIDDEN);
+    }
     if (location_label) {
         lv_obj_clear_flag(location_label, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
-// GPS-Label-Klick: Details zeigen und nach 10s wieder ausblenden
+// GPS-Label-Klick: Separates Detail-Panel neben GPS-Button einblenden
 static void gps_label_event_cb(lv_event_t *e)
 {
     if (lv_event_get_code(e) != LV_EVENT_CLICKED) {
@@ -1081,11 +1093,14 @@ static void gps_label_event_cb(lv_event_t *e)
 
     gps_details_visible = true;
     const char *text = (last_gps_text[0] != '\0') ? last_gps_text : PLACEHOLDER_GPS;
-    lv_label_set_text(gps_label, text);
 
-    lv_obj_set_style_bg_opa(gps_label, LV_OPA_30, 0);
+    // Detail-Panel befüllen und anzeigen, GPS-Button bleibt unverändert als "GPS"
+    if (gps_popup_panel && gps_popup_text_label) {
+        lv_label_set_text(gps_popup_text_label, text);
+        lv_obj_clear_flag(gps_popup_panel, LV_OBJ_FLAG_HIDDEN);
+    }
 
-    // Ortsname ausblenden, solange Details im Vordergrund sind
+    // Ortsname ausblenden, solange Popup-Panel sichtbar ist
     if (location_label) {
         lv_obj_add_flag(location_label, LV_OBJ_FLAG_HIDDEN);
     }
@@ -1588,7 +1603,7 @@ static void ui_update_timer_cb(lv_timer_t *timer)
                 womo_gas_bottle_set_status(gas_bottle_b, WOMO_STATUS_OK);
             }
             if (gas_info_label) {
-                lv_label_set_text(gas_info_label, "Gas (nc):\n--.-- kg\n--.-- kg/h\n--.- h");
+                lv_label_set_text(gas_info_label, "Gas (nc):\n--.-- kg\n---- g/h\n--.- h");
             }
             gas_has_data_a = false;
             gas_has_data_b = false;
@@ -1711,14 +1726,14 @@ static void ui_update_timer_cb(lv_timer_t *timer)
 
             if (changed) {
                 float net_disp = isnan(net) ? 0.0f : net;
-                float rate_disp = isnan(rate) ? 0.0f : rate;
+                float rate_disp = isnan(rate) ? 0.0f : (rate * 1000.0f);  // kg/h → g/h
                 float rest_disp = isnan(rest) ? 0.0f : rest;
 
                 snprintf(buf, sizeof(buf),
-                         "Gas (%s):\n%.2f kg\n%.2f kg/h\n%.1f h",
+                         "Gas (%s):\n%.2f kg\n%.0f g/h\n%.1f h",
                          flasche,
                          isnan(net) ? 0.0f : net_disp,
-                         isnan(rate) ? 0.0f : rate_disp,
+                         rate_disp,
                          isnan(rest) ? 0.0f : rest_disp);
                 lv_label_set_text(gas_info_label, buf);
                 last_active_idx = snapshot.gas.active_idx;
@@ -1727,7 +1742,7 @@ static void ui_update_timer_cb(lv_timer_t *timer)
                 last_rest = rest;
             }
         } else if (gas_info_label) {
-            lv_label_set_text(gas_info_label, "Gas (--):\n--.-- kg\n--.-- kg/h\n--.- h");
+            lv_label_set_text(gas_info_label, "Gas (--):\n--.-- kg\n---- g/h\n--.- h");
             last_active_idx = -2;
             last_net_kg = NAN;
             last_rate = NAN;
@@ -1760,7 +1775,7 @@ gas_done:
         if (changed) {
             char buf[80];
             snprintf(buf, sizeof(buf),
-                     "Frisch:\n%.1f L\n%.2f L/h\n%.1f h",
+                     "Frisch:\n%.1f L\n%.1f L/h\n%.1f h",
                      isnan(liters) ? 0.0f : liters,
                      isnan(rate) ? 0.0f : rate,
                      isnan(rest) ? 0.0f : rest);
@@ -1889,7 +1904,7 @@ gas_done:
         bool radio_grace = (s_radio_cmd_sent_us > 0 &&
                             (now_us - s_radio_cmd_sent_us) < CTRL_GRACE_PERIOD_US);
 
-        // Walter bestätigt neuen Zustand → Grace-Period sofort beenden
+        // Sensorboard bestätigt neuen Zustand → Grace-Period sofort beenden
         if (pwr_grace && classic_on == snapshot.power.pwr_12v_on) {
             s_pwr_cmd_sent_us = 0;
             pwr_grace = false;
@@ -1915,7 +1930,7 @@ gas_done:
             radio_on = snapshot.power.radio_on;
             if (radio_btn && radio_label) {
                 lv_color_t c = lv_color_hex(0x1565C0);
-                simple_toggle_button_update(radio_btn, radio_label, radio_on, "Radio", c);
+                simple_toggle_button_update(radio_btn, radio_label, radio_on, "MM", c);
                 update_radio_icon(c, radio_on);
             }
         }
@@ -2034,16 +2049,16 @@ gas_done:
             if (strcmp(text, last_gps_text) != 0) {
                 strncpy(last_gps_text, text, sizeof(last_gps_text) - 1);
                 last_gps_text[sizeof(last_gps_text) - 1] = '\0';
-                if (gps_details_visible) {
-                    lv_label_set_text(gps_label, last_gps_text);
+                if (gps_details_visible && gps_popup_text_label) {
+                    lv_label_set_text(gps_popup_text_label, last_gps_text);
                 }
             }
         } else if (!snapshot.gps.valid) {
             if (strcmp(PLACEHOLDER_GPS, last_gps_text) != 0) {
                 strncpy(last_gps_text, PLACEHOLDER_GPS, sizeof(last_gps_text) - 1);
                 last_gps_text[sizeof(last_gps_text) - 1] = '\0';
-                if (gps_details_visible) {
-                    lv_label_set_text(gps_label, last_gps_text);
+                if (gps_details_visible && gps_popup_text_label) {
+                    lv_label_set_text(gps_popup_text_label, last_gps_text);
                 }
             }
             /* Location-Text absichtlich NICHT löschen: bei kurzem GPS-Ausfall
@@ -2054,18 +2069,29 @@ gas_done:
 }
 
 // Timer callback for updating time display
+// Nur bei vollem Tageslicht (DAY) wird der weiße Ducato geladen.
+// Bei Dämmerung (SUNRISE/SUNSET) und Nacht → grauer Ducato.
 static bool theme_mode_is_daylike(womo_theme_mode_t mode)
 {
-    return (mode == WOMO_THEME_DAY || mode == WOMO_THEME_SUNRISE);
+    return (mode == WOMO_THEME_DAY);
+}
+
+// Vollständiges Theme-Update: Mode neu berechnen, Ducato + Textfarben + BG-Farbe aktualisieren.
+// Guard in load_background_image() prüft bg_last_day_state intern → kein unnötiger SD-Zugriff.
+static void full_theme_refresh(void)
+{
+    womo_theme_mode_t mode = womo_theme_update(womo_theme_get_status());
+    bool is_day_now = theme_mode_is_daylike(mode);
+    load_background_image(lv_scr_act(), is_day_now);
+    apply_text_theme_colors();
+    womo_theme_apply_to_screen(NULL);
 }
 
 static void time_update_timer_cb(lv_timer_t *timer)
 {
     char time_str[32];
     char date_str[32];
-    static bool theme_after_time_sync_applied = false;  // sorgt dafür, dass nach erster gültiger Zeit sofort Theme+BG neu gesetzt werden
-    static bool initial_bg_loaded = false; // stellt sicher, dass bei erstem Tag/Nacht direkt der passende Hintergrund geladen wird
-    static bool weather_started = false; // startet Online-Wetter erst nach WiFi-Verbindung
+    static bool weather_started = false;
     struct tm timeinfo;
     bool time_valid_now = (womo_time_get(&timeinfo) == ESP_OK) && (timeinfo.tm_year >= (2024 - 1900));
     
@@ -2110,19 +2136,6 @@ static void time_update_timer_cb(lv_timer_t *timer)
         }
     }
 
-    // Sobald die RTC/NTP-Zeit erstmals valide ist, Theme und Hintergrund sofort aktualisieren
-    if (!theme_after_time_sync_applied && time_valid_now) {
-        theme_after_time_sync_applied = true;
-
-        womo_theme_mode_t mode = womo_theme_update(womo_theme_get_status());
-        bool is_day_now = theme_mode_is_daylike(mode);
-        load_background_image(lv_scr_act(), is_day_now);
-
-        apply_text_theme_colors();
-        womo_theme_apply_to_screen(NULL);
-        initial_bg_loaded = true;
-    }
-
     // Quiet hours: 22:00-08:00 Backlight aus, außerhalb einschalten; Touch in Ruhezeit bekommt 5min Timeout
     if (time_valid_now) {
         static bool last_quiet_state = false;
@@ -2153,27 +2166,26 @@ static void time_update_timer_cb(lv_timer_t *timer)
     
     // Update WiFi status (2 lines: RSSI first, then SSID)
     update_connectivity_label();
-    
-    // Update sensor data every 5 seconds (counter % 5 == 0)
-    static uint32_t sensor_counter = 0;
-    sensor_counter++;
-    
-    // Sensor data now comes via RS485 from Walter - no local sensor reading needed
-    
-    // Nur bei Auto-Mode prüfen; Hintergrund nur beim tatsächlichen Day/Night-Wechsel neu laden.
-    // Poll seltener (60 s), da wir nur auf Zustandswechsel reagieren.
-    if (womo_theme_is_auto_mode() && (sensor_counter % 60 == 0)) {
-        womo_theme_mode_t mode = womo_theme_update(womo_theme_get_status());
-        bool is_day_now = theme_mode_is_daylike(mode);
 
-        // Reload background PNG when theme switches day/night so the correct Ducato variant is shown
-        if (!initial_bg_loaded || bg_last_day_state != (is_day_now ? 1 : 0)) {
+    // ── Theme-Mode jede Sekunde prüfen ──────────────────────────────────
+    // womo_theme_update() ist billig (nur Zeit-Vergleich). Bei Mode-Wechsel
+    // (z.B. DAY→SUNSET, NIGHT→SUNRISE, SUNSET→NIGHT) sofort Ducato +
+    // Textfarben + BG-Farbe aktualisieren. Reagiert innerhalb 1 s auf
+    // NTP-Korrektur oder Dämmerungsübergang – statt bisher 60 s.
+    if (womo_theme_is_auto_mode() && time_valid_now) {
+        static womo_theme_mode_t last_applied_mode = WOMO_THEME_DAY;
+        womo_theme_mode_t new_mode = womo_theme_update(womo_theme_get_status());
+
+        if (new_mode != last_applied_mode) {
+            bool is_day_now = theme_mode_is_daylike(new_mode);
+            ESP_LOGI(TAG, "Theme mode %d → %d (%s)",
+                     last_applied_mode, new_mode,
+                     is_day_now ? "day" : "night");
+            last_applied_mode = new_mode;
             load_background_image(lv_scr_act(), is_day_now);
-            initial_bg_loaded = true;
+            apply_text_theme_colors();
+            womo_theme_apply_to_screen(NULL);
         }
-
-        apply_text_theme_colors();
-        womo_theme_apply_to_screen(NULL);
     }
 }
 
@@ -2879,7 +2891,7 @@ static void backlight_update_label(void)
         return;
     }
 
-    lv_color_t icon_color = lv_color_hex(0x1E88E5); // kräftiges Blau für Symbol und Rand
+    lv_color_t icon_color = lv_color_hex(0x000000); // schwarz für Symbol und Rand
     lv_color_t border_color = icon_color;
 
     lv_obj_set_style_border_width(backlight_btn, 0, 0);
@@ -3125,7 +3137,7 @@ static void classic_button_event_cb(lv_event_t *event)
     if (!classic_on && radio_on) {
         radio_on = false;
         lv_color_t rc = lv_color_hex(0x1565C0);
-        simple_toggle_button_update(radio_btn, radio_label, radio_on, "Radio", rc);
+        simple_toggle_button_update(radio_btn, radio_label, radio_on, "MM", rc);
         update_radio_icon(rc, radio_on);
         // Radio-Aus: alten Timer canceln falls vorhanden, neuen starten
         if (s_radio_send_timer) {
@@ -3159,7 +3171,7 @@ static void radio_button_event_cb(lv_event_t *event)
     // Optimistisches UI: sofort umschalten
     radio_on = new_state;
     lv_color_t color = lv_color_hex(0x1565C0);
-    simple_toggle_button_update(radio_btn, radio_label, radio_on, "Radio", color);
+    simple_toggle_button_update(radio_btn, radio_label, radio_on, "MM", color);
     update_radio_icon(color, radio_on);
     // RS485-Befehl asynchron senden
     s_radio_send_timer = lv_timer_create(radio_send_timer_cb, 10, (void *)(uintptr_t)radio_on);
@@ -3203,6 +3215,11 @@ void app_main()
     ESP_LOGI(TAG, "Initializing i2cdev...");
     ESP_ERROR_CHECK(i2cdev_init());
     
+    // Backlight sofort AUS – CH422G könnte nach Reset in undefiniertem
+    // Zustand sein.  Das Backlight wird erst nach vollständiger UI-
+    // Initialisierung + Theme + Ducato explizit eingeschaltet.
+    wavesahre_rgb_lcd_bl_off();
+
     // Initialize time management
     womo_time_init();
     rs485_watchdog_start_us = esp_timer_get_time();
@@ -3214,11 +3231,11 @@ void app_main()
     womo_wifi_init();
     
     // Initialize theme (default location: Central Europe)
-    // TODO: Get location from GPS (Walter Modem)
+    // TODO: GPS-Position für Sonnenauf-/untergang nutzen
     womo_theme_init(50.0, 10.0);  // Approximate Germany
     
     // Set sunrise/sunset for Central Europe winter
-    womo_theme_set_sun_times(7, 30, 17, 0);
+    womo_theme_set_sun_times(7, 30, 17, 45);
     
     // Initialize display (uses I2C for touch controller)
     waveshare_esp32_s3_rgb_lcd_init();
@@ -3231,9 +3248,7 @@ void app_main()
     // kein LVGL und blockieren daher niemanden.
     ESP_LOGI(TAG, "Display WoMo Home Control with Dynamic Theme");
 
-    if (lvgl_port_lock(-1)) {
-
-    // Initialize SD card (needed for background image loading)
+    // ── SD + RS485 initialisieren (kein LVGL nötig → kein Lock) ──────
     ESP_LOGI(TAG, "Initializing SD card...");
     if (womo_sd_init() == ESP_OK) {
         ESP_LOGI(TAG, "SD card mounted successfully");
@@ -3241,39 +3256,30 @@ void app_main()
         ESP_LOGW(TAG, "SD card mount failed - continuing without SD");
     }
 
-    // Initialize RS485 communication (receives data from Walter)
     ESP_LOGI(TAG, "Initializing RS485 display receiver...");
     if (womo_rs485_display_init() == ESP_OK) {
-        ESP_LOGI(TAG, "RS485 initialized - will receive data from Walter");
+        ESP_LOGI(TAG, "RS485 initialized - receiving data from Sensorboard");
         womo_rs485_set_data_callback(rs485_data_received, NULL);
         womo_rs485_set_event_callback(rs485_event_handler, NULL);
         rs485_waiting_for_handshake = true;
-        
-        // Display-Ready sofort senden damit Sensorboard mit Datenübertragung beginnt
-        // (nicht erst auf hello warten - das kann 30-60s dauern wenn Sensorboard später bootet)
-        vTaskDelay(pdMS_TO_TICKS(100)); // Kurz warten damit RS485 bereit ist
+        vTaskDelay(pdMS_TO_TICKS(100));  // Kurz warten damit UART bereit
         womo_rs485_send_display_ready();
-        ESP_LOGI(TAG, "Sent initial display_ready to trigger sensor data transmission");
+        ESP_LOGI(TAG, "Sent display_ready to trigger sensor data");
     } else {
         ESP_LOGW(TAG, "RS485 init failed - continuing without external sensors");
     }
-        
-        // Get main screen and enable touch events
+
+    // ── LVGL sperren → UI aufbauen ──────────────────────────────────
+    // Nach lvgl_port_init() läuft der LVGL-Task bereits.  Mutex nehmen,
+    // damit kein Frame gerendert wird, bevor Theme + Widgets stehen.
+    if (lvgl_port_lock(-1)) {
         lv_obj_t *screen = lv_scr_act();
         lv_obj_add_flag(screen, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_event_cb(screen, screen_event_handler, LV_EVENT_CLICKED, NULL);
-
-        // Touch-Wake-Callback: feuert bei JEDEM Touch, noch vor LVGL-Events
         lvgl_touch_set_wake_cb(touch_wake_cb);
-        
-        // Initiales Theme setzen (Farbe für BG-Screen).
-        // Ducato-PNG wird hier NICHT geladen!  Ohne gültige Uhrzeit
-        // (NTP/RS485) weiß das Theme nicht, ob Tag oder Nacht →
-        // es würde den Day-Ducato laden und müsste ihn nach NTP-Sync
-        // sofort wieder durch den Night-Ducato ersetzen = sichtbarer
-        // Blitz.  Stattdessen wird der Ducato erst nach WiFi+NTP
-        // geladen, direkt bevor das Backlight eingeschaltet wird.
+
+        // Initiales Theme (nur BG-Farbe, kein Ducato – Backlight ist AUS).
         womo_theme_update(WOMO_STATUS_OK);
         lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
         womo_theme_apply_to_screen(screen);
@@ -3307,7 +3313,7 @@ void app_main()
         lv_label_set_text(date_label, "--.--.----");
         lv_obj_set_style_text_font(date_label, &lv_font_montserrat_16, 0);
         lv_obj_set_style_text_color(date_label, lv_color_black(), 0);
-        lv_obj_align(date_label, LV_ALIGN_BOTTOM_LEFT, 20, -20);
+        lv_obj_align(date_label, LV_ALIGN_BOTTOM_LEFT, 310, -15);
         
         // Create WiFi status (top left) - moved from right
         wifi_label = lv_label_create(screen);
@@ -3329,7 +3335,7 @@ void app_main()
         // Zusätzliche Schalter links (klassisch, Radio) und Netzstrom-Anzeige
         classic_btn = lv_btn_create(screen);
         lv_obj_set_size(classic_btn, 48, 48);
-        lv_obj_align_to(classic_btn, date_label, LV_ALIGN_OUT_TOP_LEFT, 0, -10);
+        lv_obj_align(classic_btn, LV_ALIGN_BOTTOM_LEFT, 10, -68);
         lv_obj_set_style_radius(classic_btn, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(classic_btn, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(classic_btn, 0, 0);
@@ -3350,7 +3356,7 @@ void app_main()
         lv_obj_add_flag(radio_btn, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(radio_btn, radio_button_event_cb, LV_EVENT_CLICKED, NULL);
         radio_label = lv_label_create(radio_btn);
-        simple_toggle_button_update(radio_btn, radio_label, radio_on, "Radio", lv_color_hex(0x1565C0));
+        simple_toggle_button_update(radio_btn, radio_label, radio_on, "MM", lv_color_hex(0x1565C0));
         update_radio_icon(lv_color_hex(0x1565C0), radio_on);
 
         shore_label = lv_label_create(screen);
@@ -3478,7 +3484,7 @@ void app_main()
     lv_obj_set_style_text_color(gas_label_in, lv_color_black(), 0);
     lv_obj_set_width(gas_label_in, 320);
     lv_obj_set_style_text_align(gas_label_in, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(gas_label_in, indoor_block_x, indoor_base_y + 55);
+    lv_obj_set_pos(gas_label_in, indoor_block_x, indoor_base_y + 105);  // IAQ unten
 
     press_label_in = lv_label_create(screen);
     lv_label_set_text(press_label_in, PLACEHOLDER_CO2);
@@ -3486,7 +3492,7 @@ void app_main()
     lv_obj_set_style_text_color(press_label_in, lv_color_black(), 0);
     lv_obj_set_width(press_label_in, 320);
     lv_obj_set_style_text_align(press_label_in, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(press_label_in, indoor_block_x, indoor_base_y + 80);
+    lv_obj_set_pos(press_label_in, indoor_block_x, indoor_base_y + 80);  // CO2 Mitte
 
     voc_label_in = lv_label_create(screen);
     lv_label_set_text(voc_label_in, PLACEHOLDER_BVOC);
@@ -3494,7 +3500,7 @@ void app_main()
     lv_obj_set_style_text_color(voc_label_in, lv_color_black(), 0);
     lv_obj_set_width(voc_label_in, 320);
     lv_obj_set_style_text_align(voc_label_in, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(voc_label_in, indoor_block_x, indoor_base_y + 105);
+    lv_obj_set_pos(voc_label_in, indoor_block_x, indoor_base_y + 55);    // bVOC oben
 
     // Farben an aktuelles Theme anpassen (Tag/Nacht)
     apply_text_theme_colors();
@@ -3557,9 +3563,27 @@ void app_main()
     lv_obj_set_style_bg_color(gps_label, lv_color_hex(0xE0E0E0), 0);
     lv_obj_set_style_bg_opa(gps_label, LV_OPA_30, 0);
     lv_obj_add_flag(gps_label, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_align(gps_label, LV_ALIGN_BOTTOM_LEFT, gps_offset_x, -20);
+    lv_obj_align(gps_label, LV_ALIGN_BOTTOM_LEFT, 10, -10);
     lv_obj_add_event_cb(gps_label, gps_label_event_cb, LV_EVENT_CLICKED, NULL);
     gps_button = gps_label; // Alias für Theme-Farb-Updates in apply_text_theme_colors()
+
+    /* GPS-Detail-Popup-Panel: erscheint rechts neben dem GPS-Button beim Klick.
+     * Position: BOTTOM_LEFT, x=65 (GPS-Button ~55px breit + 10px Margin), y=-10.
+     * Initial versteckt, wird per gps_label_event_cb eingeblendet. */
+    gps_popup_panel = lv_obj_create(screen);
+    lv_obj_set_size(gps_popup_panel, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_color(gps_popup_panel, lv_color_hex(0xE0E0E0), 0);
+    lv_obj_set_style_bg_opa(gps_popup_panel, LV_OPA_80, 0);
+    lv_obj_set_style_border_width(gps_popup_panel, 2, 0);
+    lv_obj_set_style_border_color(gps_popup_panel, lv_color_black(), 0);
+    lv_obj_set_style_radius(gps_popup_panel, 6, 0);
+    lv_obj_set_style_pad_all(gps_popup_panel, 6, 0);
+    lv_obj_add_flag(gps_popup_panel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_align(gps_popup_panel, LV_ALIGN_BOTTOM_LEFT, 65, -10);
+    gps_popup_text_label = lv_label_create(gps_popup_panel);
+    lv_obj_set_style_text_font(gps_popup_text_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(gps_popup_text_label, lv_color_black(), 0);
+    lv_label_set_text(gps_popup_text_label, "");
 
     /* Ortsname rechts neben GPS-Label.
      * Da gps_label per LV_ALIGN_BOTTOM_LEFT positioniert ist, kann
@@ -3573,7 +3597,7 @@ void app_main()
     lv_obj_set_style_text_align(location_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_width(location_label, 220);
     lv_label_set_long_mode(location_label, LV_LABEL_LONG_DOT);
-    lv_obj_align(location_label, LV_ALIGN_BOTTOM_LEFT, gps_offset_x + 50, -24);
+    lv_obj_align(location_label, LV_ALIGN_BOTTOM_LEFT, 10 + 55, -16);
 
     // cm → Pixel Umrechnung (anpassbar für physische Displaymaße)
     const float DISP_WIDTH_CM = 15.5f;
@@ -3800,55 +3824,85 @@ void app_main()
         lv_obj_set_style_border_width(perf_toggle_btn, 0, 0);
         lv_obj_add_flag(perf_toggle_btn, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(perf_toggle_btn, perf_monitor_toggle_event_cb, LV_EVENT_CLICKED, NULL);
-        
-    // Create LVGL timer to update time every second
-    lv_timer_create(time_update_timer_cb, 1000, NULL);
-    ui_update_timer = lv_timer_create(ui_update_timer_cb, UI_UPDATE_INTERVAL_DEFAULT_MS, NULL);
-    if (!ui_update_timer) {
-        ESP_LOGW(TAG, "Failed to create UI update timer");
-    }
 
-    // Ensure text colors match the initial day/night theme
-    apply_text_theme_colors();
-        
-        // Release the mutex – LVGL-Task rendert jetzt das initiale UI im Hintergrund
+        // LVGL-Timer für 1s-Updates und UI-Updates
+        lv_timer_create(time_update_timer_cb, 1000, NULL);
+        ui_update_timer = lv_timer_create(ui_update_timer_cb, UI_UPDATE_INTERVAL_DEFAULT_MS, NULL);
+        if (!ui_update_timer) {
+            ESP_LOGW(TAG, "Failed to create UI update timer");
+        }
+
+        apply_text_theme_colors();
+
         lvgl_port_unlock();
-    }
+    }  // Ende LVGL-Lock
 
     // ── HTTPS-Mutex initialisieren (vor allen HTTP-Tasks) ─────────────
     womo_http_mutex_init();
 
-    // ── WiFi + NTP VOR Backlight ──────────────────────────────────────
-    // Backlight bleibt AUS während WiFi verbindet und NTP die Uhrzeit
-    // synchronisiert.  In dieser Zeit (3-8 s) rendert der LVGL-Task im
-    // Hintergrund das initiale UI und der 1 s-Timer aktualisiert nach
-    // NTP-Sync automatisch Theme + Hintergrundbild (Tag/Nacht).
-    // Erst danach wird Backlight eingeschaltet → der Nutzer sieht
-    // sofort das korrekte Endbild, ohne sichtbare Zwischenzustände.
+    // ── WiFi + Zeitsync VOR Backlight ────────────────────────────────
+    // Backlight bleibt AUS.  Wir warten auf eine gültige Zeitquelle
+    // (NTP über WiFi ODER RS485-Timestamp vom Sensorboard – wer
+    // zuerst liefert).  Damit sind Theme + Ducato beim Einschalten
+    // des Backlights sofort korrekt (Tag/Nacht).
     ESP_LOGI(TAG, "Connecting to Router-AP: %s", WIFI_SSID);
     esp_err_t wifi_err = womo_wifi_connect(WIFI_SSID, WIFI_PASSWORD, WIFI_MAX_RETRY);
 
     if (wifi_err == ESP_OK) {
         ESP_LOGI(TAG, "WiFi connected to Router-AP: %s", WIFI_SSID);
 
-        // Sync time via NTP (non-blocking)
+        // NTP non-blocking starten
         if (womo_time_sync_ntp(false) == ESP_OK) {
             ESP_LOGI(TAG, "NTP sync started (background)");
         } else {
-            ESP_LOGW(TAG, "NTP sync start failed, using internal RTC");
+            ESP_LOGW(TAG, "NTP sync start failed");
         }
     } else {
         ESP_LOGW(TAG, "WiFi connection to Router-AP failed (%s) - RUTX11 eingeschaltet?",
                  esp_err_to_name(wifi_err));
     }
 
-    // ── Theme + Ducato mit korrekter Uhrzeit aktualisieren ────────────
-    // Jetzt ist NTP (hoffentlich) synchronisiert.  Wir aktualisieren
-    // Theme, Hintergrundbild und Textfarben sofort, BEVOR das Backlight
-    // eingeschaltet wird.  So sieht der Nutzer keine Zwischenzustände.
+    // Auf gültige Zeit warten: NTP oder RS485-Timestamp (max 5s).
+    // RS485 display_ready wurde in create_ui() bereits gesendet,
+    // das Sensorboard sendet jetzt schon Pakete mit timestamp_ms.
+    {
+        bool time_ok = false;
+        for (int i = 0; i < 50; i++) {  // max 5s (50 × 100ms)
+            // 1) NTP/GPS hat System-Uhr gesetzt?
+            struct tm t;
+            if (womo_time_get(&t) == ESP_OK && t.tm_year >= (2024 - 1900)) {
+                ESP_LOGI(TAG, "Time valid (system clock) after %d ms", i * 100);
+                time_ok = true;
+                break;
+            }
+            // 2) RS485-Timestamp vom Sensorboard verfügbar?
+            taskENTER_CRITICAL(&display_data_spinlock);
+            uint64_t ts_ms = latest_sensor_data.timestamp_ms;
+            taskEXIT_CRITICAL(&display_data_spinlock);
+            if (ts_ms > 0) {
+                int64_t rs485_secs = (int64_t)(ts_ms / 1000ULL);
+                // Plausibilitätscheck: nach 2024-01-01
+                if (rs485_secs > 1704067200) {
+                    womo_time_sync_gps((time_t)rs485_secs);
+                    ESP_LOGI(TAG, "Time synced from RS485 after %d ms", i * 100);
+                    time_ok = true;
+                    break;
+                }
+            }
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+        if (!time_ok) {
+            ESP_LOGW(TAG, "No time source available after 5s – using DAY default");
+        }
+    }
+
+    // ── Theme + Ducato mit korrekter Uhrzeit laden ─────────────────────
+    // Zeit ist jetzt gültig (NTP oder RS485) oder Fallback auf DAY.
+    // 1× Ducato laden, Theme + Textfarben setzen – Backlight noch AUS.
     if (lvgl_port_lock(-1)) {
         womo_theme_mode_t boot_mode = womo_theme_update(WOMO_STATUS_OK);
         bool boot_is_day = theme_mode_is_daylike(boot_mode);
+        ESP_LOGI(TAG, "Boot theme: %s (mode=%d)", boot_is_day ? "DAY" : "NIGHT", boot_mode);
 
         load_background_image(lv_scr_act(), boot_is_day);
         apply_text_theme_colors();

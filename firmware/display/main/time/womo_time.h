@@ -4,7 +4,7 @@
  * Manages system time with multiple sources:
  * - Internal ESP32 RTC (always running)
  * - NTP sync via WiFi (when available)
- * - GPS sync via Walter Modem (future)
+ * - GPS sync via RS485 Sensorboard
  */
 
 #ifndef WOMO_TIME_H
@@ -48,9 +48,9 @@ esp_err_t womo_time_init(void);
 esp_err_t womo_time_sync_ntp(bool wait_for_sync);
 
 /**
- * @brief Sync time from GPS (Walter Modem)
+ * @brief Sync time from GPS/RS485 (Sensorboard)
  * 
- * Future implementation when Walter Modem is available
+ * Uses timestamp from Sensorboard RS485 packets
  * 
  * @param gps_time UTC time from GPS
  * @return ESP_OK on successful sync

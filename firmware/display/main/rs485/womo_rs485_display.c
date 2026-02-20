@@ -438,8 +438,8 @@ static esp_err_t rs485_send_ack(uint32_t rx_seq, bool ok, const char *cmd, const
 
 static esp_err_t rs485_send_heartbeat(void)
 {
-    // Heartbeat nur senden wenn Walter länger als 10 s nicht gesendet hat.
-    // Während normaler Kommunikation (Walter sendet alle 2 s) entfällt
+    // Heartbeat nur senden wenn Sensorboard länger als 10 s nicht gesendet hat.
+    // Während normaler Kommunikation (Sensorboard sendet alle 2 s) entfällt
     // der Display-Heartbeat komplett → kein TX-Echo auf Half-Duplex-Bus.
     if (s_last_rx_activity_us != 0) {
         int64_t silence_us = esp_timer_get_time() - s_last_rx_activity_us;
@@ -1119,7 +1119,7 @@ static void rs485_rx_task(void *arg)
         
         if (len > 0) {
             // Half-duplex Echo-Unterdrückung: während einer aktiven
-            // Übertragung gelesene Bytes sind TX-Echo, nicht Walter-Daten.
+            // Übertragung gelesene Bytes sind TX-Echo, nicht Sensorboard-Daten.
             if (s_tx_active) {
                 continue;
             }
@@ -1284,10 +1284,10 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         const cJSON *fw = cJSON_GetObjectItem(root, "fw");
         const cJSON *uptime = cJSON_GetObjectItem(root, "uptime");
         if (cJSON_IsString(fw)) {
-            ESP_LOGI(TAG, "Walter hello: fw=%s", fw->valuestring);
+            ESP_LOGI(TAG, "Sensorboard hello: fw=%s", fw->valuestring);
         }
         if (cJSON_IsNumber(uptime)) {
-            ESP_LOGI(TAG, "Walter uptime: %.0f s", uptime->valuedouble);
+            ESP_LOGI(TAG, "Sensorboard uptime: %.0f s", uptime->valuedouble);
         }
         rs485_emit_event(WOMO_RS485_EVENT_HELLO);
         womo_rs485_send_display_ready();

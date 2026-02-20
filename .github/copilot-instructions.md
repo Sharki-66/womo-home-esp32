@@ -26,9 +26,9 @@ Git regelmäsig updaten -> Nutzer fragen.
 - `hb`: `type="hb"`, Felder `uptime`, optional `rx_seq`, `last_ack`.
 - **Topic-Pakete** (ersetzt das alte monolithische `full`-Paket): Jedes Topic wird als eigenständiges kleines JSON-Paket gesendet. Round-Robin-Scheduler, max. 1 Topic pro 100 ms-Zyklus.
 - Topic-Intervalle:
-- `ctrl` (2 s): `{ type:"ctrl", pwr_on, radio_on, ac_present, wifi_target, wifi_active, lte_target, lte_active }` – Steuer-/Power-Zustände
+- `ctrl` (2 s): `{ type:"ctrl", pwr_on, radio_on, ac_present }` – Steuer-/Power-Zustände. WiFi/LTE-Zustand kommt **nicht** vom Sensorboard – Display pollt Router direkt.
 - `imu` (5 s): `{ type:"imu", yaw_deg, pitch_deg, roll_deg, hdg, cal:{sys,gyro,acc,mag}, calibrated }` – BNO055
-- `bat` (10 s): `{ type:"bat", b1, b2, nc1, nc2, soc? }` – Batterien (Board/Kfz in Volt)
+- `bat` (10 s): `{ type:"bat", b1, b2, nc1, nc2 }` – Batterien (Board/Kfz in Volt, kein SoC)
 - `tank` (10 s): `{ type:"tank", t1, t2, nc1, nc2 }` – Tanksensoren (Prozent)
 - `hx` (10 s): `{ type:"hx", a, b, sum, nc }` – HX711 Wägezellen (kg)
 - `gas` (10 s): `{ type:"gas", active, net, rate1h, rate2h, rest_h, net_a, net_b, cap_kg, pct, pct_a, pct_b }` – Gaslogik

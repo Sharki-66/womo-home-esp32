@@ -209,8 +209,8 @@ void womo_time_auto_sync(void)
             return;
         }
         
-        // Try GPS (when Walter Modem available)
-        // TODO: Implement when Walter Modem is integrated
+        // Try RS485 Sensorboard time sync
+        // (handled in main.c time_update_timer_cb)
         
         ESP_LOGW(TAG, "Auto-sync failed - no sync source available");
     } else {

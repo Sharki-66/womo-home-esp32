@@ -16,7 +16,7 @@
 
 #define BME680_LOG_INTERVAL_MS 5000
 #define BME680_USE_BSEC 1
-#define BSEC_STATE_SAVE_INTERVAL_US (10 * 60 * 1000000LL)  // 10 Minuten
+#define BSEC_STATE_SAVE_INTERVAL_US (30 * 60 * 1000000LL)  // 30 Minuten
 #define BSEC_NVS_NAMESPACE "bsec"
 #define BSEC_NVS_KEY_INDOOR "state_in"
 
@@ -567,9 +567,10 @@ static void process_bme680(bsec_ctx_t *ctx)
     bsec_get_state(0, ctx->state, BSEC_MAX_STATE_BLOB_SIZE, s_bsec_work_buffer, sizeof(s_bsec_work_buffer), &out_len);
     ctx->state_len = out_len;
     
-    // Periodisches Speichern des BSEC State
-    if (now_ns - s_last_bsec_state_save_us >= BSEC_STATE_SAVE_INTERVAL_US) {
-        s_last_bsec_state_save_us = now_ns / 1000LL;
+    // Periodisches Speichern des BSEC State (alle 30 min)
+    int64_t now_us = now_ns / 1000LL;
+    if (now_us - s_last_bsec_state_save_us >= BSEC_STATE_SAVE_INTERVAL_US) {
+        s_last_bsec_state_save_us = now_us;
         bsec_save_state(ctx);
     }
 }

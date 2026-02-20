@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-// Sensor data structure matching Walter's JSON output
+// Sensor data structure matching Sensorboard JSON output
 typedef struct {
     // Timestamp
     uint64_t timestamp_ms;
@@ -35,7 +35,7 @@ typedef struct {
         float weight_sum_kg;
     } hx711;
 
-    // Gas summary (Walter)
+    // Gas summary (Sensorboard)
     struct {
         bool valid;
         int8_t active_idx;   // 0=A/Vorne, 1=B/Hinten
@@ -164,7 +164,7 @@ void womo_rs485_set_data_callback(womo_rs485_data_cb_t callback, void *user_data
 // Optional event callback (handshake, heartbeat, parse errors)
 void womo_rs485_set_event_callback(womo_rs485_event_cb_t callback, void *user_data);
 
-// Send commands to Walter
+// Send commands to Sensorboard
 esp_err_t womo_rs485_send_level_start(void);
 esp_err_t womo_rs485_send_level_stop(void);
 esp_err_t womo_rs485_send_tare_a(void);
