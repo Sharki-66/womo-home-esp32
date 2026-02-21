@@ -13,10 +13,12 @@
 #define GASBEE_HX711_AVG_SAMPLES    5U          // Mehr Samples = stabiler
 #define GASBEE_HX711_POLL_INTERVAL_MS 5000U     // Messung alle 5 s
 
-// Kalibrierung (übernommen von Sensorboard Kanal A, ggf. neu kalibrieren)
-// Offset und Scale mit leerem Haken und bekanntem Gewicht bestimmen.
-#define GASBEE_HX711_OFFSET         -275500
-#define GASBEE_HX711_SCALE          0.04004f    // kg pro raw-LSB
+// Kalibrierung gemessen 21.02.2026:
+//   Leer:          raw = -278300
+//   5 x 3,6 kg = 18 kg: raw = 171790
+//   scale = 18.0 / (171790 - (-278300)) = 18.0 / 450090 = 0.00003999
+#define GASBEE_HX711_OFFSET         -278300
+#define GASBEE_HX711_SCALE          0.00003999f    // kg pro raw-LSB
 
 // NVS – Kalibrierung persistent speichern
 #define GASBEE_NVS_NAMESPACE        "gasbee"

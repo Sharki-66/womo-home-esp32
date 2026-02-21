@@ -84,6 +84,8 @@ static bool measure_weight(float *weight_kg_out)
     int32_t raw = 0;
     int32_t sum = 0;
     int     valid = 0;
+    int32_t min_raw = INT32_MAX;
+    int32_t max_raw = INT32_MIN;
 
     for (int i = 0; i < GASBEE_HX711_AVG_SAMPLES; i++) {
         esp_err_t err = hx711_wait(&s_hx, GASBEE_HX711_READY_TIMEOUT);
@@ -95,6 +97,8 @@ static bool measure_weight(float *weight_kg_out)
         if (err == ESP_OK) {
             sum += raw;
             valid++;
+            if (raw < min_raw) min_raw = raw;
+            if (raw > max_raw) max_raw = raw;
         }
     }
 
@@ -103,8 +107,24 @@ static bool measure_weight(float *weight_kg_out)
         return false;
     }
 
-    float avg_raw = (float)(sum / valid);
-    *weight_kg_out = (avg_raw - (float)s_offset) * s_scale - s_tare;
+    int32_t avg_raw = sum / valid;
+
+    // Diagnose: raw=0 → DOUT floating (Verdrahtung prüfen!)
+    if (avg_raw == 0) {
+        ESP_LOGE(TAG, "⚠ HX711 raw=0! DOUT floating? Verdrahtung prüfen:");
+        ESP_LOGE(TAG, "  DOUT → GPIO%d | SCK → GPIO%d | VCC → 5V? | Load-Cell E+/E-/A+/A-?",
+                 GASBEE_HX711_DOUT_GPIO, GASBEE_HX711_SCK_GPIO);
+    }
+    // Diagnose: alle Samples identisch → kein echtes HX711-Signal
+    if (min_raw == max_raw && valid > 1) {
+        ESP_LOGW(TAG, "⚠ HX711 alle %d Samples = %ld (kein Rauschen, DOUT prüfen)", valid, (long)avg_raw);
+    }
+
+    ESP_LOGI(TAG, "HX711 raw=%ld  min=%ld  max=%ld  offset=%ld  delta=%ld",
+             (long)avg_raw, (long)min_raw, (long)max_raw,
+             (long)s_offset, (long)(avg_raw - s_offset));
+
+    *weight_kg_out = ((float)avg_raw - (float)s_offset) * s_scale - s_tare;
     return true;
 }
 
@@ -127,6 +147,11 @@ static void calc_gas(float weight_kg, float *net_kg_out, uint8_t *pct_out)
 static void measure_task(void *arg)
 {
     vTaskDelay(pdMS_TO_TICKS(GASBEE_HX711_STARTUP_MS));
+
+    // Pull-Up auf DOUT aktivieren: bei offenem Pin liest der HX711 HIGH (nicht bereit)
+    // → hx711_wait() timeouted dann sauber statt raw=0 zurückzugeben.
+    gpio_set_pull_mode(GASBEE_HX711_DOUT_GPIO, GPIO_PULLUP_ONLY);
+    ESP_LOGI(TAG, "DOUT GPIO%d Pull-Up aktiviert", GASBEE_HX711_DOUT_GPIO);
 
     // Retry-Schleife: HX711 kann nach Power-On länger brauchen oder
     // ist beim ersten Start noch nicht angeschlossen.
