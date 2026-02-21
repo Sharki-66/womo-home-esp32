@@ -7,6 +7,10 @@
     {
       "name": "📺 Display (firmware/display) - REF",
       "path": "firmware/display"
+    },
+    {
+      "name": "🔵 GasBee (firmware/gasbee) - ESP32-C3",
+      "path": "firmware/gasbee"
     }
   ],
   "settings": {
@@ -80,6 +84,48 @@
         "group": "build",
         "problemMatcher": [],
         "presentation": { "echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": false }
+      },
+      {
+        "label": "Build GasBee Firmware",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["build"],
+        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "group": "build",
+        "problemMatcher": ["$gcc"],
+        "presentation": { "echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": false }
+      },
+      {
+        "label": "Flash GasBee (/dev/ttyUSB0)",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["-p", "/dev/ttyUSB0", "flash"],
+        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "group": "build",
+        "problemMatcher": [],
+        "presentation": { "echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": false }
+      },
+      {
+        "label": "Monitor GasBee (/dev/ttyUSB0)",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["-p", "/dev/ttyUSB0", "monitor"],
+        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "group": "build",
+        "isBackground": true,
+        "problemMatcher": [],
+        "presentation": { "echo": true, "reveal": "always", "focus": true, "panel": "dedicated", "showReuseMessage": false, "clear": false }
+      },
+      {
+        "label": "Build + Flash + Monitor GasBee",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["-p", "/dev/ttyUSB0", "build", "flash", "monitor"],
+        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "group": "build",
+        "isBackground": true,
+        "problemMatcher": ["$gcc"],
+        "presentation": { "echo": true, "reveal": "always", "focus": true, "panel": "dedicated", "showReuseMessage": false, "clear": false }
       }
     ]
   },

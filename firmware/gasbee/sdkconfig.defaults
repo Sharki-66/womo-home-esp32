@@ -1,0 +1,27 @@
+# GasBee – ESP32-C3 Mini, Gaswage per BLE
+# Basiert auf: sdkconfig.defaults für esp32c3
+
+# Target
+CONFIG_IDF_TARGET="esp32c3"
+
+# BLE (NimBLE – deutlich kleiner als Bluedroid)
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=3
+CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_INTERNAL=y
+# Bluedroid deaktivieren
+CONFIG_BT_BLUEDROID_ENABLED=n
+
+# Flash / Partition
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_SINGLE_APP=y
+
+# Logging
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# Energie sparen: Light-Sleep zwischen Messungen
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+
+# NVS für Kalibrierung
+CONFIG_NVS_ENCRYPTION=n
