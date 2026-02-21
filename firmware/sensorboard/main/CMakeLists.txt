@@ -12,6 +12,7 @@ idf_component_register(
         "time/rtc_pcf8523.c"
         "sensors/hx711_sensor.c"
         "time/time_sync.c"
+        "network/gasbee_ble_client.c"
     INCLUDE_DIRS
         "."
         "sensors"
@@ -35,4 +36,5 @@ idf_component_register(
         hx711
         i2c_bus
         json
+        bt
 )

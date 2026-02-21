@@ -20,6 +20,7 @@
 #include "network/rs485_modem.h"
 #include "network/wifi/sensor_wifi.h"
 #include "network/wifi/sensor_http.h"
+#include "network/gasbee_ble_client.h"
 #include "led_strip.h"
 
 static const char *TAG = "sensor_main";
@@ -96,6 +97,12 @@ void app_main(void)
     esp_err_t hx_err = hx711_app_start();
     if (hx_err != ESP_OK) {
         ESP_LOGW(TAG, "HX711 nicht aktiv (err=%s)", esp_err_to_name(hx_err));
+    }
+
+    // GasBee BLE Client (ESP32-C3 Mini Gaswaage via BLE)
+    esp_err_t gasbee_err = gasbee_ble_client_start();
+    if (gasbee_err != ESP_OK) {
+        ESP_LOGW(TAG, "GasBee BLE Client nicht gestartet (err=%s)", esp_err_to_name(gasbee_err));
     }
 
     // BNO055 als letztes initialisieren, kleine Pause davor
