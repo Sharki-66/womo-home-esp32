@@ -91,7 +91,7 @@ static bool measure_weight(float *weight_kg_out)
             ESP_LOGW(TAG, "HX711 not ready (sample %d)", i);
             continue;
         }
-        err = hx711_read(&s_hx, &raw);
+        err = hx711_read_data(&s_hx, &raw);
         if (err == ESP_OK) {
             sum += raw;
             valid++;
@@ -128,7 +128,21 @@ static void measure_task(void *arg)
 {
     vTaskDelay(pdMS_TO_TICKS(GASBEE_HX711_STARTUP_MS));
 
-    ESP_ERROR_CHECK(hx711_init(&s_hx));
+    // Retry-Schleife: HX711 kann nach Power-On länger brauchen oder
+    // ist beim ersten Start noch nicht angeschlossen.
+    {
+        esp_err_t init_err;
+        int attempt = 0;
+        do {
+            init_err = hx711_init(&s_hx);
+            if (init_err != ESP_OK) {
+                attempt++;
+                ESP_LOGW(TAG, "HX711 nicht bereit (Versuch %d, err=%s) – retry in 2 s...",
+                         attempt, esp_err_to_name(init_err));
+                vTaskDelay(pdMS_TO_TICKS(2000));
+            }
+        } while (init_err != ESP_OK);
+    }
     ESP_LOGI(TAG, "HX711 bereit (DOUT=GPIO%d, SCK=GPIO%d)",
              GASBEE_HX711_DOUT_GPIO, GASBEE_HX711_SCK_GPIO);
 

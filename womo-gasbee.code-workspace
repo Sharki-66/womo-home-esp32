@@ -1,0 +1,96 @@
+{
+  "folders": [
+    {
+      "name": "🔵 GasBee (firmware/gasbee) - ESP32-C3",
+      "path": "firmware/gasbee"
+    }
+  ],
+  "settings": {
+    "idf.flashBaudRate": "460800",
+    "idf.port": "/dev/ttyUSB0",
+    "idf.flashType": "UART",
+    "idf.adapterTargetName": "esp32c3",
+    "idf.openOcdConfigs": ["board/esp32c3-builtin.cfg"],
+    "files.associations": { "*.h": "c", "*.c": "c" },
+    "C_Cpp.default.compilerPath": "${config:idf.toolsPath}/tools/riscv32-esp-elf/esp-13.2.0_20240530/riscv32-esp-elf/bin/riscv32-esp-elf-gcc",
+    "C_Cpp.default.compileCommands": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}/build/compile_commands.json",
+    "files.defaultLanguage": "c",
+    "explorer.sortOrder": "foldersNestsFiles",
+    "idf.showOnboardingOnInit": false,
+    "idf.enableStatusBar": true,
+    "chat.agent.maxRequests": 50
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build GasBee",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["build"],
+        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "group": { "kind": "build", "isDefault": true },
+        "problemMatcher": ["$gcc"],
+        "presentation": { "reveal": "always", "panel": "shared", "clear": true }
+      },
+      {
+        "label": "Flash GasBee (/dev/ttyUSB0)",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["-p", "/dev/ttyUSB0", "flash"],
+        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "group": "build",
+        "problemMatcher": [],
+        "presentation": { "reveal": "always", "panel": "shared", "clear": false }
+      },
+      {
+        "label": "Monitor GasBee (/dev/ttyUSB0)",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["-p", "/dev/ttyUSB0", "monitor"],
+        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "group": "build",
+        "isBackground": true,
+        "problemMatcher": [],
+        "presentation": { "reveal": "always", "panel": "dedicated", "focus": true, "clear": false }
+      },
+      {
+        "label": "Build + Flash + Monitor GasBee",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["-p", "/dev/ttyUSB0", "build", "flash", "monitor"],
+        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "group": "build",
+        "isBackground": true,
+        "problemMatcher": ["$gcc"],
+        "presentation": { "reveal": "always", "panel": "dedicated", "focus": true, "clear": true }
+      },
+      {
+        "label": "Set Target esp32c3",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["set-target", "esp32c3"],
+        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "group": "build",
+        "problemMatcher": [],
+        "presentation": { "reveal": "always", "panel": "shared", "clear": true }
+      },
+      {
+        "label": "Clean GasBee Build",
+        "type": "shell",
+        "command": "idf.py",
+        "args": ["fullclean"],
+        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "group": "build",
+        "problemMatcher": [],
+        "presentation": { "reveal": "always", "panel": "shared", "clear": true }
+      }
+    ]
+  },
+  "extensions": {
+    "recommendations": [
+      "espressif.esp-idf-extension",
+      "ms-vscode.cpptools"
+    ]
+  }
+}

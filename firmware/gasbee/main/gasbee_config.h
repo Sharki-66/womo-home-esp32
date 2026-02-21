@@ -6,8 +6,8 @@
  */
 
 // ── HX711 ────────────────────────────────────────────────────────────────────
-#define GASBEE_HX711_DOUT_GPIO      2
-#define GASBEE_HX711_SCK_GPIO       3
+#define GASBEE_HX711_DOUT_GPIO      4   // GPIO2 wäre Strapping-Pin → GPIO4
+#define GASBEE_HX711_SCK_GPIO       5
 #define GASBEE_HX711_STARTUP_MS     1000U
 #define GASBEE_HX711_READY_TIMEOUT  200U
 #define GASBEE_HX711_AVG_SAMPLES    5U          // Mehr Samples = stabiler
