@@ -15,6 +15,7 @@
 #include "gui/womo_weather.h"
 #include "gui/womo_battery.h"
 #include "gui/womo_connectivity_modal.h"
+#include "gui/womo_settings_modal.h"
 #include "gui/womo_tank.h"
 #include "gui/womo_fonts_german.h"
 #include "network/womo_wifi.h"
@@ -57,13 +58,9 @@ static const char *PLACEHOLDER_GPS = "GPS : ---";
 #define QUIET_HOUR_END   8
 #define QUIET_TOUCH_TIMEOUT_MS (5 * 60 * 1000)
 
-// Default thresholds (percentage) for warn/critical states
-static const uint8_t GAS_WARN_PERCENT = 30;
-static const uint8_t GAS_CRIT_PERCENT = 10;
-static const uint8_t FRESH_WARN_PERCENT = 30;
-static const uint8_t FRESH_CRIT_PERCENT = 10;
-static const uint8_t GREY_WARN_PERCENT = 70;  // high fill is bad
-static const uint8_t GREY_CRIT_PERCENT = 90;
+#include "gui/womo_thresholds.h"
+
+// Default thresholds werden jetzt über womo_thresholds.h verwaltet (veränderbar via Einstellungen)
 
 static const lv_point_t BACKLIGHT_RAY_POINTS[][2] = {
     {{24, 8},  {24, 2}},   // oben (bleibt innerhalb des Randes)
@@ -87,6 +84,7 @@ static lv_obj_t *status_label = NULL;
 static char status_label_last_text[80] = "";
 static lv_obj_t *wifi_label = NULL;
 static lv_obj_t *backlight_btn = NULL;
+static lv_obj_t *settings_btn  = NULL;  // Drei-Punkte-Taste → Einstellungs-Modal
 static lv_obj_t *backlight_ring = NULL;
 static lv_obj_t *backlight_icon_rays[8] = {0};
 static lv_obj_t *backlight_bulb_outline = NULL;
@@ -140,6 +138,8 @@ static lv_obj_t *bg_img = NULL;  // Background image
 static uint8_t *bg_png_data = NULL;  // Loaded background PNG buffer
 static size_t bg_png_size = 0;       // Size of loaded PNG
 static int bg_last_day_state = -1;   // -1 unknown, 0 night, 1 day
+static lv_obj_t *logo_img = NULL;    // Malibu-Logo über Ducato
+static uint8_t *logo_png_data = NULL; // Geladener Logo-PNG-Puffer
 static lv_obj_t *rs485_debug_label = NULL; // RS485 debug status
 static lv_obj_t *imu_zero_modal = NULL;     // IMU calibration modal
 static womo_weather_t *weather_widget = NULL; // Weather widget
@@ -260,6 +260,7 @@ static void ui_update_timer_cb(lv_timer_t *timer);
 static void wifi_label_event_cb(lv_event_t *event);
 static void status_label_event_cb(lv_event_t *event);
 static void backlight_button_event_cb(lv_event_t *event);
+static void settings_button_event_cb(lv_event_t *event);
 static void classic_button_event_cb(lv_event_t *event);
 static void radio_button_event_cb(lv_event_t *event);
 static void geocode_result_cb(const womo_geocode_result_t *result, void *user_data);
@@ -277,7 +278,9 @@ static void wifi_autoretry_task(void *arg);
 static void router_poll_task(void *arg);
 static bool is_quiet_hours(const struct tm *timeinfo);
 static void backlight_set(bool on);
+static bool theme_mode_is_daylike(womo_theme_mode_t mode);
 static void full_theme_refresh(void);
+static void load_logo_image(lv_obj_t *screen);
 static void connectivity_snapshot_fill(womo_connectivity_snapshot_t *snapshot);
 static void rs485_event_handler(womo_rs485_event_t event, void *user_data);
 static void gas_replace_show_modal(uint8_t slot);
@@ -290,6 +293,8 @@ static void imu_zero_close_modal(void);
 static void imu_zero_msgbox_event_cb(lv_event_t *event);
 static void perf_monitor_toggle_event_cb(lv_event_t *e);
 static void imu_zero_area_cb(lv_event_t *event);
+static void on_locale_changed(void);
+static void on_thresholds_changed(void);
 
 static void imu_labels_update(bool has_data,
                               float roll_deg,
@@ -365,7 +370,13 @@ static void imu_labels_update(bool has_data,
 
 static void apply_text_theme_colors(void)
 {
-    lv_color_t text_color = womo_theme_is_daytime() ? lv_color_black() : lv_color_white();
+    /* theme_mode_is_daylike() liefert nur für WOMO_THEME_DAY true.
+     * womo_theme_is_daytime() dagegen liefert true bis zum tatsächlichen
+     * Sonnenuntergang – also auch noch während des gesamten SUNSET-Modus,
+     * wenn der Hintergrund bereits dunkel (Gradient) ist.
+     * → schwarzer Text auf dunkelblauem Hintergrund wäre unsichtbar. */
+    womo_theme_mode_t mode = womo_theme_get_mode();
+    lv_color_t text_color = theme_mode_is_daylike(mode) ? lv_color_black() : lv_color_white();
     lv_color_t classic_color = lv_color_hex(0x2E7D32);
     lv_color_t radio_color = lv_color_hex(0x1565C0);
     lv_color_t shore_color = lv_color_hex(0xF9A825);
@@ -392,14 +403,14 @@ static void apply_text_theme_colors(void)
     if (imu_heading_label) lv_obj_set_style_text_color(imu_heading_label, lv_color_white(), 0);
     if (gps_label) lv_obj_set_style_text_color(gps_label, text_color, 0);
     if (gps_button) {
-        lv_color_t border = womo_theme_is_daytime() ? lv_color_black() : lv_color_white();
+        lv_color_t border = theme_mode_is_daylike(mode) ? lv_color_black() : lv_color_white();
         lv_obj_set_style_border_color(gps_button, border, 0);
         lv_obj_set_style_bg_color(gps_button, lv_color_hex(0xE0E0E0), 0);
         lv_obj_set_style_bg_opa(gps_button, LV_OPA_30, 0);
     }
     if (location_label) lv_obj_set_style_text_color(location_label, text_color, 0);
     if (gps_popup_panel && gps_popup_text_label) {
-        bool day = womo_theme_is_daytime();
+        bool day = theme_mode_is_daylike(mode);
         lv_obj_set_style_bg_color(gps_popup_panel,
                                   day ? lv_color_hex(0xE0E0E0) : lv_color_hex(0x303030), 0);
         lv_obj_set_style_border_color(gps_popup_panel, text_color, 0);
@@ -1070,6 +1081,81 @@ static bool load_background_image(lv_obj_t *screen, bool is_day)
     return true;
 }
 
+// Malibu-Logo von SD-Karte laden und auf dem Ducato positionieren.
+// Datei: /sdcard/images/Malibu-Logo.png (transparenter Hintergrund empfohlen).
+// Position und Skalierung per Defines anpassen:
+#define LOGO_X         560   // X-Position linke obere Ecke (Pixel vom linken Rand)
+#define LOGO_Y         260   // Y-Position linke obere Ecke (Pixel vom oberen Rand)
+#define LOGO_SCALE_PCT  50   // Skalierung in Prozent (100 = Originalgröße, 50 = halb)
+static void load_logo_image(lv_obj_t *screen)
+{
+    if (!womo_sd_is_mounted()) {
+        return;
+    }
+    const char *path = "/sdcard/images/Malibu-Logo.png";
+    struct stat st;
+    womo_ch422g_assert_sd_cs();
+    if (stat(path, &st) != 0) {
+        ESP_LOGW(TAG, "Malibu-Logo nicht gefunden: %s", path);
+        return;
+    }
+    if (st.st_size <= 0 || st.st_size > 1024 * 1024) {
+        ESP_LOGW(TAG, "Malibu-Logo: unplausible Dateigröße %ld", (long)st.st_size);
+        return;
+    }
+    womo_ch422g_assert_sd_cs();
+    FILE *fp = fopen(path, "rb");
+    if (!fp) {
+        ESP_LOGE(TAG, "Malibu-Logo: fopen fehlgeschlagen");
+        return;
+    }
+    uint8_t *buf = heap_caps_malloc(st.st_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!buf) {
+        ESP_LOGE(TAG, "Malibu-Logo: kein Speicher (%ld bytes)", (long)st.st_size);
+        fclose(fp);
+        return;
+    }
+    if (fread(buf, 1, st.st_size, fp) != (size_t)st.st_size) {
+        ESP_LOGE(TAG, "Malibu-Logo: Lesefehler");
+        fclose(fp);
+        heap_caps_free(buf);
+        return;
+    }
+    fclose(fp);
+
+    // Alten Puffer freigeben
+    if (logo_png_data) {
+        heap_caps_free(logo_png_data);
+        logo_png_data = NULL;
+    }
+    logo_png_data = buf;
+
+    static lv_img_dsc_t logo_dsc;
+    logo_dsc.header.always_zero = 0;
+    logo_dsc.header.w = 0;
+    logo_dsc.header.h = 0;
+    logo_dsc.data_size = (uint32_t)st.st_size;
+    logo_dsc.header.cf = LV_IMG_CF_RAW_ALPHA;
+    logo_dsc.data = logo_png_data;
+
+    if (!logo_img) {
+        logo_img = lv_img_create(screen);
+        lv_obj_clear_flag(logo_img, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    }
+    lv_img_set_src(logo_img, &logo_dsc);
+    lv_obj_set_style_img_opa(logo_img, LV_OPA_COVER, 0);
+
+    // Skalierung: LOGO_SCALE_PCT % → LVGL-Zoom-Wert (256 = 100%)
+    uint16_t zoom = (uint16_t)((LOGO_SCALE_PCT * 256) / 100);
+    lv_img_set_zoom(logo_img, zoom);
+    ESP_LOGI(TAG, "Malibu-Logo: zoom=%u (%d%%)", zoom, LOGO_SCALE_PCT);
+
+    lv_obj_align(logo_img, LV_ALIGN_TOP_LEFT, LOGO_X, LOGO_Y);
+    // Logo über Ducato-Hintergrund, aber unter allen Widgets
+    lv_obj_move_to_index(logo_img, 1);
+    ESP_LOGI(TAG, "Malibu-Logo geladen und positioniert (x=%d, y=%d)", LOGO_X, LOGO_Y);
+}
+
 // GPS-Detailanzeige nach Timeout wieder einklappen
 static void gps_hide_timer_cb(lv_timer_t *timer)
 {
@@ -1165,24 +1251,6 @@ static void screen_event_handler(lv_event_t * e)
         }
         
         ESP_LOGI(TAG, "Touch at: x=%d, y=%d", point.x, point.y);
-        
-        // Bottom left corner (date area): toggle language
-        if (point.x < 200 && point.y > 400) {
-            womo_locale_t current = womo_locale_get();
-            womo_locale_t next = (current == WOMO_LOCALE_DE) ? WOMO_LOCALE_EN : WOMO_LOCALE_DE;
-            womo_locale_set(next);
-            ESP_LOGI(TAG, "Language switched to: %s", (next == WOMO_LOCALE_DE) ? "DE" : "EN");
-            
-            // Immediately update all static labels
-            if (wifi_label && !womo_wifi_is_connected()) {
-                update_connectivity_label();
-            }
-            if (rs485_packet_count == 0 && rs485_debug_label) {
-                lv_label_set_text(rs485_debug_label, womo_locale_get_string(STR_RS485_WAITING));
-            }
-            system_status_apply(true);
-            // Timer callback will update time/date with new language on next cycle
-        }
     }
 }
 
@@ -1192,6 +1260,8 @@ static void ui_update_timer_cb(lv_timer_t *timer)
 
     womo_sensor_data_t snapshot = {0};
     womo_lte_status_t lte_snapshot = {0};
+    womo_thresholds_t thr;
+    womo_thresholds_get(&thr);
     uint32_t packet_count = 0;
     bool data_valid = false;
     bool rs485_timeout_snapshot = false;
@@ -1624,7 +1694,7 @@ static void ui_update_timer_cb(lv_timer_t *timer)
                 if (!gas_has_data_a || isnan(last_level_a) || fabsf(pct - last_level_a) > 0.5f) {
                     womo_gas_bottle_set_percent(gas_bottle_a, pct);
                     uint8_t fill = womo_gas_bottle_get_fill_percent(gas_bottle_a);
-                    womo_status_level_t status = evaluate_low_is_bad(fill, GAS_WARN_PERCENT, GAS_CRIT_PERCENT);
+                    womo_status_level_t status = evaluate_low_is_bad(fill, thr.gas_warn, thr.gas_crit);
                     womo_gas_bottle_set_status(gas_bottle_a, status);
                     if (status > sensor_level) {
                         sensor_level = status;
@@ -1637,7 +1707,7 @@ static void ui_update_timer_cb(lv_timer_t *timer)
                 if (!gas_has_data_a || isnan(last_level_a) || fabsf(snapshot.hx711.weight_a_kg - last_level_a) > 0.05f) {
                     womo_gas_bottle_update_weight(gas_bottle_a, snapshot.hx711.weight_a_kg);
                     uint8_t fill = womo_gas_bottle_get_fill_percent(gas_bottle_a);
-                    womo_status_level_t status = evaluate_low_is_bad(fill, GAS_WARN_PERCENT, GAS_CRIT_PERCENT);
+                    womo_status_level_t status = evaluate_low_is_bad(fill, thr.gas_warn, thr.gas_crit);
                     womo_gas_bottle_set_status(gas_bottle_a, status);
                     if (status > sensor_level) {
                         sensor_level = status;
@@ -1660,7 +1730,7 @@ static void ui_update_timer_cb(lv_timer_t *timer)
                 if (!gas_has_data_b || isnan(last_level_b) || fabsf(pct - last_level_b) > 0.5f) {
                     womo_gas_bottle_set_percent(gas_bottle_b, pct);
                     uint8_t fill = womo_gas_bottle_get_fill_percent(gas_bottle_b);
-                    womo_status_level_t status = evaluate_low_is_bad(fill, GAS_WARN_PERCENT, GAS_CRIT_PERCENT);
+                    womo_status_level_t status = evaluate_low_is_bad(fill, thr.gas_warn, thr.gas_crit);
                     womo_gas_bottle_set_status(gas_bottle_b, status);
                     if (status > sensor_level) {
                         sensor_level = status;
@@ -1673,7 +1743,7 @@ static void ui_update_timer_cb(lv_timer_t *timer)
                 if (!gas_has_data_b || isnan(last_level_b) || fabsf(snapshot.hx711.weight_b_kg - last_level_b) > 0.05f) {
                     womo_gas_bottle_update_weight(gas_bottle_b, snapshot.hx711.weight_b_kg);
                     uint8_t fill = womo_gas_bottle_get_fill_percent(gas_bottle_b);
-                    womo_status_level_t status = evaluate_low_is_bad(fill, GAS_WARN_PERCENT, GAS_CRIT_PERCENT);
+                    womo_status_level_t status = evaluate_low_is_bad(fill, thr.gas_warn, thr.gas_crit);
                     womo_gas_bottle_set_status(gas_bottle_b, status);
                     if (status > sensor_level) {
                         sensor_level = status;
@@ -1861,8 +1931,8 @@ gas_done:
             if (fresh_water_tank && (!tank_has_data || last_tank1 != snapshot.tank.tank1_percent)) {
                 womo_tank_set_level(fresh_water_tank, snapshot.tank.tank1_percent);
                 womo_status_level_t status = evaluate_low_is_bad(snapshot.tank.tank1_percent,
-                                                                 FRESH_WARN_PERCENT,
-                                                                 FRESH_CRIT_PERCENT);
+                                                                 thr.fresh_warn,
+                                                                 thr.fresh_crit);
                 womo_tank_set_status(fresh_water_tank, status);
                 if (status > sensor_level) {
                     sensor_level = status;
@@ -1872,8 +1942,8 @@ gas_done:
             if (grey_water_tank && (!tank_has_data || last_tank2 != snapshot.tank.tank2_percent)) {
                 womo_tank_set_level(grey_water_tank, snapshot.tank.tank2_percent);
                 womo_status_level_t status = evaluate_high_is_bad(snapshot.tank.tank2_percent,
-                                                                  GREY_WARN_PERCENT,
-                                                                  GREY_CRIT_PERCENT);
+                                                                  thr.grey_warn,
+                                                                  thr.grey_crit);
                 womo_tank_set_status(grey_water_tank, status);
                 if (status > sensor_level) {
                     sensor_level = status;
@@ -2076,6 +2146,20 @@ static bool theme_mode_is_daylike(womo_theme_mode_t mode)
     return (mode == WOMO_THEME_DAY);
 }
 
+// Callback: Sprache geändert → statische UI-Labels aktualisieren.
+static void on_locale_changed(void)
+{
+    if (air_title_label)    lv_label_set_text(air_title_label,    womo_locale_get_string(STR_AIR_OUTDOOR));
+    if (air_title_label_in) lv_label_set_text(air_title_label_in, womo_locale_get_string(STR_AIR_INDOOR));
+}
+
+// Callback: Grenzwerte geändert → keine UI-Sofortaktualisierung nötig,
+// da der ui_update_timer_cb die Werte beim nächsten Tick neu liest.
+static void on_thresholds_changed(void)
+{
+    /* intentionally empty – ui_update_timer_cb liest womo_thresholds_get() */
+}
+
 // Vollständiges Theme-Update: Mode neu berechnen, Ducato + Textfarben + BG-Farbe aktualisieren.
 // Guard in load_background_image() prüft bg_last_day_state intern → kein unnötiger SD-Zugriff.
 static void full_theme_refresh(void)
@@ -2173,7 +2257,9 @@ static void time_update_timer_cb(lv_timer_t *timer)
     // Textfarben + BG-Farbe aktualisieren. Reagiert innerhalb 1 s auf
     // NTP-Korrektur oder Dämmerungsübergang – statt bisher 60 s.
     if (womo_theme_is_auto_mode() && time_valid_now) {
-        static womo_theme_mode_t last_applied_mode = WOMO_THEME_DAY;
+        /* Sentinel: != jeder gültiger Mode → erzwingt beim ersten Tick ein Update,
+           selbst wenn boot-Ducato bereits korrekt geladen wurde. */
+        static womo_theme_mode_t last_applied_mode = (womo_theme_mode_t)0xFF;
         womo_theme_mode_t new_mode = womo_theme_update(womo_theme_get_status());
 
         if (new_mode != last_applied_mode) {
@@ -2790,6 +2876,14 @@ static void wifi_label_event_cb(lv_event_t *event)
     womo_connectivity_modal_show(lv_scr_act(), &snapshot);
 }
 
+static void settings_button_event_cb(lv_event_t *event)
+{
+    if (!event || lv_event_get_code(event) != LV_EVENT_CLICKED) {
+        return;
+    }
+    womo_settings_modal_show(lv_scr_act());
+}
+
 static void backlight_button_event_cb(lv_event_t *event)
 {
     if (!event || lv_event_get_code(event) != LV_EVENT_CLICKED) {
@@ -2891,9 +2985,12 @@ static void backlight_update_label(void)
         return;
     }
 
-    lv_color_t icon_color = lv_color_hex(0x000000); // schwarz für Symbol und Rand
+    lv_color_t btn_bg     = lv_color_hex(0xC0C0C0); // immer silber – AUS ist unsichtbar
+    lv_color_t icon_color = lv_color_hex(0x000000);
     lv_color_t border_color = icon_color;
 
+    lv_obj_set_style_bg_color(backlight_btn, btn_bg, 0);
+    lv_obj_set_style_bg_opa(backlight_btn, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(backlight_btn, 0, 0);
     lv_obj_set_style_border_color(backlight_btn, lv_color_hex(0x7A7A7A), 0);
 
@@ -3286,6 +3383,9 @@ void app_main()
         
         // Initialize locale system
         womo_locale_init();
+        womo_locale_register_change_cb(on_locale_changed);
+        womo_thresholds_init();
+        womo_thresholds_register_change_cb(on_thresholds_changed);
         
         // Test deutsche Schriftarten
         womo_test_german_fonts();
@@ -3381,21 +3481,44 @@ void app_main()
             backlight_btn = lv_btn_create(screen);
             lv_obj_set_size(backlight_btn, 48, 48);
             lv_obj_align(backlight_btn, LV_ALIGN_RIGHT_MID, -10, 0); // rechtsbündig mit einheitlichem Rand
-            lv_obj_set_style_radius(backlight_btn, LV_RADIUS_CIRCLE, 0); // Button bleibt kreisrund
-            lv_obj_set_style_bg_color(backlight_btn, lv_color_hex(0xC0C0C0), 0); // silberner Hintergrund
+            lv_obj_set_style_radius(backlight_btn, LV_RADIUS_CIRCLE, 0);
             lv_obj_set_style_bg_opa(backlight_btn, LV_OPA_COVER, 0);
             lv_obj_set_style_border_width(backlight_btn, 0, 0);
             lv_obj_set_style_border_color(backlight_btn, lv_color_hex(0x7A7A7A), 0);
             lv_obj_add_flag(backlight_btn, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_add_event_cb(backlight_btn, backlight_button_event_cb, LV_EVENT_CLICKED, NULL);
 
-            backlight_update_label();
+            backlight_update_label(); // setzt Farbe + Icon abhängig von backlight_on
+
+            // Drei-Punkte-Button (···) → öffnet Einstellungs-Modal
+            // Platz: zwischen Ortsname (endet ~x=265) und Datum (x=310)
+            settings_btn = lv_btn_create(screen);
+            lv_obj_set_size(settings_btn, 40, 28);
+            lv_obj_align(settings_btn, LV_ALIGN_BOTTOM_LEFT, 246, -8); // zwischen Ort und Datum
+            lv_obj_set_style_radius(settings_btn, 0, 0);
+            lv_obj_set_style_bg_opa(settings_btn, LV_OPA_TRANSP, 0);   // kein Hintergrund
+            lv_obj_set_style_border_width(settings_btn, 0, 0);
+            lv_obj_set_style_shadow_width(settings_btn, 0, 0);
+            lv_obj_add_flag(settings_btn, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_add_event_cb(settings_btn, settings_button_event_cb, LV_EVENT_CLICKED, NULL);
+            // Drei horizontale Punkte (···)
+            for (int i = 0; i < 3; i++) {
+                lv_obj_t *dot = lv_obj_create(settings_btn);
+                lv_obj_set_size(dot, 6, 6);
+                lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+                lv_obj_set_style_bg_color(dot, lv_color_white(), 0);
+                lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+                lv_obj_set_style_border_width(dot, 0, 0);
+                lv_obj_set_style_pad_all(dot, 0, 0);
+                lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+                lv_obj_align(dot, LV_ALIGN_CENTER, (i - 1) * 11, 0); // horizontal: -11, 0, +11
+            }
         
         // Weather data (top right) - Gas first, all one font size larger
     char init_buf[40];
 
     air_title_label = lv_label_create(screen);
-    lv_label_set_text(air_title_label, "Luftwerte aussen");
+    lv_label_set_text(air_title_label, womo_locale_get_string(STR_AIR_OUTDOOR));
     lv_obj_set_style_text_font(air_title_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(air_title_label, lv_color_black(), 0);
     lv_obj_set_style_text_align(air_title_label, LV_TEXT_ALIGN_RIGHT, 0);
@@ -3455,7 +3578,7 @@ void app_main()
     // Block so ausrichten, dass das rechte Ende (rechtsbündig) mittig im Display liegt
     lv_coord_t indoor_block_x = (disp_w / 2) - 290;
     air_title_label_in = lv_label_create(screen);
-    lv_label_set_text(air_title_label_in, "Luftwerte innen");
+    lv_label_set_text(air_title_label_in, womo_locale_get_string(STR_AIR_INDOOR));
     lv_obj_set_style_text_font(air_title_label_in, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(air_title_label_in, lv_color_black(), 0);
     lv_obj_set_width(air_title_label_in, 320);
@@ -3595,7 +3718,7 @@ void app_main()
     lv_obj_set_style_text_font(location_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(location_label, lv_color_black(), 0);
     lv_obj_set_style_text_align(location_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_width(location_label, 220);
+    lv_obj_set_width(location_label, 200);
     lv_label_set_long_mode(location_label, LV_LABEL_LONG_DOT);
     lv_obj_align(location_label, LV_ALIGN_BOTTOM_LEFT, 10 + 55, -16);
 
@@ -3905,6 +4028,7 @@ void app_main()
         ESP_LOGI(TAG, "Boot theme: %s (mode=%d)", boot_is_day ? "DAY" : "NIGHT", boot_mode);
 
         load_background_image(lv_scr_act(), boot_is_day);
+        load_logo_image(lv_scr_act());
         apply_text_theme_colors();
         womo_theme_apply_to_screen(NULL);
 

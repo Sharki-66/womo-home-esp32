@@ -73,6 +73,9 @@ typedef enum {
     STR_GAS_MODAL_QUESTION,
     STR_GAS_MODAL_BTN_YES,
     STR_GAS_MODAL_BTN_NO,
+    // Air value headings
+    STR_AIR_OUTDOOR,
+    STR_AIR_INDOOR,
     // Weekdays
     STR_WEEKDAY_SUN,
     STR_WEEKDAY_MON,
@@ -81,6 +84,12 @@ typedef enum {
     STR_WEEKDAY_THU,
     STR_WEEKDAY_FRI,
     STR_WEEKDAY_SAT,
+    // Settings modal – threshold section
+    STR_THRESH_TITLE,
+    STR_THRESH_WARNING,
+    STR_THRESH_GAS,
+    STR_THRESH_FRESH,
+    STR_THRESH_GREY,
     // Max value
     STR_MAX
 } womo_string_id_t;
@@ -115,5 +124,12 @@ const char* womo_locale_get_string(womo_string_id_t str_id);
  * @return Pointer to string (never NULL)
  */
 const char* womo_locale_get_weekday(uint8_t day);
+
+/**
+ * @brief Register a callback that is called whenever the locale changes.
+ *        Maximum 4 callbacks can be registered.
+ * @param cb Callback function (must not be NULL)
+ */
+void womo_locale_register_change_cb(void (*cb)(void));
 
 #endif // WOMO_LOCALE_H

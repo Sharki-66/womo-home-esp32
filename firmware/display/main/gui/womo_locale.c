@@ -4,6 +4,11 @@
 // Current locale
 static womo_locale_t s_current_locale = WOMO_LOCALE_DE;
 
+// Change callbacks
+#define MAX_CHANGE_CBS 4
+static void (*s_change_cbs[MAX_CHANGE_CBS])(void);
+static int s_change_cb_count = 0;
+
 // String table [locale][string_id]
 static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
     // German strings
@@ -72,6 +77,13 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_GAS_MODAL_QUESTION] = "Flasche gewechselt?",
         [STR_GAS_MODAL_BTN_YES] = "Ja",
         [STR_GAS_MODAL_BTN_NO] = "Nein",
+        [STR_AIR_OUTDOOR]    = "Luftwerte aussen",
+        [STR_AIR_INDOOR]    = "Luftwerte innen",
+        [STR_THRESH_TITLE]  = "Grenzwerte",
+        [STR_THRESH_WARNING]= "Warnung",
+        [STR_THRESH_GAS]    = "Gasflasche 1+2",
+        [STR_THRESH_FRESH]  = "Frischwasser",
+        [STR_THRESH_GREY]   = "Grauwasser",
     },
     // English strings
     {
@@ -139,6 +151,13 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_GAS_MODAL_QUESTION] = "Bottle replaced?",
         [STR_GAS_MODAL_BTN_YES] = "Yes",
         [STR_GAS_MODAL_BTN_NO] = "No",
+        [STR_AIR_OUTDOOR]    = "Outdoor air",
+        [STR_AIR_INDOOR]    = "Indoor air",
+        [STR_THRESH_TITLE]  = "Thresholds",
+        [STR_THRESH_WARNING]= "Warning",
+        [STR_THRESH_GAS]    = "Gas bottles 1+2",
+        [STR_THRESH_FRESH]  = "Fresh water",
+        [STR_THRESH_GREY]   = "Grey water",
     }
 };
 
@@ -151,6 +170,16 @@ void womo_locale_set(womo_locale_t locale)
 {
     if (locale < WOMO_LOCALE_MAX) {
         s_current_locale = locale;
+        for (int i = 0; i < s_change_cb_count; i++) {
+            if (s_change_cbs[i]) s_change_cbs[i]();
+        }
+    }
+}
+
+void womo_locale_register_change_cb(void (*cb)(void))
+{
+    if (cb && s_change_cb_count < MAX_CHANGE_CBS) {
+        s_change_cbs[s_change_cb_count++] = cb;
     }
 }
 

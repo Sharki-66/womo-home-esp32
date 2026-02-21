@@ -166,10 +166,11 @@ womo_theme_mode_t womo_theme_update(womo_status_level_t status)
         return current_mode;
     }
     
-    // Get current time; if clock is uninitialized (e.g. 1970), default to DAY
+    // Get current time; if clock is uninitialized (e.g. 1970), keep last known mode.
+    // WICHTIG: current_mode NICHT auf DAY resetten – das würde via full_theme_refresh()
+    // den Ducato bei temporärem Zeitfehler fälschlich auf Weiß (Tag) zurücksetzen.
     if (womo_time_get(&timeinfo) != ESP_OK || timeinfo.tm_year < (2024 - 1900)) {
-        ESP_LOGW(TAG, "Time invalid or not set, defaulting to DAY mode");
-        current_mode = WOMO_THEME_DAY;
+        ESP_LOGW(TAG, "Time invalid, keeping current mode: %d", current_mode);
         return current_mode;
     }
     
