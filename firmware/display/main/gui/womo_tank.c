@@ -25,6 +25,19 @@ static const char *TAG = "tank_widget";
 #define CONNECTOR_COLOR_DARK lv_color_hex(0x202020)
 #define FRESH_WATER_COLOR    lv_color_hex(0x6AA9FF)  /* hellblau */
 #define GREY_WATER_COLOR     lv_color_hex(0x70849B)  /* graublau */
+#define SCALE_COLOR          lv_color_hex(0x000000)  /* schwarz für Skalenstriche */
+
+// Hilfsmakro: einen Skalenstrich auf dem Container erzeugen
+// x_pos: X relativ zu Container-Ursprung, y_off: Y-Offset ab Tankoberkante
+#define MAKE_TICK(parent, x_pos, y_off, w, h) do { \
+    lv_obj_t *_t = lv_obj_create(parent); \
+    lv_obj_set_size(_t, w, h); \
+    lv_obj_set_pos(_t, x_pos, (y_off)); \
+    lv_obj_set_style_bg_color(_t, SCALE_COLOR, 0); \
+    lv_obj_set_style_border_width(_t, 0, 0); \
+    lv_obj_set_style_radius(_t, 0, 0); \
+    lv_obj_clear_flag(_t, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE); \
+} while(0)
 
 static void update_fill_visual(womo_tank_t *tank)
 {
@@ -138,6 +151,14 @@ womo_tank_t *womo_tank_create(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, womo
     lv_obj_set_style_radius(tank->fill, 4, 0);
     lv_obj_set_style_pad_all(tank->fill, 0, 0);
     lv_obj_clear_flag(tank->fill, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    // Skalenstriche INNEN an der linken Wand des Tank-Körpers (wie bei Gasflaschen):
+    // 75 % – kleiner Strich
+    MAKE_TICK(tank->tank_body, 0, TANK_BODY_HEIGHT / 4,      5, 2);
+    // 50 % – großer Strich (Mitte)
+    MAKE_TICK(tank->tank_body, 0, TANK_BODY_HEIGHT / 2,     10, 2);
+    // 25 % – kleiner Strich
+    MAKE_TICK(tank->tank_body, 0, 3 * TANK_BODY_HEIGHT / 4,  5, 2);
 
     tank->inlet = lv_obj_create(tank->container);
     lv_obj_set_size(tank->inlet, INLET_WIDTH, INLET_HEIGHT);
