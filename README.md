@@ -87,3 +87,9 @@ Das Projekt nutzt das [Espressif ESP-IDF](https://docs.espressif.com/projects/es
 ## 📜 Lizenz
 
 Privates Projekt. Siehe [LICENSE](LICENSE).
+
+## 📸 Aufbau-Fotos (Feb 2026)
+
+| Display (Vorderseite) | Sensorboard (Rückseite) |
+|---|---|
+| ![Display Vorderseite](docs/images/PXL_20260223_190708372.jpg) | ![Sensorboard Rückseite](docs/images/PXL_20260223_191625640.jpg) |
