@@ -682,6 +682,19 @@ static void rs485_publish_bme(void)
                 trend_state = bme.outdoor.press_trend_3h_state;
                 trend_hpa_h = bme.outdoor.press_trend_3h_hpa_h;
                 have_trend = true;
+                // Wenn 1h eine andere Richtung zeigt → aktuellere 1h-Tendenz bevorzugen
+                // (z.B. 3h noch steigend, aber letzte Stunde bereits stagnierend/fallend)
+                if (bme.outdoor.press_trend_1h_valid) {
+                    bool t3_rising  = (trend_state == BME680_TREND_RISING || trend_state == BME680_TREND_RISING_FAST);
+                    bool t3_falling = (trend_state == BME680_TREND_FALLING || trend_state == BME680_TREND_FALLING_FAST);
+                    bme680_pressure_trend_t s1h = bme.outdoor.press_trend_1h_state;
+                    bool t1_rising  = (s1h == BME680_TREND_RISING || s1h == BME680_TREND_RISING_FAST);
+                    bool t1_falling = (s1h == BME680_TREND_FALLING || s1h == BME680_TREND_FALLING_FAST);
+                    if ((t3_rising && !t1_rising) || (t3_falling && !t1_falling)) {
+                        trend_state = s1h;
+                        trend_hpa_h = bme.outdoor.press_trend_1h_hpa_h;
+                    }
+                }
             } else if (bme.outdoor.press_trend_1h_valid) {
                 trend_state = bme.outdoor.press_trend_1h_state;
                 trend_hpa_h = bme.outdoor.press_trend_1h_hpa_h;

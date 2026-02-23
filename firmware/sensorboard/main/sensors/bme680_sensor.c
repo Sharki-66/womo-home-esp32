@@ -136,6 +136,10 @@ static void press_history_load_from_nvs(void)
 
     if (err == ESP_OK && size == sizeof(s_press_history)) {
         ESP_LOGI(TAG, "Druck-Historie aus NVS geladen (%u Werte)", s_press_history.count);
+        // last_sample_us ist ein Uptime-Timestamp des vorherigen Boots.
+        // Nach Reboot startet esp_timer bei 0 → alten Wert löschen,
+        // damit kein blockierter Sample-Skip entsteht.
+        s_press_history.last_sample_us = 0;
     } else {
         ESP_LOGW(TAG, "Druck-Historie NVS-Fehler: %s", esp_err_to_name(err));
         memset(&s_press_history, 0, sizeof(s_press_history));
