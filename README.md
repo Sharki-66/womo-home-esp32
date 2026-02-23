@@ -1,4 +1,4 @@
-# WoMo Home – Bordcomputer für's Wohnmobil
+# WoMo Home ESP32 – Bordcomputer für's Wohnmobil
 
 > Alle wichtigen Betriebsdaten auf einen Blick – immer wissen, was im Fahrzeug los ist.
 
