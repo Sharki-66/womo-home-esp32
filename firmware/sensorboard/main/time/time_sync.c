@@ -6,6 +6,7 @@
 #include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_check.h"
+#include "esp_sntp.h"
 #include "time/rtc_pcf8523.h"
 #include "driver/i2c_master.h"
 #include "hal/sensor_i2c_bus.h"
@@ -18,22 +19,27 @@ static const char *TAG = "time_sync";
 // Schwellenwert: RTC aktualisieren wenn Abweichung > 10s
 #define TIME_SYNC_RTC_UPDATE_THRESHOLD_SEC 10
 
-// Minimum 1990 für gültige Zeit (1970 = ungültig)
-#define TIME_SYNC_VALID_YEAR 1990
+// Gültigkeitsgrenzen für Zeit-Plausibilität
+// PCF8523 unterstützt 2000–2099, daher obere Grenze 2099
+#define TIME_SYNC_VALID_YEAR_MIN 2020
+#define TIME_SYNC_VALID_YEAR_MAX 2099
 
-// PCF8523 Register für Batteriestatus
+// PCF8523 Register für Batteriestatus – KORREKTE Bit-Definitionen laut Datenblatt
+// Bit 3 = BLF (Battery Low Flag), Bit 4 = BSF (Battery Switch-over Flag)
+// ACHTUNG: Bit 2 ist BSIE (Interrupt Enable) – früher fälschlicherweise als BLF genutzt!
 #define PCF8523_ADDR            0x68
 #define PCF8523_REG_CONTROL_3   0x02
-#define PCF8523_CONTROL3_BLF    (1 << 2)  // Battery Low Flag
 
 static time_sync_status_t s_status = {
     .active_source = TIME_SOURCE_NONE,
     .last_sync_time = 0,
     .last_sync_value = 0,
     .rtc_battery_low = false,
+    .rtc_bat_switched = false,
     .system_time_valid = false,
     .gps_sync_count = 0,
     .lte_sync_count = 0,
+    .ntp_sync_count = 0,
     .rtc_sync_count = 0,
 };
 
@@ -44,6 +50,7 @@ const char* time_sync_source_to_string(time_source_t source)
     switch (source) {
         case TIME_SOURCE_GPS:  return "GPS";
         case TIME_SOURCE_LTE:  return "LTE";
+        case TIME_SOURCE_NTP:  return "NTP";
         case TIME_SOURCE_RTC:  return "RTC";
         case TIME_SOURCE_NONE: return "NONE";
         default:               return "UNKNOWN";
@@ -54,7 +61,8 @@ static bool is_time_valid(time_t t)
 {
     struct tm tm_time = {0};
     gmtime_r(&t, &tm_time);
-    return (tm_time.tm_year + 1900) >= TIME_SYNC_VALID_YEAR;
+    int year = tm_time.tm_year + 1900;
+    return year >= TIME_SYNC_VALID_YEAR_MIN && year <= TIME_SYNC_VALID_YEAR_MAX;
 }
 
 static esp_err_t update_system_time(time_t new_time, time_source_t source)
@@ -110,6 +118,50 @@ static esp_err_t update_rtc_time(time_t new_time)
     return err;
 }
 
+static void sntp_sync_callback(struct timeval *tv)
+{
+    if (!is_time_valid(tv->tv_sec)) {
+        ESP_LOGW(TAG, "NTP-Sync: empfangene Zeit ungültig (%ld), ignoriert", (long)tv->tv_sec);
+        return;
+    }
+
+    // SNTP hat die System-Zeit bereits gesetzt – jetzt RTC sichern
+    esp_err_t rtc_err = update_rtc_time(tv->tv_sec);
+
+    xSemaphoreTake(s_status_mutex, portMAX_DELAY);
+    s_status.active_source = TIME_SOURCE_NTP;
+    s_status.last_sync_time = tv->tv_sec;
+    s_status.last_sync_value = tv->tv_sec;
+    s_status.system_time_valid = true;
+    s_status.ntp_sync_count++;
+    xSemaphoreGive(s_status_mutex);
+
+    struct tm tm_info = {0};
+    gmtime_r(&tv->tv_sec, &tm_info);
+    ESP_LOGI(TAG, "NTP-Sync: %04d-%02d-%02d %02d:%02d:%02d UTC → RTC %s",
+             tm_info.tm_year + 1900, tm_info.tm_mon + 1, tm_info.tm_mday,
+             tm_info.tm_hour, tm_info.tm_min, tm_info.tm_sec,
+             rtc_err == ESP_OK ? "gesetzt" : "Fehler");
+}
+
+esp_err_t time_sync_start_ntp(const char *ntp_server)
+{
+    ESP_RETURN_ON_FALSE(s_status_mutex != NULL, ESP_ERR_INVALID_STATE, TAG, "time_sync nicht initialisiert");
+    ESP_RETURN_ON_FALSE(ntp_server != NULL && ntp_server[0] != '\0', ESP_ERR_INVALID_ARG, TAG, "NTP-Server fehlt");
+
+    if (esp_sntp_enabled()) {
+        esp_sntp_stop();
+    }
+
+    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, ntp_server);
+    esp_sntp_set_time_sync_notification_cb(sntp_sync_callback);
+    esp_sntp_init();
+
+    ESP_LOGI(TAG, "NTP-Client gestartet (Server: %s) – RTC wird nach Sync gesetzt", ntp_server);
+    return ESP_OK;
+}
+
 esp_err_t time_sync_init(void)
 {
     if (s_status_mutex != NULL) {
@@ -154,9 +206,11 @@ esp_err_t time_sync_init(void)
 
     // Batteriestatus prüfen
     bool battery_low = false;
-    esp_err_t bat_err = time_sync_check_rtc_battery(&battery_low);
-    if (bat_err == ESP_OK && battery_low) {
-        ESP_LOGW(TAG, "⚠️  RTC-Batterie schwach! Backup-Zeit nicht verlässlich.");
+    bool bat_switched = false;
+    esp_err_t bat_err = time_sync_check_rtc_battery(&battery_low, &bat_switched);
+    if (bat_err == ESP_OK) {
+        if (battery_low)  ESP_LOGW(TAG, "⚠️  RTC-Batterie schwach (BLF)! Backup-Zeit nicht verlässlich.");
+        if (bat_switched) ESP_LOGW(TAG, "⚡ RTC lief auf Batterie (BSF) – VDD-Ausfall seit letztem Reset.");
     }
 
     ESP_LOGI(TAG, "Zeit-Synchronisation initialisiert (Hierarchie: GPS → LTE → RTC)");
@@ -226,67 +280,29 @@ esp_err_t time_sync_update_from_lte(time_t lte_utc_time)
     return ESP_OK;
 }
 
-esp_err_t time_sync_check_rtc_battery(bool *battery_low)
+esp_err_t time_sync_check_rtc_battery(bool *battery_low, bool *bat_switched)
 {
     ESP_RETURN_ON_FALSE(battery_low != NULL, ESP_ERR_INVALID_ARG, TAG, "battery_low ist NULL");
 
-    // I2C-Bus muss initialisiert sein
-    esp_err_t bus_init = i2c_bus_init();
-    if (bus_init != ESP_OK) {
-        ESP_LOGW(TAG, "I2C bus nicht verfügbar: %s", esp_err_to_name(bus_init));
-        return bus_init;
-    }
-
-    i2c_master_bus_handle_t bus = i2c_bus_get_internal();
-    ESP_RETURN_ON_FALSE(bus != NULL, ESP_FAIL, TAG, "I2C bus handle fehlt");
-
-    // PCF8523 Device Handle erstellen (temporär für diesen Zugriff)
-    i2c_device_config_t dev_cfg = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address = PCF8523_ADDR,
-        .scl_speed_hz = 100000,
-    };
-
-    i2c_master_dev_handle_t dev = NULL;
-    i2c_bus_lock();
-    esp_err_t err = i2c_master_bus_add_device(bus, &dev_cfg, &dev);
-    i2c_bus_unlock();
-    
+    bool blf = false;
+    bool bsf = false;
+    esp_err_t err = pcf8523_app_get_battery_status(&blf, &bsf);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "PCF8523 Device-Erstellung fehlgeschlagen: %s", esp_err_to_name(err));
+        ESP_LOGW(TAG, "Batteriestatus lesen fehlgeschlagen: %s", esp_err_to_name(err));
         return err;
     }
 
-    // Control_3 Register lesen
-    uint8_t reg = PCF8523_REG_CONTROL_3;
-    uint8_t ctrl3 = 0;
-    
-    i2c_bus_lock();
-    err = i2c_master_transmit_receive(dev, &reg, 1, &ctrl3, 1, 500);
-    i2c_bus_unlock();
+    *battery_low = blf;
+    if (bat_switched) *bat_switched = bsf;
 
-    // Device Handle freigeben
-    i2c_bus_lock();
-    i2c_master_bus_rm_device(dev);
-    i2c_bus_unlock();
-
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Control_3 Register lesen fehlgeschlagen: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    *battery_low = (ctrl3 & PCF8523_CONTROL3_BLF) != 0;
-
-    // Status aktualisieren
     if (s_status_mutex != NULL) {
         xSemaphoreTake(s_status_mutex, portMAX_DELAY);
-        s_status.rtc_battery_low = *battery_low;
+        s_status.rtc_battery_low  = blf;
+        s_status.rtc_bat_switched = bsf;
         xSemaphoreGive(s_status_mutex);
     }
 
-    ESP_LOGD(TAG, "RTC Batteriestatus: %s (Control_3=0x%02X)", 
-             *battery_low ? "SCHWACH" : "OK", ctrl3);
-
+    ESP_LOGD(TAG, "RTC Batterie: BLF=%d (low) BSF=%d (power-cut)", blf, bsf);
     return ESP_OK;
 }
 

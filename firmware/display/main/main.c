@@ -132,6 +132,9 @@ static bool gps_details_visible = false;
 static lv_timer_t *gps_hide_timer = NULL;
 static lv_obj_t *gps_popup_panel = NULL;      // Separates Detail-Panel neben GPS-Button
 static lv_obj_t *gps_popup_text_label = NULL; // Text-Label im GPS-Popup-Panel
+static lv_obj_t *time_info_popup_panel = NULL;      // Popup beim Touch auf Datumslabel
+static lv_obj_t *time_info_popup_text_label = NULL; // Text-Label im Zeit-Info-Popup
+static lv_timer_t *time_info_hide_timer = NULL;     // Auto-hide nach 8 s
 static lv_timer_t *backlight_quiet_timer = NULL;
 static bool quiet_hours_active = false;
 static lv_obj_t *bg_img = NULL;  // Background image
@@ -415,6 +418,13 @@ static void apply_text_theme_colors(void)
                                   day ? lv_color_hex(0xE0E0E0) : lv_color_hex(0x303030), 0);
         lv_obj_set_style_border_color(gps_popup_panel, text_color, 0);
         lv_obj_set_style_text_color(gps_popup_text_label, text_color, 0);
+    }
+    if (time_info_popup_panel && time_info_popup_text_label) {
+        bool day = theme_mode_is_daylike(mode);
+        lv_obj_set_style_bg_color(time_info_popup_panel,
+                                  day ? lv_color_hex(0xE0E0E0) : lv_color_hex(0x303030), 0);
+        lv_obj_set_style_border_color(time_info_popup_panel, text_color, 0);
+        lv_obj_set_style_text_color(time_info_popup_text_label, text_color, 0);
     }
     lv_color_t tank_label_color = lv_color_black();
     if (fresh_water_tank) womo_tank_set_text_color(fresh_water_tank, tank_label_color);
@@ -868,13 +878,24 @@ static void system_status_apply(bool force_label_update)
 
     bool level_changed = (resolved != system_status_current_level);
     bool detail_changed = (detail_id != system_status_current_detail);
+    womo_status_level_t prev_level = system_status_current_level;  /* vor Überschreiben merken */
 
     system_status_current_level = resolved;
     system_status_current_detail = detail_id;
 
     womo_theme_set_status(resolved);
     if (level_changed) {
-        full_theme_refresh();
+        /* WARNING ändert Hintergrund/Ducato nicht (siehe womo_theme_get_background_color).
+         * full_theme_refresh (inkl. Ducato-Reload) nur bei Übergängen, die tatsächlich
+         * die Hintergrundfarbe betreffen: alles was ERROR/CRITICAL ein- oder ausschaltet.
+         * Bei OK↔WARNING reicht apply_text_theme_colors(). */
+        bool was_critical = (prev_level  == WOMO_STATUS_ERROR || prev_level  == WOMO_STATUS_CRITICAL);
+        bool is_critical  = (resolved    == WOMO_STATUS_ERROR || resolved    == WOMO_STATUS_CRITICAL);
+        if (was_critical || is_critical) {
+            full_theme_refresh();
+        } else {
+            apply_text_theme_colors();
+        }
     }
 
     if (resolved_source == SYSTEM_STATUS_SOURCE_SENSOR && sensor_detail_text[0] != '\0') {
@@ -1154,6 +1175,84 @@ static void load_logo_image(lv_obj_t *screen)
     // Logo über Ducato-Hintergrund, aber unter allen Widgets
     lv_obj_move_to_index(logo_img, 1);
     ESP_LOGI(TAG, "Malibu-Logo geladen und positioniert (x=%d, y=%d)", LOGO_X, LOGO_Y);
+}
+
+// Zeit-Info-Popup nach Timeout wieder ausblenden
+static void time_info_hide_timer_cb(lv_timer_t *timer)
+{
+    (void)timer;
+    if (time_info_popup_panel) {
+        lv_obj_add_flag(time_info_popup_panel, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+// Touch auf Datum/Uhrzeit → Popup mit Sync-Quelle, Sync-Alter und RTC-Batterie
+static void date_label_event_cb(lv_event_t *e)
+{
+    if (lv_event_get_code(e) != LV_EVENT_LONG_PRESSED) return;
+
+    // Quelle als lesbare Zeichenkette
+    const char *src_name;
+    switch (womo_time_get_source()) {
+        case TIME_SOURCE_NTP:          src_name = "NTP (Internet)";  break;
+        case TIME_SOURCE_GPS:          src_name = "GPS (Router)";    break;
+        case TIME_SOURCE_RS485:        src_name = "RS485 Sensor";    break;
+        case TIME_SOURCE_INTERNAL_RTC: src_name = "RTC (intern)";    break;
+        default:                       src_name = "\xE2\x80\x93\xE2\x80\x93\xE2\x80\x93"; break; // –––
+    }
+
+    // Sync-Alter
+    char sync_buf[48];
+    if (womo_time_is_synced()) {
+        uint32_t secs = womo_time_get_seconds_since_sync();
+        if (secs < 60) {
+            snprintf(sync_buf, sizeof(sync_buf), "vor %lu s", (unsigned long)secs);
+        } else if (secs < 3600) {
+            snprintf(sync_buf, sizeof(sync_buf), "vor %lu min %lu s",
+                     (unsigned long)(secs / 60), (unsigned long)(secs % 60));
+        } else {
+            snprintf(sync_buf, sizeof(sync_buf), "vor %luh %lumin",
+                     (unsigned long)(secs / 3600), (unsigned long)((secs % 3600) / 60));
+        }
+    } else {
+        snprintf(sync_buf, sizeof(sync_buf), "nie");
+    }
+
+    // RTC-Batteriestatus (aus Sensorboard power-Topic)
+    bool pwr_valid, rtc_low, rtc_sw;
+    taskENTER_CRITICAL(&display_data_spinlock);
+    pwr_valid = latest_sensor_data.power.valid;
+    rtc_low   = latest_sensor_data.power.rtc_bat_low;
+    rtc_sw    = latest_sensor_data.power.rtc_bat_switched;
+    taskEXIT_CRITICAL(&display_data_spinlock);
+
+    char rtc_bat_buf[32];
+    if (!pwr_valid) {
+        snprintf(rtc_bat_buf, sizeof(rtc_bat_buf), "unbekannt");
+    } else {
+        snprintf(rtc_bat_buf, sizeof(rtc_bat_buf), "%s", rtc_low ? "SCHWACH !!" : "OK");
+    }
+
+    char text[300];
+    int n = snprintf(text, sizeof(text),
+             "Quelle:       %s\n"
+             "Letzte Sync:  %s\n"
+             "RTC-Batterie: %s",
+             src_name, sync_buf, rtc_bat_buf);
+    if (pwr_valid && rtc_sw && n < (int)sizeof(text) - 2) {
+        strncat(text, "\nRTC war ohne Strom", sizeof(text) - strlen(text) - 1);
+    }
+
+    if (time_info_popup_panel && time_info_popup_text_label) {
+        lv_label_set_text(time_info_popup_text_label, text);
+        lv_obj_clear_flag(time_info_popup_panel, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    if (time_info_hide_timer == NULL) {
+        time_info_hide_timer = lv_timer_create(time_info_hide_timer_cb, 8000, NULL);
+    } else {
+        lv_timer_reset(time_info_hide_timer);
+    }
 }
 
 // GPS-Detailanzeige nach Timeout wieder einklappen
@@ -2560,7 +2659,7 @@ static void meteoalarm_update_cb(const womo_meteoalarm_result_t *result, void *u
 static void wifi_autoretry_task(void *arg)
 {
     (void)arg;
-    const TickType_t delay_ticks = pdMS_TO_TICKS(180000); // 180 s
+    const TickType_t delay_ticks = pdMS_TO_TICKS(30000); // 30 s
 
     for (;;) {
         vTaskDelay(delay_ticks);
@@ -3414,6 +3513,24 @@ void app_main()
         lv_obj_set_style_text_font(date_label, &lv_font_montserrat_16, 0);
         lv_obj_set_style_text_color(date_label, lv_color_black(), 0);
         lv_obj_align(date_label, LV_ALIGN_BOTTOM_LEFT, 310, -15);
+        lv_obj_add_flag(date_label, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(date_label, date_label_event_cb, LV_EVENT_LONG_PRESSED, NULL);
+
+        // Zeit-Info-Popup: erscheint über dem Datum beim Touch
+        time_info_popup_panel = lv_obj_create(screen);
+        lv_obj_set_size(time_info_popup_panel, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_style_bg_color(time_info_popup_panel, lv_color_hex(0xE0E0E0), 0);
+        lv_obj_set_style_bg_opa(time_info_popup_panel, LV_OPA_90, 0);
+        lv_obj_set_style_border_width(time_info_popup_panel, 2, 0);
+        lv_obj_set_style_border_color(time_info_popup_panel, lv_color_black(), 0);
+        lv_obj_set_style_radius(time_info_popup_panel, 6, 0);
+        lv_obj_set_style_pad_all(time_info_popup_panel, 8, 0);
+        lv_obj_add_flag(time_info_popup_panel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_align(time_info_popup_panel, LV_ALIGN_BOTTOM_LEFT, 175, -42);
+        time_info_popup_text_label = lv_label_create(time_info_popup_panel);
+        lv_obj_set_style_text_font(time_info_popup_text_label, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(time_info_popup_text_label, lv_color_black(), 0);
+        lv_label_set_text(time_info_popup_text_label, "");
         
         // Create WiFi status (top left) - moved from right
         wifi_label = lv_label_create(screen);

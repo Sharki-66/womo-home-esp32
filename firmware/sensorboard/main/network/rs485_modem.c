@@ -25,6 +25,7 @@
 #include "sensors/bme680_sensor.h"
 #include "sensors/hx711_sensor.h"
 #include "sensors/analog_sensor.h"
+#include "time/time_sync.h"
 
 #include <math.h>
 #include <stdbool.h>
@@ -593,6 +594,14 @@ static void rs485_publish_ctrl(void)
     cJSON_AddBoolToObject(root, "pwr_on", rs485_board_power_on());
     cJSON_AddBoolToObject(root, "radio_on", s_radio_on);
     cJSON_AddBoolToObject(root, "ac_present", rs485_ac_present());
+
+    // RTC-Batteriestatus mitübertragen
+    time_sync_status_t ts_status = {0};
+    if (time_sync_get_status(&ts_status) == ESP_OK) {
+        cJSON_AddBoolToObject(root, "rtc_bat_low",      ts_status.rtc_battery_low);
+        cJSON_AddBoolToObject(root, "rtc_bat_switched", ts_status.rtc_bat_switched);
+    }
+
     rs485_send_frame("ctrl", root, false);
     cJSON_Delete(root);
 }

@@ -138,9 +138,11 @@ typedef struct {
     // Power / control status (from modem ctrl block)
     struct {
         bool valid;
-        bool pwr_12v_on;     // 12V Bordnetz aktiv
-        bool radio_on;       // Multimedia/Radio aktiv (nur wenn 12V an)
-        bool ac_present;     // 230V Landstrom angeschlossen
+        bool pwr_12v_on;       // 12V Bordnetz aktiv
+        bool radio_on;         // Multimedia/Radio aktiv (nur wenn 12V an)
+        bool ac_present;       // 230V Landstrom angeschlossen
+        bool rtc_bat_low;      // BLF: RTC-Backup-Batterie schwach (<~1.2V)
+        bool rtc_bat_switched; // BSF: Seit letztem Reset mind. 1× auf RTC-Batterie gelaufen
     } power;
 } womo_sensor_data_t;
 

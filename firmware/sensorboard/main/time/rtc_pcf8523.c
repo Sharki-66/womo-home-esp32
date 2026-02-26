@@ -10,8 +10,18 @@
 #include "hal/sensor_i2c_bus.h"
 #include "sensor_config.h"
 
+// PCF8523 Control_3 Bits
+#define PCF8523_CTRL3_PM2       (1 << 7)  // Power Management Bit 2
+#define PCF8523_CTRL3_PM1       (1 << 6)  // Power Management Bit 1
+#define PCF8523_CTRL3_PM0       (1 << 5)  // Power Management Bit 0
+#define PCF8523_CTRL3_BSF       (1 << 4)  // Battery Switch-over Flag (VDD-Ausfall erkannt)
+#define PCF8523_CTRL3_BLF       (1 << 3)  // Battery Low Flag (Spannung < ~1.2V)
+#define PCF8523_CTRL3_BSIE      (1 << 1)  // Battery Switch-over Interrupt Enable
+#define PCF8523_CTRL3_BLIE      (1 << 0)  // Battery Low Interrupt Enable
+
 #define PCF8523_ADDR            0x68
 #define PCF8523_REG_CONTROL_1   0x00
+#define PCF8523_REG_CONTROL_3   0x02
 #define PCF8523_REG_SECONDS     0x03
 
 #define PCF8523_LOG_INTERVAL_MS 5000
@@ -120,14 +130,19 @@ static void pcf8523_task(void *arg)
         uint8_t buf[7] = {0};
         esp_err_t err = pcf8523_read(PCF8523_REG_SECONDS, buf, sizeof(buf));
         if (err == ESP_OK) {
+            bool os_flag = (buf[0] & 0x80) != 0; // Oscillator Stop Flag
             int sec = bcd2dec(buf[0] & 0x7F);
             int min = bcd2dec(buf[1] & 0x7F);
             int hour = bcd2dec(buf[2] & 0x3F);
             int day = bcd2dec(buf[3] & 0x3F);
             int month = bcd2dec(buf[5] & 0x1F);
             int year = bcd2dec(buf[6]) + 2000;
-            ESP_LOGI(TAG, "RTC: %04d-%02d-%02d %02d:%02d:%02d",
-                     year, month, day, hour, min, sec);
+            if (os_flag) {
+                ESP_LOGW(TAG, "RTC: OS-Flag gesetzt – Zeit ungültig (noch nie gesetzt)");
+            } else {
+                ESP_LOGI(TAG, "RTC: %04d-%02d-%02d %02d:%02d:%02d",
+                         year, month, day, hour, min, sec);
+            }
         } else {
             ESP_LOGW(TAG, "RTC lesen fehlgeschlagen (%s)", esp_err_to_name(err));
         }
@@ -182,35 +197,29 @@ esp_err_t pcf8523_app_start(void)
         ESP_LOGW(TAG, "24h Modus setzen fehlgeschlagen (%s)", esp_err_to_name(mode_err));
     }
 
-    // Enable battery switch-over and configure Control_3
-    // Control_3 (0x02): Bit 7 = 0 enables battery switch-over on VDD loss
+    // Control_3 konfigurieren: Battery Switch-over aktivieren, Flags auslesen
     uint8_t ctrl3 = 0;
-    esp_err_t bat_err = pcf8523_read(0x02, &ctrl3, 1);
+    esp_err_t bat_err = pcf8523_read(PCF8523_REG_CONTROL_3, &ctrl3, 1);
     if (bat_err == ESP_OK) {
-        ESP_LOGI(TAG, "Control_3 vor Konfiguration: 0x%02X", ctrl3);
-        
-        // Enable battery switch-over (bit 7 = 0) and keep other settings
-        // Standard mode: switch to V_BAT when VDD < VBAT
-        uint8_t new_ctrl3 = ctrl3 & 0x07;  // Clear bits 7-3, keep bits 2-0
-        esp_err_t write_err = pcf8523_write_byte(0x02, new_ctrl3);
+        bool blf = (ctrl3 & PCF8523_CTRL3_BLF) != 0;
+        bool bsf = (ctrl3 & PCF8523_CTRL3_BSF) != 0;
+        ESP_LOGI(TAG, "Control_3 = 0x%02X | BLF=%d (bat low) BSF=%d (power-cut)", ctrl3, blf, bsf);
+
+        // PM-Bits 7-5 auf 000 = Standard Battery Switch-over aktivieren
+        // Interrupt-Bits deaktivieren, BSF/BLF Flags stehen lassen
+        uint8_t new_ctrl3 = ctrl3 & (PCF8523_CTRL3_BSF | PCF8523_CTRL3_BLF);
+        esp_err_t write_err = pcf8523_write_byte(PCF8523_REG_CONTROL_3, new_ctrl3);
         if (write_err == ESP_OK) {
-            ESP_LOGI(TAG, "Battery switch-over aktiviert (Control_3: 0x%02X → 0x%02X)", ctrl3, new_ctrl3);
-            
-            // Re-read to verify
-            uint8_t verify = 0;
-            if (pcf8523_read(0x02, &verify, 1) == ESP_OK) {
-                bool battery_low = (verify & 0x04) != 0;
-                if (battery_low) {
-                    ESP_LOGW(TAG, "⚠️  RTC Batterie schwach oder fehlt");
-                } else {
-                    ESP_LOGI(TAG, "✓ RTC Batterie OK, Backup aktiviert");
-                }
-            }
+            ESP_LOGI(TAG, "Battery Switch-over aktiviert (Standard-Mode)");
         } else {
             ESP_LOGW(TAG, "Control_3 schreiben fehlgeschlagen");
         }
+
+        if (blf) ESP_LOGW(TAG, "⚠️  RTC Batterie schwach (BLF gesetzt)");
+        if (bsf) ESP_LOGW(TAG, "⚡ RTC war auf Batterie (BSF – VDD-Ausfall erkannt)");
+        if (!blf && !bsf) ESP_LOGI(TAG, "✓ RTC Batterie OK, kein Stromausfall erkannt");
     } else {
-        ESP_LOGW(TAG, "Batterie-Status konnte nicht gelesen werden");
+        ESP_LOGW(TAG, "Control_3 konnte nicht gelesen werden");
     }
 
     BaseType_t r = xTaskCreatePinnedToCore(pcf8523_task, "pcf8523_task", 4096, NULL, 4, &s_task, 0);
@@ -221,6 +230,24 @@ esp_err_t pcf8523_app_start(void)
 
     ESP_LOGI(TAG, "PCF8523 gestartet (I2C%d, SDA=%d, SCL=%d)",
              SENSOR_I2C_EXT_PORT, SENSOR_I2C_EXT_SDA_GPIO, SENSOR_I2C_EXT_SCL_GPIO);
+    return ESP_OK;
+}
+
+esp_err_t pcf8523_app_get_battery_status(bool *bat_low, bool *bat_switched)
+{
+    if (s_dev == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    uint8_t ctrl3 = 0;
+    esp_err_t err = pcf8523_read(PCF8523_REG_CONTROL_3, &ctrl3, 1);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    if (bat_low)     *bat_low     = (ctrl3 & PCF8523_CTRL3_BLF) != 0;
+    if (bat_switched) *bat_switched = (ctrl3 & PCF8523_CTRL3_BSF) != 0;
+
     return ESP_OK;
 }
 
@@ -275,6 +302,13 @@ esp_err_t pcf8523_app_get_time(time_t *utc_time)
     esp_err_t err = pcf8523_read(PCF8523_REG_SECONDS, buf, sizeof(buf));
     if (err != ESP_OK) {
         return err;
+    }
+
+    // OS-Flag (Bit 7 im Seconds-Register): gesetzt wenn Oszillator gestoppt war
+    // → RTC wurde nie gesetzt oder Backup-Batterie war leer → Zeit ungültig
+    if (buf[0] & 0x80) {
+        ESP_LOGW(TAG, "RTC OS-Flag gesetzt: Zeit nie gesetzt oder Batterie leer gewesen");
+        return ESP_ERR_INVALID_STATE;
     }
 
     int sec = bcd2dec(buf[0] & 0x7F);

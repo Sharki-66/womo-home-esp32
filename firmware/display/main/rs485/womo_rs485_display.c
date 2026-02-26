@@ -1334,12 +1334,16 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
     if (strcmp(type, "ctrl") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             s_latest_data.power.valid = true;
-            cJSON *pwr_on = cJSON_GetObjectItem(root, "pwr_on");
-            cJSON *radio  = cJSON_GetObjectItem(root, "radio_on");
-            cJSON *ac     = cJSON_GetObjectItem(root, "ac_present");
-            if (cJSON_IsBool(pwr_on))  s_latest_data.power.pwr_12v_on = cJSON_IsTrue(pwr_on);
-            if (cJSON_IsBool(radio))   s_latest_data.power.radio_on   = cJSON_IsTrue(radio);
-            if (cJSON_IsBool(ac))      s_latest_data.power.ac_present = cJSON_IsTrue(ac);
+            cJSON *pwr_on    = cJSON_GetObjectItem(root, "pwr_on");
+            cJSON *radio     = cJSON_GetObjectItem(root, "radio_on");
+            cJSON *ac        = cJSON_GetObjectItem(root, "ac_present");
+            cJSON *rtc_bat   = cJSON_GetObjectItem(root, "rtc_bat_low");
+            cJSON *rtc_bsf   = cJSON_GetObjectItem(root, "rtc_bat_switched");
+            if (cJSON_IsBool(pwr_on))   s_latest_data.power.pwr_12v_on       = cJSON_IsTrue(pwr_on);
+            if (cJSON_IsBool(radio))    s_latest_data.power.radio_on          = cJSON_IsTrue(radio);
+            if (cJSON_IsBool(ac))       s_latest_data.power.ac_present        = cJSON_IsTrue(ac);
+            if (cJSON_IsBool(rtc_bat))  s_latest_data.power.rtc_bat_low       = cJSON_IsTrue(rtc_bat);
+            if (cJSON_IsBool(rtc_bsf))  s_latest_data.power.rtc_bat_switched  = cJSON_IsTrue(rtc_bsf);
             notify_snapshot = s_latest_data;
             xSemaphoreGive(s_data_mutex);
             topic_handled = true;

@@ -170,3 +170,6 @@
 #define SENSOR_SPIFFS_BASE_PATH     "/spiffs"
 #define SENSOR_SPIFFS_PARTITION     "storage"
 #define SENSOR_SPIFFS_MAX_FILES     5
+
+// NTP Zeit-Synchronisation (setzt RTC nach WiFi-Verbindung)
+#define SENSOR_NTP_SERVER           "pool.ntp.org"

@@ -81,6 +81,12 @@ void app_main(void)
         ESP_LOGW(TAG, "Zeit-Synchronisation nicht verfügbar: %s", esp_err_to_name(time_err));
     }
 
+    // NTP-Client starten: synchronisiert System-Zeit und setzt RTC nach WiFi-Connect
+    esp_err_t ntp_err = time_sync_start_ntp(SENSOR_NTP_SERVER);
+    if (ntp_err != ESP_OK) {
+        ESP_LOGW(TAG, "NTP-Client nicht gestartet: %s", esp_err_to_name(ntp_err));
+    }
+
     // ADC für Spannungen/Tanks vorbereiten
     esp_err_t analog_err = analog_init();
     if (analog_err != ESP_OK) {

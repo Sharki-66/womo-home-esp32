@@ -150,7 +150,10 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         wifi_event_sta_disconnected_t* disconnected = (wifi_event_sta_disconnected_t*) event_data;
-        ESP_LOGW(TAG, "Disconnected from WiFi (reason: %d)", disconnected->reason);
+        // Reason-Codes: 1=unspec, 2=prev_auth_invalid, 15=4way_handshake_timeout(wrong pw),
+        // 201=no_ap_found, 204=auth_fail, 205=assoc_fail
+        ESP_LOGW(TAG, "WiFi DISCONNECTED reason=%d retry=%d/%d auto=%d",
+                 disconnected->reason, retry_count, max_retry_count, auto_reconnect_enabled);
         
         current_status = WOMO_WIFI_DISCONNECTED;
         
@@ -158,12 +161,13 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
             esp_wifi_connect();
             retry_count++;
             current_status = WOMO_WIFI_CONNECTING;
-            ESP_LOGI(TAG, "Retry %d/%d...", retry_count, max_retry_count);
+            ESP_LOGI(TAG, "WiFi retry %d/%d...", retry_count, max_retry_count);
         } else {
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
             current_status = WOMO_WIFI_ERROR;
-            snprintf(last_error, sizeof(last_error), "Connection failed after %d retries", retry_count);
-            ESP_LOGE(TAG, "%s", last_error);
+            snprintf(last_error, sizeof(last_error), "Connection failed after %d retries (reason=%d)",
+                     retry_count, disconnected->reason);
+            ESP_LOGE(TAG, "WiFi FAILED: %s", last_error);
         }
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
@@ -245,7 +249,7 @@ esp_err_t womo_wifi_connect(const char *ssid, const char *password, uint8_t max_
     auto_reconnect_enabled = true;
     xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
     
-    ESP_LOGI(TAG, "Connecting to WiFi: %s", ssid);
+    ESP_LOGI(TAG, "Connecting to WiFi SSID='%s' auth=WPA2_PSK max_retry=%d", ssid, max_retry);
 
     char pwd_buf[64] = "";
     bool password_provided = (password != NULL && password[0] != '\0');
@@ -274,17 +278,30 @@ esp_err_t womo_wifi_connect(const char *ssid, const char *password, uint8_t max_
     wifi_config.sta.pmf_cfg.required = false;
     
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
+
+    // esp_wifi_start() bei bereits gestartetem WiFi (Reconnect-Versuch) tolerieren
+    esp_err_t start_err = esp_wifi_start();
+    if (start_err != ESP_OK && start_err != ESP_ERR_WIFI_CONN && start_err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "esp_wifi_start failed: %s", esp_err_to_name(start_err));
+        return start_err;
+    }
+    if (start_err == ESP_ERR_WIFI_CONN || start_err == ESP_ERR_INVALID_STATE) {
+        // WiFi bereits gestartet, nur neu verbinden
+        ESP_LOGI(TAG, "WiFi already started, calling esp_wifi_connect()");
+        retry_count = 0;
+        esp_wifi_connect();
+        current_status = WOMO_WIFI_CONNECTING;
+    }
     
-    // Wait for connection result
+    // Auf Verbindungsergebnis warten (max. 15s)
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
             WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
             pdTRUE,
             pdFALSE,
-            portMAX_DELAY);
+            pdMS_TO_TICKS(15000));
     
     if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "Connected to WiFi: %s", ssid);
+        ESP_LOGI(TAG, "WiFi CONNECTED to '%s'", ssid);
         if (password_provided && password != NULL) {
             // Promote/insert SSID in known list and persist
             wifi_known_ensure_loaded();
@@ -293,11 +310,12 @@ esp_err_t womo_wifi_connect(const char *ssid, const char *password, uint8_t max_
         }
         return ESP_OK;
     } else if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGE(TAG, "Failed to connect to WiFi: %s", ssid);
+        ESP_LOGE(TAG, "WiFi FAIL_BIT gesetzt - Verbindung fehlgeschlagen");
         return ESP_FAIL;
     } else {
-        ESP_LOGE(TAG, "Unexpected WiFi event");
-        return ESP_FAIL;
+        // Timeout nach 15s
+        ESP_LOGE(TAG, "WiFi Timeout (15s) - kein CONNECTED oder FAIL bit");
+        return ESP_ERR_TIMEOUT;
     }
 }
 

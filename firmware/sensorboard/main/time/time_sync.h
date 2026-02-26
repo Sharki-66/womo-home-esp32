@@ -25,6 +25,7 @@ extern "C" {
 typedef enum {
     TIME_SOURCE_NONE = 0,    ///< Keine gültige Zeitquelle
     TIME_SOURCE_RTC,         ///< PCF8523 RTC (Backup)
+    TIME_SOURCE_NTP,         ///< NTP via WiFi (primär nach Boot)
     TIME_SOURCE_LTE,         ///< LTE Netzwerkzeit (AT+CCLK)
     TIME_SOURCE_GPS,         ///< GPS-Zeit (primär)
 } time_source_t;
@@ -36,10 +37,12 @@ typedef struct {
     time_source_t active_source;     ///< Aktive Zeitquelle
     time_t last_sync_time;           ///< Zeitpunkt der letzten Synchronisation (system time)
     time_t last_sync_value;          ///< Wert der letzten Synchronisation (UTC)
-    bool rtc_battery_low;            ///< RTC Batterie schwach
+    bool rtc_battery_low;            ///< BLF: Batteriespannung unter ~1.2V
+    bool rtc_bat_switched;           ///< BSF: VDD-Ausfall erkannt, Chip lief auf Batterie
     bool system_time_valid;          ///< System-Zeit ist gültig (nicht 1970-01-01)
     uint32_t gps_sync_count;         ///< Anzahl erfolgreicher GPS-Synchronisationen
     uint32_t lte_sync_count;         ///< Anzahl erfolgreicher LTE-Synchronisationen
+    uint32_t ntp_sync_count;         ///< Anzahl erfolgreicher NTP-Synchronisationen
     uint32_t rtc_sync_count;         ///< Anzahl erfolgreicher RTC-Synchronisationen
 } time_sync_status_t;
 
@@ -82,7 +85,29 @@ esp_err_t time_sync_update_from_lte(time_t lte_utc_time);
  * @param[out] battery_low true wenn Batterie schwach
  * @return ESP_OK bei Erfolg, sonst Fehlercode
  */
-esp_err_t time_sync_check_rtc_battery(bool *battery_low);
+/**
+ * @brief Startet NTP-Client für automatische Zeitsynchronisation via WiFi
+ *
+ * SNTP verbindet sich nach WiFi-Connect automatisch. Bei erfolgreichem Sync
+ * wird die RTC aktualisiert und als Backup für Netzausfälle gespeichert.
+ *
+ * @param ntp_server NTP-Server-Adresse (z.B. "pool.ntp.org")
+ * @return ESP_OK bei Erfolg
+ */
+esp_err_t time_sync_start_ntp(const char *ntp_server);
+
+/**
+ * @brief Prüft RTC-Batteriestatus
+ *
+ * Liest PCF8523 Control_3 Register:
+ * - BLF (Bit 3): Batteriespannung unter ~1.2V
+ * - BSF (Bit 4): VDD-Ausfall erkannt, Chip lief auf Batterie
+ *
+ * @param[out] battery_low   true wenn BLF gesetzt
+ * @param[out] bat_switched  true wenn BSF gesetzt (darf NULL sein)
+ * @return ESP_OK bei Erfolg, sonst Fehlercode
+ */
+esp_err_t time_sync_check_rtc_battery(bool *battery_low, bool *bat_switched);
 
 /**
  * @brief Gibt aktuellen Zeit-Synchronisations-Status zurück
