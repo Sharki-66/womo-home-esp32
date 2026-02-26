@@ -11,7 +11,7 @@ Wer mit dem Wohnmobil unterwegs ist, kennt das Problem: Wie viel Gas ist noch in
 ## 🎯 Was wird überwacht?
 
 ### Energie
-- **Bordbatterie & Starterbatterie** – Spannung, Ladezustand, Trend
+- **Bordbatterie & Starterbatterie** – Spannung, Ladezustand
 - **Landstrom** – Erkennung, ob 230V angeschlossen sind
 - **12V-Bordnetz** – Ein/Aus per Touch, Übersicht aller Verbraucher
 
@@ -21,13 +21,13 @@ Wer mit dem Wohnmobil unterwegs ist, kennt das Problem: Wie viel Gas ist noch in
 - **Flaschenwechsel-Erkennung** – Automatisches Zurücksetzen beim Tausch
 
 ### Wasser
-- **Frischwasser** (100 L) und **Grauwasser** (92 L) – Pegelstand in Prozent und Litern
+- **Frischwasser** und **Grauwasser** – Pegelstand in Prozent und Litern
 - **Verbrauchstrend** – Restlaufzeit-Prognose
 
 ### Klima & Umgebung
 - **Innenraumklima** – Temperatur, Luftfeuchte, Luftqualität (IAQ)
 - **Außenklima** – Temperatur, Luftfeuchte, Luftdrucktrend
-- **Wettervorhersage** – Aktuelles Wetter und 3-Tage-Prognose vom Internet
+- **Wettervorhersage** – (todo) Aktuelles Wetter und 3-Tage-Prognose vom Internet
 - **Unwetterwarnungen** – Automatisch vom europäischen Meteoalarm-System
 
 ### Navigation & Lage
@@ -49,9 +49,9 @@ Das System besteht aus drei Komponenten:
 
 **Touchdisplay** – Ein 7-Zoll-Farbbildschirm mit Touch, eingebaut an einer gut sichtbaren Stelle. Hier laufen alle Informationen zusammen und werden grafisch aufbereitet. Über den Touchscreen lassen sich auch Funktionen steuern (Bordnetz ein/aus, Radio, WLAN).
 
-**Router** – Ein Teltonika RUTX11 sorgt für die Verbindung zur Außenwelt: LTE-Internet unterwegs, WLAN auf dem Campingplatz, GPS-Ortung und ein eigener Hotspot für Laptops und Smartphones an Bord.
+**Router** – Hier ein Teltonika RUTX11 sorgt für die Verbindung zur Außenwelt: LTE-Internet unterwegs, WLAN auf dem Campingplatz, GPS-Ortung und ein eigener Hotspot für Laptops und Smartphones an Bord. Wurde gewählt wegen der Anschlußmöglichkeiten der Antennen auf dem Womo Dach.
 
-Sensorboard und Display kommunizieren über einen robusten RS485-Bus – ein industrietaugliches Protokoll, das unempfindlich gegen die elektrischen Störungen im Fahrzeug ist.
+Sensorboard und Display kommunizieren über einen RS485-Bus
 
 ## 💡 Warum selbst bauen?
 
@@ -60,6 +60,7 @@ Sensorboard und Display kommunizieren über einen robusten RS485-Bus – ein ind
 - **Intelligente Prognosen** – Das System rechnet mit: Wie lange reicht das Gas bei aktuellem Verbrauch? Wann ist der Tank leer? Wie entwickelt sich der Luftdruck?
 - **Offenes System** – Komplett Open Source auf ESP32-Basis. Erweiterbar, anpassbar, reparierbar. Kein Cloud-Zwang, keine Abo-Kosten.
 - **Robustheit** – Industriekomponenten (RS485, Metallgehäuse-Router), für den 12V-Betrieb ausgelegt. Funktioniert auch ohne Internet.
+- **Weil es Spass macht und so noch nicht gibt.**
 
 ## 📁 Projektstruktur
 
@@ -83,6 +84,8 @@ Das Projekt nutzt das [Espressif ESP-IDF](https://docs.espressif.com/projects/es
 
 - `womo-sensor.code-workspace` – Sensorboard-Entwicklung
 - `womo-display.code-workspace` – Display-Entwicklung
+
+**!!! Ich habe den ganzen Code im Vibe Coding erzeugt !!!**
 
 ## 📜 Lizenz
 
