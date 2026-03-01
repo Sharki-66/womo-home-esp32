@@ -2673,9 +2673,10 @@ static void wifi_autoretry_task(void *arg)
         }
 
         ESP_LOGI(TAG, "WiFi auto-reconnect to Router-AP: %s", WIFI_SSID);
-        esp_err_t err = womo_wifi_connect(WIFI_SSID, WIFI_PASSWORD, WIFI_MAX_RETRY);
+        // max_retry=1: ein Versuch, kein langer Block; nächster Versuch nach 30s
+        esp_err_t err = womo_wifi_connect(WIFI_SSID, WIFI_PASSWORD, 1);
         if (err != ESP_OK) {
-            ESP_LOGW(TAG, "WiFi reconnect to Router-AP failed: %s", esp_err_to_name(err));
+            ESP_LOGW(TAG, "WiFi reconnect failed: %s", esp_err_to_name(err));
         }
     }
 }
@@ -4086,7 +4087,9 @@ void app_main()
     // zuerst liefert).  Damit sind Theme + Ducato beim Einschalten
     // des Backlights sofort korrekt (Tag/Nacht).
     ESP_LOGI(TAG, "Connecting to Router-AP: %s", WIFI_SSID);
-    esp_err_t wifi_err = womo_wifi_connect(WIFI_SSID, WIFI_PASSWORD, WIFI_MAX_RETRY);
+    // max_retry=1: nur ein Versuch beim Boot, damit der Start nicht blockiert.
+    // wifi_autoretry_task übernimmt danach alle weiteren Verbindungsversuche.
+    esp_err_t wifi_err = womo_wifi_connect(WIFI_SSID, WIFI_PASSWORD, 1);
 
     if (wifi_err == ESP_OK) {
         ESP_LOGI(TAG, "WiFi connected to Router-AP: %s", WIFI_SSID);

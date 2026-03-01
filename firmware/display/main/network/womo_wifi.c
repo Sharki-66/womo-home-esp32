@@ -313,7 +313,8 @@ esp_err_t womo_wifi_connect(const char *ssid, const char *password, uint8_t max_
         ESP_LOGE(TAG, "WiFi FAIL_BIT gesetzt - Verbindung fehlgeschlagen");
         return ESP_FAIL;
     } else {
-        // Timeout nach 15s
+        // Timeout nach 15s – Status zurücksetzen damit autoretry nicht skippt
+        current_status = WOMO_WIFI_DISCONNECTED;
         ESP_LOGE(TAG, "WiFi Timeout (15s) - kein CONNECTED oder FAIL bit");
         return ESP_ERR_TIMEOUT;
     }

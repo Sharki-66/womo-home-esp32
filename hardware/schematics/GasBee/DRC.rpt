@@ -1,0 +1,215 @@
+** Drc report for GasBee.kicad_pcb **
+** Created on 2026-02-23T22:45:18+0100 **
+
+** Found 60 DRC violations **
+[hole_clearance]: Loch-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zu Löchern Freiraum 0.2500 mm; tatsächlich 0.1847 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zu Löchern; error
+    @(140.7550 mm, 84.7000 mm): Pad A1 [GND] von J1 auf F.Cu
+    @(141.8950 mm, 84.3900 mm): NPTH-Pad von J1
+[hole_clearance]: Loch-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zu Löchern Freiraum 0.2500 mm; tatsächlich 0.1847 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zu Löchern; error
+    @(140.7550 mm, 78.3000 mm): Pad A12 [GND] von J1 auf F.Cu
+    @(141.8950 mm, 78.6100 mm): NPTH-Pad von J1
+[hole_clearance]: Loch-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zu Löchern Freiraum 0.2500 mm; tatsächlich 0.1847 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zu Löchern; error
+    @(140.7550 mm, 78.3000 mm): Pad B1 [GND] von J1 auf F.Cu
+    @(141.8950 mm, 78.6100 mm): NPTH-Pad von J1
+[hole_clearance]: Loch-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zu Löchern Freiraum 0.2500 mm; tatsächlich 0.1847 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zu Löchern; error
+    @(140.7550 mm, 84.7000 mm): Pad B12 [GND] von J1 auf F.Cu
+    @(141.8950 mm, 84.3900 mm): NPTH-Pad von J1
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 75.2000 mm): Pad 36 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 76.0000 mm): Pad 37 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 76.8000 mm): Pad 38 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 77.6000 mm): Pad 39 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 78.4000 mm): Pad 40 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 79.2000 mm): Pad 41 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 80.0000 mm): Pad 42 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 80.8000 mm): Pad 43 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 81.6000 mm): Pad 44 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 82.4000 mm): Pad 45 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 83.2000 mm): Pad 46 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 84.0000 mm): Pad 47 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.1000 mm, 84.8000 mm): Pad 48 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.0500 mm, 74.0500 mm): Pad 50 [GND] von U1 auf F.Cu
+[copper_edge_clearance]: Platinenkanten-Freiraum-Verstoß (Einschränkungen aus Platinenkonfiguration zum Rand Freiraum 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration zum Rand; error
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.0500 mm, 85.9500 mm): Pad 53 [GND] von U1 auf F.Cu
+[drill_out_of_range]: Lochgröße außerhalb des zulässigen Bereichs (Einschränkungen aus Platinenkonfiguration min Loch 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration; error
+    @(142.6650 mm, 68.9000 mm): Durchsteckpad 9 [unconnected-(U5-EPAD-Pad9)_6] von U5
+[drill_out_of_range]: Lochgröße außerhalb des zulässigen Bereichs (Einschränkungen aus Platinenkonfiguration min Loch 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration; error
+    @(143.8650 mm, 68.9000 mm): Durchsteckpad 9 [unconnected-(U5-EPAD-Pad9)_5] von U5
+[drill_out_of_range]: Lochgröße außerhalb des zulässigen Bereichs (Einschränkungen aus Platinenkonfiguration min Loch 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration; error
+    @(145.0650 mm, 68.9000 mm): Durchsteckpad 9 [unconnected-(U5-EPAD-Pad9)_3] von U5
+[drill_out_of_range]: Lochgröße außerhalb des zulässigen Bereichs (Einschränkungen aus Platinenkonfiguration min Loch 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration; error
+    @(142.6650 mm, 67.5000 mm): Durchsteckpad 9 [unconnected-(U5-EPAD-Pad9)_2] von U5
+[drill_out_of_range]: Lochgröße außerhalb des zulässigen Bereichs (Einschränkungen aus Platinenkonfiguration min Loch 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration; error
+    @(143.8650 mm, 67.5000 mm): Durchsteckpad 9 [unconnected-(U5-EPAD-Pad9)_4] von U5
+[drill_out_of_range]: Lochgröße außerhalb des zulässigen Bereichs (Einschränkungen aus Platinenkonfiguration min Loch 0.3000 mm; tatsächlich 0.2000 mm)
+    Regel: Einschränkungen aus Platinenkonfiguration; error
+    @(145.0650 mm, 67.5000 mm): Durchsteckpad 9 [unconnected-(U5-EPAD-Pad9)_7] von U5
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(120.5000 mm, 72.5000 mm): Via [/SDA] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(100.7290 mm, 92.8663 mm): Via [Net-(J3-Pin_4)] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(101.6120 mm, 92.2497 mm): Via [Net-(J3-Pin_3)] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(105.9180 mm, 74.1869 mm): Via [/SCL] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(105.4320 mm, 76.9948 mm): Via [/SCL] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(102.9040 mm, 69.3309 mm): Via [Net-(U1-GPIO9)] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(102.5690 mm, 75.7297 mm): Via [Net-(U1-GPIO9)] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(138.0350 mm, 77.8637 mm): Via [Net-(U5-CE)] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(138.7390 mm, 84.4100 mm): Via [Net-(U5-CE)] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(135.9080 mm, 69.7327 mm): Via [Net-(U5-CE)] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(109.0010 mm, 71.9165 mm): Via [+3.3V] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(108.7990 mm, 77.1277 mm): Via [+3.3V] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(106.3340 mm, 79.9707 mm): Via [+3.3V] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(103.0590 mm, 96.7203 mm): Via [+3.3V] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(102.4600 mm, 88.5434 mm): Via [+3.3V] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(120.4460 mm, 85.1084 mm): Via [+BATT] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(123.3130 mm, 83.5716 mm): Via [+BATT] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(130.4320 mm, 73.6478 mm): Via [+BATT] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(133.4160 mm, 66.7488 mm): Via [+BATT] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(138.8400 mm, 74.6122 mm): Via [GND] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(128.0090 mm, 88.1355 mm): Via [GND] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(104.3520 mm, 73.1819 mm): Via [GND] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(102.5990 mm, 82.3655 mm): Via [GND] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(102.8470 mm, 77.4331 mm): Via [GND] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(122.2180 mm, 83.2693 mm): Via [GND] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(110.8360 mm, 76.4041 mm): Via [GND] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(111.0000 mm, 70.5000 mm): Via [/SCL] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(126.0000 mm, 70.5000 mm): Via [/SCL] auf F.Cu - B.Cu
+[via_diameter]: Via-Durchmesser (Einschränkungen aus Platinenkonfiguration min Durchmesser 0.8000 mm; tatsächlich 0.6000 mm)
+    Regel: Netzklasse "Default"; error
+    @(123.5000 mm, 71.5000 mm): Via [/SDA] auf F.Cu - B.Cu
+[silk_edge_clearance]: Bestückungsdruck durch Platinenkante abgeschnitten
+    Regel: Einschränkungen aus Platinenkonfiguration zum Bestückungsdruck; warning
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(94.0000 mm, 71.5000 mm): Referenzfeld von R5
+[silk_edge_clearance]: Bestückungsdruck durch Platinenkante abgeschnitten
+    Regel: Einschränkungen aus Platinenkonfiguration zum Bestückungsdruck; warning
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(104.6000 mm, 86.6000 mm): Abschnitt von U1 auf F.Silkscreen
+[silk_edge_clearance]: Bestückungsdruck durch Platinenkante abgeschnitten
+    Regel: Einschränkungen aus Platinenkonfiguration zum Bestückungsdruck; warning
+    @(93.5000 mm, 62.5000 mm): Rechteck auf Edge.Cuts
+    @(88.0000 mm, 73.4000 mm): Abschnitt von U1 auf F.Silkscreen
+[silk_overlap]: Bestückungsdrucküberlappung
+    Regel: Einschränkungen aus Platinenkonfiguration zum Bestückungsdruck; warning
+    @(113.9360 mm, 67.5000 mm): Referenzfeld von SW2
+    @(113.9360 mm, 67.5000 mm): Footprint-Text von SW2 (REF**)
+[silk_overlap]: Bestückungsdrucküberlappung
+    Regel: Einschränkungen aus Platinenkonfiguration zum Bestückungsdruck; warning
+    @(97.6000 mm, 92.5000 mm): Referenzfeld von U2
+    @(97.1600 mm, 91.0200 mm): Referenzfeld von C11
+[silk_overlap]: Bestückungsdrucküberlappung
+    Regel: Einschränkungen aus Platinenkonfiguration zum Bestückungsdruck; warning
+    @(113.9360 mm, 92.5000 mm): Footprint-Text von SW1 (REF**)
+    @(113.9360 mm, 92.5000 mm): Referenzfeld von SW1
+
+** Found 0 unconnected pads **
+
+** Found 0 Footprint errors **
+
+** End of Report **
