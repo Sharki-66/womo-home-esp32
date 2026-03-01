@@ -27,9 +27,9 @@
  *                   GPIO46, STRAP/LOG | I/O/T|  🟩 |   46 | 14         M        14 | 0    | 🟩  | I/O/T | BOOT/STRAP, GPIO0
  *     (ADC1_CH8, RTC) RS485 TX, GPIO9 | I/O/T|  🟨 |    9 | 15         -        15 | 45   | 🟨  | I/O/T | HX711 SCK (GPIO45)
  *    (ADC1_CH9, RTC) RS485 RX, GPIO10 | I/O/T|  🟨 |   10 | 16         1        16 | 48   | 🟩  | I/O/T | Onboard WS2812 RGB-LED (GPIO48)
- *  (ADC2_CH0, RTC, GPIO11) Multimedia | I/O/T|  🟨 |   11 | 17                  17 | 47   | 🟨  | I/O/T | HX711 DOUT (GPIO47)
- *     (ADC2_CH1, RTC, GPIO12) 12V EIN | I/O/T|  🟨 |   12 | 18                  18 | 21   | 🟨  | I/O/T | AC 220V Sence (GPIO21, RTC)
- *     (ADC2_CH2, RTC, GPIO13) 12V AUS | I/O/T|  🟨 |   13 | 19                  19 | 20   | 🟩  | I/O/T | USB_D+, GPIO20, RTC
+ *     (ADC2_CH0, RTC, GPIO11) 12V EIN | I/O/T|  🟨 |   11 | 17                  17 | 47   | 🟨  | I/O/T | HX711 DOUT (GPIO47)
+ *     (ADC2_CH1, RTC, GPIO12) 12V AUS | I/O/T|  🟨 |   12 | 18                  18 | 21   | 🟨  | I/O/T | AC 220V Sence (GPIO21, RTC)
+ *  (ADC2_CH2, RTC, GPIO13) Multimedia | I/O/T|  🟨 |   13 | 19                  19 | 20   | 🟩  | I/O/T | USB_D+, GPIO20, RTC
  *   (ADC2_CH3, RTC, GPIO14) 12V Sence | I/O/T|  🟨 |   14 | 20                  20 | 19   | 🟩  | I/O/T | USB_D-, GPIO19, RTC
  *                    5 V power supply |    P |  🟩 |   5V | 21                  21 | GND  | 🟩  | G     | Ground
  *                              Ground |    G |  🟩 |  GND | 22                  22 | GND  | 🟩  | G     | Ground
@@ -133,11 +133,11 @@
 // Board Power / Multimedia GPIOs
 // ====================================================================================
 #define SENSOR_RGB_LED_GPIO 48             // Onboard WS2812 RGB-LED (GPIO48, bestätigt)
-#define SENSOR_PWR_12V_ON_GPIO 12      // Schaltausgang: Boardspannung EIN
-#define SENSOR_PWR_12V_OFF_GPIO 13     // Schaltausgang: Boardspannung AUS
+#define SENSOR_PWR_12V_ON_GPIO 11      // Schaltausgang: Boardspannung EIN
+#define SENSOR_PWR_12V_OFF_GPIO 12     // Schaltausgang: Boardspannung AUS
 #define SENSOR_PWR_12V_SENSE_GPIO 14   // Eingang: Boardspannung Feedback
 #define SENSOR_AC_SENSE_GPIO 21        // Eingang: 230V Netzkontrolle
-#define SENSOR_MULTIMEDIA_PWR_GPIO 11  // Schaltausgang: Multimedia Power
+#define SENSOR_MULTIMEDIA_PWR_GPIO 13  // Schaltausgang: Multimedia Power
 
 // ====================================================================================
 
