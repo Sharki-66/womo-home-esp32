@@ -20,10 +20,10 @@ static uint8_t last_computed_hour = 255;  // Invalid hour to force first computa
 static uint8_t last_computed_minute = 255;
 static bool is_twilight_cached = false;  // Flag to indicate if current cache is from twilight calculation
 static womo_sun_times_t sun_times = {
-    .sunrise_hour = 6,
-    .sunrise_minute = 30,
+    .sunrise_hour = 7,
+    .sunrise_minute = 0,
     .sunset_hour = 18,
-    .sunset_minute = 30
+    .sunset_minute = 0
 };
 
 // Location for sun calculations (optional)
@@ -360,17 +360,14 @@ lv_color_t womo_theme_get_background_color(void)
     // WARNING ändert den Hintergrund NICHT – die betroffenen Widgets
     // (Tank, Batterie) zeigen ihren Warnstatus selbst per Farbe an.
     
-    // Normal status - use smooth twilight transitions for day/night modes
+    // Normal status - use smooth twilight transitions for all modes
+    // SUNRISE/SUNSET verwenden Gradient, keine feste Farbe!
     switch (current_mode) {
         case WOMO_THEME_SUNRISE:
-            return WOMO_COLOR_SUNRISE;  // Keep orange sunrise color
-        case WOMO_THEME_DAY:
-            // Use smooth twilight transition instead of fixed colors
-            return womo_theme_get_twilight_color();
         case WOMO_THEME_SUNSET:
-            return WOMO_COLOR_SUNSET;   // Keep orange sunset color  
+        case WOMO_THEME_DAY:
         case WOMO_THEME_NIGHT:
-            // Use smooth twilight transition instead of fixed colors
+            // Alle Modi verwenden den glatten Twilight-Color-Übergang
             return womo_theme_get_twilight_color();
         default:
             return womo_theme_get_twilight_color();
@@ -436,10 +433,13 @@ void womo_theme_apply_to_screen(lv_obj_t *screen)
     
     lv_color_t bg_color = womo_theme_get_background_color();
 
-    // Gradient nur während bürgerlicher Dämmerung (oder wenn Modus SUNRISE/SUNSET aktiv) und Status OK
+    // Gradient bei SUNRISE/SUNSET oder während bürgerlicher Dämmerung (nur wenn Status OK)
     bool twilight_now = is_in_civil_twilight_now();
-    bool gradient_allowed = (current_status == WOMO_STATUS_OK) &&
-                            (twilight_now || current_mode == WOMO_THEME_SUNRISE || current_mode == WOMO_THEME_SUNSET);
+    
+    // Gradient IMMER bei SUNRISE/SUNSET-Modi (unabhängig vom Status)
+    // Bei anderen Modi nur wenn Status OK und tatsächlich Twilight
+    bool gradient_allowed = (current_mode == WOMO_THEME_SUNRISE || current_mode == WOMO_THEME_SUNSET) ||
+                            (current_status == WOMO_STATUS_OK && twilight_now);
 
     // Verwende vertikalen Verlauf: oben Tagesblau, unten Nachtblau
     if (gradient_allowed) {
@@ -454,8 +454,24 @@ void womo_theme_apply_to_screen(lv_obj_t *screen)
         lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
     }
     
-    ESP_LOGI(TAG, "Applied theme to screen - Mode: %d, Status: %d", 
-             current_mode, current_status);
+    ESP_LOGI(TAG, "Applied theme to screen - Mode: %d, Status: %d, Gradient: %s", 
+             current_mode, current_status, gradient_allowed ? "YES" : "NO");
+}
+
+void womo_theme_reset(void)
+{
+    // Reset all cached state to force fresh evaluation
+    current_mode = WOMO_THEME_DAY;  // Safe default fallback
+    current_status = WOMO_STATUS_OK;
+    auto_mode_enabled = true;
+    
+    // Invalidate cached twilight color
+    cached_twilight_color = WOMO_COLOR_DAY_NORMAL;
+    last_computed_hour = 255;
+    last_computed_minute = 255;
+    is_twilight_cached = false;
+    
+    ESP_LOGI(TAG, "Theme state reset to defaults (boot/power-on)");
 }
 
 void womo_theme_cycle_mode(void)

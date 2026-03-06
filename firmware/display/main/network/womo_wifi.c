@@ -421,6 +421,32 @@ womo_wifi_status_t womo_wifi_get_status(void)
     return current_status;
 }
 
+void womo_wifi_watchdog(void)
+{
+    /* Wenn im ERROR-Zustand (nach max Retries), retry_count zurücksetzen
+     * und erneuten Connect-Versuch starten */
+    if (current_status == WOMO_WIFI_ERROR && auto_reconnect_enabled) {
+        ESP_LOGW(TAG, "WiFi watchdog: Connection lost, resetting retry counter and attempting reconnect");
+        retry_count = 0;
+        current_status = WOMO_WIFI_CONNECTING;
+        xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
+        esp_err_t err = esp_wifi_connect();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "WiFi watchdog reconnect failed: %s", esp_err_to_name(err));
+        }
+    }
+    /* Wenn DISCONNECTED aber auto_reconnect enabled, auch versuchen */
+    else if (current_status == WOMO_WIFI_DISCONNECTED && auto_reconnect_enabled) {
+        ESP_LOGI(TAG, "WiFi watchdog: Disconnected, attempting reconnect");
+        retry_count = 0;
+        current_status = WOMO_WIFI_CONNECTING;
+        esp_err_t err = esp_wifi_connect();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "WiFi watchdog connect failed: %s", esp_err_to_name(err));
+        }
+    }
+}
+
 bool womo_wifi_is_connected(void)
 {
     return (current_status == WOMO_WIFI_CONNECTED);

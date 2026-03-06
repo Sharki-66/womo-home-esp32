@@ -84,6 +84,11 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_THRESH_GAS]    = "Gasflasche 1+2",
         [STR_THRESH_FRESH]  = "Frischwasser",
         [STR_THRESH_GREY]   = "Grauwasser",
+        [STR_ROUTER_LEDS_TITLE] = "Router Status (LEDs)",
+        [STR_ROUTER_LEDS_POWER_ON] = "Router: Online",
+        [STR_ROUTER_LEDS_POWER_OFF] = "Router: Offline",
+        [STR_ROUTER_LEDS_WIFI_DISCONNECTED] = "WiFi: Nicht verbunden",
+        [STR_ROUTER_LEDS_LTE_OFFLINE] = "LTE: Offline",
     },
     // English strings
     {
@@ -158,6 +163,11 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_THRESH_GAS]    = "Gas bottles 1+2",
         [STR_THRESH_FRESH]  = "Fresh water",
         [STR_THRESH_GREY]   = "Grey water",
+        [STR_ROUTER_LEDS_TITLE] = "Router Status (LEDs)",
+        [STR_ROUTER_LEDS_POWER_ON] = "Router: Online",
+        [STR_ROUTER_LEDS_POWER_OFF] = "Router: Offline",
+        [STR_ROUTER_LEDS_WIFI_DISCONNECTED] = "WiFi: Disconnected",
+        [STR_ROUTER_LEDS_LTE_OFFLINE] = "LTE: Offline",
     }
 };
 

@@ -7,6 +7,7 @@
 #include "hardware/waveshare_rgb_lcd_port.h"
 #include "lvgl.h"
 #include "time/womo_time.h"
+#include "time/womo_sun_calc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "gui/womo_theme.h"
@@ -15,6 +16,7 @@
 #include "gui/womo_weather.h"
 #include "gui/womo_battery.h"
 #include "gui/womo_connectivity_modal.h"
+#include "gui/womo_router_leds_modal.h"
 #include "gui/womo_settings_modal.h"
 #include "gui/womo_tank.h"
 #include "gui/womo_fonts_german.h"
@@ -264,6 +266,7 @@ static void wifi_label_event_cb(lv_event_t *event);
 static void status_label_event_cb(lv_event_t *event);
 static void backlight_button_event_cb(lv_event_t *event);
 static void settings_button_event_cb(lv_event_t *event);
+void router_leds_button_event_cb(lv_event_t *event);
 static void classic_button_event_cb(lv_event_t *event);
 static void radio_button_event_cb(lv_event_t *event);
 static void geocode_result_cb(const womo_geocode_result_t *result, void *user_data);
@@ -1002,8 +1005,9 @@ static bool load_background_image(lv_obj_t *screen, bool is_day)
     const char *day_path = "/sdcard/images/Ducato-weiss.png";
     const char *night_path = "/sdcard/images/Ducato-grau.png";
 
-    if (bg_last_day_state == (is_day ? 1 : 0) && bg_img != NULL) {
-        // Already loaded matching image
+    if (bg_last_day_state == (is_day ? 1 : 0) && bg_img != NULL && bg_png_data != NULL) {
+        // Already loaded matching image with valid data
+        ESP_LOGD(TAG, "Background image already loaded and cached (%s)", is_day ? "day" : "night");
         return true;
     }
 
@@ -1465,10 +1469,12 @@ static void ui_update_timer_cb(lv_timer_t *timer)
         /* Router-Daten unter Mutex kopieren */
         womo_router_wifi_status_t rw = {0};
         womo_router_lte_status_t  rl = {0};
+        womo_router_ap_status_t   ra = {0};
         if (s_router_mutex) {
             xSemaphoreTake(s_router_mutex, portMAX_DELAY);
             rw = s_router_wifi;
             rl = s_router_lte;
+            ra = s_router_ap;
             xSemaphoreGive(s_router_mutex);
         }
 
@@ -1504,6 +1510,28 @@ static void ui_update_timer_cb(lv_timer_t *timer)
             if (memcmp(&modal_snapshot, &last_modal_snapshot, sizeof(modal_snapshot)) != 0) {
                 womo_connectivity_modal_refresh(&modal_snapshot);
                 last_modal_snapshot = modal_snapshot;
+            }
+        }
+
+        /* Router-LEDs-Modal aktualisieren, wenn offen */
+        if (womo_router_leds_modal_is_open()) {
+            womo_router_leds_snapshot_t leds_snapshot = {0};
+            leds_snapshot.router_online = wifi_connected_now;
+            leds_snapshot.router_ap_24ghz = ra.band_2_4ghz_active;
+            leds_snapshot.router_ap_5ghz = ra.band_5ghz_active;
+            leds_snapshot.wifi_connected = rw.connected;
+            strncpy(leds_snapshot.wifi_ssid, rw.ssid, sizeof(leds_snapshot.wifi_ssid) - 1);
+            leds_snapshot.wifi_signal_percent = rw.signal_percent;
+            leds_snapshot.lte_registered = rl.registered;
+            strncpy(leds_snapshot.lte_operator, rl.operator_name, sizeof(leds_snapshot.lte_operator) - 1);
+            leds_snapshot.lte_signal_percent = rl.signal_percent;
+            strncpy(leds_snapshot.lte_conn_type, rl.conn_type, sizeof(leds_snapshot.lte_conn_type) - 1);
+            strncpy(leds_snapshot.sim_state, rl.sim_state, sizeof(leds_snapshot.sim_state) - 1);
+            
+            static womo_router_leds_snapshot_t last_leds_snapshot = {0};
+            if (memcmp(&leds_snapshot, &last_leds_snapshot, sizeof(leds_snapshot)) != 0) {
+                womo_router_leds_modal_refresh(&leds_snapshot);
+                last_leds_snapshot = leds_snapshot;
             }
         }
     }
@@ -2691,6 +2719,9 @@ static void router_poll_task(void *arg)
     /* Erste Poll-Abfrage sofort wenn WiFi connected */
 
     for (;;) {
+        /* WiFi-Watchdog: Versucht automatisch zu reconnecten wenn Verbindung verloren */
+        womo_wifi_watchdog();
+        
         if (!womo_wifi_is_connected()) {
             vTaskDelay(interval);
             continue;
@@ -2726,8 +2757,9 @@ static void router_poll_task(void *arg)
         womo_router_ap_status_t ap_tmp = {0};
         esp_err_t a_err = womo_router_get_ap_status(&ap_tmp);
         if (a_err == ESP_OK && (poll_count <= 3 || (poll_count % 20) == 0)) {
-            ESP_LOGI(TAG, "Router AP: '%s' %s ch%d",
-                     ap_tmp.ssid, ap_tmp.enabled ? "aktiv" : "aus", ap_tmp.channel);
+            ESP_LOGI(TAG, "Router AP: '%s' %s ch%d, 2.4GHz=%d 5GHz=%d",
+                     ap_tmp.ssid, ap_tmp.enabled ? "aktiv" : "aus", ap_tmp.channel,
+                     ap_tmp.band_2_4ghz_active, ap_tmp.band_5ghz_active);
         }
 
         /* Auch bei Teilfehlern aktualisieren – was da ist wird angezeigt */
@@ -2780,6 +2812,16 @@ static void router_poll_task(void *arg)
             womo_weather_http_set_location(gps_tmp.latitude, gps_tmp.longitude);
             /* Meteoalarm mit gleichen Koordinaten versorgen */
             womo_meteoalarm_set_location(gps_tmp.latitude, gps_tmp.longitude);
+            
+            /* Sonnenauf-/-untergangszeiten berechnen und aktualisieren */
+            struct tm tm_now;
+            if (womo_time_get(&tm_now) == ESP_OK && tm_now.tm_year >= (2024 - 1900)) {
+                uint8_t sr_h, sr_m, ss_h, ss_m;
+                if (womo_sun_calc_times(gps_tmp.latitude, gps_tmp.longitude, &tm_now,
+                                       &sr_h, &sr_m, &ss_h, &ss_m)) {
+                    womo_theme_set_sun_times(sr_h, sr_m, ss_h, ss_m);
+                }
+            }
         } else if (g_err != ESP_OK && poll_count <= 3) {
             ESP_LOGW(TAG, "Router GPS fehlgeschlagen: %s", esp_err_to_name(g_err));
         }
@@ -2982,6 +3024,36 @@ static void settings_button_event_cb(lv_event_t *event)
         return;
     }
     womo_settings_modal_show(lv_scr_act());
+}
+
+void router_leds_button_event_cb(lv_event_t *event)
+{
+    if (!event || lv_event_get_code(event) != LV_EVENT_CLICKED) {
+        return;
+    }
+
+    /* Router-Status-Snapshot zusammenstellen */
+    womo_router_leds_snapshot_t snapshot = {0};
+    
+    snapshot.router_online = womo_wifi_is_connected();
+    
+    if (s_router_mutex) {
+        xSemaphoreTake(s_router_mutex, portMAX_DELAY);
+        snapshot.wifi_connected = s_router_wifi.connected;
+        strncpy(snapshot.wifi_ssid, s_router_wifi.ssid, sizeof(snapshot.wifi_ssid) - 1);
+        snapshot.wifi_signal_percent = s_router_wifi.signal_percent;
+        snapshot.wifi_channel = s_router_wifi.channel;
+        snapshot.router_ap_24ghz = s_router_ap.band_2_4ghz_active;
+        snapshot.router_ap_5ghz = s_router_ap.band_5ghz_active;
+        snapshot.lte_registered = s_router_lte.registered;
+        strncpy(snapshot.lte_operator, s_router_lte.operator_name, sizeof(snapshot.lte_operator) - 1);
+        snapshot.lte_signal_percent = s_router_lte.signal_percent;
+        strncpy(snapshot.lte_conn_type, s_router_lte.conn_type, sizeof(snapshot.lte_conn_type) - 1);
+        strncpy(snapshot.sim_state, s_router_lte.sim_state, sizeof(snapshot.sim_state) - 1);
+        xSemaphoreGive(s_router_mutex);
+    }
+
+    womo_router_leds_modal_show(lv_scr_act(), &snapshot);
 }
 
 static void backlight_button_event_cb(lv_event_t *event)
@@ -3428,11 +3500,12 @@ void app_main()
     womo_wifi_init();
     
     // Initialize theme (default location: Central Europe)
-    // TODO: GPS-Position für Sonnenauf-/untergang nutzen
+    // Sonnenzeiten werden automatisch via GPS berechnet (router_poll_task)
     womo_theme_init(50.0, 10.0);  // Approximate Germany
+    womo_theme_reset();  // Reset cached state (wichtig bei Power-Cycle!)
     
-    // Set sunrise/sunset for Central Europe winter
-    womo_theme_set_sun_times(7, 30, 17, 45);
+    // Fallback sunrise/sunset (wird bei erstem GPS-Fix überschrieben)
+    womo_theme_set_sun_times(7, 0, 18, 0);  // Reasonable defaults for Central Europe
     
     // Initialize display (uses I2C for touch controller)
     waveshare_esp32_s3_rgb_lcd_init();
@@ -3469,6 +3542,13 @@ void app_main()
     // ── LVGL sperren → UI aufbauen ──────────────────────────────────
     // Nach lvgl_port_init() läuft der LVGL-Task bereits.  Mutex nehmen,
     // damit kein Frame gerendert wird, bevor Theme + Widgets stehen.
+    
+    // Cache zurücksetzen beim Boot, damit Theme+Ducato korrekt geladen werden
+    bg_last_day_state = -1;
+    bg_img = NULL;
+    bg_png_data = NULL;
+    bg_png_size = 0;
+    
     if (lvgl_port_lock(-1)) {
         lv_obj_t *screen = lv_scr_act();
         lv_obj_add_flag(screen, LV_OBJ_FLAG_CLICKABLE);
@@ -3476,10 +3556,10 @@ void app_main()
         lv_obj_add_event_cb(screen, screen_event_handler, LV_EVENT_CLICKED, NULL);
         lvgl_touch_set_wake_cb(touch_wake_cb);
 
-        // Initiales Theme (nur BG-Farbe, kein Ducato – Backlight ist AUS).
-        womo_theme_update(WOMO_STATUS_OK);
+        // Initiales Theme: Fallback-Hintergrund OHNE Theme-Update (Zeit noch nicht valid!)
+        // Das echte Theme+Ducato wird später nach Zeitvalidierung geladen.
+        lv_obj_set_style_bg_color(screen, lv_color_hex(0x87CEEB), 0);  // Hellblau als Fallback
         lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
-        womo_theme_apply_to_screen(screen);
         
         // Initialize locale system
         womo_locale_init();
@@ -4143,10 +4223,14 @@ void app_main()
     // Zeit ist jetzt gültig (NTP oder RS485) oder Fallback auf DAY.
     // 1× Ducato laden, Theme + Textfarben setzen – Backlight noch AUS.
     if (lvgl_port_lock(-1)) {
+        // Cache explizit invalidieren vor dem Boot-Load
+        bg_last_day_state = -1;
+        
         womo_theme_mode_t boot_mode = womo_theme_update(WOMO_STATUS_OK);
         bool boot_is_day = theme_mode_is_daylike(boot_mode);
         ESP_LOGI(TAG, "Boot theme: %s (mode=%d)", boot_is_day ? "DAY" : "NIGHT", boot_mode);
 
+        // Ducato mit aktuellem Theme laden (Cache wurde invalidiert)
         load_background_image(lv_scr_act(), boot_is_day);
         load_logo_image(lv_scr_act());
         apply_text_theme_colors();
@@ -4174,7 +4258,10 @@ void app_main()
 
     // Kurz warten damit LVGL den finalen Frame in beide Framebuffer
     // (Direct Mode) gerendert hat, dann Backlight einschalten.
-    vTaskDelay(pdMS_TO_TICKS(150));
+    // Bei Tear-Avoidance Mode 3 müssen beide Buffer gefüllt sein (2-3 Frames).
+    ESP_LOGI(TAG, "Waiting for LVGL to render initial screen...");
+    vTaskDelay(pdMS_TO_TICKS(300));
+    ESP_LOGI(TAG, "Enabling backlight");
     backlight_set(true);
 
     if (wifi_autoretry_handle == NULL) {

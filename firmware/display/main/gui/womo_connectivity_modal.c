@@ -380,6 +380,23 @@ static void build_modal(lv_obj_t *parent)
     lv_obj_set_style_text_color(title_label, lv_color_white(), 0);
     lv_obj_align(title_label, LV_ALIGN_LEFT_MID, 16, 0);
 
+    /* ── Router-LEDs-Button (zwischen Titel und Close) ── */
+    extern void router_leds_button_event_cb(lv_event_t *event);
+    lv_obj_t *router_leds_btn = lv_btn_create(header);
+    lv_obj_set_size(router_leds_btn, 36, 36);
+    lv_obj_align(router_leds_btn, LV_ALIGN_RIGHT_MID, -120, 0); // links vom Close-Button
+    lv_obj_set_style_radius(router_leds_btn, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(router_leds_btn, lv_color_hex(0x0D47A1), 0); // dunkleres Blau
+    lv_obj_set_style_bg_opa(router_leds_btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(router_leds_btn, 0, 0);
+    lv_obj_set_style_shadow_width(router_leds_btn, 0, 0);
+    lv_obj_add_event_cb(router_leds_btn, router_leds_button_event_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *router_icon = lv_label_create(router_leds_btn);
+    lv_label_set_text(router_icon, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_font(router_icon, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(router_icon, lv_color_white(), 0);
+    lv_obj_center(router_icon);
+
     lv_obj_t *close_btn = lv_btn_create(header);
     lv_obj_set_size(close_btn, 90, 32);
     lv_obj_align(close_btn, LV_ALIGN_RIGHT_MID, -16, 0);

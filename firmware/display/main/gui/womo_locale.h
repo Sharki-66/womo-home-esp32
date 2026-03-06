@@ -90,6 +90,12 @@ typedef enum {
     STR_THRESH_GAS,
     STR_THRESH_FRESH,
     STR_THRESH_GREY,
+    // Router LEDs modal
+    STR_ROUTER_LEDS_TITLE,
+    STR_ROUTER_LEDS_POWER_ON,
+    STR_ROUTER_LEDS_POWER_OFF,
+    STR_ROUTER_LEDS_WIFI_DISCONNECTED,
+    STR_ROUTER_LEDS_LTE_OFFLINE,
     // Max value
     STR_MAX
 } womo_string_id_t;

@@ -2,6 +2,7 @@ idf_component_register(
     SRCS 
         "main.c"
         "time/womo_time.c"
+        "time/womo_sun_calc.c"
         "gui/womo_theme.c"
         "gui/womo_locale.c"
         "gui/womo_gas_bottle.c"
@@ -9,6 +10,7 @@ idf_component_register(
         "gui/womo_weather.c"
         "gui/womo_battery.c"
         "gui/womo_connectivity_modal.c"
+        "gui/womo_router_leds_modal.c"
         "gui/womo_settings_modal.c"
         "gui/womo_thresholds.c"
         "gui/womo_fonts_german.c"

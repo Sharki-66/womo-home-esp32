@@ -200,9 +200,11 @@ typedef struct {
 typedef struct {
     bool  enabled;                /**< AP aktiv?                   */
     char  ssid[33];               /**< AP-SSID (z.B. "Malibu-622") */
-    uint8_t channel;              /**< Kanal                       */
+    uint8_t channel;              /**< Kanal (erstes AP-Interface) */
     uint8_t clients;              /**< Anzahl verbundener Clients  */
     womo_ap_client_info_t client_list[WOMO_AP_CLIENT_MAX];
+    bool  band_2_4ghz_active;     /**< 2.4 GHz Band aktiv?         */
+    bool  band_5ghz_active;       /**< 5 GHz Band aktiv?           */
 } womo_router_ap_status_t;
 
 /**

@@ -148,6 +148,14 @@ bool womo_theme_is_daytime(void);
 void womo_theme_apply_to_screen(lv_obj_t *screen);
 
 /**
+ * @brief Reset theme state to defaults (call at boot/power-on)
+ * 
+ * Resets cached colors, theme mode, and forces re-evaluation.
+ * Necessary because static variables survive soft-resets.
+ */
+void womo_theme_reset(void);
+
+/**
  * @brief Cycle to next theme mode (for touch control)
  * 
  * Cycles through: DAY -> SUNSET -> NIGHT -> SUNRISE -> DAY

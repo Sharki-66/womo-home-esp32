@@ -115,6 +115,14 @@ esp_err_t womo_wifi_get_ip_string(char *ip_str, size_t max_len);
 void womo_wifi_set_auto_reconnect(bool enable);
 
 /**
+ * @brief Periodically check WiFi connection and attempt reconnect if needed
+ * 
+ * Call this function periodically (e.g. every 15s) to ensure persistent WiFi connection.
+ * Resets retry counter and attempts reconnect if in ERROR state.
+ */
+void womo_wifi_watchdog(void);
+
+/**
  * @brief Get last connection error
  * 
  * @return Error description string

@@ -865,9 +865,13 @@ esp_err_t womo_router_get_lte_status(womo_router_lte_status_t *out)
 
     /* Netztyp (z.B. "4G (LTE)") */
     if (router_sh("gsmctl -t", buf, sizeof(buf)) == ESP_OK && buf[0]) {
+        ESP_LOGD(TAG, "gsmctl -t RAW output: '%s' (len=%d)", buf, strlen(buf));
         char *nl = strchr(buf, '\n');
         if (nl) *nl = '\0';
         strncpy(out->conn_type, buf, sizeof(out->conn_type) - 1);
+        ESP_LOGD(TAG, "gsmctl -t parsed: '%s'", out->conn_type);
+    } else {
+        ESP_LOGW(TAG, "gsmctl -t: failed or empty");
     }
 
     /* SIM-State: gsmctl -e auf RUTX11 ist "--bsent <INTERFACE>" (Bytes sent),
@@ -1268,16 +1272,56 @@ esp_err_t womo_router_get_ap_status(womo_router_ap_status_t *out)
                 cJSON_Delete(info_args);
 
                 if (ie == ESP_OK && info_data) {
+                    /* KOMPLETTE JSON-Antwort loggen (nur bei DEBUG) */
+                    char *json_str = cJSON_Print(info_data);
+                    if (json_str) {
+                        ESP_LOGD(TAG, "iwinfo info for '%s': %s", dev->valuestring, json_str);
+                        free(json_str);
+                    }
+                    
                     cJSON *mode = cJSON_GetObjectItem(info_data, "mode");
                     if (mode && cJSON_IsString(mode) &&
                         strcasecmp(mode->valuestring, "Master") == 0) {
                         /* AP-Interface gefunden */
+                        cJSON *ch = cJSON_GetObjectItem(info_data, "channel");
+                        uint8_t channel = 0;
+                        if (ch && cJSON_IsNumber(ch)) {
+                            channel = (uint8_t)ch->valueint;
+                        }
+                        
+                        /* hwmode als Fallback: "11a" / "11na" / "11ac" = 5GHz, sonst 2.4GHz */
+                        cJSON *hwmode = cJSON_GetObjectItem(info_data, "hwmode");
+                        const char *hwmode_str = (hwmode && cJSON_IsString(hwmode)) ? hwmode->valuestring : NULL;
+                        
+                        ESP_LOGI(TAG, "AP Interface '%s': channel=%u, hwmode='%s'", 
+                                 dev->valuestring, channel, hwmode_str ? hwmode_str : "?");
+                        
+                        /* Band erkennen: 1. Versuch über Kanal, 2. Versuch über hwmode */
+                        if (channel > 0 && channel <= 14) {
+                            out->band_2_4ghz_active = true;
+                            ESP_LOGI(TAG, "  -> 2.4 GHz band detected (via channel)");
+                        } else if (channel > 14) {
+                            out->band_5ghz_active = true;
+                            ESP_LOGI(TAG, "  -> 5 GHz band detected (via channel)");
+                        } else if (hwmode_str) {
+                            /* hwmode als Fallback */
+                            if (strstr(hwmode_str, "11a") || strstr(hwmode_str, "11ac") || 
+                                strstr(hwmode_str, "11ax") || strstr(hwmode_str, "11na")) {
+                                out->band_5ghz_active = true;
+                                ESP_LOGI(TAG, "  -> 5 GHz band detected (via hwmode '%s')", hwmode_str);
+                            } else {
+                                out->band_2_4ghz_active = true;
+                                ESP_LOGI(TAG, "  -> 2.4 GHz band detected (via hwmode '%s')", hwmode_str);
+                            }
+                        } else {
+                            ESP_LOGW(TAG, "  -> Cannot determine band (channel=0, no hwmode)");
+                        }
+                        
                         if (!out->enabled) {
                             /* SSID + Channel vom ersten AP übernehmen */
                             out->enabled = true;
                             json_strcpy(out->ssid, sizeof(out->ssid), info_data, "ssid");
-                            cJSON *ch = cJSON_GetObjectItem(info_data, "channel");
-                            if (ch && cJSON_IsNumber(ch)) out->channel = (uint8_t)ch->valueint;
+                            out->channel = channel;
                         }
                         if (ap_dev_count < AP_DEV_MAX) {
                             strncpy(ap_devices[ap_dev_count], dev->valuestring,

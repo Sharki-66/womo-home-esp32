@@ -90,3 +90,49 @@ Git regelmäsig updaten -> Nutzer fragen.
 - LVGL v9 hat Kompatibilitäts-Layer (`lv_api_map_v8.h`) für die meisten Umbenennungen – für schnellen Start nutzbar, für sauberen Code schrittweise ersetzen.
 - Kein bestehendes v9-Beispiel speziell für Waveshare ESP32-S3-Touch-LCD-7, aber das Espressif RGB-LCD-Beispiel ist nahezu identisch (800×480, GT1151, ESP32-S3-N16R8).
 - `esp_lvgl_port` übernimmt: LVGL-Task, Timer, Mutex, Flush, Buffer-Allokation, VSync-Sync. Übernimmt NICHT: RGB-Panel-Init, Touch-HW-Init, Backlight (CH422G).
+
+### Betroffene Dateien (Analyse Stand 06.03.2026)
+
+#### 🔴 Aufwand HOCH – kompletter Rewrite / Ersatz
+| Datei | Grund |
+|---|---|
+| `main/hardware/lvgl_port.c` | ~640 Zeilen komplett durch `esp_lvgl_port` v2 ersetzen. Nutzt `lv_disp_drv_t`, `_lv_refr_get_disp_refreshing()`, `disp->inv_p`, `indev->driver->read_timer`, `lv_color_t *color_map` Flush-Callback – alles v9-inkompatibel. |
+| `main/hardware/waveshare_rgb_lcd_port.c/.h` | `lv_coord_t` (2×), `lv_scr_act()` (1×), `lv_event_get_target` (1×), direkter Framebuffer-Zugriff |
+
+#### 🟠 Aufwand MITTEL – viele Umbenennungen
+| Datei | Betroffene APIs |
+|---|---|
+| `main/main.c` | `lv_coord_t` (17×), `lv_btn_create` (5×), `lv_obj_clear_flag` (21×), `lv_obj_del` (4×), `lv_scr_act()` (8×), `lv_disp_get_hor_res` (1×), `lv_indev_get_act` (1×), `lv_timer_del` (1×), `lv_msgbox` (9×), `lv_img_*` (9×), `LV_LABEL_LONG_DOT` (1×), `lv_obj_set_style_img_opa` (1×) |
+| `main/gui/womo_connectivity_modal.c` | `lv_btn_create` (6×), `lv_obj_clear_flag` (12×), `LV_BTNMATRIX_CTRL_*` (15×), `lv_obj_del` (1×), `lv_event_get_target` (2×), `lv_scr_act()` (1×), `lv_indev_get_act` (1×), `lv_spinner_create` (1×), `lv_keyboard_set_map` (2×), `LV_LABEL_LONG_DOT` (1×) |
+| `main/gui/womo_settings_modal.c` | `lv_btn_create` (7×), `lv_obj_clear_flag` (5×), `lv_event_get_target` (3×) |
+
+#### 🟡 Aufwand GERING – wenige Stellen
+| Datei | Betroffene APIs |
+|---|---|
+| `main/gui/womo_battery.c/.h` | `lv_coord_t` (4×), `lv_obj_clear_flag` (7×), `lv_obj_del` (1×) |
+| `main/gui/womo_gas_bottle.c/.h` | `lv_coord_t` (9×), `lv_obj_clear_flag` (6×), `lv_obj_del` (1×) |
+| `main/gui/womo_tank.c/.h` | `lv_coord_t` (10×), `lv_obj_clear_flag` (6×), `lv_obj_del` (1×) |
+| `main/gui/womo_weather.c/.h` | `lv_coord_t` (2×), `lv_obj_clear_flag` (3×), `lv_img_*` (4×) |
+| `main/gui/womo_router_leds_modal.c` | `lv_obj_clear_flag` (3×), `lv_obj_del` (1×), `lv_scr_act()` (2×) |
+| `main/gui/womo_theme.c` | `lv_scr_act()` (1×) |
+
+#### 🔵 Fonts – Neugenerierung nötig (v8-Format → v9-Format)
+Alle 6 Custom-Fonts in `main/gui/fonts/` müssen mit dem v9-Font-Converter neu gebaut werden:
+`lv_font_montserrat_12_german.c`, `_14_`, `_16_`, `_20_`, `_24_german.c`, `lv_font_material_16.c`
+
+#### ⚪ Nicht betroffen
+`main/network/`, `main/rs485/`, `main/storage/`, `main/time/`
+
+#### Gesamtzahlen (mechanische Umbenennungen)
+| API alt → neu | Anzahl Stellen | Dateien |
+|---|---|---|
+| `lv_coord_t` → `int32_t` | 45 | 9 |
+| `lv_obj_clear_flag` → `lv_obj_remove_flag` | 63 | 8 |
+| `lv_btn_create` → `lv_button_create` | 18 | 3 |
+| `lv_scr_act()` → `lv_screen_active()` | 14 | 6 |
+| `LV_BTNMATRIX_CTRL_*` → `LV_BUTTONMATRIX_CTRL_*` | 15 | 1 |
+| `lv_obj_del` → `lv_obj_delete` | 9 | 6 |
+| `lv_event_get_target` → `lv_event_get_target_obj` | 6 | 3 |
+| `lv_img_*` → `lv_image_*` | 13 | 2 |
+| `lv_msgbox` (API neu) | 9 | 1 |
+| Sonstige (1× je) | 6 | div. |
