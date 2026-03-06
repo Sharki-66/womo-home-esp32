@@ -179,12 +179,6 @@ void waveshare_esp32_s3_touch_reset()
 }
 #endif
 
-// VSYNC event callback function
-IRAM_ATTR static bool rgb_lcd_on_vsync_event(esp_lcd_panel_handle_t panel, const esp_lcd_rgb_panel_event_data_t *edata, void *user_ctx)
-{
-    return lvgl_port_notify_rgb_vsync();
-}
-
 // GPIO initialization
 void gpio_init(void)
 {
@@ -269,8 +263,8 @@ esp_err_t waveshare_esp32_s3_rgb_lcd_init()
     // zeigt – auch bevor LVGL überhaupt gestartet wird.
     {
         lv_color_t bg = womo_theme_get_background_color();
-        // lv_color_t bei LV_COLOR_DEPTH=16 ist bereits RGB565
-        uint16_t rgb565 = bg.full;
+        /* LVGL v9: lv_color_t → RGB565 via lv_color_to_u16() */
+        uint16_t rgb565 = lv_color_to_u16(bg);
 
         size_t fb_size_bytes = EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES * sizeof(uint16_t);
 #if LVGL_PORT_LCD_RGB_BUFFER_NUMS >= 2
@@ -331,17 +325,9 @@ esp_err_t waveshare_esp32_s3_rgb_lcd_init()
     ESP_ERROR_CHECK(esp_lcd_touch_new_i2c_gt911(tp_io_handle, &tp_cfg, &tp_handle)); // Create new I2C GT911 touch controller
 #endif // CONFIG_EXAMPLE_LCD_TOUCH_CONTROLLER_GT911
 
-    ESP_ERROR_CHECK(lvgl_port_init(panel_handle, tp_handle)); // Initialize LVGL with the panel and touch handles
-
-    // Register callbacks for RGB panel events
-    esp_lcd_rgb_panel_event_callbacks_t cbs = {
-#if EXAMPLE_RGB_BOUNCE_BUFFER_SIZE > 0
-        .on_bounce_frame_finish = rgb_lcd_on_vsync_event, // Callback for bounce frame finish
-#else
-        .on_vsync = rgb_lcd_on_vsync_event, // Callback for vertical sync
-#endif
-    };
-    ESP_ERROR_CHECK(esp_lcd_rgb_panel_register_event_callbacks(panel_handle, &cbs, NULL)); // Register event callbacks
+    /* esp_lvgl_port registriert den VSync/Bounce-Callback intern in
+     * lvgl_port_add_disp_rgb() – kein eigener Callback mehr nötig. */
+    ESP_ERROR_CHECK(womo_lvgl_port_init(panel_handle, tp_handle));
 
     return ESP_OK; // Return success 
 }

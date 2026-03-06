@@ -569,7 +569,7 @@ static void geocode_result_cb(const womo_geocode_result_t *result, void *user_da
     /* Erfolg: normales Intervall */
     geocode_last_failed = false;
 
-    if (lvgl_port_lock(-1)) {
+    if (lvgl_port_lock(0)) {
         const char *text = result->short_name[0] ? result->short_name : result->display_name;
         if (text && text[0] != '\0') {
             if (strcmp(text, location_last_text) != 0) {
@@ -2535,7 +2535,7 @@ static void openweather_update_cb(const womo_weather_http_data_t *data, void *us
              data->temperature_c,
              data->is_night ? "yes" : "no");
 
-    if (weather_widget && lvgl_port_lock(-1)) {
+    if (weather_widget && lvgl_port_lock(0)) {
         womo_weather_set_condition(weather_widget, condition, data->is_night);
         if (weather_widget->temp_label) {
             womo_weather_set_temperature(weather_widget, temperature);
@@ -2663,7 +2663,7 @@ static void meteoalarm_update_cb(const womo_meteoalarm_result_t *result, void *u
 
     if (!weather_widget) return;
 
-    if (lvgl_port_lock(-1)) {
+    if (lvgl_port_lock(0)) {
         womo_weather_set_warnings(weather_widget, result->count, result->max_severity);
         /* Click-Handler nur beim ersten Mal registrieren */
         static bool click_registered = false;
@@ -3549,7 +3549,7 @@ void app_main()
     bg_png_data = NULL;
     bg_png_size = 0;
     
-    if (lvgl_port_lock(-1)) {
+    if (lvgl_port_lock(0)) {
         lv_obj_t *screen = lv_scr_act();
         lv_obj_add_flag(screen, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
@@ -4222,7 +4222,7 @@ void app_main()
     // ── Theme + Ducato mit korrekter Uhrzeit laden ─────────────────────
     // Zeit ist jetzt gültig (NTP oder RS485) oder Fallback auf DAY.
     // 1× Ducato laden, Theme + Textfarben setzen – Backlight noch AUS.
-    if (lvgl_port_lock(-1)) {
+    if (lvgl_port_lock(0)) {
         // Cache explizit invalidieren vor dem Boot-Load
         bg_last_day_state = -1;
         
