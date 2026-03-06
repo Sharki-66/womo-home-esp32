@@ -36,6 +36,7 @@
 #include "esp_log.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "womo_http_mutex.h"
@@ -499,13 +500,14 @@ esp_err_t womo_meteoalarm_start(womo_meteoalarm_cb_t callback, void *user_data)
      * Meteoalarm TLS-Speicher anfordert (verhindert -0x7F00 SSL_ALLOC_FAILED). */
     s_ctx.earliest_fetch_tick = xTaskGetTickCount() + pdMS_TO_TICKS(60000);
 
-    BaseType_t created = xTaskCreate(
+    BaseType_t created = xTaskCreateWithCaps(
         ma_task,
         "meteoalarm",
         MA_TASK_STACK,
         NULL,
         MA_TASK_PRIO,
-        &s_ctx.task_handle
+        &s_ctx.task_handle,
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT
     );
 
     if (created != pdPASS) {

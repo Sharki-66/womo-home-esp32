@@ -9,6 +9,7 @@
  */
 
 #include "freertos/FreeRTOS.h"
+#include "esp_heap_caps.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_touch.h"
 #include "esp_log.h"
@@ -124,6 +125,11 @@ esp_err_t womo_lvgl_port_init(esp_lcd_panel_handle_t lcd_handle,
         .task_affinity     = LVGL_PORT_TASK_CORE,
         .task_max_sleep_ms = LVGL_PORT_TASK_MAX_DELAY_MS,
         .timer_period_ms   = LVGL_PORT_TICK_PERIOD_MS,
+        /* WICHTIG: Stack muss im internen RAM liegen!
+         * SPIRAM-Stack + spi_flash-Operationen (NVS, SPIFFS) = Assertion-Crash,
+         * da der Cache beim Flash-Zugriff deaktiviert wird und SPIRAM
+         * dann nicht mehr erreichbar ist. */
+        .task_stack_caps   = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT,
     };
     ESP_RETURN_ON_ERROR(lvgl_port_init(&port_cfg), TAG, "esp_lvgl_port init failed");
 

@@ -47,7 +47,13 @@ idf_component_register(
         nvs_flash
         json
         driver
+        esp_timer
 )
 
+# Warnungs-Unterdrückung für LVGL (Managed Component: lvgl__lvgl)
+# idf_component_get_property schlägt still fehl wenn der Name nicht passt –
+# deshalb mit cmake_language(CALL) absichern.
 idf_component_get_property(lvgl_lib lvgl__lvgl COMPONENT_LIB)
-target_compile_options(${lvgl_lib} PRIVATE -Wno-format)
+if(lvgl_lib)
+    target_compile_options(${lvgl_lib} PRIVATE -Wno-format)
+endif()

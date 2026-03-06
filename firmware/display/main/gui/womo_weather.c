@@ -206,12 +206,12 @@ static void load_weather_icon(womo_weather_t *weather, const char *filename, boo
     ESP_LOGI(TAG, "Weather PNG loaded: %ld bytes", file_size);
     
     // Create LVGL image descriptor for PNG (same as Ducato method)
-    static lv_img_dsc_t weather_img_dsc;
-    weather_img_dsc.header.always_zero = 0;
+    static lv_image_dsc_t weather_img_dsc;
+    weather_img_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
     weather_img_dsc.header.w = 0;  // PNG decoder will determine size
     weather_img_dsc.header.h = 0;  // PNG decoder will determine size
     weather_img_dsc.data_size = file_size;
-    weather_img_dsc.header.cf = LV_IMG_CF_RAW_ALPHA;  // Let PNG decoder handle it
+    weather_img_dsc.header.cf = LV_COLOR_FORMAT_RAW_ALPHA;  // Let PNG decoder handle it
     weather_img_dsc.data = png_data;
     
     // Set image source to memory descriptor
