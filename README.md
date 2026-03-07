@@ -63,3 +63,26 @@ Dieses Projekt kombiniert zwei ESP32-S3 Module für ein leistungsstarkes WoMo-Ko
 - **C/C++** (native ESP32 Entwicklung)
 
 ### Architektur
+- Detaillierte Software-Architektur Dokumentation folgt
+
+---
+
+## 📚 Dokumentation & Hilfe
+
+### Projekt-Dokumentation
+- 📖 **[Hardware Übersicht](docs/hardware/docs_hardware_overview_Version2.md)**
+- 📖 **[Community Hardware Plattformen](docs/hardware/community-open-hardware-platforms.md)**
+- 📖 **[Issues und PRs schließen](docs/CLOSING_ISSUES_AND_PRS.md)**
+
+### Hilfe & Support
+Wenn du Fragen hast oder Issues/Pull Requests verwalten möchtest, siehe unsere [Anleitung zum Schließen von Issues und PRs](docs/CLOSING_ISSUES_AND_PRS.md).
+
+---
+
+## 📄 Lizenz
+
+Siehe [LICENSE](LICENSE) für Details.
+
+---
+
+**Stand:** 2024-11-01
