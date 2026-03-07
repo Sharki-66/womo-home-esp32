@@ -28,7 +28,6 @@
 #include "network/womo_http_mutex.h"
 #include "storage/womo_sd.h"
 #include "rs485/womo_rs485_display.h"
-#include "i2cdev.h"  // i2cdev for CH422G GPIO expander on display
 #include "nvs.h"
 #include "sdkconfig.h"
 #include <stdio.h>
@@ -3482,10 +3481,6 @@ static void backlight_set(bool on)
 
 void app_main()
 {
-    // Initialize i2cdev FIRST (needed by display for CH422G GPIO expander)
-    ESP_LOGI(TAG, "Initializing i2cdev...");
-    ESP_ERROR_CHECK(i2cdev_init());
-    
     // Backlight sofort AUS – CH422G könnte nach Reset in undefiniertem
     // Zustand sein.  Das Backlight wird erst nach vollständiger UI-
     // Initialisierung + Theme + Ducato explizit eingeschaltet.
