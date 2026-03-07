@@ -156,4 +156,22 @@ esp_err_t womo_wifi_get_known_credentials(const char *ssid,
 
 esp_err_t womo_wifi_connect_best_known(uint8_t max_retry);
 
+/**
+ * @brief WiFi-Verbindung sofort im Hintergrund starten (nicht-blockierend).
+ *        Ermöglicht parallelen Ablauf während Display-HW + LVGL-UI-Konstruktion.
+ *        Ergebnis per womo_wifi_wait_connected() abfragen.
+ * @param ssid      SSID des Zielnetzwerks
+ * @param password  Passwort (NULL = aus NVS-Bekannteliste laden)
+ * @param max_retry Max. Wiederholungen bei Fehler (0 = unbegrenzt)
+ */
+esp_err_t womo_wifi_connect_async(const char *ssid, const char *password, uint8_t max_retry);
+
+/**
+ * @brief Auf das Ergebnis einer via womo_wifi_connect_async() gestarteten
+ *        Verbindung warten. Speichert Passwort bei Erfolg in NVS.
+ * @param timeout_ms Maximale Wartezeit in ms. 0 = unbegrenzt.
+ * @return ESP_OK=verbunden, ESP_FAIL=fehlgeschlagen, ESP_ERR_TIMEOUT=Timeout
+ */
+esp_err_t womo_wifi_wait_connected(uint32_t timeout_ms);
+
 #endif // WOMO_WIFI_H

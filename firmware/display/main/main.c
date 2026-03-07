@@ -152,6 +152,7 @@ static womo_battery_t *main_battery = NULL;   // Battery 1 widget
 static womo_battery_t *secondary_battery = NULL; // Battery 2 widget
 /* Meteoalarm ─────────────────────────────────────────────────────── */
 static bool  meteoalarm_started = false;        // Task einmalig gestartet
+static bool  weather_started   = false;         // Task einmalig gestartet
 static lv_obj_t *meteoalarm_popup = NULL;       // aktuelles Warnungs-Popup (NULL = geschlossen)
 static lv_timer_t *ui_update_timer = NULL; // Periodic UI/IMU refresh timer
 static int64_t last_time_sync_try_us = 0; // Throttle multi-source time sync attempts
@@ -159,7 +160,6 @@ static const uint32_t UI_UPDATE_INTERVAL_DEFAULT_MS = 500;
 static bool geocode_in_progress = false;
 static bool geocode_last_failed  = false; // steuert Retry- vs. Normal-Intervall
 static bool perf_monitor_visible = true;    // Performance monitor visibility
-static lv_obj_t *perf_monitor_label = NULL;  // Performance monitor label reference
 static int64_t geocode_last_request_us = 0;
 static double geocode_last_lat = NAN;
 static double geocode_last_lon = NAN;
@@ -376,11 +376,10 @@ static void imu_labels_update(bool has_data,
 
 static void apply_text_theme_colors(void)
 {
-    /* theme_mode_is_daylike() liefert nur für WOMO_THEME_DAY true.
-     * womo_theme_is_daytime() dagegen liefert true bis zum tatsächlichen
-     * Sonnenuntergang – also auch noch während des gesamten SUNSET-Modus,
-     * wenn der Hintergrund bereits dunkel (Gradient) ist.
-     * → schwarzer Text auf dunkelblauem Hintergrund wäre unsichtbar. */
+    /* theme_mode_is_daylike(): DAY + SUNRISE → true (weißer Ducato, dunkle Texte)
+     *                          NIGHT + SUNSET → false (grauer Ducato, helle Texte)
+     * SUNRISE = Morgen, heller Himmel → schwarzer Text gut lesbar.
+     * SUNSET  = Abend, dunkler Hintergrund → weißer Text nötig. */
     womo_theme_mode_t mode = womo_theme_get_mode();
     lv_color_t text_color = theme_mode_is_daylike(mode) ? lv_color_black() : lv_color_white();
     lv_color_t classic_color = lv_color_hex(0x2E7D32);
@@ -2272,7 +2271,9 @@ gas_done:
 // Bei Dämmerung (SUNRISE/SUNSET) und Nacht → grauer Ducato.
 static bool theme_mode_is_daylike(womo_theme_mode_t mode)
 {
-    return (mode == WOMO_THEME_DAY);
+    // SUNRISE = Morgen―sieht wie Tag aus: weißer Ducato, dunkle Texte
+    // SUNSET  = Abend―sieht wie Nacht aus: grauer Ducato, helle Texte
+    return (mode == WOMO_THEME_DAY || mode == WOMO_THEME_SUNRISE);
 }
 
 // Callback: Sprache geändert → statische UI-Labels aktualisieren.
@@ -2304,7 +2305,7 @@ static void time_update_timer_cb(lv_timer_t *timer)
 {
     char time_str[32];
     char date_str[32];
-    static bool weather_started = false;
+    static bool last_wifi_was_connected = false;
     struct tm timeinfo;
     bool time_valid_now = (womo_time_get(&timeinfo) == ESP_OK) && (timeinfo.tm_year >= (2024 - 1900));
     
@@ -2329,8 +2330,24 @@ static void time_update_timer_cb(lv_timer_t *timer)
         lv_label_set_text(date_label, "--.--.----");
     }
 
+    // Bei WiFi-Disconnect: laufende Tasks stoppen und Flags zurücksetzen, damit sie beim nächsten Connect neu starten
+    bool wifi_now = womo_wifi_is_connected();
+    if (last_wifi_was_connected && !wifi_now) {
+        if (weather_started) {
+            womo_weather_http_stop();
+            weather_started = false;
+            ESP_LOGI(TAG, "WiFi getrennt – Wetter-Task gestoppt, Neustart beim Reconnect");
+        }
+        if (meteoalarm_started) {
+            womo_meteoalarm_stop();
+            meteoalarm_started = false;
+            ESP_LOGI(TAG, "WiFi getrennt – Meteoalarm-Task gestoppt, Neustart beim Reconnect");
+        }
+    }
+    last_wifi_was_connected = wifi_now;
+
     // Wettercode erst abrufen, wenn WiFi steht UND Zeit synchronisiert ist (TLS braucht gültige Uhrzeit)
-    if (!weather_started && womo_wifi_is_connected() && womo_time_is_synced()) {
+    if (!weather_started && wifi_now && womo_time_is_synced()) {
         esp_err_t weather_err = womo_weather_http_start(openweather_update_cb, NULL);
         if (weather_err != ESP_OK) {
             ESP_LOGW(TAG, "Online weather updates disabled: %s", esp_err_to_name(weather_err));
@@ -2340,7 +2357,7 @@ static void time_update_timer_cb(lv_timer_t *timer)
     }
 
     // Meteoalarm: nach WiFi + Zeitsync starten (wie Wetter)
-    if (!meteoalarm_started && womo_wifi_is_connected() && womo_time_is_synced()) {
+    if (!meteoalarm_started && wifi_now && womo_time_is_synced()) {
         esp_err_t ma_err = womo_meteoalarm_start(meteoalarm_update_cb, NULL);
         if (ma_err != ESP_OK) {
             ESP_LOGW(TAG, "Meteoalarm-Task nicht gestartet: %s", esp_err_to_name(ma_err));
@@ -3114,38 +3131,19 @@ static void perf_monitor_toggle_event_cb(lv_event_t *e)
     }
 
     perf_monitor_visible = !perf_monitor_visible;
-    
-    // Suche das Performance Monitor Label im System Layer
-    if (!perf_monitor_label) {
-        lv_obj_t *sys_layer = lv_layer_sys();
-        if (sys_layer) {
-            uint32_t child_count = lv_obj_get_child_cnt(sys_layer);
-            for (uint32_t i = 0; i < child_count; i++) {
-                lv_obj_t *child = lv_obj_get_child(sys_layer, i);
-                // Performance Monitor ist ein Label mit schwarzem Hintergrund
-                if (child && lv_obj_check_type(child, &lv_label_class)) {
-                    lv_color_t bg = lv_obj_get_style_bg_color(child, 0);
-                    if (lv_color_to_u16(bg) == lv_color_to_u16(lv_color_black())) {
-                        perf_monitor_label = child;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    
-    if (perf_monitor_label) {
+
+    /* LVGL v9: lv_sysmon API statt Label-Suche im sys_layer */
+    lv_display_t *disp = lv_display_get_default();
+    if (disp) {
         if (perf_monitor_visible) {
-            lv_obj_clear_flag(perf_monitor_label, LV_OBJ_FLAG_HIDDEN);
+            lv_sysmon_show_performance(disp);
         } else {
-            lv_obj_add_flag(perf_monitor_label, LV_OBJ_FLAG_HIDDEN);
+            lv_sysmon_hide_performance(disp);
         }
         ESP_LOGI(TAG, "Performance Monitor %s", perf_monitor_visible ? "eingeblendet" : "ausgeblendet");
-    } else {
-        ESP_LOGW(TAG, "Performance Monitor Label nicht gefunden");
     }
-    
-    // RS485 Debug Label auch mit togglen
+
+    // RS485 Debug Label mittogglen
     if (rs485_debug_label) {
         if (perf_monitor_visible) {
             lv_obj_clear_flag(rs485_debug_label, LV_OBJ_FLAG_HIDDEN);
@@ -3499,10 +3497,12 @@ void app_main()
     rs485_last_packet_time_us = rs485_watchdog_start_us;
     rs485_timeout_active = false;
     
-    // Initialize WiFi
+    // Initialize WiFi + sofort async verbinden (läuft parallel zu Display-HW + UI-Konstruktion)
     ESP_LOGI(TAG, "Initializing WiFi...");
     womo_wifi_init();
-    
+    ESP_LOGI(TAG, "WiFi async connect: %s (Hintergrund)", WIFI_SSID);
+    womo_wifi_connect_async(WIFI_SSID, WIFI_PASSWORD, 1);
+
     // Initialize theme (default location: Central Europe)
     // Sonnenzeiten werden automatisch via GPS berechnet (router_poll_task)
     womo_theme_init(50.0, 10.0);  // Approximate Germany
@@ -3570,10 +3570,7 @@ void app_main()
         womo_locale_register_change_cb(on_locale_changed);
         womo_thresholds_init();
         womo_thresholds_register_change_cb(on_thresholds_changed);
-        
-        // Test deutsche Schriftarten
-        womo_test_german_fonts();
-        
+
     // Create title - höher positioniert
     title_label = lv_label_create(screen);
     lv_label_set_text(title_label, womo_locale_get_string(STR_TITLE));
@@ -4165,20 +4162,13 @@ void app_main()
     // ── HTTPS-Mutex initialisieren (vor allen HTTP-Tasks) ─────────────
     womo_http_mutex_init();
 
-    // ── WiFi + Zeitsync VOR Backlight ────────────────────────────────
-    // Backlight bleibt AUS.  Wir warten auf eine gültige Zeitquelle
-    // (NTP über WiFi ODER RS485-Timestamp vom Sensorboard – wer
-    // zuerst liefert).  Damit sind Theme + Ducato beim Einschalten
-    // des Backlights sofort korrekt (Tag/Nacht).
-    ESP_LOGI(TAG, "Connecting to Router-AP: %s", WIFI_SSID);
-    // max_retry=1: nur ein Versuch beim Boot, damit der Start nicht blockiert.
-    // wifi_autoretry_task übernimmt danach alle weiteren Verbindungsversuche.
-    esp_err_t wifi_err = womo_wifi_connect(WIFI_SSID, WIFI_PASSWORD, 1);
+    // ── WiFi-Verbindungsergebnis abholen ────────────────────────────────
+    // WiFi läuft seit womo_wifi_init() im Hintergrund (connect_async).
+    // Restwartezeit ≈ 0 ms wenn der Router erreichbar war; max 5s Fallback.
+    esp_err_t wifi_err = womo_wifi_wait_connected(5000);
 
     if (wifi_err == ESP_OK) {
         ESP_LOGI(TAG, "WiFi connected to Router-AP: %s", WIFI_SSID);
-
-        // NTP non-blocking starten
         if (womo_time_sync_ntp(false) == ESP_OK) {
             ESP_LOGI(TAG, "NTP sync started (background)");
         } else {
@@ -4225,16 +4215,16 @@ void app_main()
 
     // ── Theme + Ducato mit korrekter Uhrzeit laden ─────────────────────
     // Zeit ist jetzt gültig (NTP oder RS485) oder Fallback auf DAY.
-    // 1× Ducato laden, Theme + Textfarben setzen – Backlight noch AUS.
+    // Kein explizites Cache-Invalidieren: Falls der LVGL-Timer-CB das
+    // Bild bereits korrekt geladen hat (bg_last_day_state gesetzt),
+    // erkennt load_background_image() das und überspringt den SD-Zugriff.
     if (lvgl_port_lock(0)) {
-        // Cache explizit invalidieren vor dem Boot-Load
-        bg_last_day_state = -1;
-        
         womo_theme_mode_t boot_mode = womo_theme_update(WOMO_STATUS_OK);
         bool boot_is_day = theme_mode_is_daylike(boot_mode);
-        ESP_LOGI(TAG, "Boot theme: %s (mode=%d)", boot_is_day ? "DAY" : "NIGHT", boot_mode);
+        const char *mode_names[] = {"DAY", "NIGHT", "SUNRISE", "SUNSET"};
+        ESP_LOGI(TAG, "Boot theme: %s (mode=%d, ducato=%s)",
+                 mode_names[boot_mode], boot_mode, boot_is_day ? "weiss" : "grau");
 
-        // Ducato mit aktuellem Theme laden (Cache wurde invalidiert)
         load_background_image(lv_scr_act(), boot_is_day);
         load_logo_image(lv_scr_act());
         apply_text_theme_colors();
@@ -4265,7 +4255,7 @@ void app_main()
     // (Direct Mode) gerendert hat, dann Backlight einschalten.
     // Bei Tear-Avoidance Mode 3 müssen beide Buffer gefüllt sein (2-3 Frames).
     ESP_LOGI(TAG, "Waiting for LVGL to render initial screen...");
-    vTaskDelay(pdMS_TO_TICKS(300));
+    vTaskDelay(pdMS_TO_TICKS(150));  // 2 Frames @60fps genügen (Direct-Mode beide Buffer gefüllt)
     ESP_LOGI(TAG, "Enabling backlight");
     if (lvgl_port_lock(0)) {
         backlight_set(true);
