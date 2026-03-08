@@ -22,6 +22,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sensor_config.h"
+#include "hal/deep_sleep.h"
 #include "sensors/bme680_sensor.h"
 #include "sensors/hx711_sensor.h"
 #include "sensors/analog_sensor.h"
@@ -426,6 +427,7 @@ static void rs485_handle_display_ready(void)
 
 static bool s_radio_on = false;
 static bool s_power_gpio_inited = false;
+static volatile bool s_shutdown_pending = false;
 
 // Gas-Verbrauchsstate (mit NVS-Persistenz)
 typedef struct {
@@ -1068,6 +1070,7 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
     } else if (strcmp(cmd_str, "pwr_12v_off") == 0) {
         cmd_err = rs485_set_12v_power(false);
         s_ctrl_immediate = true;
+        s_shutdown_pending = true;  // Nach ACK-Versand in Deep Sleep
     } else if (strcmp(cmd_str, "radio_on") == 0) {
         cmd_err = rs485_set_radio(true);
         s_ctrl_immediate = true;
@@ -1203,6 +1206,13 @@ static void rs485_process_rx_line(const char *line)
     }
 
     cJSON_Delete(root);
+
+    // Nach ACK: Deep Sleep wenn pwr_12v_off empfangen wurde
+    if (s_shutdown_pending) {
+        s_shutdown_pending = false;
+        vTaskDelay(pdMS_TO_TICKS(300));  // Sicherstellen dass ACK gesendet wurde
+        deep_sleep_enter();             // Kehrt nicht zurück
+    }
 }
 
 // ── RX / TX Tasks ───────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "app_main.c"
+        "hal/deep_sleep.c"
         "sensors/analog_sensor.c"
         "network/rs485_modem.c"
         "network/womo_rs485.c"
