@@ -76,6 +76,5 @@ esp_err_t womo_ch422g_assert_sd_cs(void);
 esp_err_t wavesahre_rgb_lcd_bl_on();
 esp_err_t wavesahre_rgb_lcd_bl_off();
 
-void example_lvgl_demo_ui();
 
 #endif

@@ -65,6 +65,8 @@ typedef struct {
     uint8_t warn_count;           // Anzahl aktiver Warnungen (0 = kein Badge)
     uint8_t warn_max_severity;    // Höchste Severity (0=keine, 2=orange, 3/4=rot)
     char icon_path[128];         // Current icon file path
+    uint8_t *png_buf;            // Aktuell gecachter PNG-Datenpuffer (für Free beim Wechsel)
+    lv_image_dsc_t img_dsc;     // LVGL Image-Descriptor (im Struct → eindeutige Adresse pro Widget)
 } womo_weather_t;
 
 /**

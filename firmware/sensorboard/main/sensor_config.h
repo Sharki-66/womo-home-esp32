@@ -16,8 +16,8 @@
  *                               Reset |    I |  🟩 |  RST | 3          P         3 | RX   | 🟩  | I/O/T | U0RXD, GPIO44, CLK_OUT2
  *    (ADC1_CH3, RTC, GPIO4) Batt1 KFZ | I/O/T|  🟨 |    4 | 4          3         4 | 1    | 🟨  | I/O/T | Tank1 Frisch (GPIO1, RTC, ADC1_CH0)
  *  (ADC1_CH4, RTC, GPIO5) Batt2 Board | I/O/T|  🟨 |    5 | 5          2         5 | 2    | 🟨  | I/O/T | Tank2 Grau (GPIO2, RTC, ADC1_CH1)
- *                ADC1_CH5, RTC, GPIO6 | I/O/T|  ⬜ |    6 | 6          -         6 | 42   | 🟩  | I/O/T | MTMS, GPIO42
- *                ADC1_CH6, RTC, GPIO7 | I/O/T|  ⬜ |    7 | 7          S         7 | 41   | 🟩  | I/O/T | MTDI, GPIO41
+ *         DC1_CH5, RTC, GPIO6) WAKEUP | I/O/T|  🟨 |    6 | 6          -         6 | 42   | 🟩  | I/O/T | MTMS, GPIO42
+ *   (ADC1_CH6, RTC, GPIO7) Display 5V | I/O/T|  🟨 |    7 | 7          S         7 | 41   | 🟩  | I/O/T | MTDI, GPIO41
  *     (ADC2_CH4, RTC, GPIO15) I2C SCL | I/O/T|  🟨 |   15 | 8          3         8 | 40   | 🟩  | I/O/T | MTDO, GPIO40
  *     (ADC2_CH5, RTC, GPIO16) I2C SDA | I/O/T|  🟨 |   16 | 9          -         9 | 39   | 🟩  | I/O/T | MTCK, GPIO39
  *        ADC2_CH6, U1TXD, RTC, GPIO17 | I/O/T|  ⬜ |   17 | 10         W        10 | 38   | 🟨  | I/O/T | RGB_LED  (GPIO38)
@@ -130,14 +130,27 @@
 #define SENSOR_TANK2_ADC_CHANNEL 1     // GPIO2 (Grauwasser)
 
 // ====================================================================================
-// Board Power / Multimedia GPIOs
+// Board Power / Multimedia GPIOs (LBE-Steuerung über bistabiles Relais)
 // ====================================================================================
 #define SENSOR_RGB_LED_GPIO 48             // Onboard WS2812 RGB-LED (GPIO48, bestätigt)
-#define SENSOR_PWR_12V_ON_GPIO 11      // Schaltausgang: Boardspannung EIN
-#define SENSOR_PWR_12V_OFF_GPIO 12     // Schaltausgang: Boardspannung AUS
-#define SENSOR_PWR_12V_SENSE_GPIO 14   // Eingang: Boardspannung Feedback
+#define SENSOR_PWR_12V_ON_GPIO 11      // Schaltausgang: LBE EIN (Relais-Puls)
+#define SENSOR_PWR_12V_OFF_GPIO 12     // Schaltausgang: LBE AUS (Relais-Puls)
+#define SENSOR_PWR_12V_SENSE_GPIO 14   // Eingang: LBE Spannungsfeedback
 #define SENSOR_AC_SENSE_GPIO 21        // Eingang: 230V Netzkontrolle
 #define SENSOR_MULTIMEDIA_PWR_GPIO 13  // Schaltausgang: Multimedia Power
+
+// ====================================================================================
+// Display-Versorgung (direkte Mosfet-Steuerung, HIGH=ein / LOW=aus)
+// GPIO7: RTC-fähig, kein Strapping — wird im Deep Sleep LOW gehalten
+// Display wird über 5V USB versorgt (Mosfet schaltet USB-5V-Leitug)
+// ====================================================================================
+#define SENSOR_DISPLAY_PWR_GPIO 7      // Ausgang: 5V USB Display-Versorgung (HIGH=ein)
+
+// ====================================================================================
+// Deep Sleep / Wakeup
+// GPIO6: RTC-fähig, freier Pin, kein Strapping — EXT0-Wakeup durch Touch-Taster
+// ====================================================================================
+#define SENSOR_WAKEUP_GPIO 6           // Eingang: Touch-Taster (aktiv HIGH, EXT0 Wakeup)
 
 // ====================================================================================
 

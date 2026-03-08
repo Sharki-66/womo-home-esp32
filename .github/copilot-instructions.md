@@ -49,90 +49,11 @@ Git regelmäsig updaten -> Nutzer fragen.
 - Router-WiFi-Zugangsdaten werden im NVS gespeichert (Namespace `rtr_wifi`, max. 20 Einträge, MRU-Reihenfolge). Bei Netzwerkauswahl aus Dropdown wird gespeichertes Passwort vorausgefüllt.
 - Router-Poll-Task (`router_poll_task` in main.c) aktualisiert AP/WiFi/LTE/GPS alle 15 s und füllt `womo_connectivity_snapshot_t` mit AP-Feldern (ap_enabled, ap_ssid, ap_clients, ap_client_list).
 
-## Geplante Migration: LVGL v8 → v9 (noch nicht gestartet)
-### Ist-Zustand
-- LVGL **8.4.0** als lokale Kopie in `components/lvgl__lvgl/`, konfiguriert über **Kconfig** (`LV_CONF_SKIP=y`, kein `lv_conf.h`).
-- Display: RGB LCD 800×480, 16-bit RGB565, Tear-Avoidance Mode 3 (Double-Buffer + Direct-Mode), LVGL-Task Core 1, Prio 4, 4–12 ms Delay.
-- Touch: GT911 (I2C) via `esp_lcd_touch`.
-- Custom `lvgl_port.c` (640 Zeilen): eigener Flush-Callback (5 Varianten), Dirty-Area-Tracking mit internen LVGL-Strukturen (`disp->inv_p`, `_lv_refr_get_disp_refreshing()`), eigener LVGL-Task, Indev-Driver.
-- Custom Fonts: 6× Montserrat-German (12/14/16/20/24 px) in `main/gui/fonts/`, v8-Format.
+## Geplante Migration: LVGL v8 → v9
 
-### Ziel
-- LVGL **v9** + **`espressif/esp_lvgl_port` v2** (aktuell v2.7.1) als Managed Component.
-- `esp_lvgl_port` ersetzt den kompletten custom `lvgl_port.c` → ~640 Zeilen werden zu ~20 Zeilen Config.
-- Referenz-Beispiel: `esp-bsp/components/esp_lvgl_port/examples/rgb_lcd/` (800×480 + GT1151, nahezu identisch zu unserem Setup).
+> Details, Phasen, betroffene Dateien und Risiken: siehe [.github/lvgl-v8-to-v9-migration.md](lvgl-v8-to-v9-migration.md)
 
-### Aufwand (geschätzt 3–4 Tage)
-1. **Dependencies umstellen** (0,5 Tage): `lvgl ^9` + `esp_lvgl_port ^2` in `idf_component.yml`, lokale LVGL-Kopie entfernen.
-2. **Driver-Layer ersetzen** (1 Tag): `lvgl_port.c` durch `esp_lvgl_port` Config ersetzen (`lvgl_port_add_disp_rgb()` + `lvgl_port_add_touch()`). CH422G-Backlight + Touch-Wake-Callback separat halten.
-3. **Custom Fonts neu generieren** (0,5 Tage): 6 Montserrat-German-Fonts mit v9-Font-Converter neu bauen.
-4. **Widget-Umbenennungen** (1 Tag): ~100 Stellen, mechanisch:
-   - `lv_btn_create` → `lv_button_create` (9×)
-   - `lv_img_*` → `lv_image_*` (5×), `lv_img_dsc_t` → `lv_image_dsc_t`, `LV_IMG_CF_RAW_ALPHA` → `LV_COLOR_FORMAT_*`
-   - `lv_obj_del` → `lv_obj_delete` (10×), `lv_obj_clear_flag` → `lv_obj_remove_flag` (15×)
-   - `LV_BTNMATRIX_CTRL_*` → `LV_BUTTONMATRIX_CTRL_*` (17×)
-   - `lv_coord_t` → `int32_t` (18×), `lv_scr_act()` → `lv_screen_active()` (6×)
-   - `LV_LABEL_LONG_DOT` → `LV_LABEL_LONG_DOTS` (3×)
-   - `lv_disp_get_hor_res` → `lv_display_get_horizontal_resolution` (2×)
-   - `lv_indev_get_act` → `lv_indev_active` (1×)
-   - `lv_timer_del` → `lv_timer_delete`, `lv_obj_set_style_img_opa` → `lv_obj_set_style_image_opa`
-   - `lv_event_get_target` → `lv_event_get_target_obj`
-5. **Spezialfälle** (0,5 Tage):
-   - `lv_spinner_create(parent, speed, arc)` → `lv_spinner_create(parent)` + `lv_spinner_set_anim_params()`
-   - `lv_msgbox` API komplett überarbeitet
-   - Keyboard-Map: `lv_keyboard_set_map()` Signatur geändert
-   - Flush-Callback Signatur: `lv_color_t *color_map` → `uint8_t *px_map`
-   - `lv_color_t` intern jetzt RGB888 (3 Byte), Farbformat per `lv_display_set_color_format()`
-6. **Kconfig + Test** (0,5 Tage): LVGL-v9-Menuconfig, Farbformat, Performance-Tuning.
-
-### Risiken / Hinweise
-- Touch-Wake-Callback (`lvgl_touch_set_wake_cb`): greift aktuell auf `indev->driver->read_timer` zu – Pfad existiert in v9 nicht mehr, muss anders gelöst werden.
-- LVGL v9 hat Kompatibilitäts-Layer (`lv_api_map_v8.h`) für die meisten Umbenennungen – für schnellen Start nutzbar, für sauberen Code schrittweise ersetzen.
-- Kein bestehendes v9-Beispiel speziell für Waveshare ESP32-S3-Touch-LCD-7, aber das Espressif RGB-LCD-Beispiel ist nahezu identisch (800×480, GT1151, ESP32-S3-N16R8).
-- `esp_lvgl_port` übernimmt: LVGL-Task, Timer, Mutex, Flush, Buffer-Allokation, VSync-Sync. Übernimmt NICHT: RGB-Panel-Init, Touch-HW-Init, Backlight (CH422G).
-
-### Betroffene Dateien (Analyse Stand 06.03.2026)
-
-#### 🔴 Aufwand HOCH – kompletter Rewrite / Ersatz
-| Datei | Grund |
-|---|---|
-| `main/hardware/lvgl_port.c` | ~640 Zeilen komplett durch `esp_lvgl_port` v2 ersetzen. Nutzt `lv_disp_drv_t`, `_lv_refr_get_disp_refreshing()`, `disp->inv_p`, `indev->driver->read_timer`, `lv_color_t *color_map` Flush-Callback – alles v9-inkompatibel. |
-| `main/hardware/waveshare_rgb_lcd_port.c/.h` | `lv_coord_t` (2×), `lv_scr_act()` (1×), `lv_event_get_target` (1×), direkter Framebuffer-Zugriff |
-
-#### 🟠 Aufwand MITTEL – viele Umbenennungen
-| Datei | Betroffene APIs |
-|---|---|
-| `main/main.c` | `lv_coord_t` (17×), `lv_btn_create` (5×), `lv_obj_clear_flag` (21×), `lv_obj_del` (4×), `lv_scr_act()` (8×), `lv_disp_get_hor_res` (1×), `lv_indev_get_act` (1×), `lv_timer_del` (1×), `lv_msgbox` (9×), `lv_img_*` (9×), `LV_LABEL_LONG_DOT` (1×), `lv_obj_set_style_img_opa` (1×) |
-| `main/gui/womo_connectivity_modal.c` | `lv_btn_create` (6×), `lv_obj_clear_flag` (12×), `LV_BTNMATRIX_CTRL_*` (15×), `lv_obj_del` (1×), `lv_event_get_target` (2×), `lv_scr_act()` (1×), `lv_indev_get_act` (1×), `lv_spinner_create` (1×), `lv_keyboard_set_map` (2×), `LV_LABEL_LONG_DOT` (1×) |
-| `main/gui/womo_settings_modal.c` | `lv_btn_create` (7×), `lv_obj_clear_flag` (5×), `lv_event_get_target` (3×) |
-
-#### 🟡 Aufwand GERING – wenige Stellen
-| Datei | Betroffene APIs |
-|---|---|
-| `main/gui/womo_battery.c/.h` | `lv_coord_t` (4×), `lv_obj_clear_flag` (7×), `lv_obj_del` (1×) |
-| `main/gui/womo_gas_bottle.c/.h` | `lv_coord_t` (9×), `lv_obj_clear_flag` (6×), `lv_obj_del` (1×) |
-| `main/gui/womo_tank.c/.h` | `lv_coord_t` (10×), `lv_obj_clear_flag` (6×), `lv_obj_del` (1×) |
-| `main/gui/womo_weather.c/.h` | `lv_coord_t` (2×), `lv_obj_clear_flag` (3×), `lv_img_*` (4×) |
-| `main/gui/womo_router_leds_modal.c` | `lv_obj_clear_flag` (3×), `lv_obj_del` (1×), `lv_scr_act()` (2×) |
-| `main/gui/womo_theme.c` | `lv_scr_act()` (1×) |
-
-#### 🔵 Fonts – Neugenerierung nötig (v8-Format → v9-Format)
-Alle 6 Custom-Fonts in `main/gui/fonts/` müssen mit dem v9-Font-Converter neu gebaut werden:
-`lv_font_montserrat_12_german.c`, `_14_`, `_16_`, `_20_`, `_24_german.c`, `lv_font_material_16.c`
-
-#### ⚪ Nicht betroffen
-`main/network/`, `main/rs485/`, `main/storage/`, `main/time/`
-
-#### Gesamtzahlen (mechanische Umbenennungen)
-| API alt → neu | Anzahl Stellen | Dateien |
-|---|---|---|
-| `lv_coord_t` → `int32_t` | 45 | 9 |
-| `lv_obj_clear_flag` → `lv_obj_remove_flag` | 63 | 8 |
-| `lv_btn_create` → `lv_button_create` | 18 | 3 |
-| `lv_scr_act()` → `lv_screen_active()` | 14 | 6 |
-| `LV_BTNMATRIX_CTRL_*` → `LV_BUTTONMATRIX_CTRL_*` | 15 | 1 |
-| `lv_obj_del` → `lv_obj_delete` | 9 | 6 |
-| `lv_event_get_target` → `lv_event_get_target_obj` | 6 | 3 |
-| `lv_img_*` → `lv_image_*` | 13 | 2 |
-| `lv_msgbox` (API neu) | 9 | 1 |
-| Sonstige (1× je) | 6 | div. |
+- Branch: `feature/lvgl9-migration`
+- Aktueller LVGL-Stand: **8.4.0** (lokale Kopie in `components/lvgl__lvgl/`)
+- Migrationsziel: LVGL **v9** + `espressif/esp_lvgl_port ^2` als Managed Component
+- Startpunkt: Phase 1 – `lvgl_port.c` Rewrite + `idf_component.yml` umstellen

@@ -641,3 +641,88 @@ esp_err_t womo_wifi_get_known_credentials(const char *ssid,
     pwd_out[pwd_out_sz - 1] = '\0';
     return ESP_OK;
 }
+
+/* ── Async-Verbindung: Zustand für wait_connected() ─────────────────────── */
+static char s_async_ssid[33]     = "";
+static char s_async_password[64] = "";
+static bool s_async_pwd_provided = false;
+
+esp_err_t womo_wifi_connect_async(const char *ssid, const char *password, uint8_t max_retry)
+{
+    if (ssid == NULL) { ESP_LOGE(TAG, "SSID cannot be NULL"); return ESP_ERR_INVALID_ARG; }
+    if (s_wifi_event_group == NULL) { ESP_LOGE(TAG, "WiFi not initialized"); return ESP_ERR_INVALID_STATE; }
+
+    max_retry_count = max_retry;
+    retry_count = 0;
+    auto_reconnect_enabled = true;
+    xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
+
+    strncpy(s_async_ssid, ssid, sizeof(s_async_ssid) - 1);
+    s_async_ssid[sizeof(s_async_ssid) - 1] = '\0';
+    s_async_password[0] = '\0';
+    s_async_pwd_provided = false;
+
+    char pwd_buf[64] = "";
+    bool password_provided = (password != NULL && password[0] != '\0');
+    wifi_known_ensure_loaded();
+    if (!password_provided) {
+        int idx = wifi_known_find(s_known_list, s_known_count, ssid);
+        if (idx >= 0) {
+            strncpy(pwd_buf, s_known_list[idx].pwd, sizeof(pwd_buf) - 1);
+            pwd_buf[sizeof(pwd_buf) - 1] = '\0';
+            if (pwd_buf[0] != '\0') { password = pwd_buf; password_provided = true; }
+        }
+    }
+    if (password_provided && password) {
+        strncpy(s_async_password, password, sizeof(s_async_password) - 1);
+        s_async_password[sizeof(s_async_password) - 1] = '\0';
+        s_async_pwd_provided = true;
+    }
+
+    wifi_config_t wifi_config = {0};
+    strncpy((char*)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
+    if (password_provided && password) {
+        strncpy((char*)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
+    }
+    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    wifi_config.sta.pmf_cfg.capable  = true;
+    wifi_config.sta.pmf_cfg.required = false;
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+
+    esp_err_t start_err = esp_wifi_start();
+    if (start_err != ESP_OK && start_err != ESP_ERR_WIFI_CONN && start_err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "esp_wifi_start failed: %s", esp_err_to_name(start_err));
+        return start_err;
+    }
+    if (start_err == ESP_ERR_WIFI_CONN || start_err == ESP_ERR_INVALID_STATE) {
+        retry_count = 0;
+        esp_wifi_connect();
+        current_status = WOMO_WIFI_CONNECTING;
+    }
+    ESP_LOGI(TAG, "WiFi async connect gestartet (SSID='%s')", ssid);
+    return ESP_OK;
+}
+
+esp_err_t womo_wifi_wait_connected(uint32_t timeout_ms)
+{
+    if (s_wifi_event_group == NULL) { return ESP_ERR_INVALID_STATE; }
+    TickType_t ticks = (timeout_ms == 0) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
+            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdTRUE, pdFALSE, ticks);
+    if (bits & WIFI_CONNECTED_BIT) {
+        ESP_LOGI(TAG, "WiFi CONNECTED to '%s'", s_async_ssid);
+        if (s_async_pwd_provided) {
+            wifi_known_ensure_loaded();
+            wifi_known_promote(s_known_list, &s_known_count, s_async_ssid, s_async_password);
+            wifi_nvs_save_known(s_known_list, s_known_count);
+        }
+        return ESP_OK;
+    } else if (bits & WIFI_FAIL_BIT) {
+        ESP_LOGE(TAG, "WiFi FAIL_BIT – Verbindung fehlgeschlagen");
+        return ESP_FAIL;
+    } else {
+        current_status = WOMO_WIFI_DISCONNECTED;
+        ESP_LOGE(TAG, "WiFi Timeout (%"PRIu32"ms)", timeout_ms);
+        return ESP_ERR_TIMEOUT;
+    }
+}

@@ -1,0 +1,1 @@
+Warnung: Breitenkorrektur eingeschränkt.  Für die aktuellen Designregeln muss sich der Breitenkorrekturwert im Bereich [0.000001 mm; -0.000002 mm] befinden.

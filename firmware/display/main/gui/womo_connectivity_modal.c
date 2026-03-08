@@ -1,4 +1,5 @@
 #include "womo_connectivity_modal.h"
+#include "gui/womo_router_leds_modal.h"
 
 #include "gui/womo_locale.h"
 #include "gui/womo_fonts_german.h"
@@ -102,13 +103,13 @@ static const char * s_keyboard_map_lc[] = {
 };
 
 static const lv_btnmatrix_ctrl_t s_keyboard_ctrl_lc[] = {
-    LV_KEYBOARD_CTRL_BTN_FLAGS | 5,
+    LV_KEYBOARD_CTRL_BUTTON_FLAGS | 5,
     WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4),
     WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4),
     LV_BTNMATRIX_CTRL_CHECKED | 7,
     WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4),
     WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4),
-    LV_KEYBOARD_CTRL_BTN_FLAGS | 6,
+    LV_KEYBOARD_CTRL_BUTTON_FLAGS | 6,
     WOMO_KB_BTN(3), WOMO_KB_BTN(3), WOMO_KB_BTN(3), WOMO_KB_BTN(3), WOMO_KB_BTN(3),
     WOMO_KB_BTN(3), WOMO_KB_BTN(3), WOMO_KB_BTN(3), WOMO_KB_BTN(3), WOMO_KB_BTN(3),
     LV_BTNMATRIX_CTRL_CHECKED | 7,
@@ -117,8 +118,8 @@ static const lv_btnmatrix_ctrl_t s_keyboard_ctrl_lc[] = {
     WOMO_KB_BTN(1), WOMO_KB_BTN(1), WOMO_KB_BTN(1),
     LV_BTNMATRIX_CTRL_CHECKED | WOMO_KB_BTN(1),
     LV_BTNMATRIX_CTRL_CHECKED | WOMO_KB_BTN(1), LV_BTNMATRIX_CTRL_CHECKED | WOMO_KB_BTN(1),
-    LV_KEYBOARD_CTRL_BTN_FLAGS | 2, LV_BTNMATRIX_CTRL_CHECKED | 2, 6,
-    LV_BTNMATRIX_CTRL_CHECKED | 2, LV_KEYBOARD_CTRL_BTN_FLAGS | 2
+    LV_KEYBOARD_CTRL_BUTTON_FLAGS | 2, LV_BTNMATRIX_CTRL_CHECKED | 2, 6,
+    LV_BTNMATRIX_CTRL_CHECKED | 2, LV_KEYBOARD_CTRL_BUTTON_FLAGS | 2
 };
 
 static const char * s_keyboard_map_uc[] = {
@@ -130,13 +131,13 @@ static const char * s_keyboard_map_uc[] = {
 };
 
 static const lv_btnmatrix_ctrl_t s_keyboard_ctrl_uc[] = {
-    LV_KEYBOARD_CTRL_BTN_FLAGS | 5,
+    LV_KEYBOARD_CTRL_BUTTON_FLAGS | 5,
     WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4),
     WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4),
     LV_BTNMATRIX_CTRL_CHECKED | 7,
     WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4),
     WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4), WOMO_KB_BTN(4),
-    LV_KEYBOARD_CTRL_BTN_FLAGS | 6,
+    LV_KEYBOARD_CTRL_BUTTON_FLAGS | 6,
     WOMO_KB_BTN(3), WOMO_KB_BTN(3), WOMO_KB_BTN(3), WOMO_KB_BTN(3), WOMO_KB_BTN(3),
     WOMO_KB_BTN(3), WOMO_KB_BTN(3), WOMO_KB_BTN(3), WOMO_KB_BTN(3), WOMO_KB_BTN(3),
     LV_BTNMATRIX_CTRL_CHECKED | 7,
@@ -145,8 +146,8 @@ static const lv_btnmatrix_ctrl_t s_keyboard_ctrl_uc[] = {
     WOMO_KB_BTN(1), WOMO_KB_BTN(1), WOMO_KB_BTN(1),
     LV_BTNMATRIX_CTRL_CHECKED | WOMO_KB_BTN(1),
     LV_BTNMATRIX_CTRL_CHECKED | WOMO_KB_BTN(1), LV_BTNMATRIX_CTRL_CHECKED | WOMO_KB_BTN(1),
-    LV_KEYBOARD_CTRL_BTN_FLAGS | 2, LV_BTNMATRIX_CTRL_CHECKED | 2, 6,
-    LV_BTNMATRIX_CTRL_CHECKED | 2, LV_KEYBOARD_CTRL_BTN_FLAGS | 2
+    LV_KEYBOARD_CTRL_BUTTON_FLAGS | 2, LV_BTNMATRIX_CTRL_CHECKED | 2, 6,
+    LV_BTNMATRIX_CTRL_CHECKED | 2, LV_KEYBOARD_CTRL_BUTTON_FLAGS | 2
 };
 
 #undef WOMO_KB_BTN
@@ -556,7 +557,8 @@ static void build_modal(lv_obj_t *parent)
     lv_obj_t *scan_lbl = lv_label_create(s_ctx.wifi_scan_btn);
     lv_label_set_text(scan_lbl, womo_locale_get_string(STR_WIFI_SCAN_BUTTON));
 
-    s_ctx.wifi_spinner = lv_spinner_create(s_ctx.wifi_scan_row, 1000, 60);
+    s_ctx.wifi_spinner = lv_spinner_create(s_ctx.wifi_scan_row);
+    lv_spinner_set_anim_params(s_ctx.wifi_spinner, 1000, 60);
     lv_obj_set_size(s_ctx.wifi_spinner, 26, 26);
     lv_obj_add_flag(s_ctx.wifi_spinner, LV_OBJ_FLAG_HIDDEN);
 
@@ -687,6 +689,7 @@ static void destroy_modal(void)
 
     close_scan_popup();
     lvgl_touch_set_fast_mode(false);
+    womo_router_leds_modal_close();  /* Router-LEDs-Modal mitschließen falls offen */
     lv_obj_del_async(s_ctx.overlay);  /* async: kein Blockieren im Event-Callback */
     memset(&s_ctx, 0, sizeof(s_ctx));
 }

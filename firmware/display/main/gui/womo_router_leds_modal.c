@@ -378,3 +378,10 @@ bool womo_router_leds_modal_is_open(void)
 {
     return (s_ctx.router_box != NULL);
 }
+
+void womo_router_leds_modal_close(void)
+{
+    if (s_ctx.router_box) {
+        destroy_modal();
+    }
+}

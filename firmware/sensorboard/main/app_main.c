@@ -21,7 +21,9 @@
 #include "network/wifi/sensor_wifi.h"
 #include "network/wifi/sensor_http.h"
 #include "network/gasbee_ble_client.h"
+#include "hal/deep_sleep.h"
 #include "led_strip.h"
+#include "driver/gpio.h"
 
 static const char *TAG = "sensor_main";
 
@@ -53,8 +55,35 @@ static void rgb_led_off(void)
     }
 }
 
+/**
+ * Display 12V einschalten (GPIO7 HIGH).
+ * Wird direkt beim Wakeup aufgerufen – VOR allem anderen.
+ */
+static void pwr_12v_on_early(void)
+{
+    gpio_config_t cfg = {
+        .pin_bit_mask   = BIT64(SENSOR_DISPLAY_PWR_GPIO),
+        .mode           = GPIO_MODE_OUTPUT,
+        .pull_up_en     = GPIO_PULLUP_DISABLE,
+        .pull_down_en   = GPIO_PULLDOWN_DISABLE,
+        .intr_type      = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&cfg);
+    gpio_set_level(SENSOR_DISPLAY_PWR_GPIO, 1);
+    ESP_LOGI(TAG, "Display 12V EIN (Wakeup, GPIO%d HIGH)", SENSOR_DISPLAY_PWR_GPIO);
+}
+
 void app_main(void)
 {
+    // ── Wakeup-Pin initialisieren (immer zuerst) ──────────────────────
+    deep_sleep_init();
+
+    // ── 12V sofort einschalten wenn durch Touch-Taster geweckt ───────
+    if (deep_sleep_wakeup_by_touch()) {
+        ESP_LOGI(TAG, "Wakeup durch Touch-Taster → 12V EIN");
+        pwr_12v_on_early();
+    }
+
     rgb_led_off();
 
     esp_err_t ret = nvs_flash_init();

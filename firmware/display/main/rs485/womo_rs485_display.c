@@ -7,6 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "esp_heap_caps.h"
 #include "cJSON.h"
 #include <string.h>
 #include <strings.h>
@@ -653,7 +654,8 @@ esp_err_t womo_rs485_display_init(void)
     ESP_LOGI(TAG, "RS485 plain UART mode (auto-DE transistor, post-TX echo flush)");
     
     // Start RX task with large stack (16KB for JSON parsing + LVGL callback + buffers)
-    BaseType_t task_created = xTaskCreate(rs485_rx_task, "rs485_rx", 16384, NULL, 5, NULL);
+    BaseType_t task_created = xTaskCreateWithCaps(rs485_rx_task, "rs485_rx", 16384, NULL, 5, NULL,
+                                                   MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (task_created != pdPASS) {
         ESP_LOGE(TAG, "Failed to create RX task");
         uart_driver_delete(RS485_UART_NUM);
@@ -666,12 +668,13 @@ esp_err_t womo_rs485_display_init(void)
     
     s_initialized = true;
     if (!s_heartbeat_task) {
-        BaseType_t hb_created = xTaskCreate(rs485_heartbeat_task,
+        BaseType_t hb_created = xTaskCreateWithCaps(rs485_heartbeat_task,
                                             "rs485_hb",
                                             4096,
                                             NULL,
                                             4,
-                                            &s_heartbeat_task);
+                                            &s_heartbeat_task,
+                                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (hb_created != pdPASS) {
             ESP_LOGW(TAG, "Failed to create heartbeat task");
         }

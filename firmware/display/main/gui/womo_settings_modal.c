@@ -30,6 +30,8 @@ static lv_obj_t *s_panel    = NULL;
 static womo_thresholds_t s_te;   /* Arbeitskopie beim Öffnen */
 
 /* ── Locale-abhängige Labels im Threshold-Abschnitt ─────── */
+static lv_obj_t *s_title_lbl     = NULL;
+static lv_obj_t *s_close_lbl     = NULL;
 static lv_obj_t *s_thr_title_lbl = NULL;
 static lv_obj_t *s_warn_hdr_lbl  = NULL;
 static lv_obj_t *s_row_lbl[3]    = {NULL, NULL, NULL};
@@ -38,6 +40,8 @@ static bool      s_locale_cb_reg  = false;
 static void settings_locale_cb(void)
 {
     if (!s_panel) return;
+    if (s_title_lbl)     lv_label_set_text(s_title_lbl,     womo_locale_get_string(STR_SETTINGS_TITLE));
+    if (s_close_lbl)     lv_label_set_text(s_close_lbl,     womo_locale_get_string(STR_MODAL_CLOSE_BUTTON));
     lv_label_set_text(s_thr_title_lbl, womo_locale_get_string(STR_THRESH_TITLE));
     lv_label_set_text(s_warn_hdr_lbl,  womo_locale_get_string(STR_THRESH_WARNING));
     lv_label_set_text(s_row_lbl[0],    womo_locale_get_string(STR_THRESH_GAS));
@@ -221,8 +225,15 @@ static void close_modal(void)
 {
     if (s_overlay) {
         lv_obj_del_async(s_overlay);  /* async: kein Blockieren im Event-Callback */
-        s_overlay = NULL;
-        s_panel   = NULL;
+        s_overlay      = NULL;
+        s_panel        = NULL;
+        s_title_lbl    = NULL;
+        s_close_lbl    = NULL;
+        s_thr_title_lbl= NULL;
+        s_warn_hdr_lbl = NULL;
+        s_row_lbl[0]   = NULL;
+        s_row_lbl[1]   = NULL;
+        s_row_lbl[2]   = NULL;
     }
 }
 
@@ -332,10 +343,11 @@ void womo_settings_modal_show(lv_obj_t *parent)
 
     /* Titel */
     lv_obj_t *title = lv_label_create(header);
-    lv_label_set_text(title, "Einstellungen");
+    lv_label_set_text(title, womo_locale_get_string(STR_SETTINGS_TITLE));
     lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
     lv_obj_align(title, LV_ALIGN_LEFT_MID, PAD, 0);
+    s_title_lbl = title;
 
     /* Schliessen-Button rechts in der Kopfzeile */
     lv_obj_t *close_btn = lv_btn_create(header);
@@ -347,10 +359,11 @@ void womo_settings_modal_show(lv_obj_t *parent)
     lv_obj_set_style_pad_all(close_btn, 4, 0);
     lv_obj_add_event_cb(close_btn, close_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *close_lbl = lv_label_create(close_btn);
-    lv_label_set_text(close_lbl, "Schliessen");
+    lv_label_set_text(close_lbl, womo_locale_get_string(STR_MODAL_CLOSE_BUTTON));
     lv_obj_set_style_text_font(close_lbl, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(close_lbl, lv_color_white(), 0);
     lv_obj_center(close_lbl);
+    s_close_lbl = close_lbl;
 
     /* ── Inhaltsbereich ─────────────────────────────────── */
     int content_y = HDR_H + PAD;

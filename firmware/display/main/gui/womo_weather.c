@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include "misc/cache/instance/lv_image_cache.h"  // lv_image_cache_drop (LVGL private)
 #include "storage/womo_sd.h"
 
 static const char *TAG = "weather";
@@ -204,22 +205,29 @@ static void load_weather_icon(womo_weather_t *weather, const char *filename, boo
     }
     
     ESP_LOGI(TAG, "Weather PNG loaded: %ld bytes", file_size);
-    
-    // Create LVGL image descriptor for PNG (same as Ducato method)
-    static lv_img_dsc_t weather_img_dsc;
-    weather_img_dsc.header.always_zero = 0;
-    weather_img_dsc.header.w = 0;  // PNG decoder will determine size
-    weather_img_dsc.header.h = 0;  // PNG decoder will determine size
-    weather_img_dsc.data_size = file_size;
-    weather_img_dsc.header.cf = LV_IMG_CF_RAW_ALPHA;  // Let PNG decoder handle it
-    weather_img_dsc.data = png_data;
-    
+
+    // Alten Cache-Eintrag und Puffer freigeben, bevor der Descriptor überschrieben wird.
+    // WICHTIG: Da img_dsc eine feste Adresse im Struct hat, würde LVGL sonst das gecachte
+    // alte Bild zurückliefern, obwohl der Descriptor-Inhalt bereits geändert wurde.
+    lv_image_cache_drop(&weather->img_dsc);
+    if (weather->png_buf) {
+        heap_caps_free(weather->png_buf);
+        weather->png_buf = NULL;
+    }
+
+    // LVGL image descriptor im Struct befüllen (eindeutige Adresse pro Widget-Instanz)
+    weather->img_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+    weather->img_dsc.header.w = 0;  // PNG decoder will determine size
+    weather->img_dsc.header.h = 0;  // PNG decoder will determine size
+    weather->img_dsc.data_size = file_size;
+    weather->img_dsc.header.cf = LV_COLOR_FORMAT_RAW_ALPHA;  // Let PNG decoder handle it
+    weather->img_dsc.data = png_data;
+    weather->png_buf = png_data;
+
     // Set image source to memory descriptor
-    lv_img_set_src(weather->weather_icon, &weather_img_dsc);
-    
+    lv_img_set_src(weather->weather_icon, &weather->img_dsc);
+
     ESP_LOGI(TAG, "Weather icon PNG set successfully");
-    
-    // Note: png_data will be kept in memory as LVGL references it
 }
 
 womo_weather_t* womo_weather_create(lv_obj_t *parent)
@@ -348,15 +356,22 @@ void womo_weather_delete(womo_weather_t *weather)
     if (!weather) {
         return;
     }
-    
+
+    // Cache-Eintrag und PNG-Puffer freigeben
+    lv_image_cache_drop(&weather->img_dsc);
+    if (weather->png_buf) {
+        heap_caps_free(weather->png_buf);
+        weather->png_buf = NULL;
+    }
+
     // Delete LVGL objects (this will also delete child objects)
     if (weather->container) {
         lv_obj_del(weather->container);
     }
-    
+
     // Free memory
     free(weather);
-    
+
     ESP_LOGI(TAG, "Weather widget deleted");
 }
 
