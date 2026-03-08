@@ -533,7 +533,7 @@
       "idf": "",
       "netlist": "",
       "plot": "/home/hajo/womo-home-esp32/hardware/schematics/Sensorboard/gerber/",
-      "pos_files": "",
+      "pos_files": "/home/hajo/womo-home-esp32/hardware/schematics/Sensorboard/production/",
       "specctra_dsn": "",
       "step": "",
       "svg": "",
