@@ -89,6 +89,13 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_ROUTER_LEDS_POWER_OFF] = "Router: Offline",
         [STR_ROUTER_LEDS_WIFI_DISCONNECTED] = "WiFi: Nicht verbunden",
         [STR_ROUTER_LEDS_LTE_OFFLINE] = "LTE: Offline",
+        [STR_TANK_FRESH]    = "Frisch",
+        [STR_TANK_GREY]     = "Grau",
+        [STR_TANK_FRESH_PLACEHOLDER] = "Frisch:\n--- L\n--.-- L/h\n--.- h",
+        [STR_GAS_FRONT]     = "Vorne",
+        [STR_GAS_REAR]      = "Hinten",
+        [STR_SETTINGS_TITLE]= "Einstellungen",
+        [STR_BATTERY_KFZ]   = "Kfz",
     },
     // English strings
     {
@@ -168,6 +175,13 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_ROUTER_LEDS_POWER_OFF] = "Router: Offline",
         [STR_ROUTER_LEDS_WIFI_DISCONNECTED] = "WiFi: Disconnected",
         [STR_ROUTER_LEDS_LTE_OFFLINE] = "LTE: Offline",
+        [STR_TANK_FRESH]    = "Fresh",
+        [STR_TANK_GREY]     = "Grey",
+        [STR_TANK_FRESH_PLACEHOLDER] = "Fresh:\n--- L\n--.-- L/h\n--.- h",
+        [STR_GAS_FRONT]     = "Front",
+        [STR_GAS_REAR]      = "Rear",
+        [STR_SETTINGS_TITLE]= "Settings",
+        [STR_BATTERY_KFZ]   = "Vehicle",
     }
 };
 

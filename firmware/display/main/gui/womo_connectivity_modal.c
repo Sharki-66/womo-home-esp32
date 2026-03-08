@@ -1,4 +1,5 @@
 #include "womo_connectivity_modal.h"
+#include "gui/womo_router_leds_modal.h"
 
 #include "gui/womo_locale.h"
 #include "gui/womo_fonts_german.h"
@@ -688,6 +689,7 @@ static void destroy_modal(void)
 
     close_scan_popup();
     lvgl_touch_set_fast_mode(false);
+    womo_router_leds_modal_close();  /* Router-LEDs-Modal mitschließen falls offen */
     lv_obj_del_async(s_ctx.overlay);  /* async: kein Blockieren im Event-Callback */
     memset(&s_ctx, 0, sizeof(s_ctx));
 }

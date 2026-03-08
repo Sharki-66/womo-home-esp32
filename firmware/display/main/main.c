@@ -1972,7 +1972,8 @@ gas_done:
         if (changed) {
             char buf[80];
             snprintf(buf, sizeof(buf),
-                     "Frisch:\n%.1f L\n%.1f L/h\n%.1f h",
+                     "%s:\n%.1f L\n%.1f L/h\n%.1f h",
+                     womo_locale_get_string(STR_TANK_FRESH),
                      isnan(liters) ? 0.0f : liters,
                      isnan(rate) ? 0.0f : rate,
                      isnan(rest) ? 0.0f : rest);
@@ -1982,7 +1983,7 @@ gas_done:
             last_tank1_rest_h = rest;
         }
     } else if (tank_info_label) {
-        lv_label_set_text(tank_info_label, "Frisch:\n--- L\n--.-- L/h\n--.- h");
+        lv_label_set_text(tank_info_label, womo_locale_get_string(STR_TANK_FRESH_PLACEHOLDER));
     }
 
     // Battery widgets
@@ -2278,8 +2279,21 @@ static bool theme_mode_is_daylike(womo_theme_mode_t mode)
 // Callback: Sprache geändert → statische UI-Labels aktualisieren.
 static void on_locale_changed(void)
 {
-    if (air_title_label)    lv_label_set_text(air_title_label,    womo_locale_get_string(STR_AIR_OUTDOOR));
-    if (air_title_label_in) lv_label_set_text(air_title_label_in, womo_locale_get_string(STR_AIR_INDOOR));
+    if (air_title_label)          lv_label_set_text(air_title_label,          womo_locale_get_string(STR_AIR_OUTDOOR));
+    if (air_title_label_in)       lv_label_set_text(air_title_label_in,       womo_locale_get_string(STR_AIR_INDOOR));
+    if (fresh_water_caption_label)lv_label_set_text(fresh_water_caption_label, womo_locale_get_string(STR_TANK_FRESH));
+    if (grey_water_caption_label) lv_label_set_text(grey_water_caption_label,  womo_locale_get_string(STR_TANK_GREY));
+    if (gas_label_front)          lv_label_set_text(gas_label_front,           womo_locale_get_string(STR_GAS_FRONT));
+    if (gas_label_rear)           lv_label_set_text(gas_label_rear,            womo_locale_get_string(STR_GAS_REAR));
+    if (battery_kfz_label)        lv_label_set_text(battery_kfz_label,         womo_locale_get_string(STR_BATTERY_KFZ));
+    if (tank_info_label) {
+        const char *cur = lv_label_get_text(tank_info_label);
+        const char *de_ph = "Frisch:\n--- L\n--.-- L/h\n--.- h";
+        const char *en_ph = "Fresh:\n--- L\n--.-- L/h\n--.- h";
+        if (cur && (strcmp(cur, de_ph) == 0 || strcmp(cur, en_ph) == 0)) {
+            lv_label_set_text(tank_info_label, womo_locale_get_string(STR_TANK_FRESH_PLACEHOLDER));
+        }
+    }
 }
 
 // Callback: Grenzwerte geändert → keine UI-Sofortaktualisierung nötig,
@@ -3770,7 +3784,7 @@ void app_main()
     // Innenraum-BME680 (addr 0x76) mittig platzieren, etwas tiefer (ca. +1/4 Displayhöhe)
     lv_coord_t indoor_base_y = 170 + (disp_h / 4) - 35; // 15px höher
     // Block so ausrichten, dass das rechte Ende (rechtsbündig) mittig im Display liegt
-    lv_coord_t indoor_block_x = (disp_w / 2) - 290;
+    lv_coord_t indoor_block_x = (disp_w / 2) - 285; // +5px nach rechts
     air_title_label_in = lv_label_create(screen);
     lv_label_set_text(air_title_label_in, womo_locale_get_string(STR_AIR_INDOOR));
     lv_obj_set_style_text_font(air_title_label_in, &lv_font_montserrat_16, 0);
@@ -3928,7 +3942,7 @@ void app_main()
         womo_tank_set_caption(fresh_water_tank, "");
         womo_tank_set_no_data(fresh_water_tank);
         fresh_water_caption_label = lv_label_create(screen);
-        lv_label_set_text(fresh_water_caption_label, "Frisch");
+        lv_label_set_text(fresh_water_caption_label, womo_locale_get_string(STR_TANK_FRESH));
         lv_obj_set_style_text_font(fresh_water_caption_label, &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_align(fresh_water_caption_label, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_text_color(fresh_water_caption_label, lv_color_black(), 0);
@@ -3943,7 +3957,7 @@ void app_main()
         womo_tank_set_caption(grey_water_tank, "");
         womo_tank_set_no_data(grey_water_tank);
         grey_water_caption_label = lv_label_create(screen);
-        lv_label_set_text(grey_water_caption_label, "Grau");
+        lv_label_set_text(grey_water_caption_label, womo_locale_get_string(STR_TANK_GREY));
         lv_obj_set_style_text_font(grey_water_caption_label, &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_align(grey_water_caption_label, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_text_color(grey_water_caption_label, lv_color_black(), 0);
@@ -3975,7 +3989,7 @@ void app_main()
         lv_obj_add_event_cb(gas_bottle_a->container, gas_bottle_clicked_cb, LV_EVENT_ALL, (void *)(uintptr_t)0);
         if (!gas_label_front) {
             gas_label_front = lv_label_create(screen);
-            lv_label_set_text(gas_label_front, "Vorne");
+            lv_label_set_text(gas_label_front, womo_locale_get_string(STR_GAS_FRONT));
             lv_obj_set_style_text_font(gas_label_front, &lv_font_montserrat_12, 0);
             lv_obj_set_style_text_align(gas_label_front, LV_TEXT_ALIGN_CENTER, 0);
             lv_obj_set_style_text_color(gas_label_front, lv_color_black(), 0);
@@ -3990,7 +4004,7 @@ void app_main()
         lv_obj_add_event_cb(gas_bottle_b->container, gas_bottle_clicked_cb, LV_EVENT_ALL, (void *)(uintptr_t)1);
         if (!gas_label_rear) {
             gas_label_rear = lv_label_create(screen);
-            lv_label_set_text(gas_label_rear, "Hinten");
+            lv_label_set_text(gas_label_rear, womo_locale_get_string(STR_GAS_REAR));
             lv_obj_set_style_text_font(gas_label_rear, &lv_font_montserrat_12, 0);
             lv_obj_set_style_text_align(gas_label_rear, LV_TEXT_ALIGN_CENTER, 0);
             lv_obj_set_style_text_color(gas_label_rear, lv_color_black(), 0);
@@ -4013,7 +4027,7 @@ void app_main()
 
     if (!tank_info_label) {
         tank_info_label = lv_label_create(screen);
-        lv_label_set_text(tank_info_label, "Frisch:\n--- L\n--.-- L/h\n--.- h");
+        lv_label_set_text(tank_info_label, womo_locale_get_string(STR_TANK_FRESH_PLACEHOLDER));
         lv_obj_set_style_text_font(tank_info_label, &lv_font_montserrat_14, 0);
         lv_obj_set_style_text_color(tank_info_label, lv_color_black(), 0);
         lv_obj_set_style_text_align(tank_info_label, LV_TEXT_ALIGN_RIGHT, 0);
@@ -4058,7 +4072,7 @@ void app_main()
         womo_battery_set_pos(main_battery, car_x, car_y);
         if (!battery_kfz_label) {
             battery_kfz_label = lv_label_create(screen);
-            lv_label_set_text(battery_kfz_label, "Kfz");
+            lv_label_set_text(battery_kfz_label, womo_locale_get_string(STR_BATTERY_KFZ));
             lv_obj_set_style_text_font(battery_kfz_label, &lv_font_montserrat_12, 0);
             lv_obj_set_style_text_color(battery_kfz_label, lv_color_black(), 0);
             lv_obj_align_to(battery_kfz_label, main_battery->container, LV_ALIGN_OUT_BOTTOM_MID, 0, -4);

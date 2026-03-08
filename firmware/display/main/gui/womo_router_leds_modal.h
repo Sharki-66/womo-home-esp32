@@ -52,6 +52,11 @@ void womo_router_leds_modal_refresh(const womo_router_leds_snapshot_t *snapshot)
  */
 bool womo_router_leds_modal_is_open(void);
 
+/**
+ * @brief Schließt das Router-LEDs-Modal programmatisch (z.B. wenn Eltern-Modal geschlossen wird).
+ */
+void womo_router_leds_modal_close(void);
+
 #ifdef __cplusplus
 }
 #endif

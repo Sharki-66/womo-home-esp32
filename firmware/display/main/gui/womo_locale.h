@@ -96,6 +96,17 @@ typedef enum {
     STR_ROUTER_LEDS_POWER_OFF,
     STR_ROUTER_LEDS_WIFI_DISCONNECTED,
     STR_ROUTER_LEDS_LTE_OFFLINE,
+    // Tank captions
+    STR_TANK_FRESH,
+    STR_TANK_GREY,
+    STR_TANK_FRESH_PLACEHOLDER,
+    // Gas bottle position labels
+    STR_GAS_FRONT,
+    STR_GAS_REAR,
+    // Settings modal title
+    STR_SETTINGS_TITLE,
+    // Battery label
+    STR_BATTERY_KFZ,
     // Max value
     STR_MAX
 } womo_string_id_t;
