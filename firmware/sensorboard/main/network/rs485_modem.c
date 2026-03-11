@@ -43,6 +43,7 @@
 #define RS485_COMMAND_TIMEOUT_MS      WOMO_RS485_COMMAND_TIMEOUT_MS
 #define RS485_MIN_IDLE_US             150000   // 150 ms TX-Sperre nach RX
 #define RS485_IDLE_WAIT_MAX_US        400000
+#define RS485_MIN_TX_GAP_US            80000   // 80 ms Mindestabstand zwischen zwei TX (Empfangsfenster)
 
 // Heartbeat / Handshake Intervalle
 #define RS485_HEARTBEAT_INTERVAL_MS   SENSOR_RS485_HEARTBEAT_INTERVAL_MS
@@ -71,6 +72,7 @@ static uint32_t s_last_ack_seq      = 0;
 static int64_t  s_last_ack_time_us  = 0;
 static int64_t  s_last_rx_us        = 0;
 static int64_t  s_last_rx_line_us   = 0;
+static int64_t  s_last_tx_us        = 0;   // letzter TX-Abschluss (für Empfangsfenster)
 static int64_t  s_last_rx_heartbeat_us = 0;
 static int64_t  s_last_tx_heartbeat_us = 0;
 static bool     s_display_ready     = false;
@@ -274,12 +276,19 @@ static esp_err_t rs485_send_frame(const char *label, cJSON *payload, bool need_a
         if (wait > RS485_IDLE_WAIT_MAX_US) wait = RS485_IDLE_WAIT_MAX_US;
         vTaskDelay(pdMS_TO_TICKS((uint32_t)(wait / 1000)));
     }
+    // Mindestabstand zum letzten TX einhalten → Empfangsfenster für Display
+    int64_t since_tx = esp_timer_get_time() - s_last_tx_us;
+    if (s_last_tx_us > 0 && since_tx < RS485_MIN_TX_GAP_US && since_tx >= 0) {
+        int64_t wait_tx = RS485_MIN_TX_GAP_US - since_tx;
+        vTaskDelay(pdMS_TO_TICKS((uint32_t)(wait_tx / 1000)));
+    }
 
     // TX-Zeit schätzen (zum Logging)
     uint32_t tx_time_ms = (uint32_t)((pos * 10 * 1000 + (SENSOR_RS485_BAUDRATE - 1)) / SENSOR_RS485_BAUDRATE);
 
     xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
     esp_err_t wr_err = womo_rs485_write((const uint8_t *)buf, pos, pdMS_TO_TICKS(1000));
+    s_last_tx_us = esp_timer_get_time();   // Empfangsfenster ab jetzt
     xSemaphoreGive(s_tx_mutex);
     free(buf);
 
@@ -426,6 +435,7 @@ static void rs485_handle_display_ready(void)
 // ── Power / GPIO ────────────────────────────────────────────────────────
 
 static bool s_radio_on = false;
+static bool s_pwr_on_state = true;   /* Soft-Flag: beim Boot=true, kein GPIO14-Sense nötig */
 static bool s_power_gpio_inited = false;
 static volatile bool s_shutdown_pending = false;
 
@@ -544,7 +554,7 @@ static bool rs485_read_gpio_level(gpio_num_t gpio, bool fallback)
 
 static bool rs485_board_power_on(void)
 {
-    return rs485_read_gpio_level(SENSOR_PWR_12V_SENSE_GPIO, false);
+    return s_pwr_on_state;
 }
 
 static bool rs485_ac_present(void)
@@ -1065,9 +1075,11 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
         gas_state_save_to_nvs();
         ESP_LOGI(TAG, "Gas bottle replace: slot=%d channel=%s -> active_override=%d", slot_idx, chan, override);
     } else if (strcmp(cmd_str, "pwr_12v_on") == 0) {
+        s_pwr_on_state = true;
         cmd_err = rs485_set_12v_power(true);
         s_ctrl_immediate = true;
     } else if (strcmp(cmd_str, "pwr_12v_off") == 0) {
+        s_pwr_on_state = false;
         cmd_err = rs485_set_12v_power(false);
         s_ctrl_immediate = true;
         s_shutdown_pending = true;  // Nach ACK-Versand in Deep Sleep
@@ -1210,7 +1222,6 @@ static void rs485_process_rx_line(const char *line)
     // Nach ACK: Deep Sleep wenn pwr_12v_off empfangen wurde
     if (s_shutdown_pending) {
         s_shutdown_pending = false;
-        vTaskDelay(pdMS_TO_TICKS(300));  // Sicherstellen dass ACK gesendet wurde
         deep_sleep_enter();             // Kehrt nicht zurück
     }
 }

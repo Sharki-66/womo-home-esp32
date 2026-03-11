@@ -61,6 +61,7 @@ static void rgb_led_off(void)
  */
 static void pwr_12v_on_early(void)
 {
+    /* Display 5V einschalten (GPIO7, Mosfet) */
     gpio_config_t cfg = {
         .pin_bit_mask   = BIT64(SENSOR_DISPLAY_PWR_GPIO),
         .mode           = GPIO_MODE_OUTPUT,
@@ -70,17 +71,35 @@ static void pwr_12v_on_early(void)
     };
     gpio_config(&cfg);
     gpio_set_level(SENSOR_DISPLAY_PWR_GPIO, 1);
-    ESP_LOGI(TAG, "Display 12V EIN (Wakeup, GPIO%d HIGH)", SENSOR_DISPLAY_PWR_GPIO);
+    ESP_LOGI(TAG, "Display 5V EIN (Wakeup, GPIO%d HIGH)", SENSOR_DISPLAY_PWR_GPIO);
+
+    /* LBE 12V-Relais einschalten (GPIO11, Puls ≥200 ms).
+     * Ohne diesen Puls bleibt das bistabile Relais im AUS-Zustand,
+     * rs485_board_power_on() liest LOW und das Display bekommt pwr_on=false. */
+    gpio_config_t cfg2 = {
+        .pin_bit_mask   = BIT64(SENSOR_PWR_12V_ON_GPIO) | BIT64(SENSOR_PWR_12V_OFF_GPIO),
+        .mode           = GPIO_MODE_OUTPUT,
+        .pull_up_en     = GPIO_PULLUP_DISABLE,
+        .pull_down_en   = GPIO_PULLDOWN_DISABLE,
+        .intr_type      = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&cfg2);
+    gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  0);
+    gpio_set_level(SENSOR_PWR_12V_OFF_GPIO, 0);
+    gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  1);
+    vTaskDelay(pdMS_TO_TICKS(200));
+    gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  0);
+    ESP_LOGI(TAG, "LBE 12V EIN (Wakeup, GPIO%d pulsed)", SENSOR_PWR_12V_ON_GPIO);
 }
 
 void app_main(void)
 {
-    // ── Wakeup-Pin initialisieren (immer zuerst) ──────────────────────
+    // ── Touch initialisieren (immer zuerst) ──────────────────────────
     deep_sleep_init();
 
-    // ── 12V sofort einschalten wenn durch Touch-Taster geweckt ───────
+    // ── Wakeup-Behandlung (Hardware-Touch-Wakeup) ────────────────────
     if (deep_sleep_wakeup_by_touch()) {
-        ESP_LOGI(TAG, "Wakeup durch Touch-Taster → 12V EIN");
+        ESP_LOGI(TAG, "Touch-Wakeup erkannt → 12V EIN");
         pwr_12v_on_early();
     }
 
@@ -154,6 +173,9 @@ void app_main(void)
     } else {
         ESP_LOGI(TAG, "✓ RS485-Display-Kommunikation aktiv");
     }
+
+    // Touch-Debug-Monitor (nur Log-Ausgabe, keine Aktion)
+    deep_sleep_start_monitor();
 
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));

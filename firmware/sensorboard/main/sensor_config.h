@@ -148,9 +148,12 @@
 
 // ====================================================================================
 // Deep Sleep / Wakeup
-// GPIO6: RTC-fähig, freier Pin, kein Strapping — EXT0-Wakeup durch Touch-Taster
+// GPIO6 = TOUCH_PAD_NUM6: kapazitiver Touch-Eingang, RTC-fähig, kein Strapping
+// Kupferpad/Streifen direkt an GPIO6 — kein externer IC nötig
+// Schwellwert: Touch gilt als ausgelöst wenn Messwert um >20% unter Baseline fällt
 // ====================================================================================
-#define SENSOR_WAKEUP_GPIO 6           // Eingang: Touch-Taster (aktiv HIGH, EXT0 Wakeup)
+#define SENSOR_WAKEUP_GPIO 6                    // Touch-Wakeup: GPIO6 = TOUCH_PAD_NUM6
+#define SENSOR_WAKEUP_TOUCH_THRESHOLD_PCT 10    // Empfindlichkeit: 10% über Baseline = Touch erkannt
 
 // ====================================================================================
 
