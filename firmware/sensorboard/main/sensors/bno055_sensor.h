@@ -28,6 +28,9 @@ bool bno055_imu_get_snapshot(bno055_imu_snapshot_t *out);
 
 esp_err_t bno055_app_start(void);
 
+/** BNO055 in Suspend-Modus versetzen (vor Deep Sleep aufrufen, ~0,2 µA). */
+void bno055_app_sleep(void);
+
 // Aktuellen Pitch/Roll als Nullpunkt setzen (NVS-persistent).
 esp_err_t bno055_app_zero_pitch_roll(void);
 

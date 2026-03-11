@@ -22,6 +22,9 @@ esp_err_t hx711_app_start(void);
 
 esp_err_t hx711_app_get_snapshot(hx711_snapshot_t *out);
 
+/** HX711 in Power-Down versetzen (vor Deep Sleep aufrufen). */
+void hx711_app_sleep(void);
+
 #ifdef __cplusplus
 }
 #endif

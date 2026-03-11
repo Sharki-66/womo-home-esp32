@@ -7,6 +7,12 @@ CONFIG_ESP32S3_DEFAULT_CPU_FREQ_MHZ=240
 CONFIG_USBH_TASK_CORE_ID=1
 
 #
+# Touch Sensor (Legacy-API, Deprecation-Warnung unterdrücken)
+# TODO: Migration auf driver/touch_sens.h (neue API) steht noch aus
+#
+CONFIG_TOUCH_SUPPRESS_DEPRECATE_WARN=y
+
+#
 # Partition Table
 #
 CONFIG_PARTITION_TABLE_CUSTOM=y

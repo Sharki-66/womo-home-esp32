@@ -338,6 +338,24 @@ static void bno055_task(void *arg)
     }
 }
 
+void bno055_app_sleep(void)
+{
+    /* BNO055 PWR_MODE = Suspend (0x02): ~0,2 µA statt 12,3 mA.
+     * Sequenz laut Datenblatt: erst CONFIG_MODE setzen, dann PWR_MODE. */
+    if (s_bno.config.slave_handle == NULL) return;
+
+    /* 1. OPR_MODE → CONFIG_MODE (0x3D = 0x00) */
+    uint8_t cfg_mode[2] = {0x3D, 0x00};
+    i2c_master_transmit(s_bno.config.slave_handle, cfg_mode, sizeof(cfg_mode), 50);
+    vTaskDelay(pdMS_TO_TICKS(25));
+
+    /* 2. PWR_MODE → Suspend (0x3E = 0x02) */
+    uint8_t suspend[2]  = {0x3E, 0x02};
+    i2c_master_transmit(s_bno.config.slave_handle, suspend, sizeof(suspend), 50);
+
+    ESP_LOGD(TAG, "BNO055 Suspend");
+}
+
 esp_err_t bno055_app_start(void)
 {
     if (s_task) {

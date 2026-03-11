@@ -23,6 +23,13 @@ static const uint32_t HX711_WAIT_TIMEOUT_MS = SENSOR_HX711_READY_TIMEOUT_MS;
 static const uint32_t HX711_WAIT_BACKOFF_MS = SENSOR_HX711_READY_BACKOFF_MS;
 static const uint32_t HX711_WAIT_RETRY = SENSOR_HX711_READY_RETRY_COUNT;
 
+void hx711_app_sleep(void)
+{
+    /* SCK HIGH > 60 µs → HX711 Power-Down (~0,1 µA statt 1,5 mA). */
+    hx711_power_down(&s_hx, true);
+    ESP_LOGD(TAG, "HX711 Power-Down");
+}
+
 static float hx711_convert_to_kg(int32_t raw, int32_t offset, float scale)
 {
     return (raw - offset) * scale / 1000.0f;

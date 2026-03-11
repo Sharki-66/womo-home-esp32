@@ -4,6 +4,8 @@
 #include "esp_log.h"
 #include "driver/gpio.h"
 #include "driver/touch_pad.h"
+#include "sensors/hx711_sensor.h"
+#include "sensors/bno055_sensor.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <inttypes.h>
@@ -102,7 +104,24 @@ void deep_sleep_enter(void)
     ESP_LOGI(TAG, "Deep Sleep. Touch-Wakeup auf GPIO%d (HW, Schwelle=+%" PRIu32 ").",
              SENSOR_WAKEUP_GPIO, s_threshold);
 
+    /* ── Peripherie abschalten ─────────────────────────────────────── */
+
+    /* HX711: Power-Down (SCK HIGH > 60 µs → ~0,1 µA statt 1,5 mA) */
+    hx711_app_sleep();
+
+    /* BNO055: Suspend-Modus (~0,2 µA statt 12,3 mA) */
+    bno055_app_sleep();
+
+    /* RS485-Transceiver: DE/RTS LOW halten (kein Empfangsstrom).
+     * gpio_hold_en() friert den Pegel ein, auch wenn UART im Sleep aus ist. */
+    gpio_set_direction(SENSOR_RS485_DE_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(SENSOR_RS485_DE_GPIO, 0);
+    gpio_hold_en(SENSOR_RS485_DE_GPIO);
+
+    /* Display 5V abschalten */
     set_output_gpio(SENSOR_DISPLAY_PWR_GPIO, 0);
+
+    /* ── Sleep einleiten ───────────────────────────────────────────── */
 
     /* RTC_PERIPH eingeschaltet lassen, damit die Touch-FSM im Deep Sleep
      * weiter läuft.  Ohne diese Zeile fährt ESP-IDF die RTC-Peripherie

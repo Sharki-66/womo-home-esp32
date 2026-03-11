@@ -189,3 +189,20 @@
 
 // NTP Zeit-Synchronisation (setzt RTC nach WiFi-Verbindung)
 #define SENSOR_NTP_SERVER           "pool.ntp.org"
+
+// ====================================================================================
+// Log-Level Konfiguration (ESP_LOG_NONE/ERROR/WARN/INFO/DEBUG/VERBOSE)
+// Hier zentral je Modul einstellen, ohne Code zu ändern.
+// ====================================================================================
+#define LOG_LEVEL_SENSOR_MAIN    ESP_LOG_INFO
+#define LOG_LEVEL_DEEP_SLEEP     ESP_LOG_WARN
+#define LOG_LEVEL_RS485          ESP_LOG_WARN
+#define LOG_LEVEL_ANALOG         ESP_LOG_WARN
+#define LOG_LEVEL_BNO055         ESP_LOG_WARN    // bno055_app + BNO055-Komponente
+#define LOG_LEVEL_BME680         ESP_LOG_WARN    // bme680_app + bme680-Komponente
+#define LOG_LEVEL_HX711          ESP_LOG_WARN
+#define LOG_LEVEL_GASBEE_BLE     ESP_LOG_WARN
+#define LOG_LEVEL_I2C_BUS        ESP_LOG_WARN
+#define LOG_LEVEL_PCF8523        ESP_LOG_WARN
+#define LOG_LEVEL_TIME_SYNC      ESP_LOG_WARN
+#define LOG_LEVEL_WIFI           ESP_LOG_WARN    // wifi, mdns, esp_netif, dhcpc

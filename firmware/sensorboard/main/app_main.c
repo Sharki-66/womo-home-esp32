@@ -11,6 +11,7 @@
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "sensor_config.h"
+#include "esp_wifi.h"
 #include "sensors/analog_sensor.h"
 #include "sensors/bno055_sensor.h"
 #include "sensors/bme680_sensor.h"
@@ -26,6 +27,28 @@
 #include "driver/gpio.h"
 
 static const char *TAG = "sensor_main";
+
+/** Log-Level je Modul gemäß sensor_config.h setzen. */
+static void sensor_log_init(void)
+{
+    esp_log_level_set("sensor_main",  LOG_LEVEL_SENSOR_MAIN);
+    esp_log_level_set("deep_sleep",   LOG_LEVEL_DEEP_SLEEP);
+    esp_log_level_set("womo_rs485",   LOG_LEVEL_RS485);
+    esp_log_level_set("rs485_modem",  LOG_LEVEL_RS485);
+    esp_log_level_set("analog",       LOG_LEVEL_ANALOG);
+    esp_log_level_set("bno055_app",   LOG_LEVEL_BNO055);
+    esp_log_level_set("BNO055",       LOG_LEVEL_BNO055);
+    esp_log_level_set("bme680_app",   LOG_LEVEL_BME680);
+    esp_log_level_set("bme680",       LOG_LEVEL_BME680);
+    esp_log_level_set("hx711_app",    LOG_LEVEL_HX711);
+    esp_log_level_set("gasbee_ble",   LOG_LEVEL_GASBEE_BLE);
+    esp_log_level_set("i2c_bus",      LOG_LEVEL_I2C_BUS);
+    esp_log_level_set("pcf8523_app",  LOG_LEVEL_PCF8523);
+    esp_log_level_set("time_sync",    LOG_LEVEL_TIME_SYNC);
+    esp_log_level_set("wifi",         LOG_LEVEL_WIFI);
+    esp_log_level_set("esp_netif_lwip", LOG_LEVEL_WIFI);
+    esp_log_level_set("esp_netif_handlers", LOG_LEVEL_WIFI);
+}
 
 /** Onboard WS2812 RGB-LED (GPIO48) ausschalten. */
 static void rgb_led_off(void)
@@ -94,12 +117,16 @@ static void pwr_12v_on_early(void)
 
 void app_main(void)
 {
+    sensor_log_init();
+
     // ── Touch initialisieren (immer zuerst) ──────────────────────────
     deep_sleep_init();
 
     // ── Wakeup-Behandlung (Hardware-Touch-Wakeup) ────────────────────
     if (deep_sleep_wakeup_by_touch()) {
         ESP_LOGI(TAG, "Touch-Wakeup erkannt → 12V EIN");
+        /* RS485-DE-Hold aufheben (wurde vor Sleep eingefroren) */
+        gpio_hold_dis(SENSOR_RS485_DE_GPIO);
         pwr_12v_on_early();
     }
 
