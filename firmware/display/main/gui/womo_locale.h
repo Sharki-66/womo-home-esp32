@@ -107,6 +107,8 @@ typedef enum {
     STR_SETTINGS_TITLE,
     // Battery label
     STR_BATTERY_KFZ,
+    // Forecast modal
+    STR_FORECAST_TITLE,
     // Max value
     STR_MAX
 } womo_string_id_t;

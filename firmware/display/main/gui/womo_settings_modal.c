@@ -10,6 +10,7 @@
 #include "womo_locale.h"
 #include "womo_thresholds.h"
 #include "womo_fonts_german.h"
+#include "../time/womo_time.h"
 #include "esp_log.h"
 #include <string.h>
 #include <stdio.h>
@@ -37,11 +38,14 @@ static lv_obj_t *s_warn_hdr_lbl  = NULL;
 static lv_obj_t *s_row_lbl[3]    = {NULL, NULL, NULL};
 static bool      s_locale_cb_reg  = false;
 
+/* ── RTC-Batterie-Info-Labels ────────────────────────── */
+static lv_obj_t *s_rtc_info_lbl  = NULL;  // Mehrzeiliger Info-Block
+
 static void settings_locale_cb(void)
 {
     if (!s_panel) return;
     if (s_title_lbl)     lv_label_set_text(s_title_lbl,     womo_locale_get_string(STR_SETTINGS_TITLE));
-    if (s_close_lbl)     lv_label_set_text(s_close_lbl,     womo_locale_get_string(STR_MODAL_CLOSE_BUTTON));
+    /* s_close_lbl zeigt LV_SYMBOL_CLOSE – kein Locale-Update nötig */
     lv_label_set_text(s_thr_title_lbl, womo_locale_get_string(STR_THRESH_TITLE));
     lv_label_set_text(s_warn_hdr_lbl,  womo_locale_get_string(STR_THRESH_WARNING));
     lv_label_set_text(s_row_lbl[0],    womo_locale_get_string(STR_THRESH_GAS));
@@ -351,16 +355,15 @@ void womo_settings_modal_show(lv_obj_t *parent)
 
     /* Schliessen-Button rechts in der Kopfzeile */
     lv_obj_t *close_btn = lv_btn_create(header);
-    lv_obj_set_size(close_btn, 90, 32);
+    lv_obj_set_size(close_btn, 36, 32);
     lv_obj_align(close_btn, LV_ALIGN_RIGHT_MID, -PAD, 0);
-    lv_obj_set_style_bg_color(close_btn, lv_color_hex(0xD32F2F), 0);
-    lv_obj_set_style_radius(close_btn, 6, 0);
+    lv_obj_set_style_bg_color(close_btn, lv_color_hex(0xC62828), 0);
+    lv_obj_set_style_radius(close_btn, 4, 0);
     lv_obj_set_style_border_width(close_btn, 0, 0);
-    lv_obj_set_style_pad_all(close_btn, 4, 0);
+    lv_obj_set_style_pad_all(close_btn, 0, 0);
     lv_obj_add_event_cb(close_btn, close_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *close_lbl = lv_label_create(close_btn);
-    lv_label_set_text(close_lbl, womo_locale_get_string(STR_MODAL_CLOSE_BUTTON));
-    lv_obj_set_style_text_font(close_lbl, &lv_font_montserrat_14, 0);
+    lv_label_set_text(close_lbl, LV_SYMBOL_CLOSE);
     lv_obj_set_style_text_color(close_lbl, lv_color_white(), 0);
     lv_obj_center(close_lbl);
     s_close_lbl = close_lbl;
@@ -414,6 +417,75 @@ void womo_settings_modal_show(lv_obj_t *parent)
     /* Callbacks: gegenseitiger Verweis als user_data */
     lv_obj_add_event_cb(btn_de, lang_de_cb, LV_EVENT_CLICKED, btn_en);
     lv_obj_add_event_cb(btn_en, lang_en_cb, LV_EVENT_CLICKED, btn_de);
+
+    /* ── Abschnitt: Batterie (RTC) – rechts neben Sprache ─ */
+    int rtc_x = 320;  // Rechte Hälfte
+    lv_obj_t *rtc_title = lv_label_create(s_panel);
+    lv_label_set_text(rtc_title, "Batterie (RTC)");
+    lv_obj_set_style_text_font(rtc_title, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(rtc_title, lv_color_hex(0x333333), 0);
+    lv_obj_set_pos(rtc_title, rtc_x, content_y);
+
+    lv_obj_t *rtc_sep = lv_obj_create(s_panel);
+    lv_obj_set_size(rtc_sep, 290, 1);
+    lv_obj_set_pos(rtc_sep, rtc_x, content_y + 24);
+    lv_obj_set_style_bg_color(rtc_sep, lv_color_hex(0xCCCCCC), 0);
+    lv_obj_set_style_border_width(rtc_sep, 0, 0);
+    lv_obj_set_style_radius(rtc_sep, 0, 0);
+    lv_obj_clear_flag(rtc_sep, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    // RTC-Informationen vom Zeitsystem holen
+    const char *src_name;
+    switch (womo_time_get_source()) {
+        case TIME_SOURCE_NTP:          src_name = "NTP (Internet)";  break;
+        case TIME_SOURCE_GPS:          src_name = "GPS (Router)";    break;
+        case TIME_SOURCE_RS485:        src_name = "RS485 Sensor";    break;
+        case TIME_SOURCE_INTERNAL_RTC: src_name = "RTC (intern)";    break;
+        default:                       src_name = "\xE2\x80\x93\xE2\x80\x93\xE2\x80\x93"; break; // –––
+    }
+
+    char sync_buf[48];
+    if (womo_time_is_synced()) {
+        uint32_t secs = womo_time_get_seconds_since_sync();
+        if (secs < 60) {
+            snprintf(sync_buf, sizeof(sync_buf), "vor %lu s", (unsigned long)secs);
+        } else if (secs < 3600) {
+            snprintf(sync_buf, sizeof(sync_buf), "vor %lu min", (unsigned long)(secs / 60));
+        } else {
+            snprintf(sync_buf, sizeof(sync_buf), "vor %lu h", (unsigned long)(secs / 3600));
+        }
+    } else {
+        snprintf(sync_buf, sizeof(sync_buf), "nie");
+    }
+
+    // RTC-Batterie-Status: Muss über externe Funktion geholt werden
+    // (da latest_sensor_data in main.c static ist)
+    extern void womo_get_rtc_battery_status(bool *valid, bool *low, bool *switched);
+    bool rtc_valid = false, rtc_low = false, rtc_sw = false;
+    womo_get_rtc_battery_status(&rtc_valid, &rtc_low, &rtc_sw);
+
+    char rtc_bat_buf[32];
+    if (!rtc_valid) {
+        snprintf(rtc_bat_buf, sizeof(rtc_bat_buf), "unbekannt");
+    } else {
+        snprintf(rtc_bat_buf, sizeof(rtc_bat_buf), "%s", rtc_low ? "SCHWACH !!" : "OK");
+    }
+
+    char rtc_info_text[300];
+    int n = snprintf(rtc_info_text, sizeof(rtc_info_text),
+             "Quelle:       %s\n"
+             "Letzte Sync:  %s\n"
+             "RTC-Batterie: %s",
+             src_name, sync_buf, rtc_bat_buf);
+    if (rtc_valid && rtc_sw && n < (int)sizeof(rtc_info_text) - 2) {
+        strncat(rtc_info_text, "\nRTC war ohne Strom", sizeof(rtc_info_text) - strlen(rtc_info_text) - 1);
+    }
+
+    s_rtc_info_lbl = lv_label_create(s_panel);
+    lv_label_set_text(s_rtc_info_lbl, rtc_info_text);
+    lv_obj_set_style_text_font(s_rtc_info_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_rtc_info_lbl, lv_color_hex(0x444444), 0);
+    lv_obj_set_pos(s_rtc_info_lbl, rtc_x, content_y + 34);
 
     /* ── Abschnitt: Grenzwerte ──────────────────────────── */
     /* Sprach-Buttons enden bei content_y + 34 + 44 = content_y + 78  */

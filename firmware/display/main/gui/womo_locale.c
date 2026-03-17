@@ -96,6 +96,7 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_GAS_REAR]      = "Hinten",
         [STR_SETTINGS_TITLE]= "Einstellungen",
         [STR_BATTERY_KFZ]   = "Kfz",
+        [STR_FORECAST_TITLE]= "5-Tage Vorhersage",
     },
     // English strings
     {
@@ -182,6 +183,7 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_GAS_REAR]      = "Rear",
         [STR_SETTINGS_TITLE]= "Settings",
         [STR_BATTERY_KFZ]   = "Vehicle",
+        [STR_FORECAST_TITLE]= "5-Day Forecast",
     }
 };
 

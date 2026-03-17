@@ -14,6 +14,7 @@ typedef struct {
     uint8_t ap_clients;
     womo_ap_client_info_t ap_client_list[WOMO_AP_CLIENT_MAX];
     /* WLAN (Router STA) */
+    bool wifi_enabled;            /**< WiFi-Radio aktiv (UCI disabled=0) */
     bool wifi_connected;
     womo_wifi_status_t wifi_status;
     uint8_t wifi_signal_percent;

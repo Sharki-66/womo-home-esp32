@@ -226,32 +226,65 @@ static void router_wifi_nvs_load(void)
 {
     nvs_handle_t h;
     esp_err_t err = nvs_open(NVS_NS_RTR_WIFI, NVS_READONLY, &h);
-    if (err != ESP_OK) { s_router_known_count = 0; return; }
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "NVS %s nicht gefunden (noch kein WLAN gespeichert)", NVS_NS_RTR_WIFI);
+        s_router_known_count = 0;
+        return;
+    }
 
     uint8_t cnt = 0;
     err = nvs_get_u8(h, "count", &cnt);
-    if (err != ESP_OK) { s_router_known_count = 0; nvs_close(h); return; }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "NVS count nicht lesbar");
+        s_router_known_count = 0;
+        nvs_close(h);
+        return;
+    }
     if (cnt > ROUTER_KNOWN_MAX) cnt = ROUTER_KNOWN_MAX;
 
     size_t blob_size = cnt * sizeof(router_wifi_entry_t);
     if (cnt > 0) {
         err = nvs_get_blob(h, "list", s_router_known, &blob_size);
-        if (err != ESP_OK) cnt = 0;
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "NVS blob nicht lesbar");
+            cnt = 0;
+        }
     }
     s_router_known_count = cnt;
     nvs_close(h);
+
+    if (cnt > 0) {
+        ESP_LOGI(TAG, "NVS: %d gespeicherte WLAN-Netzwerke geladen:", cnt);
+        for (size_t i = 0; i < cnt; i++) {
+            ESP_LOGI(TAG, "  [%d] '%s' (pwd: %s)",
+                     (int)i, s_router_known[i].ssid,
+                     s_router_known[i].pwd[0] ? "ja" : "nein");
+        }
+    } else {
+        ESP_LOGI(TAG, "NVS: Keine gespeicherten WLAN-Netzwerke");
+    }
 }
 
 static void router_wifi_nvs_save(void)
 {
     if (s_router_known_count == 0) return;
     nvs_handle_t h;
-    if (nvs_open(NVS_NS_RTR_WIFI, NVS_READWRITE, &h) != ESP_OK) return;
+    if (nvs_open(NVS_NS_RTR_WIFI, NVS_READWRITE, &h) != ESP_OK) {
+        ESP_LOGE(TAG, "NVS-Speichern fehlgeschlagen (Open)");
+        return;
+    }
     nvs_set_u8(h, "count", (uint8_t)s_router_known_count);
     nvs_set_blob(h, "list", s_router_known,
                  s_router_known_count * sizeof(router_wifi_entry_t));
     nvs_commit(h);
     nvs_close(h);
+
+    ESP_LOGI(TAG, "NVS: %d WLAN-Netzwerke gespeichert", s_router_known_count);
+    for (size_t i = 0; i < s_router_known_count; i++) {
+        ESP_LOGI(TAG, "  [%d] '%s' (pwd: %d Zeichen)",
+                 (int)i, s_router_known[i].ssid,
+                 (int)strlen(s_router_known[i].pwd));
+    }
 }
 
 static int router_wifi_find(const char *ssid)
@@ -399,16 +432,15 @@ static void build_modal(lv_obj_t *parent)
     lv_obj_center(router_icon);
 
     lv_obj_t *close_btn = lv_btn_create(header);
-    lv_obj_set_size(close_btn, 90, 32);
-    lv_obj_align(close_btn, LV_ALIGN_RIGHT_MID, -16, 0);
-    lv_obj_set_style_bg_color(close_btn, lv_color_hex(0xD32F2F), 0);
-    lv_obj_set_style_radius(close_btn, 6, 0);
+    lv_obj_set_size(close_btn, 36, 32);
+    lv_obj_align(close_btn, LV_ALIGN_RIGHT_MID, -8, 0);
+    lv_obj_set_style_bg_color(close_btn, lv_color_hex(0xC62828), 0);
+    lv_obj_set_style_radius(close_btn, 4, 0);
     lv_obj_set_style_border_width(close_btn, 0, 0);
-    lv_obj_set_style_pad_all(close_btn, 4, 0);
+    lv_obj_set_style_pad_all(close_btn, 0, 0);
     lv_obj_add_event_cb(close_btn, close_button_event_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *close_label = lv_label_create(close_btn);
-    lv_label_set_text(close_label, womo_locale_get_string(STR_MODAL_CLOSE_BUTTON));
-    lv_obj_set_style_text_font(close_label, &lv_font_montserrat_14_german, 0);
+    lv_label_set_text(close_label, LV_SYMBOL_CLOSE);
     lv_obj_set_style_text_color(close_label, lv_color_white(), 0);
     lv_obj_center(close_label);
 
@@ -799,41 +831,15 @@ static void update_wifi_status_label(void)
 
     char buffer[96];
 
-    if (s_latest_snapshot.wifi_status == WOMO_WIFI_CONNECTING) {
-        snprintf(buffer, sizeof(buffer), "%s",
-                 womo_locale_get_string(STR_WIFI_STATUS_CONNECTING));
-        if (s_ctx.wifi_led) set_led_active(s_ctx.wifi_led, false);
-        s_ctx.wifi_switch_internal = true;
-        lv_obj_add_state(s_ctx.wifi_switch, LV_STATE_CHECKED);
-        s_ctx.wifi_switch_internal = false;
-        /* Scan-Zeile sichtbar (Radio wird aktiviert) */
-        if (s_ctx.wifi_scan_row)
-            lv_obj_clear_flag(s_ctx.wifi_scan_row, LV_OBJ_FLAG_HIDDEN);
-    } else if (s_latest_snapshot.wifi_connected) {
-        const char *ssid = s_latest_snapshot.wifi_ssid[0]
-                               ? s_latest_snapshot.wifi_ssid : "WiFi";
-        snprintf(buffer, sizeof(buffer), "%s (%u%%)",
-                 ssid, s_latest_snapshot.wifi_signal_percent);
-        if (s_ctx.wifi_led) set_led_active(s_ctx.wifi_led, true);
-        s_ctx.wifi_switch_internal = true;
-        lv_obj_add_state(s_ctx.wifi_switch, LV_STATE_CHECKED);
-        s_ctx.wifi_switch_internal = false;
-        /* Scan-Zeile sichtbar (WLAN aktiv) */
-        if (s_ctx.wifi_scan_row)
-            lv_obj_clear_flag(s_ctx.wifi_scan_row, LV_OBJ_FLAG_HIDDEN);
-        if (s_ctx.selected_ssid[0] == '\0') {
-            strncpy(s_ctx.selected_ssid, ssid,
-                    sizeof(s_ctx.selected_ssid) - 1);
-            s_ctx.selected_ssid[sizeof(s_ctx.selected_ssid) - 1] = '\0';
-        }
-    } else {
+    /* ── Fall 1: WiFi-Radio deaktiviert (UCI disabled=1) ── */
+    if (!s_latest_snapshot.wifi_enabled) {
         snprintf(buffer, sizeof(buffer), "%s",
                  womo_locale_get_string(STR_WIFI_STATUS_DISCONNECTED));
         if (s_ctx.wifi_led) set_led_active(s_ctx.wifi_led, false);
         s_ctx.wifi_switch_internal = true;
         lv_obj_clear_state(s_ctx.wifi_switch, LV_STATE_CHECKED);
         s_ctx.wifi_switch_internal = false;
-        /* Scan-UI ausblenden (ohne WLAN kein Scan möglich) */
+        /* Scan-UI ausblenden (Radio aus → kein Scan möglich) */
         if (s_ctx.wifi_scan_row)
             lv_obj_add_flag(s_ctx.wifi_scan_row, LV_OBJ_FLAG_HIDDEN);
         if (s_ctx.wifi_scan_status_label)
@@ -845,6 +851,40 @@ static void update_wifi_status_label(void)
         if (s_ctx.wifi_btn_row)
             lv_obj_add_flag(s_ctx.wifi_btn_row, LV_OBJ_FLAG_HIDDEN);
         close_scan_popup();
+        lv_label_set_text(s_ctx.wifi_status_label, buffer);
+        return;
+    }
+
+    /* ── Fall 2-4: WiFi-Radio aktiv (enabled=true) ── */
+    s_ctx.wifi_switch_internal = true;
+    lv_obj_add_state(s_ctx.wifi_switch, LV_STATE_CHECKED);
+    s_ctx.wifi_switch_internal = false;
+    /* Scan-Zeile sichtbar (Radio aktiv → Scan möglich) */
+    if (s_ctx.wifi_scan_row)
+        lv_obj_clear_flag(s_ctx.wifi_scan_row, LV_OBJ_FLAG_HIDDEN);
+
+    if (s_latest_snapshot.wifi_status == WOMO_WIFI_CONNECTING) {
+        /* Fall 2: Verbindungsaufbau läuft */
+        snprintf(buffer, sizeof(buffer), "%s",
+                 womo_locale_get_string(STR_WIFI_STATUS_CONNECTING));
+        if (s_ctx.wifi_led) set_led_active(s_ctx.wifi_led, false);
+    } else if (s_latest_snapshot.wifi_connected) {
+        /* Fall 3: Verbunden */
+        const char *ssid = s_latest_snapshot.wifi_ssid[0]
+                               ? s_latest_snapshot.wifi_ssid : "WiFi";
+        snprintf(buffer, sizeof(buffer), "%s (%u%%)",
+                 ssid, s_latest_snapshot.wifi_signal_percent);
+        if (s_ctx.wifi_led) set_led_active(s_ctx.wifi_led, true);
+        if (s_ctx.selected_ssid[0] == '\0') {
+            strncpy(s_ctx.selected_ssid, ssid,
+                    sizeof(s_ctx.selected_ssid) - 1);
+            s_ctx.selected_ssid[sizeof(s_ctx.selected_ssid) - 1] = '\0';
+        }
+    } else {
+        /* Fall 4: Radio aktiv, aber nicht verbunden */
+        snprintf(buffer, sizeof(buffer), "%s",
+                 womo_locale_get_string(STR_WIFI_STATUS_DISCONNECTED));
+        if (s_ctx.wifi_led) set_led_active(s_ctx.wifi_led, false);
     }
 
     lv_label_set_text(s_ctx.wifi_status_label, buffer);
@@ -1001,6 +1041,7 @@ static void scan_list_btn_event_cb(lv_event_t *e)
         /* Gespeichertes Passwort vorausfüllen */
         int known_idx = router_wifi_find(s_ctx.selected_ssid);
         if (known_idx >= 0 && s_router_known[known_idx].pwd[0]) {
+            ESP_LOGI(TAG, "Passwort für '%s' aus NVS vorausgefüllt", s_ctx.selected_ssid);
             lv_textarea_set_text(s_ctx.wifi_password_area,
                                  s_router_known[known_idx].pwd);
             strncpy(s_ctx.entered_password,
@@ -1008,6 +1049,7 @@ static void scan_list_btn_event_cb(lv_event_t *e)
                     sizeof(s_ctx.entered_password) - 1);
             s_ctx.entered_password[sizeof(s_ctx.entered_password) - 1] = '\0';
         } else {
+            ESP_LOGI(TAG, "Kein gespeichertes Passwort für '%s'", s_ctx.selected_ssid);
             lv_textarea_set_text(s_ctx.wifi_password_area, "");
             s_ctx.entered_password[0] = '\0';
         }
@@ -1101,10 +1143,18 @@ static void wifi_password_event_cb(lv_event_t *e)
         lv_keyboard_set_textarea(s_ctx.wifi_keyboard, s_ctx.wifi_password_area);
         lv_obj_clear_flag(s_ctx.wifi_keyboard, LV_OBJ_FLAG_HIDDEN);
         lvgl_touch_set_fast_mode(true);
+        /* Panel nach oben verschieben damit Passwortfeld sichtbar bleibt */
+        if (s_ctx.panel) {
+            lv_obj_align(s_ctx.panel, LV_ALIGN_TOP_MID, 0, 10);
+        }
     } else if (code == LV_EVENT_DEFOCUSED) {
         lv_keyboard_set_textarea(s_ctx.wifi_keyboard, NULL);
         lv_obj_add_flag(s_ctx.wifi_keyboard, LV_OBJ_FLAG_HIDDEN);
         lvgl_touch_set_fast_mode(false);
+        /* Panel wieder zentrieren */
+        if (s_ctx.panel) {
+            lv_obj_center(s_ctx.panel);
+        }
     } else if (code == LV_EVENT_VALUE_CHANGED) {
         const char *pwd = lv_textarea_get_text(s_ctx.wifi_password_area);
         strncpy(s_ctx.entered_password, pwd, sizeof(s_ctx.entered_password) - 1);
@@ -1118,6 +1168,10 @@ static void wifi_password_event_cb(lv_event_t *e)
         lv_keyboard_set_textarea(s_ctx.wifi_keyboard, NULL);
         lv_obj_add_flag(s_ctx.wifi_keyboard, LV_OBJ_FLAG_HIDDEN);
         lvgl_touch_set_fast_mode(false);
+        /* Panel wieder zentrieren */
+        if (s_ctx.panel) {
+            lv_obj_center(s_ctx.panel);
+        }
 
         // Enter/OK gedrückt: sofort WLAN aktivieren (wie Kippschalter auf ON)
         ensure_selected_ssid_from_snapshot();
@@ -1340,7 +1394,10 @@ static void wifi_connect_task(void *arg)
 
     /* Bei Erfolg Zugangsdaten in NVS speichern */
     if (err == ESP_OK && params.password[0]) {
+        ESP_LOGI(TAG, "Speichere '%s' + Passwort im NVS", params.ssid);
         router_wifi_promote(params.ssid, params.password);
+    } else if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Verbindung zu '%s' fehlgeschlagen → nicht gespeichert", params.ssid);
     }
 
     if (lvgl_port_lock(-1)) {
@@ -1362,12 +1419,25 @@ static void wifi_connect_task(void *arg)
             if (s_ctx.wifi_btn_row)
                 lv_obj_add_flag(s_ctx.wifi_btn_row, LV_OBJ_FLAG_HIDDEN);
         } else {
-            set_wifi_activity_text(womo_locale_get_string(STR_WIFI_STATUS_ERROR));
+            /* Fehler: Status anzeigen und Passwortfeld SICHTBAR lassen */
+            char err_buffer[96];
+            snprintf(err_buffer, sizeof(err_buffer), "Fehler: %s (UCI)", esp_err_to_name(err));
+            set_wifi_activity_text(err_buffer);
+            ESP_LOGE(TAG, "WiFi-Verbindung zu '%s' fehlgeschlagen: %s", 
+                     params.ssid, esp_err_to_name(err));
+            /* Switch ausschalten */
             s_ctx.wifi_switch_internal = true;
             if (s_ctx.wifi_switch) {
                 lv_obj_clear_state(s_ctx.wifi_switch, LV_STATE_CHECKED);
             }
             s_ctx.wifi_switch_internal = false;
+            /* Passwortfeld SICHTBAR lassen zur Korrektur */
+            if (s_ctx.wifi_password_label)
+                lv_obj_clear_flag(s_ctx.wifi_password_label, LV_OBJ_FLAG_HIDDEN);
+            if (s_ctx.wifi_password_area)
+                lv_obj_clear_flag(s_ctx.wifi_password_area, LV_OBJ_FLAG_HIDDEN);
+            if (s_ctx.wifi_btn_row)
+                lv_obj_clear_flag(s_ctx.wifi_btn_row, LV_OBJ_FLAG_HIDDEN);
         }
         lvgl_port_unlock();
     }
@@ -1430,6 +1500,7 @@ static void wifi_disconnect_task(void *arg)
 
 /**
  * Router-WiFi-Scan-Task: Scannt verfügbare Netze über den Router (iwinfo).
+ * Versucht automatisch, mit bekannten Netzwerken zu verbinden.
  */
 static void router_scan_task(void *arg)
 {
@@ -1468,6 +1539,39 @@ static void router_scan_task(void *arg)
         return;
     }
 
+    /* ── Auto-Connect: Bekanntes Netzwerk suchen und verbinden ────── */
+    /* Nur wenn aktuell NICHT verbunden – sonst Nutzer manuell wählen lassen */
+    if (!s_latest_snapshot.wifi_connected) {
+        for (size_t i = 0; i < count; i++) {
+            if (wifi_should_hide_ssid(results[i].ssid)) {
+                continue;
+            }
+            int known_idx = router_wifi_find(results[i].ssid);
+            if (known_idx >= 0 && s_router_known[known_idx].pwd[0]) {
+                /* Bekanntes Netzwerk gefunden → automatisch verbinden */
+                ESP_LOGI(TAG, "Auto-Connect: Bekanntes Netzwerk '%s' gefunden (Signal: %d dBm)",
+                         results[i].ssid, results[i].rssi);
+                
+                strncpy(s_ctx.selected_ssid, results[i].ssid, sizeof(s_ctx.selected_ssid) - 1);
+                s_ctx.selected_ssid[sizeof(s_ctx.selected_ssid) - 1] = '\0';
+                
+                char status_buf[96];
+                snprintf(status_buf, sizeof(status_buf), "→ %s (Auto-Connect)", s_ctx.selected_ssid);
+                set_wifi_activity_text(status_buf);
+                
+                lvgl_port_unlock();
+                
+                /* Verbinden (außerhalb LVGL-Lock) */
+                start_wifi_connect_task(s_router_known[known_idx].ssid,
+                                       s_router_known[known_idx].pwd);
+                s_ctx.wifi_scan_task = NULL;
+                vTaskDelete(NULL);
+                return;
+            }
+        }
+    }
+
+    /* ── Keine Auto-Verbindung → Scan-Ergebnisse anzeigen ────── */
     memset(s_ctx.scan_results, 0, sizeof(s_ctx.scan_results));
 
     size_t stored = 0;

@@ -31,6 +31,7 @@ extern "C" {
 
 /** WiFi-Client-Status des Routers (wifi0 / STA-Interface) */
 typedef struct {
+    bool  enabled;                /**< Radio aktiv (UCI disabled=0) */
     bool  connected;              /**< STA assoziiert?            */
     char  ssid[33];               /**< Aktuell verbundenes SSID   */
     int8_t rssi;                  /**< Signalstärke in dBm        */

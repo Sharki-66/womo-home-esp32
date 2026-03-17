@@ -279,7 +279,12 @@ static esp_err_t rpc_parse_response(const char *json_str,
     if (out_code) *out_code = code;
 
     if (code != 0) {
-        ESP_LOGW(TAG, "ubus Returncode %d", code);
+        const char *ubus_errors[] = {
+            "OK", "INVALID_COMMAND", "INVALID_ARGUMENT", "METHOD_NOT_FOUND",
+            "NOT_FOUND", "NO_DATA", "PERMISSION_DENIED", "TIMEOUT"
+        };
+        const char *err_str = (code >= 0 && code < 8) ? ubus_errors[code] : "UNKNOWN";
+        ESP_LOGW(TAG, "ubus Returncode %d (%s)", code, err_str);
         cJSON_Delete(root);
         return ESP_ERR_INVALID_STATE;
     }
@@ -681,6 +686,82 @@ static void wifi_extract_info(womo_router_wifi_status_t *out, const cJSON *data)
     out->connected = (out->ssid[0] != '\0' && (out->rssi != 0 || out->signal_percent > 0));
 }
 
+/* ── Helper: STA-Interface finden ────────────────────────── */
+
+/**
+ * Lädt den kompletten wireless-UCI-Dump und sucht die Sektion
+ * mit option "mode" == "sta" / "client".
+ * Der gefundene Name wird gecacht (einmalige Suche pro Boot).
+ *
+ * Router-Antwort auf uci get {"config":"wireless"} (ohne section/option):
+ *   {"result":[0,{"values":{"wifi_iface_0":{".type":"wifi-iface","mode":"ap",...},
+ *                           "wifi_iface_1":{".type":"wifi-iface","mode":"sta",...}}}]}
+ *
+ * @return Sektionsname (z.B. "wifi_iface_1") oder NULL wenn nicht gefunden
+ */
+static const char *find_sta_interface(void)
+{
+    static char   s_sta_iface[32] = "";
+    static bool   s_searched      = false;
+
+    if (s_searched && s_sta_iface[0]) {
+        return s_sta_iface;
+    }
+
+    /* Kompletten wireless-Dump holen */
+    cJSON *dump = NULL;
+    esp_err_t err = womo_router_uci_get("wireless", NULL, NULL, (void **)&dump);
+    if (err != ESP_OK || !dump) {
+        ESP_LOGW(TAG, "find_sta_interface: uci get wireless fehlgeschlagen");
+        s_searched = true;
+        return NULL;
+    }
+
+    /* Antwortstruktur: {"values": {"<name>": {".type":"wifi-iface","mode":"sta",...}}} */
+    cJSON *values = cJSON_GetObjectItem(dump, "values");
+    if (!cJSON_IsObject(values)) {
+        ESP_LOGW(TAG, "find_sta_interface: kein 'values'-Objekt in Antwort");
+        cJSON_Delete(dump);
+        s_searched = true;
+        return NULL;
+    }
+
+    cJSON *sec = NULL;
+    cJSON_ArrayForEach(sec, values) {
+        if (!cJSON_IsObject(sec)) continue;
+
+        /* Nur wifi-iface Sektionen prüfen */
+        cJSON *type = cJSON_GetObjectItem(sec, ".type");
+        if (!type || !cJSON_IsString(type)) continue;
+        if (strcmp(type->valuestring, "wifi-iface") != 0) continue;
+
+        /* mode == "sta" oder "Client" (Teltonika) */
+        cJSON *mode = cJSON_GetObjectItem(sec, "mode");
+        if (!mode || !cJSON_IsString(mode)) continue;
+        if (strcasecmp(mode->valuestring, "sta")    != 0 &&
+            strcasecmp(mode->valuestring, "client") != 0) {
+            continue;
+        }
+
+        /* Sektionsname: cJSON Array-Key */
+        const char *name = sec->string;
+        if (!name || name[0] == '\0') continue;
+
+        strncpy(s_sta_iface, name, sizeof(s_sta_iface) - 1);
+        s_sta_iface[sizeof(s_sta_iface) - 1] = '\0';
+        s_searched = true;
+        ESP_LOGI(TAG, "STA-Interface gefunden: wireless.%s (mode=%s)",
+                 s_sta_iface, mode->valuestring);
+        cJSON_Delete(dump);
+        return s_sta_iface;
+    }
+
+    cJSON_Delete(dump);
+    s_searched = true;
+    ESP_LOGW(TAG, "Kein STA-Interface (mode=sta/client) in wireless-Config gefunden");
+    return NULL;
+}
+
 /* ── High-Level: WiFi-Status ─────────────────────────────── */
 
 esp_err_t womo_router_get_wifi_status(womo_router_wifi_status_t *out)
@@ -689,26 +770,30 @@ esp_err_t womo_router_get_wifi_status(womo_router_wifi_status_t *out)
     memset(out, 0, sizeof(*out));
 
     /* ── UCI disabled-Flag vorab prüfen ───────────────────────
-     * Wenn wifi_iface_1 per UCI deaktiviert wurde (disabled=1), melden
+     * Wenn STA-Interface per UCI deaktiviert wurde (disabled=1), melden
      * wir sofort „nicht verbunden".  iwinfo liefert sonst noch Restdaten
      * vom gerade herunterfahrenden Interface, und der Switch springt
      * fälschlicherweise wieder auf „an".
      */
-    {
+    const char *sta_iface = find_sta_interface();
+    if (sta_iface) {
         cJSON *uci_dis = NULL;
-        esp_err_t de = womo_router_uci_get("wireless", "wifi_iface_1",
+        esp_err_t de = womo_router_uci_get("wireless", sta_iface,
                                             "disabled", (void **)&uci_dis);
         if (de == ESP_OK && uci_dis) {
             cJSON *val = cJSON_GetObjectItem(uci_dis, "value");
             if (val && cJSON_IsString(val) && strcmp(val->valuestring, "1") == 0) {
-                ESP_LOGD(TAG, "WiFi STA UCI disabled=1 → connected=false");
+                ESP_LOGD(TAG, "WiFi STA UCI disabled=1 → enabled=false, connected=false");
                 cJSON_Delete(uci_dis);
-                /* out ist bereits memset(0) → connected=false */
+                /* out ist bereits memset(0) → enabled=false, connected=false */
                 return ESP_OK;
             }
             cJSON_Delete(uci_dis);
         }
     }
+
+    /* Ab hier ist das Interface enabled (disabled != 1 oder unbekannt) */
+    out->enabled = true;
 
     /*
      * STA/Client-Interface automatisch finden:
@@ -1121,15 +1206,22 @@ esp_err_t womo_router_wifi_set_sta(const char *ssid,
 {
     if (!ssid) return ESP_ERR_INVALID_ARG;
 
+    ESP_LOGI(TAG, "WiFi STA konfigurieren: SSID='%s', Passwort: %s, Encryption: %s",
+             ssid, password ? "ja" : "nein",
+             (encryption && encryption[0]) ? encryption : "psk2");
+
+    /* STA-Interface automatisch finden */
+    const char *sta_iface = find_sta_interface();
+    if (!sta_iface) {
+        ESP_LOGE(TAG, "WiFi set_sta: Kein STA-Interface im Router-UCI gefunden");
+        return ESP_ERR_NOT_FOUND;
+    }
+
     /*
-     * UCI-Struktur auf RUTX11 (typisch):
-     *   wireless.wifi_iface_0  = Master AP ("Malibu-622")
-     *   wireless.wifi_iface_1  = STA Client (für externes WLAN)
-     *
      * Wir setzen:
-     *   wireless.wifi_iface_1.ssid = <ssid>
-     *   wireless.wifi_iface_1.key  = <password>
-     *   wireless.wifi_iface_1.encryption = <encryption | "psk2">
+     *   wireless.<sta_iface>.ssid = <ssid>
+     *   wireless.<sta_iface>.key  = <password>
+     *   wireless.<sta_iface>.encryption = <encryption | "psk2">
      */
     cJSON *values = cJSON_CreateObject();
     cJSON_AddStringToObject(values, "ssid", ssid);
@@ -1142,20 +1234,24 @@ esp_err_t womo_router_wifi_set_sta(const char *ssid,
      * per enable_sta(false) deaktiviert wurde.  */
     cJSON_AddStringToObject(values, "disabled", "0");
 
-    esp_err_t err = womo_router_uci_set("wireless", "wifi_iface_1", values);
+    esp_err_t err = womo_router_uci_set("wireless", sta_iface, values);
     cJSON_Delete(values);
 
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "UCI set für STA fehlgeschlagen");
+        ESP_LOGE(TAG, "UCI set für STA '%s' fehlgeschlagen: %s", sta_iface, esp_err_to_name(err));
         return err;
     }
+
+    ESP_LOGI(TAG, "UCI set OK, committing...");
 
     /* Commit + Reload */
     err = womo_router_uci_commit("wireless");
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "UCI commit fehlgeschlagen");
+        ESP_LOGE(TAG, "UCI commit fehlgeschlagen: %s", esp_err_to_name(err));
         return err;
     }
+
+    ESP_LOGI(TAG, "UCI commit OK, reloading WiFi...");
 
     /* /sbin/wifi reload für zuverlässigen Wireless-Restart */
     const char *p[] = { "reload" };
@@ -1164,7 +1260,7 @@ esp_err_t womo_router_wifi_set_sta(const char *ssid,
         ESP_LOGW(TAG, "wifi reload Warnung: %s", esp_err_to_name(err));
     }
 
-    ESP_LOGI(TAG, "WiFi STA → SSID='%s'", ssid);
+    ESP_LOGI(TAG, "WiFi STA → SSID='%s' konfiguriert auf '%s'", ssid, sta_iface);
     return ESP_OK;
 }
 
@@ -1172,10 +1268,15 @@ esp_err_t womo_router_wifi_set_sta(const char *ssid,
 
 esp_err_t womo_router_wifi_enable_sta(bool enable)
 {
+    const char *sta_iface = find_sta_interface();
+    if (!sta_iface) {
+        ESP_LOGE(TAG, "WiFi enable_sta: Kein STA-Interface gefunden");
+        return ESP_ERR_NOT_FOUND;
+    }
     cJSON *values = cJSON_CreateObject();
     cJSON_AddStringToObject(values, "disabled", enable ? "0" : "1");
 
-    esp_err_t err = womo_router_uci_set("wireless", "wifi_iface_1", values);
+    esp_err_t err = womo_router_uci_set("wireless", sta_iface, values);
     cJSON_Delete(values);
 
     if (err != ESP_OK) return err;

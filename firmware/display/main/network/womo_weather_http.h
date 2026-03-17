@@ -23,7 +23,35 @@ typedef struct {
     char description[48];       ///< Short text derived from WMO code (ASCII)
 } womo_weather_http_data_t;
 
+#define WOMO_FORECAST_DAYS 5
+
+/**
+ * @brief One day of daily forecast data from Open-Meteo.
+ */
+typedef struct {
+    bool  valid;
+    char  date[11];          ///< ISO date "YYYY-MM-DD"
+    int   weather_code;      ///< WMO code for the day
+    float temp_max_c;        ///< Max temperature in °C
+    float temp_min_c;        ///< Min temperature in °C
+    float precip_mm;         ///< Precipitation sum in mm
+    int   rain_prob_pct;     ///< Max precipitation probability 0–100 %
+    float wind_max_ms;       ///< Max wind speed in m/s
+    float sunshine_h;        ///< Sunshine duration in hours
+} womo_weather_forecast_day_t;
+
+/**
+ * @brief 5-day forecast result.
+ */
+typedef struct {
+    bool valid;
+    womo_weather_forecast_day_t day[WOMO_FORECAST_DAYS];
+} womo_weather_forecast_t;
+
 typedef void (*womo_weather_http_callback_t)(const womo_weather_http_data_t *data, void *user_data);
+
+/** Callback invoked when the 5-day forecast has been updated. */
+typedef void (*womo_weather_forecast_callback_t)(const womo_weather_forecast_t *forecast, void *user_data);
 
 /**
  * @brief Start periodic weather updates from Open-Meteo.
@@ -59,6 +87,15 @@ bool womo_weather_http_is_running(void);
  * @param lon  Longitude in decimal degrees
  */
 void womo_weather_http_set_location(double lat, double lon);
+
+/**
+ * @brief Register a callback for 5-day forecast updates.
+ *
+ * Must be called before or after womo_weather_http_start(); the callback
+ * is invoked from the weather task every time a successful daily fetch
+ * completes.
+ */
+void womo_weather_http_set_forecast_callback(womo_weather_forecast_callback_t cb, void *user_data);
 
 #ifdef __cplusplus
 }
