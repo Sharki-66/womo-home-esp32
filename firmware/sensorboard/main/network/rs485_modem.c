@@ -73,6 +73,7 @@ static int64_t  s_last_ack_time_us  = 0;
 static int64_t  s_last_rx_us        = 0;
 static int64_t  s_last_rx_line_us   = 0;
 static int64_t  s_last_tx_us        = 0;   // letzter TX-Abschluss (für Empfangsfenster)
+static volatile int64_t s_echo_suppress_until_us = 0; // TX-Echo unterdrücken bis zu diesem Zeitpunkt
 static int64_t  s_last_rx_heartbeat_us = 0;
 static int64_t  s_last_tx_heartbeat_us = 0;
 static bool     s_display_ready     = false;
@@ -283,8 +284,12 @@ static esp_err_t rs485_send_frame(const char *label, cJSON *payload, bool need_a
         vTaskDelay(pdMS_TO_TICKS((uint32_t)(wait_tx / 1000)));
     }
 
-    // TX-Zeit schätzen (zum Logging)
+    // TX-Zeit schätzen (zum Logging und Echo-Unterdrückung)
     uint32_t tx_time_ms = (uint32_t)((pos * 10 * 1000 + (SENSOR_RS485_BAUDRATE - 1)) / SENSOR_RS485_BAUDRATE);
+
+    // Echo-Suppressions-Fenster: TX-Dauer + 50 ms Puffer (eigene Bytes kommen auf RX zurück)
+    int64_t tx_dur_us = ((int64_t)pos * 10 * 1000000LL + (int64_t)SENSOR_RS485_BAUDRATE - 1) / (int64_t)SENSOR_RS485_BAUDRATE;
+    s_echo_suppress_until_us = esp_timer_get_time() + tx_dur_us + 50000LL;
 
     xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
     esp_err_t wr_err = womo_rs485_write((const uint8_t *)buf, pos, pdMS_TO_TICKS(1000));
@@ -1245,7 +1250,11 @@ static void rs485_rx_task(void *arg)
                     if (line_pos > 0) {
                         s_rx_line_buffer[line_pos] = '\0';
                         s_last_rx_line_us = s_last_rx_us;
-                        rs485_process_rx_line(s_rx_line_buffer);
+                        if (esp_timer_get_time() >= s_echo_suppress_until_us) {
+                            rs485_process_rx_line(s_rx_line_buffer);
+                        } else {
+                            ESP_LOGD(TAG, "TX-Echo unterdrückt: %s", s_rx_line_buffer);
+                        }
                         line_pos = 0;
                     }
                 } else if ((unsigned char)c >= 0x20 && (unsigned char)c <= 0x7E) {

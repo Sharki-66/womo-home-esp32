@@ -205,19 +205,19 @@ esp_err_t pcf8523_app_start(void)
         bool bsf = (ctrl3 & PCF8523_CTRL3_BSF) != 0;
         ESP_LOGI(TAG, "Control_3 = 0x%02X | BLF=%d (bat low) BSF=%d (power-cut)", ctrl3, blf, bsf);
 
+        if (blf) ESP_LOGW(TAG, "⚠️  RTC Batterie schwach (BLF gesetzt) – wird quittiert");
+        if (bsf) ESP_LOGW(TAG, "⚡ RTC war auf Batterie (BSF – VDD-Ausfall erkannt) – wird quittiert");
+        if (!blf && !bsf) ESP_LOGI(TAG, "✓ RTC Batterie OK, kein Stromausfall erkannt");
+
         // PM-Bits 7-5 auf 000 = Standard Battery Switch-over aktivieren
-        // Interrupt-Bits deaktivieren, BSF/BLF Flags stehen lassen
-        uint8_t new_ctrl3 = ctrl3 & (PCF8523_CTRL3_BSF | PCF8523_CTRL3_BLF);
+        // BSF und BLF löschen (Sticky-Flags müssen explizit quittiert werden)
+        uint8_t new_ctrl3 = ctrl3 & ~(PCF8523_CTRL3_BSF | PCF8523_CTRL3_BLF);
         esp_err_t write_err = pcf8523_write_byte(PCF8523_REG_CONTROL_3, new_ctrl3);
         if (write_err == ESP_OK) {
-            ESP_LOGI(TAG, "Battery Switch-over aktiviert (Standard-Mode)");
+            ESP_LOGI(TAG, "Battery Switch-over aktiviert, Flags quittiert (Standard-Mode)");
         } else {
             ESP_LOGW(TAG, "Control_3 schreiben fehlgeschlagen");
         }
-
-        if (blf) ESP_LOGW(TAG, "⚠️  RTC Batterie schwach (BLF gesetzt)");
-        if (bsf) ESP_LOGW(TAG, "⚡ RTC war auf Batterie (BSF – VDD-Ausfall erkannt)");
-        if (!blf && !bsf) ESP_LOGI(TAG, "✓ RTC Batterie OK, kein Stromausfall erkannt");
     } else {
         ESP_LOGW(TAG, "Control_3 konnte nicht gelesen werden");
     }

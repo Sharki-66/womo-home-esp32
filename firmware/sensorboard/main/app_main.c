@@ -138,6 +138,12 @@ void app_main(void)
         ESP_ERROR_CHECK(nvs_flash_init());
     }
 
+    // Zeit-Synchronisation initialisieren (RTC + I2C-Bus – muss VOR WiFi/HTTP passieren)
+    esp_err_t time_err = time_sync_init();
+    if (time_err != ESP_OK) {
+        ESP_LOGW(TAG, "Zeit-Synchronisation nicht verfügbar: %s", esp_err_to_name(time_err));
+    }
+
     // WiFi-Verbindung zum RUTX11 herstellen (bleibt dauerhaft aktiv)
     esp_err_t wifi_err = sensor_wifi_init();
     if (wifi_err != ESP_OK) {
@@ -148,12 +154,6 @@ void app_main(void)
     esp_err_t http_err = sensor_http_start();
     if (http_err != ESP_OK) {
         ESP_LOGW(TAG, "HTTP-Server nicht gestartet: %s", esp_err_to_name(http_err));
-    }
-
-    // Zeit-Synchronisation initialisieren (liest RTC beim Boot)
-    esp_err_t time_err = time_sync_init();
-    if (time_err != ESP_OK) {
-        ESP_LOGW(TAG, "Zeit-Synchronisation nicht verfügbar: %s", esp_err_to_name(time_err));
     }
 
     // NTP-Client starten: synchronisiert System-Zeit und setzt RTC nach WiFi-Connect
