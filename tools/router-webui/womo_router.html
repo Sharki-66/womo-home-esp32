@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WoMoHome – Router</title>
+<style>
+:root {
+  --bg:      #12151e;
+  --card:    #1c2030;
+  --card2:   #0d1a30;
+  --accent:  #e94560;
+  --green:   #00b894;
+  --red:     #d63031;
+  --yellow:  #fdcb6e;
+  --text:    #e8eaf2;
+  --muted:   #7a7f96;
+  --border:  #2b3050;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;min-height:100vh}
+
+/* ── Button ── */
+button{cursor:pointer;border:none;border-radius:6px;padding:7px 14px;font-size:.84rem;font-weight:600;transition:opacity .15s}
+button:hover{opacity:.8}
+button:disabled{opacity:.38;cursor:default}
+.btn-sec{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+.btn-green{background:var(--green);color:#fff}
+.btn-red{background:var(--red);color:#fff}
+
+/* ── Header ── */
+header{background:var(--card2);padding:11px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--accent)}
+header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
+.hdr-right{display:flex;align-items:center;gap:8px}
+
+/* ── Main grid ── */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:14px}
+@media(max-width:720px){.grid{grid-template-columns:1fr}}
+
+/* ── Card ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.card-title{font-size:.95rem;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.led{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.led-on {background:var(--green);box-shadow:0 0 6px var(--green)}
+.led-off{background:var(--red);  box-shadow:0 0 6px var(--red)}
+.led-unk{background:var(--yellow);box-shadow:0 0 6px var(--yellow)}
+
+/* ── Infozeilen ── */
+.irow{display:flex;justify-content:space-between;font-size:.82rem;padding:3px 0;color:var(--muted)}
+.irow b{color:var(--text);font-weight:500}
+
+/* ── Signal-Bar ── */
+.sig-bar{width:100%;height:5px;background:var(--border);border-radius:3px;margin:5px 0 10px;overflow:hidden}
+.sig-fill{height:100%;border-radius:3px;transition:width .5s}
+
+/* ── Toggle-Switch ── */
+.sw-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.sw-row span{font-size:.84rem}
+.sw{position:relative;display:inline-block;width:44px;height:24px}
+.sw input{opacity:0;width:0;height:0}
+.sw-slider{position:absolute;cursor:pointer;inset:0;background:var(--border);transition:.3s;border-radius:24px}
+.sw-slider:before{position:absolute;content:"";height:18px;width:18px;left:3px;bottom:3px;background:#fff;transition:.3s;border-radius:50%}
+input:checked+.sw-slider{background:var(--green)}
+input:checked+.sw-slider:before{transform:translateX(20px)}
+
+/* ── Client-Liste ── */
+.client-list{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.client-item{font-size:.78rem;padding:5px 8px;background:var(--bg);border-radius:5px;display:flex;justify-content:space-between;align-items:center}
+.client-item .cmac{color:var(--muted);font-size:.72rem}
+
+/* ── Scan-Liste ── */
+.scan-list{margin-top:10px;display:flex;flex-direction:column;gap:5px;max-height:230px;overflow-y:auto}
+.scan-item{padding:8px 10px;background:var(--bg);border:1px solid transparent;border-radius:7px;cursor:pointer;transition:border-color .15s}
+.scan-item:hover,.scan-item.sel{border-color:var(--accent)}
+.scan-item .sssid{font-weight:600;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scan-item .smeta{font-size:.74rem;color:var(--muted);display:flex;gap:8px;margin-top:2px}
+.enc-lbl{color:var(--yellow)}
+
+/* ── Verbinden-Form ── */
+.con-form{display:none;margin-top:10px;padding:10px;background:var(--bg);border-radius:8px}
+.con-form .con-net{font-size:.8rem;margin-bottom:8px;color:var(--muted)}
+.con-form .con-net b{color:var(--text)}
+.con-form input{width:100%;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.84rem;margin-bottom:8px}
+.con-form .con-btns{display:flex;gap:6px}
+.con-form .con-btns button{flex:1}
+
+/* ── Spinner ── */
+.spin{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:rot .7s linear infinite;vertical-align:middle}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ── Statusleiste ── */
+.status-bar{background:var(--card2);padding:5px 18px;font-size:.75rem;color:var(--muted);display:flex;gap:12px;border-top:1px solid var(--border)}
+.status-bar .ts{margin-left:auto}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ MAIN ══════════════════ -->
+<div id="main-screen">
+  <header>
+    <h1>🚐 WoMoHome – Router</h1>
+    <div class="hdr-right">
+      <span id="hdr-spin" style="display:none" class="spin"></span>
+      <button class="btn-sec" onclick="refreshAll()">↺ Aktualisieren</button>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- ── AP / HotSpot ── -->
+    <div class="card">
+      <div class="card-title">
+        <span class="led" id="ap-led"></span>
+        📡 HotSpot
+      </div>
+      <div class="irow"><span>SSID</span><b id="ap-ssid">–</b></div>
+      <div class="irow"><span>Kanal</span><b id="ap-chan">–</b></div>
+      <div class="irow"><span>Clients</span><b id="ap-cnt">–</b></div>
+      <div class="client-list" id="ap-clients"></div>
+    </div>
+
+    <!-- ── WLAN / STA ── -->
+    <div class="card">
+      <div class="card-title">
+        <span class="led" id="wifi-led"></span>
+        📶 WLAN
+      </div>
+      <div class="sw-row">
+        <span>Aktiviert</span>
+        <label class="sw">
+          <input type="checkbox" id="wifi-sw" onchange="toggleWifi(this.checked)">
+          <span class="sw-slider"></span>
+        </label>
+      </div>
+      <div class="irow"><span>SSID</span><b id="wifi-ssid">–</b></div>
+      <div class="irow"><span>Signal</span><b id="wifi-sig">–</b></div>
+      <div class="sig-bar"><div class="sig-fill" id="wifi-bar" style="width:0%"></div></div>
+      <div class="irow"><span>BSSID</span><b id="wifi-bssid">–</b></div>
+      <div class="irow"><span>Kanal</span><b id="wifi-chan">–</b></div>
+      <div style="margin-top:12px">
+        <button class="btn-sec" style="width:100%" id="scan-btn" onclick="startScan()">🔍 WLAN scannen</button>
+      </div>
+      <div class="scan-list" id="scan-list"></div>
+      <div class="con-form" id="con-form">
+        <div class="con-net">Netzwerk: <b id="con-ssid-lbl"></b></div>
+        <input type="password" id="con-pwd" placeholder="Passwort (leer = offenes Netz)"
+               onkeydown="if(event.key==='Enter')doConnect()">
+        <div class="con-btns">
+          <button class="btn-green" onclick="doConnect()">Verbinden</button>
+          <button class="btn-sec"   onclick="cancelConnect()">Abbrechen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── LTE ── -->
+    <div class="card">
+      <div class="card-title">
+        <span class="led" id="lte-led"></span>
+        📱 LTE
+      </div>
+      <div class="sw-row">
+        <span>Aktiviert</span>
+        <label class="sw">
+          <input type="checkbox" id="lte-sw" onchange="toggleLte(this.checked)">
+          <span class="sw-slider"></span>
+        </label>
+      </div>
+      <div class="irow"><span>Anbieter</span><b id="lte-op">–</b></div>
+      <div class="irow"><span>Typ</span><b id="lte-type">–</b></div>
+      <div class="irow"><span>Signal</span><b id="lte-sig">–</b></div>
+      <div class="sig-bar"><div class="sig-fill" id="lte-bar" style="width:0%"></div></div>
+      <div class="irow"><span>SIM</span><b id="lte-sim">–</b></div>
+    </div>
+
+  </div><!-- .grid -->
+
+  <div class="status-bar">
+    <span id="stat-txt">Bereit</span>
+    <span class="ts" id="stat-ts">–</span>
+  </div>
+</div><!-- #main-screen -->
+
+<script>
+'use strict';
+
+/* ── Konfiguration ── */
+const UBUS_URL = '/cgi-bin/ubus';  // CGI-Proxy auf Port 8080 → same-origin, kein CORS
+const NULL_TOK = '00000000000000000000000000000000';  // exakt 32 Zeichen (ubus-Standard)
+const REFRESH_MS = 15000;
+const ROUTER_PASS = __ROUTER_PASS__;  // wird beim Deploy durch deploy.sh als JSON-String eingebettet
+
+/* ── State ── */
+let s_tok = NULL_TOK;
+let s_tokExp = 0;        // ms timestamp
+let s_timer = null;
+let s_reqId = 1;
+let s_staIface = null;   // gecacht
+let s_selSsid = null;
+let s_selOpen = false;
+let s_scanRefreshCnt = 0; // Auto-Clear nach 3 Refreshes
+
+/* ══════════════════════════════════════════════
+   ubus low-level
+══════════════════════════════════════════════ */
+async function ubusRaw(obj, method, args, tok) {
+  const r = await fetch(UBUS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0', id: s_reqId++,
+      method: 'call',
+      params: [tok !== undefined ? tok : s_tok, obj, method, args || {}]
+    })
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function ensureSession() {
+  if (Date.now() < s_tokExp) return;
+  const d = await ubusRaw('session', 'login', { username: 'admin', password: ROUTER_PASS }, NULL_TOK);
+  if (!d.result || d.result[0] !== 0) throw new Error('Login fehlgeschlagen');
+  const tok = d.result[1]?.ubus_rpc_session;
+  if (!tok) throw new Error('Kein Session-Token');
+  s_tok = tok;
+  s_tokExp = Date.now() + 270_000; // 4:30 min (300 s Timeout - 30 s Reserve)
+}
+
+async function ubusCall(obj, method, args) {
+  await ensureSession();
+  let d = await ubusRaw(obj, method, args);
+  if (d.result?.[0] === 6) {
+    // PERMISSION_DENIED → einmalig re-login
+    s_tokExp = 0;
+    await ensureSession();
+    d = await ubusRaw(obj, method, args);
+  }
+  if (!d.result || d.result[0] !== 0) throw new Error(`ubus ${d.result?.[0] ?? '?'}`);
+  return d.result[1] || {};
+}
+
+async function ubusExec(cmd, params) {
+  const r = await ubusCall('file', 'exec', { command: cmd, params: params || [] });
+  return (r.stdout || '').trim();
+}
+
+/* ══════════════════════════════════════════════
+   Refresh
+══════════════════════════════════════════════ */
+async function refreshAll() {
+  // Scan-Liste nach 3 Aktualisierungen automatisch ausblenden
+  if (document.getElementById('scan-list').children.length > 0) {
+    s_scanRefreshCnt++;
+    if (s_scanRefreshCnt >= 3) clearScan();
+  }
+  setStat('Aktualisiere…');
+  document.getElementById('hdr-spin').style.display = 'inline-block';
+  const errs = [];
+  await Promise.all([
+    refreshAp().catch(e => errs.push('AP:' + e.message)),
+    refreshWifi().catch(e => errs.push('WiFi:' + e.message)),
+    refreshLte().catch(e => errs.push('LTE:' + e.message)),
+  ]);
+  document.getElementById('hdr-spin').style.display = 'none';
+  document.getElementById('stat-ts').textContent =
+    'Stand: ' + new Date().toLocaleTimeString('de-DE');
+  setStat(errs.length ? '⚠ ' + errs.join(' | ') : 'OK');
+}
+
+function setStat(t) { document.getElementById('stat-txt').textContent = t; }
+
+function setLed(id, on, unknown) {
+  document.getElementById(id).className =
+    'led ' + (unknown ? 'led-unk' : on ? 'led-on' : 'led-off');
+}
+
+function sigColor(pct) {
+  return pct >= 60 ? 'var(--green)' : pct >= 30 ? 'var(--yellow)' : 'var(--red)';
+}
+
+function h(s) {  // HTML-escape
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ══════════════════════════════════════════════
+   AP / HotSpot
+══════════════════════════════════════════════ */
+async function refreshAp() {
+  // Alles parallel: uci wireless + iwinfo devices + dhcp.leases gleichzeitig
+  const [uciRes, devsRes, leasesRes] = await Promise.allSettled([
+    ubusCall('uci', 'get', { config: 'wireless' }),
+    ubusCall('iwinfo', 'devices', {}),
+    ubusExec('/bin/cat', ['/tmp/dhcp.leases']),
+  ]);
+
+  const vals = uciRes.status === 'fulfilled' ? (uciRes.value?.values || {}) : {};
+  let apEnabled = false, apSsid = '?', apChan = '?', apIface = null;
+  for (const [k, sec] of Object.entries(vals)) {
+    if (sec['.type'] === 'wifi-device' && apChan === '?') apChan = sec.channel || '?';
+    if (sec['.type'] === 'wifi-iface' && sec.mode === 'ap') {
+      apEnabled = sec.disabled !== '1';
+      apSsid = sec.ssid || '?';
+      apIface = sec.ifname || null;
+    }
+  }
+
+  // AP-Interface aus iwinfo devices ermitteln (parallel zu uci schon fertig)
+  if (!apIface && devsRes.status === 'fulfilled') {
+    const devs = devsRes.value?.devices || [];
+    const infoResults = await Promise.allSettled(
+      devs.map(d => ubusCall('iwinfo', 'info', { device: d }))
+    );
+    for (let i = 0; i < devs.length; i++) {
+      if (infoResults[i].status === 'fulfilled' && infoResults[i].value?.mode === 'Master') {
+        apIface = devs[i]; break;
+      }
+    }
+    apIface = apIface || (devs[0] ?? 'wlan0');
+  }
+  apIface = apIface || 'wlan0';
+
+  // DHCP-Leases
+  const hostOf = {};
+  if (leasesRes.status === 'fulfilled') {
+    for (const line of (leasesRes.value || '').split('\n')) {
+      const p = line.trim().split(/\s+/);
+      if (p.length >= 4) hostOf[p[1].toUpperCase()] = p[3] !== '*' ? p[3] : '';
+    }
+  }
+
+  // assoclist
+  let assocList = [];
+  try {
+    assocList = (await ubusCall('iwinfo', 'assoclist', { device: apIface })).results || [];
+  } catch (_) {}
+
+  setLed('ap-led', apEnabled);
+  document.getElementById('ap-ssid').textContent = apSsid;
+  document.getElementById('ap-chan' ).textContent = apChan;
+  document.getElementById('ap-cnt' ).textContent = assocList.length;
+
+  const listEl = document.getElementById('ap-clients');
+  listEl.innerHTML = '';
+  for (const c of assocList) {
+    const mac  = (c.mac || '').toUpperCase();
+    const host = hostOf[mac] || mac;
+    const dbm  = c.signal ?? '?';
+    const div  = document.createElement('div');
+    div.className = 'client-item';
+    div.innerHTML  = `<span>${h(host)}</span><span class="cmac">${dbm} dBm</span>`;
+    listEl.appendChild(div);
+  }
+}
+
+/* ══════════════════════════════════════════════
+   WiFi STA
+══════════════════════════════════════════════ */
+async function resolveStaIface() {
+  if (s_staIface) return s_staIface;
+  const uci  = await ubusCall('uci', 'get', { config: 'wireless' });
+  for (const [k, sec] of Object.entries(uci?.values || {})) {
+    if (sec['.type'] === 'wifi-iface' && sec.mode === 'sta') {
+      s_staIface = k; return k;
+    }
+  }
+  return null;
+}
+
+async function refreshWifi() {
+  // uci wireless + iwinfo devices parallel
+  const [uciRes, devsRes] = await Promise.allSettled([
+    ubusCall('uci', 'get', { config: 'wireless' }),
+    ubusCall('iwinfo', 'devices', {}),
+  ]);
+
+  // STA-Interface + disabled-Flag aus uci (kein extra-Call mehr)
+  let sta = s_staIface, enabled = true;
+  if (uciRes.status === 'fulfilled') {
+    for (const [k, sec] of Object.entries(uciRes.value?.values || {})) {
+      if (sec['.type'] === 'wifi-iface' && sec.mode === 'sta') {
+        if (!s_staIface) s_staIface = k;
+        sta = k;
+        enabled = sec.disabled !== '1';
+        break;
+      }
+    }
+  }
+
+  // iwinfo info für alle Devices parallel
+  let ssid = '', sig = null, bssid = '–', chan = '–', connected = false;
+  if (devsRes.status === 'fulfilled') {
+    const devs = devsRes.value?.devices || [];
+    const infoResults = await Promise.allSettled(
+      devs.map(d => ubusCall('iwinfo', 'info', { device: d }))
+    );
+    for (const r of infoResults) {
+      if (r.status === 'fulfilled' && r.value?.mode === 'Client' && r.value?.ssid) {
+        ssid = r.value.ssid;
+        sig  = r.value.signal ?? null;
+        bssid = r.value.bssid || '–';
+        chan  = r.value.channel || '–';
+        connected = true;
+        break;
+      }
+    }
+  }
+
+  const qPct = sig !== null ? Math.min(100, Math.max(0, Math.round((sig + 100) * 2))) : 0;
+
+  setLed('wifi-led', connected, !enabled);
+  document.getElementById('wifi-sw').checked = enabled;
+  document.getElementById('wifi-ssid').textContent =
+    connected ? ssid : (enabled ? 'Verbindung wird gesucht…' : 'Deaktiviert');
+  document.getElementById('wifi-sig').textContent =
+    sig !== null ? `${qPct}% (${sig} dBm)` : '–';
+  document.getElementById('wifi-bssid').textContent = bssid;
+  document.getElementById('wifi-chan').textContent  = chan;
+  const bar = document.getElementById('wifi-bar');
+  bar.style.width = qPct + '%';
+  bar.style.background = sigColor(qPct);
+}
+
+/* ══════════════════════════════════════════════
+   LTE
+══════════════════════════════════════════════ */
+async function refreshLte() {
+  let enabled = true, op = '–', type = '–', sim = '–', sigPct = 0, sigDbm = null;
+
+  // LTE-Daten via dediziertem CGI (läuft als root, kein ubus file/exec nötig)
+  let lteErr = null;
+  try {
+    const r = await fetch('/cgi-bin/lte');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const text = await r.text();
+    let d;
+    try { d = JSON.parse(text); }
+    catch (_) { throw new Error(`Kein JSON: ${text.substring(0, 80)}`); }
+    enabled   = d.disabled !== '1';
+    op        = d.op   || '–';
+    type      = d.type || '–';
+    sim       = d.sim  || '';
+    // RSRP ist für LTE der relevanteste Wert (-140 dBm = 0 % … -80 dBm = 100 %)
+    const rsrp = d.rsrp && d.rsrp !== '-' ? parseInt(d.rsrp) : null;
+    const rssi = d.rssi && d.rssi !== '-' ? parseInt(d.rssi) : null;
+    const sinr = d.sinr && d.sinr !== '-' ? parseInt(d.sinr) : null;
+    if (rsrp !== null && !isNaN(rsrp)) {
+      sigDbm = rsrp;
+      sigPct = Math.min(100, Math.max(0, Math.round((rsrp + 140) / 60 * 100)));
+    } else if (rssi !== null && !isNaN(rssi)) {
+      sigDbm = rssi;
+      sigPct = Math.min(100, Math.max(0, Math.round((rssi + 113) / 62 * 100)));
+    }
+    sim = sinr !== null && !isNaN(sinr) ? `SINR: ${sinr} dB` : (d.sim || '');
+  } catch (e) { lteErr = e.message; }
+
+  const registered = op !== '–' && op !== 'N/A' && op !== '';
+  setLed('lte-led', registered, !enabled || !!lteErr);
+  document.getElementById('lte-sw').checked = enabled;
+  document.getElementById('lte-op').textContent   = lteErr ? `⚠ ${lteErr}` : op;
+  document.getElementById('lte-type').textContent = type;
+  document.getElementById('lte-sig').textContent  =
+    sigDbm !== null ? `${sigPct}% (${sigDbm} dBm)` : '–';
+  document.getElementById('lte-sim').textContent  = sim;
+  const bar = document.getElementById('lte-bar');
+  bar.style.width = sigPct + '%';
+  bar.style.background = sigColor(sigPct);
+}
+
+/* ══════════════════════════════════════════════
+   WLAN-Scan
+══════════════════════════════════════════════ */
+async function startScan() {
+  const btn    = document.getElementById('scan-btn');
+  const listEl = document.getElementById('scan-list');
+  btn.disabled = true;
+  btn.textContent = '⏳ Scanne…';
+  btn.onclick = startScan;
+  s_scanRefreshCnt = 0;
+  listEl.innerHTML = '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:10px">Scan läuft…</div>';
+  cancelConnect();
+
+  try {
+    // Scan-Interface ermitteln (bevorzuge Client-Interface)
+    let scanDev = null;
+    try {
+      const devs = (await ubusCall('iwinfo', 'devices', {})).devices || [];
+      for (const d of devs) {
+        try {
+          const info = await ubusCall('iwinfo', 'info', { device: d });
+          if (info?.mode === 'Client') { scanDev = d; break; }
+        } catch (_) {}
+      }
+      if (!scanDev && devs.length) scanDev = devs[0];
+    } catch (_) {}
+
+    // Scan mit Fallbacks
+    let results = null;
+    const tryDevs = [...new Set([scanDev, 'wlan0-2', 'wifi0', 'wlan0', 'wlan1'].filter(Boolean))];
+    for (const dev of tryDevs) {
+      try {
+        const r = await ubusCall('iwinfo', 'scan', { device: dev });
+        if (r?.results?.length > 0) { results = r.results; break; }
+      } catch (_) {}
+    }
+
+    listEl.innerHTML = '';
+    if (!results?.length) {
+      listEl.innerHTML = '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:10px">Keine Netzwerke gefunden</div>';
+      btn.disabled = false;
+      btn.textContent = '🔍 WLAN scannen';
+      return;
+    }
+
+    // Sortieren nach Signal stärkstes zuerst, deduplizieren nach SSID
+    results.sort((a, b) => (b.signal ?? -200) - (a.signal ?? -200));
+    const seen = new Set();
+    for (const r of results) {
+      const ssid = r.ssid || '';
+      if (!ssid || seen.has(ssid)) continue;
+      seen.add(ssid);
+
+      const sig    = r.signal ?? 0;
+      const qMax   = r.quality_max || 70;
+      const pct    = r.quality ? Math.round(r.quality / qMax * 100)
+                               : Math.min(100, Math.max(0, Math.round((sig + 100) * 2)));
+      const isOpen = !r.encryption?.enabled;
+      const enc    = isOpen ? 'Offen' : (r.encryption?.description || 'WPA');
+      const ch     = r.channel || '?';
+
+      const item = document.createElement('div');
+      item.className = 'scan-item';
+      item.dataset.ssid = ssid;
+      item.dataset.open = isOpen ? '1' : '0';
+      item.innerHTML = `
+        <div class="sssid">${h(ssid)}</div>
+        <div class="smeta">
+          <span style="color:${sigColor(pct)}">${pct}% (${sig} dBm)</span>
+          <span>Kanal ${ch}</span>
+          <span class="enc-lbl">${h(enc)}</span>
+        </div>`;
+      item.addEventListener('click', () => selectNet(ssid, isOpen, item));
+      listEl.appendChild(item);
+    }
+    // Button zu "Scan schließen" mutieren
+    btn.disabled = false;
+    btn.textContent = '✕ Scan schließen';
+    btn.onclick = clearScan;
+    return;
+  } catch (e) {
+    listEl.innerHTML = `<div style="color:var(--red);font-size:.82rem;padding:8px">Fehler: ${h(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    if (btn.textContent === '⏳ Scanne…') btn.textContent = '🔍 WLAN scannen';
+  }
+}
+
+function selectNet(ssid, isOpen, el) {
+  s_selSsid = ssid;
+  s_selOpen = isOpen;
+  document.querySelectorAll('.scan-item').forEach(i => i.classList.remove('sel'));
+  el.classList.add('sel');
+  document.getElementById('con-ssid-lbl').textContent = ssid;
+  const form = document.getElementById('con-form');
+  form.style.display = 'block';
+  const pwdEl = document.getElementById('con-pwd');
+  pwdEl.placeholder = isOpen ? '(kein Passwort nötig)' : 'Passwort';
+  pwdEl.value = '';
+  if (!isOpen) pwdEl.focus();
+}
+
+function clearScan() {
+  s_scanRefreshCnt = 0;
+  document.getElementById('scan-list').innerHTML = '';
+  cancelConnect();
+  const btn = document.getElementById('scan-btn');
+  btn.textContent = '🔍 WLAN scannen';
+  btn.onclick = startScan;
+}
+
+function cancelConnect() {
+  document.getElementById('con-form').style.display = 'none';
+  s_selSsid = null;
+}
+
+async function doConnect() {
+  if (!s_selSsid) return;
+  const pwd = document.getElementById('con-pwd').value;
+  const sta = await resolveStaIface();
+  if (!sta) { alert('STA-Interface nicht gefunden – Router-Konfiguration prüfen'); return; }
+
+  setStat(`Verbinde mit „${s_selSsid}"…`);
+  try {
+    const values = { ssid: s_selSsid, disabled: '0' };
+    if (!s_selOpen && pwd) {
+      values.encryption = 'psk2';
+      values.key = pwd;
+    } else {
+      values.encryption = 'none';
+    }
+    await ubusCall('uci', 'set', { config: 'wireless', section: sta, values });
+    await ubusCall('uci', 'commit', { config: 'wireless' });
+    await ubusExec('/sbin/wifi', ['reload']);
+    cancelConnect();
+    setStat('Netzwerk wird aufgebaut – bitte warten…');
+    await new Promise(r => setTimeout(r, 4000));
+    await refreshWifi();
+    setStat('OK');
+  } catch (e) {
+    setStat('Fehler: ' + e.message);
+    alert('Verbindung fehlgeschlagen:\n' + e.message);
+    await refreshWifi();
+  }
+}
+
+/* ══════════════════════════════════════════════
+   Toggle WiFi / LTE
+══════════════════════════════════════════════ */
+async function toggleWifi(on) {
+  const sta = await resolveStaIface();
+  if (!sta) return;
+  setStat((on ? 'Aktiviere' : 'Deaktiviere') + ' WLAN…');
+  try {
+    await ubusCall('uci', 'set', { config: 'wireless', section: sta, values: { disabled: on ? '0' : '1' } });
+    await ubusCall('uci', 'commit', { config: 'wireless' });
+    await ubusExec('/sbin/wifi', ['reload']);
+    await new Promise(r => setTimeout(r, 2500));
+    await refreshWifi();
+    setStat('OK');
+  } catch (e) {
+    setStat('Fehler: ' + e.message);
+    await refreshWifi();  // Switch-State zurücksetzen
+  }
+}
+
+async function toggleLte(on) {
+  setStat((on ? 'Aktiviere' : 'Deaktiviere') + ' LTE…');
+  try {
+    await ubusCall('uci', 'set', { config: 'network', section: 'mob1s1a1', values: { disabled: on ? '0' : '1' } });
+    await ubusCall('uci', 'commit', { config: 'network' });
+    await ubusExec('/sbin/reload_config', []);
+    await new Promise(r => setTimeout(r, 2500));
+    await refreshLte();
+    setStat('OK');
+  } catch (e) {
+    setStat('Fehler: ' + e.message);
+    await refreshLte();  // Switch-State zurücksetzen
+  }
+}
+
+/* ══════════════════════════════════════════════
+   Auto-Start beim Seitenaufruf
+══════════════════════════════════════════════ */
+(async () => {
+  try {
+    await refreshAll();
+    s_timer = setInterval(refreshAll, REFRESH_MS);
+  } catch (e) {
+    document.getElementById('stat-txt').textContent = '⚠ ' + e.message;
+  }
+})();
+</script>
+</body>
+</html>
