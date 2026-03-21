@@ -18,15 +18,15 @@ echo "  Router : ${ROUTER_IP}"
 echo "═══════════════════════════════════════════════"
 echo ""
 
-echo "[1/4] SSH verbinden…"
+echo "[1/5] SSH verbinden…"
 $SSH 'echo ok' > /dev/null
 echo "  → verbunden"
 
-echo "[2/4] Datei entfernen…"
+echo "[2/5] Datei entfernen…"
 $SSH 'rm -rf /etc/womo'
 echo "  → /etc/womo gelöscht"
 
-echo "[3/4] uhttpd-Instanz 'womo' entfernen…"
+echo "[3/5] uhttpd-Instanz 'womo' entfernen…"
 $SSH '
   if uci show uhttpd.womo > /dev/null 2>&1; then
     uci delete uhttpd.womo
@@ -38,7 +38,18 @@ $SSH '
   fi
 '
 
-echo "[4/4] Firewall-Regel 'womo_webui' entfernen…"
+echo "[3/5] Cron-Einträge entfernen…"
+$SSH '
+  if crontab -l 2>/dev/null | grep -q "/etc/womo/poll"; then
+    crontab -l 2>/dev/null | grep -v "/etc/womo/poll" | crontab -
+    /etc/init.d/cron restart 2>/dev/null || true
+    echo "  → Cron-Einträge entfernt"
+  else
+    echo "  → Keine Cron-Einträge gefunden"
+  fi
+'
+
+echo "[4/5] Firewall-Regel 'womo_webui' entfernen…"
 $SSH '
   IDX=$(uci show firewall 2>/dev/null | grep -n "womo_webui" | head -1 | cut -d: -f1)
   if [ -n "$IDX" ]; then
@@ -55,6 +66,7 @@ $SSH '
   fi
 '
 
+echo "[5/5] Abschluss…"
 echo ""
 echo "══════════════════════════════════════════════════════"
 echo "  ✓ Alles rückgängig gemacht."

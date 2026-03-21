@@ -87,8 +87,9 @@ fi
 
 # 3. HTML + CGI-Proxy nach /etc/womo/ schreiben (persistent über Overlay)
 echo "[3/5] Datei nach /etc/womo/ schreiben…"
-$SSH 'mkdir -p /etc/womo/cgi-bin'
+$SSH 'mkdir -p /etc/womo/cgi-bin && chmod 755 /etc/womo /etc/womo/cgi-bin'
 $SSH 'cat > /etc/womo/index.html' < "${TMP}"
+$SSH 'chmod 644 /etc/womo/index.html'
 echo "  → /etc/womo/index.html"
 
 # CGI-Proxy: leitet POST-Requests an den lokalen ubus-HTTP-Daemon (Port 80) weiter
@@ -131,6 +132,167 @@ printf '{"op":"%s","type":"%s","rssi":"%s","rsrp":"%s","sinr":"%s","disabled":"%
   "$OP" "$TYPE" "${RSSI:--}" "${RSRP:--}" "${SINR:--}" "${DISABLED:-0}"
 CGISCRIPT
 echo "  → /etc/womo/cgi-bin/lte (gsmctl-Wrapper)"
+
+# CGI-Clients: iwinfo assoclist + dhcp.leases → JSON (läuft als root, kein ubus file/exec nötig)
+$SSH 'cat > /etc/womo/cgi-bin/clients && chmod +x /etc/womo/cgi-bin/clients' << 'CGISCRIPT'
+#!/bin/sh
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH
+printf "Content-Type: application/json\r\n\r\n"
+
+# AP-Interface: erstes Interface im Master-Mode
+AP_IFACE=""
+for d in wlan0 wlan0-1 wlan1 wlan1-1; do
+  iwinfo "$d" info 2>/dev/null | grep -qi 'mode.*master' && AP_IFACE="$d" && break
+done
+[ -z "$AP_IFACE" ] && printf '{"iface":"","clients":[]}\n' && exit 0
+
+# assoclist in Tempfile (awk kann keine Shell-Variablen mit Newlines via -v)
+ASSOC_TMP=$(mktemp)
+iwinfo "$AP_IFACE" assoclist 2>/dev/null > "$ASSOC_TMP"
+
+# awk: liest assoclist-File + /tmp/dhcp.leases direkt (kein -v Newline-Problem)
+awk -v iface="$AP_IFACE" '
+FNR==NR {
+  # Erste Datei: dhcp.leases einlesen (MAC→Hostname)
+  if (NF>=4 && $4!="*" && $4!="") hof[toupper($2)]=$4
+  next
+}
+# Zweite Datei: assoclist parsen
+# Format: "1E:9E:87:19:D3:01  -61 dBm / -107 dBm ..."
+# $1 = MAC, $2 = Signal-dBm
+/^[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:/ {
+  mac=$1; sig=$2
+  umac=toupper(mac)
+  host = (umac in hof) ? hof[umac] : mac
+  gsub(/"/, "", host)
+  entries[++n] = sprintf("{\"mac\":\"%s\",\"host\":\"%s\",\"signal\":%s}", mac, host, sig)
+}
+END {
+  printf "{\"iface\":\"%s\",\"clients\":[", iface
+  for(i=1;i<=n;i++) { if(i>1) printf ","; printf "%s", entries[i] }
+  print "]}"
+}
+' /tmp/dhcp.leases "$ASSOC_TMP"
+rm -f "$ASSOC_TMP"
+CGISCRIPT
+echo "  → /etc/womo/cgi-bin/clients (assoclist-Wrapper)"
+
+# poll.sh: sammelt alle Daten mit nativen CLI-Tools → /etc/womo/status.json
+$SSH 'cat > /etc/womo/poll.sh && chmod +x /etc/womo/poll.sh' << 'POLLSCRIPT'
+#!/bin/sh
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH
+TMP=$(mktemp /tmp/womo_poll_XXXXXX)
+trap 'rm -f "$TMP"' EXIT
+
+# ── AP ─────────────────────────────────────────────────
+AP_SSID=$(uci get wireless.@wifi-iface[0].ssid 2>/dev/null | tr -d '"\n\r\\')
+AP_CHAN=$(uci get wireless.radio0.channel 2>/dev/null | tr -d '\n\r')
+AP_DIS=$(uci get wireless.@wifi-iface[0].disabled 2>/dev/null | tr -d '\n\r')
+AP_EN=$([ "$AP_DIS" = "1" ] && echo 0 || echo 1)
+AP_IFACE=$(iwinfo 2>/dev/null | awk 'NR==1{print $1}')
+for d in $(iwinfo 2>/dev/null | awk 'NR==1{print $1}'); do
+  if iwinfo "$d" info 2>/dev/null | grep -qi 'mode.*master'; then AP_IFACE="$d"; break; fi
+done
+AP_IFACE=${AP_IFACE:-wlan0}
+
+AP_CNT=$(iwinfo "$AP_IFACE" assoclist 2>/dev/null | grep -cE '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' || echo 0)
+
+# ── WLAN STA ───────────────────────────────────────────
+STA_DIS=0
+for i in 0 1 2 3; do
+  MODE=$(uci get wireless.@wifi-iface[$i].mode 2>/dev/null)
+  if [ "$MODE" = "sta" ]; then
+    STA_DIS=$(uci get wireless.@wifi-iface[$i].disabled 2>/dev/null | tr -d '\n\r')
+    break
+  fi
+done
+STA_EN=$([ "$STA_DIS" = "1" ] && echo 0 || echo 1)
+STA_SSID=""; STA_SIG=""; STA_BSSID=""; STA_CHAN=""; STA_CON=0
+for d in $(iwinfo 2>/dev/null | awk '{print $1}'); do
+  INFO=$(iwinfo "$d" info 2>/dev/null)
+  if echo "$INFO" | grep -qi 'mode.*client'; then
+    STA_SSID=$(echo "$INFO" | awk -F'"' '/ESSID/{if(NF>=3){print $2}else{print ""}; exit}')
+    STA_SIG=$(echo "$INFO" | grep 'Signal' | grep -oE '[-0-9]+ dBm' | grep -oE '[-0-9]+' | head -1)
+    STA_BSSID=$(echo "$INFO" | grep 'Access Point' | grep -oE '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' | head -1)
+    STA_CHAN=$(echo "$INFO" | grep 'Channel' | grep -oE '[0-9]+' | head -1)
+    [ -n "$STA_SSID" ] && STA_CON=1
+    break
+  fi
+done
+
+# ── GPS ───────────────────────────────────────────────
+GPS_STAT=$(gpsctl -s  2>/dev/null | head -1 | tr -d '\n\r')
+GPS_LAT=$(gpsctl -i  2>/dev/null | head -1 | tr -d '\n\r')
+GPS_LON=$(gpsctl -x  2>/dev/null | head -1 | tr -d '\n\r')
+GPS_ALT=$(gpsctl -a  2>/dev/null | head -1 | tr -d '\n\r')
+GPS_SPD=$(gpsctl -v  2>/dev/null | head -1 | tr -d '\n\r')
+GPS_SAT=$(gpsctl -p  2>/dev/null | head -1 | tr -d '\n\r')
+# Fix ableiten: status-Flag oder Koordinaten als Fallback
+GPS_FIX="none"
+if [ "$GPS_STAT" = "0" ]; then
+  GPS_FIX="fix"
+elif [ -n "$GPS_LAT" ] && [ "$GPS_LAT" != "0" ] && [ "$GPS_LAT" != "0.000000" ] \
+   && [ -n "$GPS_LON" ] && [ "$GPS_LON" != "0" ] && [ "$GPS_LON" != "0.000000" ]; then
+  GPS_FIX="fix"
+fi
+
+# ── LTE ────────────────────────────────────────────────
+LTE_OP=$(gsmctl -o 2>/dev/null | tr -d '\n\r')
+LTE_TYPE=$(gsmctl -t 2>/dev/null | tr -d '\n\r')
+LTE_DIS=$(uci get network.mob1s1a1.disabled 2>/dev/null | tr -d '\n\r')
+QOUT=$(gsmctl -q 2>/dev/null)
+LTE_RSSI=$(echo "$QOUT" | awk '/RSSI:/{match($0,/-?[0-9]+/); print substr($0,RSTART,RLENGTH); exit}')
+LTE_RSRP=$(echo "$QOUT" | awk '/RSRP:/{match($0,/-?[0-9]+/); print substr($0,RSTART,RLENGTH); exit}')
+LTE_SINR=$(echo "$QOUT" | awk '/SINR:/{match($0,/-?[0-9]+/); print substr($0,RSTART,RLENGTH); exit}')
+
+# JSON-safe String-Escaping: backslash und quote
+json_str() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+# ── JSON atomar schreiben ──────────────────────────────
+TS=$(date +%s)
+AP_SSID_J=$(json_str "$AP_SSID")
+STA_SSID_J=$(json_str "$STA_SSID")
+LTE_OP_J=$(json_str "$LTE_OP")
+LTE_TYPE_J=$(json_str "$LTE_TYPE")
+GPS_FIX_J=$(json_str "$GPS_FIX")
+printf '{"ts":%s,"ap":{"enabled":%s,"ssid":"%s","chan":"%s","cnt":%s},"wifi":{"enabled":%s,"ssid":"%s","signal":"%s","bssid":"%s","chan":"%s","connected":%s},"lte":{"op":"%s","type":"%s","rssi":"%s","rsrp":"%s","sinr":"%s","disabled":"%s"},"gps":{"fix":"%s","lat":"%s","lon":"%s","alt":"%s","speed":"%s","sats":"%s"}}\n' \
+  "$TS" "$AP_EN" "$AP_SSID_J" "$AP_CHAN" "${AP_CNT:-0}" \
+  "$STA_EN" "$STA_SSID_J" "${STA_SIG:-}" "${STA_BSSID:-}" "${STA_CHAN:-}" "$STA_CON" \
+  "$LTE_OP_J" "$LTE_TYPE_J" "${LTE_RSSI:--}" "${LTE_RSRP:--}" "${LTE_SINR:--}" "${LTE_DIS:-0}" \
+  "$GPS_FIX_J" "${GPS_LAT:-}" "${GPS_LON:-}" "${GPS_ALT:-}" "${GPS_SPD:-}" "${GPS_SAT:-}" \
+  > "$TMP" && mv "$TMP" /etc/womo/status.json && chmod 644 /etc/womo/status.json
+POLLSCRIPT
+echo "  → /etc/womo/poll.sh"
+
+# cgi-bin/poll: führt poll.sh aus und liefert status.json zurück
+$SSH 'cat > /etc/womo/cgi-bin/poll && chmod +x /etc/womo/cgi-bin/poll' << 'CGISCRIPT'
+#!/bin/sh
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH
+/etc/womo/poll.sh > /dev/null 2>&1
+printf "Content-Type: application/json\r\n\r\n"
+cat /etc/womo/status.json 2>/dev/null || printf '{"error":"not ready"}\n'
+CGISCRIPT
+echo "  → /etc/womo/cgi-bin/poll"
+
+# Cron: poll.sh alle 15 s (4× pro Minute)
+$SSH '
+  crontab -l 2>/dev/null | grep -v "/etc/womo/poll" > /tmp/womo_cron || true
+  echo "* * * * * /etc/womo/poll.sh" >> /tmp/womo_cron
+  echo "* * * * * sleep 15; /etc/womo/poll.sh" >> /tmp/womo_cron
+  echo "* * * * * sleep 30; /etc/womo/poll.sh" >> /tmp/womo_cron
+  echo "* * * * * sleep 45; /etc/womo/poll.sh" >> /tmp/womo_cron
+  crontab /tmp/womo_cron
+  /etc/init.d/cron restart 2>/dev/null || true
+  rm -f /tmp/womo_cron
+'
+echo "  → Cron: poll.sh alle 15 s"
+
+# Erstes poll.sh sofort ausführen damit status.json existiert
+$SSH '/etc/womo/poll.sh'
+echo "  → Erster Poll ausgeführt"
 
 # 3. Zweite uhttpd-Instanz auf Port 8080 konfigurieren
 echo "[4/5] uhttpd-Instanz auf Port ${WOMO_PORT} einrichten…"

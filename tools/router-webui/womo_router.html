@@ -12,6 +12,7 @@
   --accent:  #e94560;
   --green:   #00b894;
   --red:     #d63031;
+  --blue:    #0984e3;
   --yellow:  #fdcb6e;
   --text:    #e8eaf2;
   --muted:   #7a7f96;
@@ -34,8 +35,7 @@ header h1{font-size:1.1rem;font-weight:700;letter-spacing:.5px}
 .hdr-right{display:flex;align-items:center;gap:8px}
 
 /* ── Main grid ── */
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:14px}
-@media(max-width:720px){.grid{grid-template-columns:1fr}}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;padding:14px}
 
 /* ── Card ── */
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
@@ -172,6 +172,19 @@ input:checked+.sw-slider:before{transform:translateX(20px)}
       <div class="irow"><span>SIM</span><b id="lte-sim">–</b></div>
     </div>
 
+    <!-- ── GPS ── -->
+    <div class="card">
+      <div class="card-title">
+        <span class="led" id="gps-led"></span>
+        📍 GPS
+      </div>
+      <div class="irow"><span>Fix</span><b id="gps-fix">–</b></div>
+      <div class="irow"><span>Position</span><b id="gps-pos" style="font-size:.78rem">–</b></div>
+      <div class="irow"><span>Höhe</span><b id="gps-alt">–</b></div>
+      <div class="irow"><span>Geschwindigkeit</span><b id="gps-spd">–</b></div>
+      <div class="irow"><span>Satelliten</span><b id="gps-sat">–</b></div>
+    </div>
+
   </div><!-- .grid -->
 
   <div class="status-bar">
@@ -247,7 +260,112 @@ async function ubusExec(cmd, params) {
 /* ══════════════════════════════════════════════
    Refresh
 ══════════════════════════════════════════════ */
-async function refreshAll() {
+
+// Gemeinsame Funktion: DOM aus status.json befüllen
+function applyStatus(d) {
+  // AP
+  const ap = d.ap || {};
+  setLed('ap-led', !!ap.enabled);
+  document.getElementById('ap-ssid').textContent = ap.ssid || '–';
+  document.getElementById('ap-chan' ).textContent = ap.chan  || '–';
+  document.getElementById('ap-cnt' ).textContent = ap.cnt   ?? '–';
+  // Clients: status.json hat keine Liste → AP-Clients via ubus nachladen (async, kein Warten)
+  refreshApClients().catch(() => {});
+
+  // WLAN
+  const w = d.wifi || {};
+  const wConnected = !!w.connected;
+  const wEnabled   = !!w.enabled;
+  const wSig = w.signal !== '' && w.signal !== undefined ? parseInt(w.signal) : null;
+  const wPct = wSig !== null ? Math.min(100, Math.max(0, Math.round((wSig + 100) * 2))) : 0;
+  setLed('wifi-led', wConnected, !wEnabled);
+  document.getElementById('wifi-sw').checked = wEnabled;
+  document.getElementById('wifi-ssid').textContent =
+    wConnected ? w.ssid : (wEnabled ? 'Verbindung wird gesucht…' : 'Deaktiviert');
+  document.getElementById('wifi-sig').textContent =
+    wSig !== null ? `${wPct}% (${wSig} dBm)` : '–';
+  document.getElementById('wifi-bssid').textContent = w.bssid || '–';
+  document.getElementById('wifi-chan').textContent  = w.chan  || '–';
+  const wBar = document.getElementById('wifi-bar');
+  wBar.style.width = wPct + '%';
+  wBar.style.background = sigColor(wPct);
+
+  // LTE
+  const l = d.lte || {};
+  const lEnabled = l.disabled !== '1';
+  const rsrp = l.rsrp && l.rsrp !== '-' ? parseInt(l.rsrp) : null;
+  const rssi = l.rssi && l.rssi !== '-' ? parseInt(l.rssi) : null;
+  const sinr = l.sinr && l.sinr !== '-' ? parseInt(l.sinr) : null;
+  let lSigDbm = null, lSigPct = 0;
+  if (rsrp !== null && !isNaN(rsrp)) {
+    lSigDbm = rsrp;
+    lSigPct = Math.min(100, Math.max(0, Math.round((rsrp + 140) / 60 * 100)));
+  } else if (rssi !== null && !isNaN(rssi)) {
+    lSigDbm = rssi;
+    lSigPct = Math.min(100, Math.max(0, Math.round((rssi + 113) / 62 * 100)));
+  }
+  const lRegistered = l.op && l.op !== '–' && l.op !== 'N/A' && l.op !== '';
+  setLed('lte-led', lRegistered, !lEnabled);
+  document.getElementById('lte-sw').checked = lEnabled;
+  document.getElementById('lte-op').textContent   = l.op   || '–';
+  document.getElementById('lte-type').textContent = l.type || '–';
+  document.getElementById('lte-sig').textContent  =
+    lSigDbm !== null ? `${lSigPct}% (${lSigDbm} dBm)` : '–';
+  document.getElementById('lte-sim').textContent  =
+    sinr !== null && !isNaN(sinr) ? `SINR: ${sinr} dB` : '–';
+  const lBar = document.getElementById('lte-bar');
+  lBar.style.width = lSigPct + '%';
+  lBar.style.background = sigColor(lSigPct);
+
+  // GPS
+  const g = d.gps || {};
+  const gFix = (g.fix || 'none').trim().toLowerCase();
+  const gHasFix = gFix === 'fix';
+  setLed('gps-led', gHasFix, !gHasFix);
+  document.getElementById('gps-fix').textContent = gHasFix ? 'Fix' : 'Kein Fix';
+  if (gHasFix && g.lat && g.lon) {
+    const lat = parseFloat(g.lat).toFixed(5);
+    const lon = parseFloat(g.lon).toFixed(5);
+    const el = document.getElementById('gps-pos');
+    el.innerHTML = `<a href="https://www.google.com/maps?q=${encodeURIComponent(lat+','+lon)}" target="_blank" style="color:var(--blue)">${lat}, ${lon}</a>`;
+  } else {
+    document.getElementById('gps-pos').textContent = '–';
+  }
+  document.getElementById('gps-alt').textContent =
+    gHasFix && g.alt   ? Math.round(parseFloat(g.alt))   + ' m'    : '–';
+  document.getElementById('gps-spd').textContent =
+    gHasFix && g.speed ? parseFloat(g.speed).toFixed(1)  + ' km/h' : '–';
+  document.getElementById('gps-sat').textContent =
+    gHasFix && g.sats  ? g.sats : '–';
+}
+
+// Nur AP-Clients nachladen (klein, schnell)
+async function refreshApClients() {
+  // Ladeindikator sofort setzen
+  const listEl = document.getElementById('ap-clients');
+  if (listEl.children.length === 0)
+    listEl.innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:4px 0">Lade…</div>';
+  // Dediziertes CGI (läuft als root) – kein ubus file/exec ACL-Problem
+  let data;
+  try {
+    const r = await fetch('/cgi-bin/clients?_=' + Date.now());
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    data = await r.json();
+  } catch (e) {
+    return; // still silent – AP ist immer da, Clients optional
+  }
+  const clients = data.clients || [];
+  document.getElementById('ap-cnt').textContent = clients.length;
+  listEl.innerHTML = '';
+  for (const c of clients) {
+    const div = document.createElement('div');
+    div.className = 'client-item';
+    div.innerHTML = `<span>${h(c.host || c.mac)}</span><span class="cmac">${c.signal ?? '?'} dBm</span>`;
+    listEl.appendChild(div);
+  }
+}
+
+async function refreshAll(forcePoll = false) {
   // Scan-Liste nach 3 Aktualisierungen automatisch ausblenden
   if (document.getElementById('scan-list').children.length > 0) {
     s_scanRefreshCnt++;
@@ -255,16 +373,25 @@ async function refreshAll() {
   }
   setStat('Aktualisiere…');
   document.getElementById('hdr-spin').style.display = 'inline-block';
-  const errs = [];
-  await Promise.all([
-    refreshAp().catch(e => errs.push('AP:' + e.message)),
-    refreshWifi().catch(e => errs.push('WiFi:' + e.message)),
-    refreshLte().catch(e => errs.push('LTE:' + e.message)),
-  ]);
+  try {
+    // forcePoll=true (z.B. nach Toggle) → /cgi-bin/poll (frische Daten, ~1s)
+    // normaler Interval-Refresh → /status.json (Cache, sofort)
+    const url = forcePoll ? '/cgi-bin/poll' : '/status.json';
+    let r = await fetch(url + '?_=' + Date.now());
+    // Fallback: status.json noch nicht vorhanden (403/404) → direkt /cgi-bin/poll
+    if (!r.ok && !forcePoll) r = await fetch('/cgi-bin/poll?_=' + Date.now());
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    applyStatus(d);
+    const ageS = d.ts ? Math.round(Date.now() / 1000 - d.ts) : null;
+    const ageTxt = ageS !== null ? ` (${ageS}s alt)` : '';
+    document.getElementById('stat-ts').textContent =
+      'Stand: ' + new Date().toLocaleTimeString('de-DE') + ageTxt;
+    setStat('OK');
+  } catch (e) {
+    setStat('⚠ ' + e.message);
+  }
   document.getElementById('hdr-spin').style.display = 'none';
-  document.getElementById('stat-ts').textContent =
-    'Stand: ' + new Date().toLocaleTimeString('de-DE');
-  setStat(errs.length ? '⚠ ' + errs.join(' | ') : 'OK');
 }
 
 function setStat(t) { document.getElementById('stat-txt').textContent = t; }
@@ -282,76 +409,6 @@ function h(s) {  // HTML-escape
   return String(s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-/* ══════════════════════════════════════════════
-   AP / HotSpot
-══════════════════════════════════════════════ */
-async function refreshAp() {
-  // Alles parallel: uci wireless + iwinfo devices + dhcp.leases gleichzeitig
-  const [uciRes, devsRes, leasesRes] = await Promise.allSettled([
-    ubusCall('uci', 'get', { config: 'wireless' }),
-    ubusCall('iwinfo', 'devices', {}),
-    ubusExec('/bin/cat', ['/tmp/dhcp.leases']),
-  ]);
-
-  const vals = uciRes.status === 'fulfilled' ? (uciRes.value?.values || {}) : {};
-  let apEnabled = false, apSsid = '?', apChan = '?', apIface = null;
-  for (const [k, sec] of Object.entries(vals)) {
-    if (sec['.type'] === 'wifi-device' && apChan === '?') apChan = sec.channel || '?';
-    if (sec['.type'] === 'wifi-iface' && sec.mode === 'ap') {
-      apEnabled = sec.disabled !== '1';
-      apSsid = sec.ssid || '?';
-      apIface = sec.ifname || null;
-    }
-  }
-
-  // AP-Interface aus iwinfo devices ermitteln (parallel zu uci schon fertig)
-  if (!apIface && devsRes.status === 'fulfilled') {
-    const devs = devsRes.value?.devices || [];
-    const infoResults = await Promise.allSettled(
-      devs.map(d => ubusCall('iwinfo', 'info', { device: d }))
-    );
-    for (let i = 0; i < devs.length; i++) {
-      if (infoResults[i].status === 'fulfilled' && infoResults[i].value?.mode === 'Master') {
-        apIface = devs[i]; break;
-      }
-    }
-    apIface = apIface || (devs[0] ?? 'wlan0');
-  }
-  apIface = apIface || 'wlan0';
-
-  // DHCP-Leases
-  const hostOf = {};
-  if (leasesRes.status === 'fulfilled') {
-    for (const line of (leasesRes.value || '').split('\n')) {
-      const p = line.trim().split(/\s+/);
-      if (p.length >= 4) hostOf[p[1].toUpperCase()] = p[3] !== '*' ? p[3] : '';
-    }
-  }
-
-  // assoclist
-  let assocList = [];
-  try {
-    assocList = (await ubusCall('iwinfo', 'assoclist', { device: apIface })).results || [];
-  } catch (_) {}
-
-  setLed('ap-led', apEnabled);
-  document.getElementById('ap-ssid').textContent = apSsid;
-  document.getElementById('ap-chan' ).textContent = apChan;
-  document.getElementById('ap-cnt' ).textContent = assocList.length;
-
-  const listEl = document.getElementById('ap-clients');
-  listEl.innerHTML = '';
-  for (const c of assocList) {
-    const mac  = (c.mac || '').toUpperCase();
-    const host = hostOf[mac] || mac;
-    const dbm  = c.signal ?? '?';
-    const div  = document.createElement('div');
-    div.className = 'client-item';
-    div.innerHTML  = `<span>${h(host)}</span><span class="cmac">${dbm} dBm</span>`;
-    listEl.appendChild(div);
-  }
 }
 
 /* ══════════════════════════════════════════════
@@ -605,7 +662,7 @@ async function doConnect() {
     cancelConnect();
     setStat('Netzwerk wird aufgebaut – bitte warten…');
     await new Promise(r => setTimeout(r, 4000));
-    await refreshWifi();
+    await refreshAll(true);
     setStat('OK');
   } catch (e) {
     setStat('Fehler: ' + e.message);
@@ -626,11 +683,11 @@ async function toggleWifi(on) {
     await ubusCall('uci', 'commit', { config: 'wireless' });
     await ubusExec('/sbin/wifi', ['reload']);
     await new Promise(r => setTimeout(r, 2500));
-    await refreshWifi();
+    await refreshAll(true);
     setStat('OK');
   } catch (e) {
     setStat('Fehler: ' + e.message);
-    await refreshWifi();  // Switch-State zurücksetzen
+    await refreshAll(true);
   }
 }
 
@@ -641,11 +698,11 @@ async function toggleLte(on) {
     await ubusCall('uci', 'commit', { config: 'network' });
     await ubusExec('/sbin/reload_config', []);
     await new Promise(r => setTimeout(r, 2500));
-    await refreshLte();
+    await refreshAll(true);
     setStat('OK');
   } catch (e) {
     setStat('Fehler: ' + e.message);
-    await refreshLte();  // Switch-State zurücksetzen
+    await refreshAll(true);
   }
 }
 
