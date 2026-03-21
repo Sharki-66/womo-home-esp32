@@ -220,11 +220,6 @@ static bool rs485_invalid_data_active = false;
 
 typedef enum {
     SYSTEM_STATUS_SOURCE_MANUAL = 0,
-    SYSTEM_STATUS_SOURCE_RS485_TIMEOUT,
-    SYSTEM_STATUS_SOURCE_RS485_WAITING,
-    SYSTEM_STATUS_SOURCE_RS485_INVALID,
-    SYSTEM_STATUS_SOURCE_WIFI,
-    SYSTEM_STATUS_SOURCE_BATTERY,
     SYSTEM_STATUS_SOURCE_SENSOR,
     SYSTEM_STATUS_SOURCE_MAX
 } system_status_source_t;
@@ -239,12 +234,30 @@ static system_status_entry_t system_status_entries[SYSTEM_STATUS_SOURCE_MAX] = {
 static womo_status_level_t system_status_current_level = WOMO_STATUS_OK;
 static womo_string_id_t system_status_current_detail = STR_MAX;
 static womo_status_level_t system_status_sensor_level = WOMO_STATUS_OK;
-static womo_status_level_t sensor_latched_level = WOMO_STATUS_OK;
-static womo_status_level_t sensor_level_prev = WOMO_STATUS_OK;
-static womo_status_level_t sensor_level_raw_last = WOMO_STATUS_OK;
-static char sensor_detail_text[12] = "";
-static bool sensor_ack_active = false;
-static womo_status_level_t sensor_ack_level = WOMO_STATUS_OK;
+
+// --- Sensor-Fehler-Stapel: pro Quelle aktueller und quittierter Level ---
+typedef enum {
+    SENSOR_ERR_SRC_GAS = 0,
+    SENSOR_ERR_SRC_FRESH,
+    SENSOR_ERR_SRC_GREY,
+    SENSOR_ERR_SRC_BAT,
+    SENSOR_ERR_SRC_RS485,  // RS485 Timeout / Verbindungsverlust
+    SENSOR_ERR_SRC_IAQ,    // Luftqualität (BME680 indoor IAQ)
+    SENSOR_ERR_SRC_MAX
+} sensor_err_src_t;
+
+static const char * const sensor_err_src_name[SENSOR_ERR_SRC_MAX] = {
+    "Gas", "Wasser", "Abw.", "Bat", "RS485", "IAQ"
+};
+
+typedef struct {
+    womo_status_level_t current;  // Aktuell ermittelter Level (jeden Tick neu)
+    womo_status_level_t acked;    // Per Touch quittierter Level
+} sensor_err_state_t;
+
+static sensor_err_state_t sensor_err_states[SENSOR_ERR_SRC_MAX] = {0};
+static int sensor_err_display_idx = -1;
+static char sensor_detail_text[32] = "";
 static portMUX_TYPE system_status_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
 // RS485 data callback
@@ -413,9 +426,9 @@ static void apply_text_theme_colors(void)
     if (humid_label_in) lv_obj_set_style_text_color(humid_label_in, lv_color_black(), 0);
     if (temp_label_in) lv_obj_set_style_text_color(temp_label_in, lv_color_black(), 0);
     if (rs485_debug_label) lv_obj_set_style_text_color(rs485_debug_label, text_color, 0);
-    if (imu_pitch_label) lv_obj_set_style_text_color(imu_pitch_label, lv_color_white(), 0);
-    if (imu_roll_label) lv_obj_set_style_text_color(imu_roll_label, lv_color_white(), 0);
-    if (imu_heading_label) lv_obj_set_style_text_color(imu_heading_label, lv_color_white(), 0);
+    if (imu_pitch_label) lv_obj_set_style_text_color(imu_pitch_label, text_color, 0);
+    if (imu_roll_label) lv_obj_set_style_text_color(imu_roll_label, text_color, 0);
+    if (imu_heading_label) lv_obj_set_style_text_color(imu_heading_label, text_color, 0);
     if (gps_label) lv_obj_set_style_text_color(gps_label, text_color, 0);
     if (gps_button) {
         lv_color_t border = theme_mode_is_daylike(mode) ? lv_color_black() : lv_color_white();
@@ -869,11 +882,6 @@ static void system_status_apply(bool force_label_update)
     system_status_source_t resolved_source = SYSTEM_STATUS_SOURCE_MAX;
 
     for (int i = 0; i < SYSTEM_STATUS_SOURCE_MAX; ++i) {
-        if (i == SYSTEM_STATUS_SOURCE_RS485_TIMEOUT ||
-            i == SYSTEM_STATUS_SOURCE_RS485_WAITING ||
-            i == SYSTEM_STATUS_SOURCE_RS485_INVALID) {
-            continue; // RS485 soll das Theme nicht mehr beeinflussen
-        }
         if (!entries_copy[i].active) {
             continue;
         }
@@ -921,12 +929,6 @@ static void system_status_apply(bool force_label_update)
                  womo_locale_get_string(status_level_to_locale_id(resolved)),
                  sensor_detail_text);
         status_label_apply_text(buf);
-    } else if (resolved_source == SYSTEM_STATUS_SOURCE_RS485_TIMEOUT) {
-        status_label_show_detail(resolved, womo_locale_get_string(STR_RS485_TIMEOUT_LABEL));
-    } else if (resolved_source == SYSTEM_STATUS_SOURCE_RS485_INVALID) {
-        status_label_show_detail(resolved, womo_locale_get_string(STR_RS485_INVALID_DATA));
-    } else if (resolved_source == SYSTEM_STATUS_SOURCE_RS485_WAITING) {
-        status_label_show_detail(resolved, womo_locale_get_string(STR_RS485_WAITING_HELLO));
     } else if (detail_valid) {
         if (force_label_update || level_changed || detail_changed) {
             status_label_show_detail(resolved, womo_locale_get_string(detail_id));
@@ -1319,8 +1321,10 @@ static void ui_update_timer_cb(lv_timer_t *timer)
     bool rs485_timeout_snapshot = false;
     bool rs485_waiting_snapshot = false;
     bool rs485_invalid_snapshot = false;
-    womo_status_level_t sensor_level = WOMO_STATUS_OK;
-    const char *sensor_cause = NULL;
+    // Per-Sensor-Quellen-Level für Stapel zurücksetzen (globale States)
+    for (int _si = 0; _si < SENSOR_ERR_SRC_MAX; _si++) {
+        sensor_err_states[_si].current = WOMO_STATUS_OK;
+    }
     int64_t last_packet_us = 0;
     const int64_t now_us = esp_timer_get_time();
     bool modal_open = womo_connectivity_modal_is_open();
@@ -1356,6 +1360,10 @@ static void ui_update_timer_cb(lv_timer_t *timer)
             ESP_LOGI(TAG, "RS485 Timeout aufgehoben (Unterbrechung %.1f s)", elapsed_s);
         }
     }
+
+    // RS485-Timeout → Sensor-Stapel (WARNING, damit veraltete Daten sichtbar werden)
+    sensor_err_states[SENSOR_ERR_SRC_RS485].current =
+        rs485_timeout_snapshot ? WOMO_STATUS_WARNING : WOMO_STATUS_OK;
 
     // Multi-Source Time Sync (WiFi NTP > GPS > LTE) mit dynamischer Rate
     const int64_t TIME_SYNC_RETRY_US_SYNCED = 60LL * 1000000LL; // 60s Abklingzeit nach Sync
@@ -1722,6 +1730,20 @@ static void ui_update_timer_cb(lv_timer_t *timer)
         }
     }
 
+    // IAQ Luftqualität → Sensor-Stapel (unabhängig von Label-Existenz, nur bei kalibriertem Sensor)
+    if (snapshot.bme680_indoor.valid && snapshot.bme680_indoor.iaq_accuracy >= 2) {
+        uint16_t iaq = snapshot.bme680_indoor.iaq;
+        womo_status_level_t iaq_status = WOMO_STATUS_OK;
+        if (iaq >= THRESH_IAQ_CRIT_DEFAULT) {
+            iaq_status = WOMO_STATUS_ERROR;
+        } else if (iaq >= THRESH_IAQ_WARN_DEFAULT) {
+            iaq_status = WOMO_STATUS_WARNING;
+        }
+        if (iaq_status > sensor_err_states[SENSOR_ERR_SRC_IAQ].current) {
+            sensor_err_states[SENSOR_ERR_SRC_IAQ].current = iaq_status;
+        }
+    }
+
     // Gas bottle widgets
     if (gas_bottle_a || gas_bottle_b) {
         static bool gas_has_data_a = false;
@@ -1772,9 +1794,8 @@ static void ui_update_timer_cb(lv_timer_t *timer)
                     uint8_t fill = womo_gas_bottle_get_fill_percent(gas_bottle_a);
                     womo_status_level_t status = evaluate_low_is_bad(fill, thr.gas_warn, thr.gas_crit);
                     womo_gas_bottle_set_status(gas_bottle_a, status);
-                    if (status > sensor_level) {
-                        sensor_level = status;
-                        sensor_cause = "Gas";
+                    if (status > sensor_err_states[SENSOR_ERR_SRC_GAS].current) {
+                        sensor_err_states[SENSOR_ERR_SRC_GAS].current = status;
                     }
                 }
                 last_level_a = pct;
@@ -1785,9 +1806,8 @@ static void ui_update_timer_cb(lv_timer_t *timer)
                     uint8_t fill = womo_gas_bottle_get_fill_percent(gas_bottle_a);
                     womo_status_level_t status = evaluate_low_is_bad(fill, thr.gas_warn, thr.gas_crit);
                     womo_gas_bottle_set_status(gas_bottle_a, status);
-                    if (status > sensor_level) {
-                        sensor_level = status;
-                        sensor_cause = "Gas";
+                    if (status > sensor_err_states[SENSOR_ERR_SRC_GAS].current) {
+                        sensor_err_states[SENSOR_ERR_SRC_GAS].current = status;
                     }
                 }
                 last_level_a = snapshot.hx711.weight_a_kg;
@@ -1808,9 +1828,8 @@ static void ui_update_timer_cb(lv_timer_t *timer)
                     uint8_t fill = womo_gas_bottle_get_fill_percent(gas_bottle_b);
                     womo_status_level_t status = evaluate_low_is_bad(fill, thr.gas_warn, thr.gas_crit);
                     womo_gas_bottle_set_status(gas_bottle_b, status);
-                    if (status > sensor_level) {
-                        sensor_level = status;
-                        sensor_cause = "Gas";
+                    if (status > sensor_err_states[SENSOR_ERR_SRC_GAS].current) {
+                        sensor_err_states[SENSOR_ERR_SRC_GAS].current = status;
                     }
                 }
                 last_level_b = pct;
@@ -1821,9 +1840,8 @@ static void ui_update_timer_cb(lv_timer_t *timer)
                     uint8_t fill = womo_gas_bottle_get_fill_percent(gas_bottle_b);
                     womo_status_level_t status = evaluate_low_is_bad(fill, thr.gas_warn, thr.gas_crit);
                     womo_gas_bottle_set_status(gas_bottle_b, status);
-                    if (status > sensor_level) {
-                        sensor_level = status;
-                        sensor_cause = "Gas";
+                    if (status > sensor_err_states[SENSOR_ERR_SRC_GAS].current) {
+                        sensor_err_states[SENSOR_ERR_SRC_GAS].current = status;
                     }
                 }
                 last_level_b = snapshot.hx711.weight_b_kg;
@@ -1981,9 +1999,8 @@ gas_done:
 
             battery_has_data = true;
 
-            if (any_voltage && battery_status > sensor_level) {
-                sensor_level = battery_status;
-                sensor_cause = "Bat";
+            if (any_voltage && battery_status > sensor_err_states[SENSOR_ERR_SRC_BAT].current) {
+                sensor_err_states[SENSOR_ERR_SRC_BAT].current = battery_status;
             }
         } else if (!snapshot.battery.valid && battery_has_data) {
             if (main_battery) {
@@ -2011,9 +2028,8 @@ gas_done:
                                                                  thr.fresh_warn,
                                                                  thr.fresh_crit);
                 womo_tank_set_status(fresh_water_tank, status);
-                if (status > sensor_level) {
-                    sensor_level = status;
-                    sensor_cause = "Was";
+                if (status > sensor_err_states[SENSOR_ERR_SRC_FRESH].current) {
+                    sensor_err_states[SENSOR_ERR_SRC_FRESH].current = status;
                 }
             }
             if (grey_water_tank && (!tank_has_data || last_tank2 != snapshot.tank.tank2_percent)) {
@@ -2022,9 +2038,8 @@ gas_done:
                                                                   thr.grey_warn,
                                                                   thr.grey_crit);
                 womo_tank_set_status(grey_water_tank, status);
-                if (status > sensor_level) {
-                    sensor_level = status;
-                    sensor_cause = "Was";
+                if (status > sensor_err_states[SENSOR_ERR_SRC_GREY].current) {
+                    sensor_err_states[SENSOR_ERR_SRC_GREY].current = status;
                 }
             }
             last_tank1 = snapshot.tank.tank1_percent;
@@ -2090,32 +2105,65 @@ gas_done:
         }
     }
 
-    sensor_level_raw_last = sensor_level;
+    // Per-Topic Stale-Prüfung: Topic seit > 60 s nicht empfangen, aber RS485 läuft → WARNING
+    {
+        const int64_t STALE_TOPIC_US = 60LL * 1000000LL;
+        if (!rs485_timeout_snapshot && packet_count > 0) {
+            if (snapshot.bat_topic_rx_us > 0 &&
+                (now_us - snapshot.bat_topic_rx_us) > STALE_TOPIC_US &&
+                sensor_err_states[SENSOR_ERR_SRC_BAT].current < WOMO_STATUS_WARNING) {
+                sensor_err_states[SENSOR_ERR_SRC_BAT].current = WOMO_STATUS_WARNING;
+            }
+            if (snapshot.tank_topic_rx_us > 0 &&
+                (now_us - snapshot.tank_topic_rx_us) > STALE_TOPIC_US &&
+                sensor_err_states[SENSOR_ERR_SRC_FRESH].current < WOMO_STATUS_WARNING) {
+                sensor_err_states[SENSOR_ERR_SRC_FRESH].current = WOMO_STATUS_WARNING;
+            }
+            if (snapshot.gas_topic_rx_us > 0 &&
+                (now_us - snapshot.gas_topic_rx_us) > STALE_TOPIC_US &&
+                sensor_err_states[SENSOR_ERR_SRC_GAS].current < WOMO_STATUS_WARNING) {
+                sensor_err_states[SENSOR_ERR_SRC_GAS].current = WOMO_STATUS_WARNING;
+            }
+        }
+    }
 
-    if (sensor_level == WOMO_STATUS_OK) {
-        sensor_level_prev = WOMO_STATUS_OK;
-        sensor_latched_level = WOMO_STATUS_OK;
+    // Sensor-Fehler-Stapel: Erholung berücksichtigen (acked auf current absenken)
+    for (int _si = 0; _si < SENSOR_ERR_SRC_MAX; _si++) {
+        if (sensor_err_states[_si].current < sensor_err_states[_si].acked) {
+            sensor_err_states[_si].acked = sensor_err_states[_si].current;
+        }
+    }
+
+    // Unquittierte Fehler: current > acked
+    womo_status_level_t stack_max = WOMO_STATUS_OK;
+    int stack_show_idx = -1;
+    int stack_pending = 0;
+    for (int _si = 0; _si < SENSOR_ERR_SRC_MAX; _si++) {
+        if (sensor_err_states[_si].current > sensor_err_states[_si].acked) {
+            stack_pending++;
+            if (sensor_err_states[_si].current > stack_max) {
+                stack_max = sensor_err_states[_si].current;
+                stack_show_idx = _si;
+            }
+        }
+    }
+
+    if (stack_pending > 0) {
+        sensor_err_display_idx = stack_show_idx;
+        if (stack_pending > 1) {
+            snprintf(sensor_detail_text, sizeof(sensor_detail_text), "%s+%d",
+                     sensor_err_src_name[stack_show_idx], stack_pending - 1);
+        } else {
+            snprintf(sensor_detail_text, sizeof(sensor_detail_text), "%s",
+                     sensor_err_src_name[stack_show_idx]);
+        }
+        system_status_apply_sensor_level(stack_max);
+    } else {
+        sensor_err_display_idx = -1;
         sensor_detail_text[0] = '\0';
-        sensor_ack_active = false;
-        sensor_ack_level = WOMO_STATUS_OK;
         if (system_status_sensor_level != WOMO_STATUS_OK) {
             system_status_apply_sensor_level(WOMO_STATUS_OK);
         }
-    } else {
-        bool severity_up_vs_ack = (sensor_level > sensor_ack_level);
-        bool blocked_by_ack = (sensor_ack_active && !severity_up_vs_ack);
-
-        if (!blocked_by_ack) {
-            sensor_latched_level = sensor_level;
-            if (sensor_cause) {
-                strncpy(sensor_detail_text, sensor_cause, sizeof(sensor_detail_text) - 1);
-                sensor_detail_text[sizeof(sensor_detail_text) - 1] = '\0';
-            }
-            system_status_apply_sensor_level(sensor_latched_level);
-            sensor_ack_active = false;
-            sensor_ack_level = WOMO_STATUS_OK;
-        }
-        sensor_level_prev = sensor_level;
     }
 
     if (gps_label) {
@@ -3130,15 +3178,44 @@ static void status_label_event_cb(lv_event_t *event)
         return;
     }
 
-    sensor_latched_level = WOMO_STATUS_OK;
-    system_status_apply_sensor_level(WOMO_STATUS_OK);
-    ESP_LOGI(TAG, "Sensorstatus per Touch quittiert");
+    // Aktuell angezeigten Fehler quittieren (acked = current)
+    if (sensor_err_display_idx >= 0 && sensor_err_display_idx < SENSOR_ERR_SRC_MAX) {
+        sensor_err_states[sensor_err_display_idx].acked =
+            sensor_err_states[sensor_err_display_idx].current;
+        ESP_LOGI(TAG, "Sensorstatus '%s' (Level=%d) quittiert",
+                 sensor_err_src_name[sensor_err_display_idx],
+                 sensor_err_states[sensor_err_display_idx].acked);
+    }
 
-    // Keine erneute Auslösung, solange der aktuelle Rohzustand unverändert bleibt
-    sensor_level_prev = sensor_level_raw_last;
-    sensor_ack_active = true;
-    sensor_ack_level = sensor_level_raw_last;
-    sensor_detail_text[0] = '\0';
+    // Verbleibende unquittierte Fehler prüfen
+    womo_status_level_t stack_max = WOMO_STATUS_OK;
+    int next_idx = -1;
+    int pending_count = 0;
+    for (int i = 0; i < SENSOR_ERR_SRC_MAX; i++) {
+        if (sensor_err_states[i].current > sensor_err_states[i].acked) {
+            pending_count++;
+            if (sensor_err_states[i].current > stack_max) {
+                stack_max = sensor_err_states[i].current;
+                next_idx = i;
+            }
+        }
+    }
+
+    if (pending_count > 0) {
+        sensor_err_display_idx = next_idx;
+        if (pending_count > 1) {
+            snprintf(sensor_detail_text, sizeof(sensor_detail_text), "%s+%d",
+                     sensor_err_src_name[next_idx], pending_count - 1);
+        } else {
+            snprintf(sensor_detail_text, sizeof(sensor_detail_text), "%s",
+                     sensor_err_src_name[next_idx]);
+        }
+        system_status_apply_sensor_level(stack_max);
+    } else {
+        sensor_err_display_idx = -1;
+        sensor_detail_text[0] = '\0';
+        system_status_apply_sensor_level(WOMO_STATUS_OK);
+    }
 
     // Theme/Label sofort aktualisieren
     system_status_apply(true);
@@ -3849,7 +3926,7 @@ void app_main()
     lv_obj_set_style_text_color(gas_label_in, lv_color_black(), 0);
     lv_obj_set_width(gas_label_in, 320);
     lv_obj_set_style_text_align(gas_label_in, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(gas_label_in, indoor_block_x, indoor_base_y + 105);  // IAQ unten
+    lv_obj_set_pos(gas_label_in, indoor_block_x, indoor_base_y + 86);   // IAQ unten
 
     press_label_in = lv_label_create(screen);
     lv_label_set_text(press_label_in, PLACEHOLDER_CO2);
@@ -3857,7 +3934,7 @@ void app_main()
     lv_obj_set_style_text_color(press_label_in, lv_color_black(), 0);
     lv_obj_set_width(press_label_in, 320);
     lv_obj_set_style_text_align(press_label_in, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(press_label_in, indoor_block_x, indoor_base_y + 80);  // CO2 Mitte
+    lv_obj_set_pos(press_label_in, indoor_block_x, indoor_base_y + 68);  // CO2 Mitte
 
     voc_label_in = lv_label_create(screen);
     lv_label_set_text(voc_label_in, PLACEHOLDER_BVOC);
@@ -3865,20 +3942,20 @@ void app_main()
     lv_obj_set_style_text_color(voc_label_in, lv_color_black(), 0);
     lv_obj_set_width(voc_label_in, 320);
     lv_obj_set_style_text_align(voc_label_in, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(voc_label_in, indoor_block_x, indoor_base_y + 55);    // bVOC oben
+    lv_obj_set_pos(voc_label_in, indoor_block_x, indoor_base_y + 50);    // bVOC oben
 
     // Farben an aktuelles Theme anpassen (Tag/Nacht)
     apply_text_theme_colors();
 
-    lv_coord_t right_margin = (lv_coord_t)lrintf(disp_w * 0.30f) - 30;
+    lv_coord_t right_margin = (lv_coord_t)lrintf(disp_w * 0.30f) - 30 - 15;
     if (right_margin < 0) {
         right_margin = 0;
     }
-    lv_coord_t top_offset = (lv_coord_t)lrintf(disp_h * 0.40f) - 40;
+    lv_coord_t top_offset = (lv_coord_t)lrintf(disp_h * 0.40f) - 40 + 10;
     if (top_offset < 0) {
         top_offset = 0;
     }
-    lv_coord_t line_spacing = 24;
+    lv_coord_t line_spacing = 18;
 
     imu_pitch_label = lv_label_create(screen);
     lv_label_set_text(imu_pitch_label, "Pitch: --.-°");
@@ -3971,7 +4048,7 @@ void app_main()
     const float px_per_cm_y = disp_h / DISP_HEIGHT_CM;
 
     // Create water tank widgets (positioned above the gas bottles)
-    fresh_water_tank = womo_tank_create(screen, 115, 110, WOMO_TANK_FRESH);
+    fresh_water_tank = womo_tank_create(screen, 125, 110, WOMO_TANK_FRESH);
     if (fresh_water_tank) {
         womo_tank_set_caption(fresh_water_tank, "");
         womo_tank_set_no_data(fresh_water_tank);
@@ -3986,7 +4063,7 @@ void app_main()
     }
 
 
-    grey_water_tank = womo_tank_create(screen, 185, 110, WOMO_TANK_GREY);
+    grey_water_tank = womo_tank_create(screen, 195, 110, WOMO_TANK_GREY);
     if (grey_water_tank) {
         womo_tank_set_caption(grey_water_tank, "");
         womo_tank_set_no_data(grey_water_tank);
@@ -3997,7 +4074,7 @@ void app_main()
         lv_obj_set_style_text_color(grey_water_caption_label, lv_color_black(), 0);
         lv_obj_align_to(grey_water_caption_label, grey_water_tank->container, LV_ALIGN_OUT_BOTTOM_MID, 0, -24);
         if (shore_label) {
-            lv_obj_align_to(shore_label, grey_water_tank->container, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
+            lv_obj_align_to(shore_label, grey_water_tank->container, LV_ALIGN_OUT_RIGHT_MID, 15, 0);
             if (shore_caption_label) {
                 lv_obj_align_to(shore_caption_label, shore_label, LV_ALIGN_OUT_BOTTOM_MID, 0, -24);
                 if (grey_water_caption_label) {
@@ -4011,8 +4088,8 @@ void app_main()
 
     // Create gas bottle widgets (20px weiter nach links)
     // Display height is 480px, so 480 - 250 = 230px from top
-    gas_bottle_a = womo_gas_bottle_create(screen, 120, 230);  // Gas bottle A (90 - 20 + 50)
-    gas_bottle_b = womo_gas_bottle_create(screen, 190, 230);  // Gas bottle B (160 - 20 + 50)
+    gas_bottle_a = womo_gas_bottle_create(screen, 130, 230);  // Gas bottle A (90 - 20 + 50)
+    gas_bottle_b = womo_gas_bottle_create(screen, 200, 230);  // Gas bottle B (160 - 20 + 50)
     
     // Set weights for bottles: 10.1 kg = 0%, 21 kg = 100%
     if (gas_bottle_a) {
