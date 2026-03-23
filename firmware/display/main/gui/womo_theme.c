@@ -197,29 +197,31 @@ womo_theme_mode_t womo_theme_update(womo_status_level_t status)
     }
     
     // Determine theme mode
+    womo_theme_mode_t prev_mode = current_mode;
     if (is_between_times(hour, minute, 
                         sunrise_start_hour, sunrise_start_min,
                         sun_times.sunrise_hour, sun_times.sunrise_minute)) {
         current_mode = WOMO_THEME_SUNRISE;
-        ESP_LOGI(TAG, "Theme: SUNRISE");
     }
     else if (is_between_times(hour, minute,
                              sun_times.sunrise_hour, sun_times.sunrise_minute,
                              sunset_start_hour, sunset_start_min)) {
         current_mode = WOMO_THEME_DAY;
-        ESP_LOGD(TAG, "Theme: DAY");
     }
     else if (is_between_times(hour, minute,
                              sunset_start_hour, sunset_start_min,
                              sun_times.sunset_hour, sun_times.sunset_minute)) {
         current_mode = WOMO_THEME_SUNSET;
-        ESP_LOGI(TAG, "Theme: SUNSET");
     }
     else {
         current_mode = WOMO_THEME_NIGHT;
-        ESP_LOGD(TAG, "Theme: NIGHT");
     }
-    
+
+    if (current_mode != prev_mode) {
+        static const char * const mode_names[] = {"DAY", "NIGHT", "SUNRISE", "SUNSET"};
+        ESP_LOGI(TAG, "Theme: %s", mode_names[current_mode]);
+    }
+
     return current_mode;
 }
 
@@ -395,13 +397,19 @@ womo_status_level_t womo_theme_get_status(void)
 void womo_theme_set_sun_times(uint8_t sunrise_hour, uint8_t sunrise_min,
                                uint8_t sunset_hour, uint8_t sunset_min)
 {
-    sun_times.sunrise_hour = sunrise_hour;
+    bool changed = (sun_times.sunrise_hour   != sunrise_hour ||
+                    sun_times.sunrise_minute != sunrise_min  ||
+                    sun_times.sunset_hour    != sunset_hour  ||
+                    sun_times.sunset_minute  != sunset_min);
+    sun_times.sunrise_hour   = sunrise_hour;
     sun_times.sunrise_minute = sunrise_min;
-    sun_times.sunset_hour = sunset_hour;
-    sun_times.sunset_minute = sunset_min;
-    
-    ESP_LOGI(TAG, "Sun times updated - Sunrise: %02d:%02d, Sunset: %02d:%02d",
-             sunrise_hour, sunrise_min, sunset_hour, sunset_min);
+    sun_times.sunset_hour    = sunset_hour;
+    sun_times.sunset_minute  = sunset_min;
+
+    if (changed) {
+        ESP_LOGI(TAG, "Sun times updated - Sunrise: %02d:%02d, Sunset: %02d:%02d",
+                 sunrise_hour, sunrise_min, sunset_hour, sunset_min);
+    }
 }
 
 const womo_sun_times_t* womo_theme_get_sun_times(void)

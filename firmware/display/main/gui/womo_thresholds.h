@@ -17,6 +17,8 @@
 #define THRESH_FRESH_CRIT_DEFAULT  10
 #define THRESH_GREY_WARN_DEFAULT   70  /* % – high is bad */
 #define THRESH_GREY_CRIT_DEFAULT   90
+#define THRESH_IAQ_WARN_DEFAULT   150  /* IAQ-Wert – high is bad (BSEC: 0=gut, 500=schlecht) */
+#define THRESH_IAQ_CRIT_DEFAULT   250
 
 /* ── Struct ─────────────────────────────────────────────── */
 typedef struct {

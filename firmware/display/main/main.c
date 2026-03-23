@@ -65,15 +65,6 @@ static const char *PLACEHOLDER_GPS = "GPS : ---";
 
 // Default thresholds werden jetzt über womo_thresholds.h verwaltet (veränderbar via Einstellungen)
 
-static const lv_point_precise_t BACKLIGHT_RAY_POINTS[][2] = {
-    {{24, 8},  {24, 2}},   // oben (bleibt innerhalb des Randes)
-    {{33, 12}, {41, 4}},   // oben rechts
-    {{38, 24}, {46, 24}},  // rechts
-    {{10, 24}, {2, 24}},   // links
-    {{15, 12}, {7, 4}},    // oben links
-};
-
-
 // WiFi credentials from Kconfig
 #define WIFI_SSID      CONFIG_WOMO_WIFI_SSID
 #define WIFI_PASSWORD  CONFIG_WOMO_WIFI_PASSWORD
@@ -86,27 +77,36 @@ static lv_obj_t *date_label = NULL;
 static lv_obj_t *status_label = NULL;
 static char status_label_last_text[80] = "";
 static lv_obj_t *wifi_label = NULL;
+static lv_obj_t *wifi_icon_img = NULL;
+static lv_obj_t *lte_icon_img = NULL;
+// wifi_0_bar..wifi_4_bar + cellular_0_bar..cellular_4_bar
+static uint8_t       *wifi_icon_bufs[6]  = {0};  // wifi_1..wifi_6
+static lv_image_dsc_t wifi_icon_dscs[6]  = {0};
+static uint8_t       *lte_icon_bufs[6]   = {0};  // signal_1..signal_6
+static lv_image_dsc_t lte_icon_dscs[6]   = {0};
 static lv_obj_t *backlight_btn = NULL;
 static lv_obj_t *settings_btn  = NULL;  // Drei-Punkte-Taste → Einstellungs-Modal
-static lv_obj_t *backlight_ring = NULL;
-static lv_obj_t *backlight_icon_rays[8] = {0};
-static lv_obj_t *backlight_bulb_outline = NULL;
-static lv_obj_t *backlight_bulb_base = NULL;
-static lv_obj_t *backlight_strike = NULL;
+static lv_obj_t *backlight_img = NULL;
+static lv_obj_t *backlight_strike = NULL;  // schwarzer Strich durch das Icon
+static uint8_t  *backlight_icon_buf = NULL;
+static lv_image_dsc_t backlight_icon_dsc = {0};
 static lv_obj_t *classic_btn = NULL;
 static lv_obj_t *classic_label = NULL;
-static lv_obj_t *classic_arc = NULL;
-static lv_obj_t *classic_tick = NULL;
+static lv_obj_t *classic_img = NULL;
+static uint8_t  *classic_icon_buf = NULL;
+static lv_image_dsc_t classic_icon_dsc = {0};
 static lv_obj_t *radio_btn = NULL;
 static lv_obj_t *radio_label = NULL;
-static lv_obj_t *radio_arc = NULL;
+static lv_obj_t *radio_img = NULL;
+static uint8_t  *radio_icon_checked_buf = NULL;
+static lv_image_dsc_t radio_icon_checked_dsc = {0};
+static uint8_t  *radio_icon_unchecked_buf = NULL;
+static lv_image_dsc_t radio_icon_unchecked_dsc = {0};
 static lv_obj_t *shore_label = NULL;
 static lv_obj_t *shore_caption_label = NULL;
-static lv_obj_t *shore_arc = NULL;
-static lv_obj_t *shore_bolt_a = NULL;
-static lv_obj_t *shore_bolt_b = NULL;
-static lv_obj_t *shore_bolt_c = NULL;
-static lv_obj_t *shore_bolt_poly = NULL;
+static lv_obj_t *shore_img = NULL;
+static uint8_t  *shore_icon_buf = NULL;
+static lv_image_dsc_t shore_icon_dsc = {0};
 static lv_obj_t *battery_board_label = NULL;
 static lv_obj_t *battery_kfz_label = NULL;
 static lv_obj_t *fresh_water_caption_label = NULL;
@@ -128,8 +128,11 @@ static lv_obj_t *air_title_label = NULL; // Air value heading
 static lv_obj_t *imu_pitch_label = NULL;
 static lv_obj_t *imu_roll_label = NULL;
 static lv_obj_t *imu_heading_label = NULL;
-static lv_obj_t *gps_button = NULL;  // Unsichtbarer Klickbereich für GPS-Details
-static lv_obj_t *gps_label = NULL;    // GPS position
+static lv_obj_t *gps_button = NULL;  // Runder Icon-Button für GPS-Details
+static lv_obj_t *gps_label = NULL;    // GPS position (Alias auf gps_button)
+static lv_obj_t *gps_img = NULL;
+static uint8_t  *gps_icon_buf = NULL;
+static lv_image_dsc_t gps_icon_dsc = {0};
 static char last_gps_text[256] = ""; // Zuletzt berechneter GPS-Text (Detailansicht)
 static bool gps_details_visible = false;
 static lv_timer_t *gps_hide_timer = NULL;
@@ -288,7 +291,8 @@ static void geocode_result_cb(const womo_geocode_result_t *result, void *user_da
 static void geocode_trigger_if_needed(const womo_sensor_data_t *snapshot);
 static void backlight_update_label(void);
 static void simple_toggle_button_update(lv_obj_t *btn, lv_obj_t *label, bool active, const char *text, lv_color_t active_color);
-static lv_obj_t *ensure_arc(lv_obj_t *arc, lv_obj_t *parent, lv_color_t color, bool open_top);
+static lv_obj_t *load_icon_png(lv_obj_t *parent, const char *path, uint8_t **buf_ptr, lv_image_dsc_t *dsc, lv_obj_t *img_obj);
+static void preload_icons(void);
 static void update_classic_icon(lv_color_t color, bool active);
 static void update_radio_icon(lv_color_t color, bool active);
 static void update_shore_icon(lv_color_t color, bool active);
@@ -404,8 +408,7 @@ static void apply_text_theme_colors(void)
     if (title_label) lv_obj_set_style_text_color(title_label, text_color, 0);
     if (time_label) lv_obj_set_style_text_color(time_label, text_color, 0);
     if (date_label) lv_obj_set_style_text_color(date_label, text_color, 0);
-    if (status_label) lv_obj_set_style_text_color(status_label, text_color, 0);
-    if (status_label) lv_obj_set_style_border_color(status_label, text_color, 0);
+    if (status_label) lv_obj_set_style_text_color(status_label, lv_color_black(), 0);  // immer schwarz (hellgrauer Hintergrund)
     if (wifi_label) lv_obj_set_style_text_color(wifi_label, text_color, 0);
     if (wifi_label) lv_obj_set_style_border_color(wifi_label, text_color, 0);
     if (air_title_label) lv_obj_set_style_text_color(air_title_label, text_color, 0);
@@ -422,20 +425,15 @@ static void apply_text_theme_colors(void)
         lv_obj_set_style_border_color(gps_popup_panel, text_color, 0);
         lv_obj_set_style_text_color(gps_popup_text_label, text_color, 0);
     }
-    if (air_title_label_in) lv_obj_set_style_text_color(air_title_label_in, lv_color_black(), 0);
-    if (humid_label_in) lv_obj_set_style_text_color(humid_label_in, lv_color_black(), 0);
-    if (temp_label_in) lv_obj_set_style_text_color(temp_label_in, lv_color_black(), 0);
+    if (air_title_label_in) lv_obj_set_style_text_color(air_title_label_in, text_color, 0);
+    if (humid_label_in) lv_obj_set_style_text_color(humid_label_in, text_color, 0);
+    if (temp_label_in) lv_obj_set_style_text_color(temp_label_in, text_color, 0);
+    // IAQ, CO2, bVOC bleiben immer schwarz (dynamisch eingefärbt je Wert)
     if (rs485_debug_label) lv_obj_set_style_text_color(rs485_debug_label, text_color, 0);
-    if (imu_pitch_label) lv_obj_set_style_text_color(imu_pitch_label, text_color, 0);
-    if (imu_roll_label) lv_obj_set_style_text_color(imu_roll_label, text_color, 0);
-    if (imu_heading_label) lv_obj_set_style_text_color(imu_heading_label, text_color, 0);
-    if (gps_label) lv_obj_set_style_text_color(gps_label, text_color, 0);
-    if (gps_button) {
-        lv_color_t border = theme_mode_is_daylike(mode) ? lv_color_black() : lv_color_white();
-        lv_obj_set_style_border_color(gps_button, border, 0);
-        lv_obj_set_style_bg_color(gps_button, lv_color_hex(0xE0E0E0), 0);
-        lv_obj_set_style_bg_opa(gps_button, LV_OPA_30, 0);
-    }
+    if (imu_pitch_label) lv_obj_set_style_text_color(imu_pitch_label, lv_color_black(), 0);
+    if (imu_roll_label) lv_obj_set_style_text_color(imu_roll_label, lv_color_black(), 0);
+    if (imu_heading_label) lv_obj_set_style_text_color(imu_heading_label, lv_color_black(), 0);
+    // gps_button ist jetzt ein Icon-Button (kein Label-Text, kein Rahmen)
     if (location_label) lv_obj_set_style_text_color(location_label, text_color, 0);
     if (gps_popup_panel && gps_popup_text_label) {
         bool day = theme_mode_is_daylike(mode);
@@ -713,17 +711,50 @@ static bool is_quiet_hours(const struct tm *timeinfo)
     return (hour >= QUIET_HOUR_START) || (hour < QUIET_HOUR_END);
 }
 
+// Hilfsfunktion: signal_percent (0-100) → Icon-Index 0..4
+// WiFi: wifi_1..wifi_5 → Index 0..4
+// WiFi: wifi_1..wifi_6 → Index 0..5
+static int signal_to_wifi(unsigned int pct, bool connected) {
+    if (!connected || pct == 0) return 0;  // wifi_1 = kein Signal
+    if (pct < 20) return 1;                // wifi_2
+    if (pct < 40) return 2;                // wifi_3
+    if (pct < 60) return 3;                // wifi_4
+    if (pct < 80) return 4;                // wifi_5
+    return 5;                              // wifi_6
+}
+
+// LTE: signal_1..signal_6 → Index 0..5
+static int signal_to_lte(unsigned int pct, bool connected) {
+    if (!connected || pct == 0) return 0;  // signal_1 = kein Signal
+    if (pct < 20) return 1;                // signal_2
+    if (pct < 40) return 2;                // signal_3
+    if (pct < 60) return 3;                // signal_4
+    if (pct < 80) return 4;                // signal_5
+    return 5;                              // signal_6
+}
+
+// Hilfsfunktion: setzt WiFi/LTE Icon-Widgets auf den richtigen Deskriptor
+static void update_connectivity_icons(unsigned int wifi_pct, bool wifi_connected,
+                                       unsigned int lte_pct, bool lte_connected)
+{
+    if (wifi_icon_img) {
+        int idx = signal_to_wifi(wifi_pct, wifi_connected);
+        if (wifi_icon_dscs[idx].data)
+            lv_img_set_src(wifi_icon_img, &wifi_icon_dscs[idx]);
+    }
+    if (lte_icon_img) {
+        int idx = signal_to_lte(lte_pct, lte_connected);
+        if (lte_icon_dscs[idx].data)
+            lv_img_set_src(lte_icon_img, &lte_icon_dscs[idx]);
+    }
+}
+
 static void update_connectivity_label(void)
 {
     if (!wifi_label) {
         return;
     }
 
-    char wifi_line[64];
-    char lte_line[64];
-    char combined[140];
-
-    /* Router-Daten unter Mutex kopieren */
     womo_router_wifi_status_t rw = {0};
     womo_router_lte_status_t  rl = {0};
     if (s_router_mutex) {
@@ -733,29 +764,10 @@ static void update_connectivity_label(void)
         xSemaphoreGive(s_router_mutex);
     }
 
-    /* WiFi-Zeile: Router WAN WiFi-Client (externes WLAN) */
-    if (!womo_wifi_is_connected()) {
-        /* ESP32 selbst hat keine Verbindung zum Router-AP */
-        snprintf(wifi_line, sizeof(wifi_line), "WiFi: Router offline");
-    } else if (rw.connected && rw.ssid[0]) {
-        snprintf(wifi_line, sizeof(wifi_line), "WiFi: %s %u%%",
-                 rw.ssid, rw.signal_percent);
-    } else {
-        snprintf(wifi_line, sizeof(wifi_line), "WiFi: nicht verbunden");
-    }
-
-    /* LTE-Zeile: Router Mobilfunk */
-    if (rl.registered && rl.operator_name[0]) {
-        snprintf(lte_line, sizeof(lte_line), "LTE : %s %u%%",
-                 rl.operator_name, rl.signal_percent);
-    } else if (rl.operator_name[0]) {
-        snprintf(lte_line, sizeof(lte_line), "LTE : %s 0%%", rl.operator_name);
-    } else {
-        snprintf(lte_line, sizeof(lte_line), "LTE : -- 0%%");
-    }
-
-    snprintf(combined, sizeof(combined), "%s\n%s", wifi_line, lte_line);
-    lv_label_set_text(wifi_label, combined);
+    bool wifi_ok = womo_wifi_is_connected() && rw.connected;
+    bool lte_ok  = rl.registered;
+    update_connectivity_icons(rw.signal_percent, wifi_ok,
+                              rl.signal_percent,  lte_ok);
 }
 
 static void connectivity_snapshot_fill(womo_connectivity_snapshot_t *snapshot)
@@ -1138,8 +1150,8 @@ static bool load_background_image(lv_obj_t *screen, bool is_day)
 // Malibu-Logo von SD-Karte laden und auf dem Ducato positionieren.
 // Datei: /sdcard/images/Malibu-Logo.png (transparenter Hintergrund empfohlen).
 // Position und Skalierung per Defines anpassen:
-#define LOGO_X         560   // X-Position linke obere Ecke (Pixel vom linken Rand)
-#define LOGO_Y         260   // Y-Position linke obere Ecke (Pixel vom oberen Rand)
+#define LOGO_X         565   // X-Position linke obere Ecke (Pixel vom linken Rand)
+#define LOGO_Y         275   // Y-Position linke obere Ecke (Pixel vom oberen Rand)
 #define LOGO_SCALE_PCT  50   // Skalierung in Prozent (100 = Originalgröße, 50 = halb)
 static void load_logo_image(lv_obj_t *screen)
 {
@@ -1455,10 +1467,13 @@ static void ui_update_timer_cb(lv_timer_t *timer)
 
         snprintf(combined, sizeof(combined), "%s\n%s", wifi_line, lte_line);
         if (strcmp(combined, last_connectivity_text) != 0) {
-            lv_label_set_text(wifi_label, combined);
             strncpy(last_connectivity_text, combined, sizeof(last_connectivity_text) - 1);
             last_connectivity_text[sizeof(last_connectivity_text) - 1] = '\0';
         }
+        bool wifi_ok = wifi_connected_now && rw.connected;
+        bool lte_ok  = rl.registered;
+        update_connectivity_icons(rw.signal_percent, wifi_ok,
+                                  rl.signal_percent,  lte_ok);
 
         if (modal_open) {
             womo_connectivity_snapshot_t modal_snapshot;
@@ -3250,92 +3265,138 @@ static void perf_monitor_toggle_event_cb(lv_event_t *e)
     }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ * Hilfsfunktion: PNG von SD-Karte in lv_image_dsc_t laden und lv_img
+ * Widget setzen.  Bestehenden Puffer freigeben falls bereits belegt.
+ * Rückgabe: img-Widget (neues lv_img_create falls *img_ptr == NULL)
+ * ───────────────────────────────────────────────────────────────────────── */
+static lv_obj_t *load_icon_png(lv_obj_t *parent, const char *path,
+                                uint8_t **buf_ptr, lv_image_dsc_t *dsc,
+                                lv_obj_t *img_obj)
+{
+    if (!path || !buf_ptr || !dsc) return img_obj;
+
+    FILE *fp = fopen(path, "rb");
+    if (!fp) {
+        ESP_LOGW(TAG, "Icon nicht gefunden: %s", path);
+        return img_obj;
+    }
+    fseek(fp, 0, SEEK_END);
+    long fsz = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    if (fsz <= 0 || fsz > 256 * 1024) {
+        fclose(fp);
+        return img_obj;
+    }
+    if (*buf_ptr) {
+        heap_caps_free(*buf_ptr);
+        *buf_ptr = NULL;
+    }
+    uint8_t *buf = heap_caps_malloc((size_t)fsz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!buf || fread(buf, 1, (size_t)fsz, fp) != (size_t)fsz) {
+        if (buf) heap_caps_free(buf);
+        fclose(fp);
+        return img_obj;
+    }
+    fclose(fp);
+
+    *buf_ptr = buf;
+    memset(dsc, 0, sizeof(*dsc));
+    dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
+    dsc->header.w     = 0;
+    dsc->header.h     = 0;
+    dsc->header.cf    = LV_COLOR_FORMAT_RAW_ALPHA;
+    dsc->data         = buf;
+    dsc->data_size    = (uint32_t)fsz;
+
+    if (parent) {
+        if (!img_obj) {
+            img_obj = lv_img_create(parent);
+            lv_obj_clear_flag(img_obj, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_set_style_img_recolor_opa(img_obj, LV_OPA_TRANSP, 0);
+            lv_obj_center(img_obj);
+        }
+        lv_img_set_src(img_obj, dsc);
+        lv_obj_center(img_obj);
+    }
+    return img_obj;
+}
+
+static void preload_icons(void)
+{
+    backlight_img = load_icon_png(backlight_btn,
+                                  "/sdcard/images/icons-48(32)/lightbulb_circle.png",
+                                  &backlight_icon_buf, &backlight_icon_dsc,
+                                  backlight_img);
+    if (backlight_btn && !backlight_strike) {
+        static lv_point_precise_t s_strike_pts[2] = {{11, 11}, {37, 37}};
+        backlight_strike = lv_line_create(backlight_btn);
+        lv_line_set_points(backlight_strike, s_strike_pts, 2);
+        lv_obj_set_style_line_width(backlight_strike, 2, 0);
+        lv_obj_set_style_line_color(backlight_strike, lv_color_hex(0x000000), 0);
+        lv_obj_set_style_line_rounded(backlight_strike, true, 0);
+        lv_obj_set_style_bg_opa(backlight_strike, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(backlight_strike, 0, 0);
+        lv_obj_clear_flag(backlight_strike, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    }
+    classic_img = load_icon_png(classic_btn,
+                                "/sdcard/images/icons-48(32)/power_settings_new.png",
+                                &classic_icon_buf, &classic_icon_dsc,
+                                classic_img);
+    // Radio: beide Zustands-Icons in separate Puffer vorladen (kein Widget hier)
+    load_icon_png(NULL,
+                  "/sdcard/images/icons-48(32)/radio_button_checked.png",
+                  &radio_icon_checked_buf, &radio_icon_checked_dsc,
+                  NULL);
+    load_icon_png(NULL,
+                  "/sdcard/images/icons-48(32)/radio_button_unchecked.png",
+                  &radio_icon_unchecked_buf, &radio_icon_unchecked_dsc,
+                  NULL);
+    // Radio-Widget auf radio_btn erstellen und initiales Icon setzen
+    if (radio_btn && !radio_img) {
+        radio_img = lv_img_create(radio_btn);
+        lv_obj_clear_flag(radio_img, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_center(radio_img);
+    }
+    if (radio_img) {
+        lv_image_dsc_t *dsc = radio_on ? &radio_icon_checked_dsc : &radio_icon_unchecked_dsc;
+        if (dsc->data) lv_img_set_src(radio_img, dsc);
+    }
+    shore_img = load_icon_png(shore_label,
+                              "/sdcard/images/icons-48(32)/charger.png",
+                              &shore_icon_buf, &shore_icon_dsc,
+                              shore_img);
+    // WiFi + LTE Signalstärken-Icons vorladen (32×32px, Ordner icons-48(32))
+    static const char * const wifi_paths[6] = {
+        "/sdcard/images/icons-48(32)/wifi_1.png",
+        "/sdcard/images/icons-48(32)/wifi_2.png",
+        "/sdcard/images/icons-48(32)/wifi_3.png",
+        "/sdcard/images/icons-48(32)/wifi_4.png",
+        "/sdcard/images/icons-48(32)/wifi_5.png",
+        "/sdcard/images/icons-48(32)/wifi_6.png",
+    };
+    static const char * const lte_paths[6] = {
+        "/sdcard/images/icons-48(32)/signal_1.png",
+        "/sdcard/images/icons-48(32)/signal_2.png",
+        "/sdcard/images/icons-48(32)/signal_3.png",
+        "/sdcard/images/icons-48(32)/signal_4.png",
+        "/sdcard/images/icons-48(32)/signal_5.png",
+        "/sdcard/images/icons-48(32)/signal_6.png",
+    };
+    for (int i = 0; i < 6; i++)
+        load_icon_png(NULL, wifi_paths[i], &wifi_icon_bufs[i], &wifi_icon_dscs[i], NULL);
+    for (int i = 0; i < 6; i++)
+        load_icon_png(NULL, lte_paths[i],  &lte_icon_bufs[i],  &lte_icon_dscs[i],  NULL);
+}
+
 static void backlight_update_label(void)
 {
     if (!backlight_btn) {
         return;
     }
-
-    lv_color_t btn_bg     = lv_color_hex(0xC0C0C0); // immer silber – AUS ist unsichtbar
-    lv_color_t icon_color = lv_color_hex(0x000000);
-    lv_color_t border_color = icon_color;
-
-    lv_obj_set_style_bg_color(backlight_btn, btn_bg, 0);
+    lv_obj_set_style_bg_color(backlight_btn, lv_color_hex(0xC0C0C0), 0);
     lv_obj_set_style_bg_opa(backlight_btn, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(backlight_btn, 0, 0);
-    lv_obj_set_style_border_color(backlight_btn, lv_color_hex(0x7A7A7A), 0);
-
-    if (!backlight_ring) {
-        backlight_ring = lv_obj_create(backlight_btn);
-        lv_obj_set_size(backlight_ring, 42, 42);
-        lv_obj_set_style_radius(backlight_ring, LV_RADIUS_CIRCLE, 0); // Ring bleibt kreisrund
-        lv_obj_set_style_bg_opa(backlight_ring, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_width(backlight_ring, 3, 0); // 1px dicker
-        lv_obj_set_style_border_color(backlight_ring, border_color, 0);
-        lv_obj_set_style_pad_all(backlight_ring, 0, 0);
-        lv_obj_clear_flag(backlight_ring, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_center(backlight_ring);
-    } else {
-        lv_obj_set_style_border_color(backlight_ring, border_color, 0);
-        lv_obj_set_style_border_width(backlight_ring, 3, 0);
-        lv_obj_set_size(backlight_ring, 42, 42);
-        lv_obj_set_style_radius(backlight_ring, LV_RADIUS_CIRCLE, 0);
-        lv_obj_clear_flag(backlight_ring, LV_OBJ_FLAG_CLICKABLE);
-    }
-
-    if (!backlight_bulb_outline) {
-        backlight_bulb_outline = lv_obj_create(backlight_btn);
-        lv_obj_set_size(backlight_bulb_outline, 18, 18);
-        lv_obj_set_style_radius(backlight_bulb_outline, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_opa(backlight_bulb_outline, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_width(backlight_bulb_outline, 1, 0);
-        lv_obj_set_style_border_color(backlight_bulb_outline, icon_color, 0);
-        lv_obj_set_style_pad_all(backlight_bulb_outline, 0, 0);
-        lv_obj_clear_flag(backlight_bulb_outline, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_center(backlight_bulb_outline);
-    } else {
-        lv_obj_set_style_border_color(backlight_bulb_outline, icon_color, 0);
-        lv_obj_clear_flag(backlight_bulb_outline, LV_OBJ_FLAG_CLICKABLE);
-    }
-
-    if (!backlight_bulb_base) {
-        backlight_bulb_base = lv_obj_create(backlight_btn);
-        lv_obj_set_size(backlight_bulb_base, 11, 6);
-        lv_obj_set_style_radius(backlight_bulb_base, 2, 0);
-        lv_obj_set_style_bg_color(backlight_bulb_base, icon_color, 0);
-        lv_obj_set_style_bg_opa(backlight_bulb_base, LV_OPA_COVER, 0);
-        lv_obj_set_style_border_width(backlight_bulb_base, 0, 0);
-        lv_obj_set_style_pad_all(backlight_bulb_base, 0, 0);
-        lv_obj_clear_flag(backlight_bulb_base, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_align(backlight_bulb_base, LV_ALIGN_CENTER, 0, 10);
-    } else {
-        lv_obj_set_style_bg_color(backlight_bulb_base, icon_color, 0);
-        lv_obj_clear_flag(backlight_bulb_base, LV_OBJ_FLAG_CLICKABLE);
-    }
-
-    size_t ray_count = sizeof(BACKLIGHT_RAY_POINTS) / sizeof(BACKLIGHT_RAY_POINTS[0]);
-    for (size_t i = 0; i < ray_count; ++i) {
-        if (backlight_icon_rays[i]) {
-            lv_obj_del(backlight_icon_rays[i]);
-            backlight_icon_rays[i] = NULL;
-        }
-    }
-
-    if (!backlight_strike) {
-        static const lv_point_precise_t strike_points[2] = {{10, 38}, {38, 10}}; // endet innerhalb des blauen Rings
-        backlight_strike = lv_line_create(backlight_btn);
-        lv_line_set_points(backlight_strike, strike_points, 2);
-        lv_obj_set_size(backlight_strike, 48, 48);
-        lv_obj_center(backlight_strike);
-        lv_obj_set_style_line_width(backlight_strike, 3, 0);
-        lv_obj_set_style_line_color(backlight_strike, border_color, 0);
-        lv_obj_set_style_line_rounded(backlight_strike, true, 0);
-        lv_obj_clear_flag(backlight_strike, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    } else {
-        lv_obj_set_style_line_width(backlight_strike, 3, 0);
-        lv_obj_set_style_line_color(backlight_strike, border_color, 0);
-        lv_obj_clear_flag(backlight_strike, LV_OBJ_FLAG_CLICKABLE);
-    }
 }
 
 static void simple_toggle_button_update(lv_obj_t *btn, lv_obj_t *label, bool active, const char *text, lv_color_t active_color)
@@ -3349,110 +3410,37 @@ static void simple_toggle_button_update(lv_obj_t *btn, lv_obj_t *label, bool act
     lv_obj_set_style_bg_color(btn, bg, 0);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(btn, 0, 0);
-    lv_obj_set_style_border_color(btn, lv_color_hex(0x7A7A7A), 0);
     lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_pad_all(btn, 0, 0);
 
-    lv_label_set_text(label, (text && text[0]) ? text : "");
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(label, active ? lv_color_white() : lv_color_black(), 0);
+    lv_label_set_text(label, "");
     lv_obj_center(label);
-}
-
-static lv_obj_t *ensure_arc(lv_obj_t *arc, lv_obj_t *parent, lv_color_t color, bool open_top)
-{
-    if (!parent) {
-        return arc;
-    }
-
-    if (!arc) {
-        arc = lv_arc_create(parent);
-        lv_obj_set_size(arc, 42, 42); // wie Backlight: Ring innerhalb des Buttons
-        lv_obj_center(arc);
-        lv_obj_clear_flag(arc, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_style_bg_opa(arc, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_pad_all(arc, 0, 0);
-        lv_obj_set_style_border_width(arc, 0, 0);
-        // Drehe Null-Position nach oben, damit open_top die Lücke oben platziert
-        lv_arc_set_rotation(arc, 270);
-        // Knob ausblenden, sonst erscheint ein blauer Punkt
-        lv_obj_set_style_bg_opa(arc, LV_OPA_TRANSP, LV_PART_KNOB);
-        lv_obj_set_style_border_width(arc, 0, LV_PART_KNOB);
-        lv_obj_set_style_arc_width(arc, 0, LV_PART_KNOB);
-        lv_obj_set_style_pad_all(arc, 0, LV_PART_KNOB);
-    }
-
-    uint16_t start = open_top ? 30 : 0;
-    uint16_t end = open_top ? 330 : 360;
-    lv_arc_set_bg_angles(arc, start, end);
-    lv_arc_set_value(arc, 0);
-    lv_obj_set_style_arc_width(arc, 3, 0);
-    lv_obj_set_style_arc_color(arc, color, 0);
-    lv_obj_set_style_arc_opa(arc, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(arc, 0, 0);
-    return arc;
 }
 
 static void update_classic_icon(lv_color_t color, bool active)
 {
-    classic_arc = ensure_arc(classic_arc, classic_btn, lv_color_black(), true);
-    if (classic_tick == NULL && classic_btn) {
-        static const lv_point_precise_t tick_pts[2] = {{24, 6}, {24, 16}};
-        classic_tick = lv_line_create(classic_btn);
-        lv_line_set_points(classic_tick, tick_pts, 2);
-        lv_obj_set_size(classic_tick, 48, 48);
-        lv_obj_center(classic_tick);
-        lv_obj_clear_flag(classic_tick, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_style_line_width(classic_tick, 3, 0);
-        lv_obj_set_style_line_rounded(classic_tick, true, 0);
-    }
-    if (classic_tick) {
-        lv_obj_set_style_line_color(classic_tick, lv_color_black(), 0);
-        lv_obj_set_style_line_opa(classic_tick, active ? LV_OPA_COVER : LV_OPA_60, 0);
-    }
+    if (!classic_btn) return;
+    lv_color_t bg = active ? lv_color_hex(0x2E7D32) : lv_color_hex(0xC0C0C0);
+    lv_obj_set_style_bg_color(classic_btn, bg, 0);
+    lv_obj_set_style_bg_opa(classic_btn, LV_OPA_COVER, 0);
+    // Icon bereits geladen – keine SD-Zugriff
 }
 
 static void update_radio_icon(lv_color_t color, bool active)
 {
-    radio_arc = ensure_arc(radio_arc, radio_btn, lv_color_black(), false);
-    if (radio_arc) {
-        lv_obj_set_style_arc_color(radio_arc, lv_color_black(), 0);
-        lv_obj_set_style_arc_opa(radio_arc, LV_OPA_COVER, 0);
+    if (!radio_btn || !radio_img) return;
+    lv_obj_set_style_bg_color(radio_btn, lv_color_hex(0xC0C0C0), 0);
+    lv_obj_set_style_bg_opa(radio_btn, LV_OPA_COVER, 0);
+    // Zwischen vorgeladenen Deskriptoren wechseln – kein SD-Zugriff
+    lv_image_dsc_t *dsc = active ? &radio_icon_checked_dsc : &radio_icon_unchecked_dsc;
+    if (dsc->data) {
+        lv_img_set_src(radio_img, dsc);
     }
 }
 
 static void update_shore_icon(lv_color_t color, bool active)
 {
-    shore_arc = ensure_arc(shore_arc, shore_label, lv_color_black(), false);
-    if (shore_arc) {
-        lv_obj_set_style_arc_color(shore_arc, lv_color_black(), 0);
-        lv_obj_set_style_arc_opa(shore_arc, LV_OPA_COVER, 0);
-    }
-
-    // Aufräumen alter Segmente, falls vorhanden
-    if (shore_bolt_a) { lv_obj_del(shore_bolt_a); shore_bolt_a = NULL; }
-    if (shore_bolt_b) { lv_obj_del(shore_bolt_b); shore_bolt_b = NULL; }
-    if (shore_bolt_c) { lv_obj_del(shore_bolt_c); shore_bolt_c = NULL; }
-
-    if (!shore_bolt_poly && shore_label) {
-        static const lv_point_precise_t bolt_pts[] = {
-            {26, 10}, {18, 24}, {26, 24}, {20, 36}, {30, 22}, {22, 22}, {26, 10}
-        };
-        shore_bolt_poly = lv_line_create(shore_label);
-        lv_line_set_points(shore_bolt_poly, bolt_pts, sizeof(bolt_pts) / sizeof(bolt_pts[0]));
-        lv_obj_set_size(shore_bolt_poly, 48, 48);
-        lv_obj_center(shore_bolt_poly);
-        lv_obj_clear_flag(shore_bolt_poly, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_style_line_width(shore_bolt_poly, 3, 0);
-        lv_obj_set_style_line_rounded(shore_bolt_poly, true, 0);
-    }
-
-    lv_opa_t bolt_opa = LV_OPA_COVER; // immer voll deckend
-    lv_color_t bolt_color = lv_color_black();
-    if (shore_bolt_poly) {
-        lv_obj_set_style_line_color(shore_bolt_poly, bolt_color, 0);
-        lv_obj_set_style_line_opa(shore_bolt_poly, bolt_opa, 0);
-    }
+    (void)color; (void)active; // Icon bereits geladen – kein SD-Zugriff
 }
 
 // Timer-Callbacks für asynchronen RS485-Send (blockiert nicht den LVGL-Thread)
@@ -3552,10 +3540,9 @@ static void shore_power_update_label(void)
         return;
     }
 
-    lv_color_t bg = shore_power_present ? lv_color_hex(0xF9A825) : lv_color_hex(0xE0E0E0);
-    lv_opa_t opa = shore_power_present ? LV_OPA_COVER : LV_OPA_TRANSP;
+    lv_color_t bg = shore_power_present ? lv_color_hex(0xF9A825) : lv_color_hex(0xC0C0C0);
     lv_obj_set_style_bg_color(shore_label, bg, 0);
-    lv_obj_set_style_bg_opa(shore_label, opa, 0);
+    lv_obj_set_style_bg_opa(shore_label, LV_OPA_COVER, 0);
     lv_label_set_text(shore_label, "");
 }
 
@@ -3734,27 +3721,42 @@ void app_main()
         lv_obj_set_style_text_color(date_label, lv_color_black(), 0);
         lv_obj_align(date_label, LV_ALIGN_BOTTOM_LEFT, 310, -15);
         
-        // Create WiFi status (top left) - moved from right
-        wifi_label = lv_label_create(screen);
-        lv_label_set_text(wifi_label, "WiFi: offline 0%\nLTE : -- 0%");
-        lv_obj_set_style_text_font(wifi_label, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(wifi_label, lv_color_black(), 0);
-        lv_obj_set_style_border_width(wifi_label, 2, 0);
-        lv_obj_set_style_border_color(wifi_label, lv_color_black(), 0);
-        lv_obj_set_style_radius(wifi_label, 6, 0);
-        lv_obj_set_style_pad_all(wifi_label, 6, 0);
-        lv_obj_set_style_bg_color(wifi_label, lv_color_hex(0xE0E0E0), 0);
-        lv_obj_set_style_bg_opa(wifi_label, LV_OPA_30, 0); // 70% Durchscheinen
-        lv_obj_set_style_text_align(wifi_label, LV_TEXT_ALIGN_LEFT, 0);
-        lv_obj_align(wifi_label, LV_ALIGN_TOP_LEFT, 10, 10);
+        // Create WiFi/LTE status button (top left) – Pill-Form, links WiFi, rechts LTE
+        wifi_label = lv_btn_create(screen);
+        lv_obj_set_size(wifi_label, 104, 40);
+        lv_obj_set_style_radius(wifi_label, LV_RADIUS_CIRCLE, 0);  // Pill-Form (halbkreisförmige Enden)
+        lv_obj_set_style_bg_color(wifi_label, lv_color_hex(0xC0C0C0), 0);
+        lv_obj_set_style_bg_opa(wifi_label, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(wifi_label, 0, 0);
+        lv_obj_set_style_pad_all(wifi_label, 0, 0);
+        lv_obj_align(wifi_label, LV_ALIGN_TOP_LEFT, 80, 14);
         lv_obj_add_flag(wifi_label, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(wifi_label, wifi_label_event_cb, LV_EVENT_CLICKED, NULL);
+        // Trennlinie mittig zwischen WiFi und LTE
+        lv_obj_t *wifi_divider = lv_obj_create(wifi_label);
+        lv_obj_set_size(wifi_divider, 2, 24);
+        lv_obj_set_style_bg_color(wifi_divider, lv_color_hex(0x808080), 0);
+        lv_obj_set_style_bg_opa(wifi_divider, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(wifi_divider, 0, 0);
+        lv_obj_set_style_pad_all(wifi_divider, 0, 0);
+        lv_obj_set_style_radius(wifi_divider, 1, 0);
+        lv_obj_center(wifi_divider);
+        lv_obj_clear_flag(wifi_divider, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        // WiFi-Icon links, LTE-Icon rechts
+        wifi_icon_img = lv_img_create(wifi_label);
+        lv_obj_clear_flag(wifi_icon_img, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_style_img_recolor_opa(wifi_icon_img, LV_OPA_TRANSP, 0);
+        lv_obj_align(wifi_icon_img, LV_ALIGN_LEFT_MID, 10, 0);
+        lte_icon_img = lv_img_create(wifi_label);
+        lv_obj_clear_flag(lte_icon_img, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_style_img_recolor_opa(lte_icon_img, LV_OPA_TRANSP, 0);
+        lv_obj_align(lte_icon_img, LV_ALIGN_RIGHT_MID, -12, 0);
         update_connectivity_label();
 
         // Zusätzliche Schalter links (klassisch, Radio) und Netzstrom-Anzeige
         classic_btn = lv_btn_create(screen);
         lv_obj_set_size(classic_btn, 48, 48);
-        lv_obj_align(classic_btn, LV_ALIGN_BOTTOM_LEFT, 10, -68);
+        lv_obj_align(classic_btn, LV_ALIGN_TOP_LEFT, 10, 10);
         lv_obj_set_style_radius(classic_btn, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(classic_btn, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(classic_btn, 0, 0);
@@ -3767,7 +3769,7 @@ void app_main()
 
         radio_btn = lv_btn_create(screen);
         lv_obj_set_size(radio_btn, 48, 48);
-        lv_obj_align_to(radio_btn, wifi_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
+        lv_obj_align(radio_btn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
         lv_obj_set_style_radius(radio_btn, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(radio_btn, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(radio_btn, 0, 0);
@@ -3799,38 +3801,42 @@ void app_main()
             // Backlight Toggle (Lampe) unten mittig
             backlight_btn = lv_btn_create(screen);
             lv_obj_set_size(backlight_btn, 48, 48);
-            lv_obj_align(backlight_btn, LV_ALIGN_RIGHT_MID, -10, 0); // rechtsbündig mit einheitlichem Rand
+            lv_obj_align(backlight_btn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
             lv_obj_set_style_radius(backlight_btn, LV_RADIUS_CIRCLE, 0);
             lv_obj_set_style_bg_opa(backlight_btn, LV_OPA_COVER, 0);
             lv_obj_set_style_border_width(backlight_btn, 0, 0);
+            lv_obj_set_style_pad_all(backlight_btn, 0, 0); // content area = volle 48×48
             lv_obj_set_style_border_color(backlight_btn, lv_color_hex(0x7A7A7A), 0);
             lv_obj_add_flag(backlight_btn, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_add_event_cb(backlight_btn, backlight_button_event_cb, LV_EVENT_CLICKED, NULL);
 
-            backlight_update_label(); // setzt Farbe + Icon abhängig von backlight_on
+            backlight_update_label(); // setzt Button-Farbe
+            preload_icons();           // alle Icons einmalig von SD laden
 
-            // Drei-Punkte-Button (···) → öffnet Einstellungs-Modal
-            // Platz: zwischen Ortsname (endet ~x=265) und Datum (x=310)
+            // Drei-Punkte-Button (⋮) → öffnet Einstellungs-Modal, rechts neben WiFi-Button
             settings_btn = lv_btn_create(screen);
-            lv_obj_set_size(settings_btn, 40, 28);
-            lv_obj_align(settings_btn, LV_ALIGN_BOTTOM_LEFT, 246, -8); // zwischen Ort und Datum
-            lv_obj_set_style_radius(settings_btn, 0, 0);
-            lv_obj_set_style_bg_opa(settings_btn, LV_OPA_TRANSP, 0);   // kein Hintergrund
+            lv_obj_set_size(settings_btn, 28, 40);
+            lv_obj_align(settings_btn, LV_ALIGN_TOP_LEFT, 242, 24);
+            lv_obj_set_style_transform_rotation(settings_btn, 900, 0); // 90°
+            lv_obj_set_style_radius(settings_btn, LV_RADIUS_CIRCLE, 0);
+            lv_obj_set_style_bg_color(settings_btn, lv_color_hex(0xC0C0C0), 0);
+            lv_obj_set_style_bg_opa(settings_btn, LV_OPA_COVER, 0);
             lv_obj_set_style_border_width(settings_btn, 0, 0);
             lv_obj_set_style_shadow_width(settings_btn, 0, 0);
+            lv_obj_set_style_pad_all(settings_btn, 0, 0);
             lv_obj_add_flag(settings_btn, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_add_event_cb(settings_btn, settings_button_event_cb, LV_EVENT_CLICKED, NULL);
-            // Drei horizontale Punkte (···)
+            // Drei vertikale Punkte (⋮)
             for (int i = 0; i < 3; i++) {
                 lv_obj_t *dot = lv_obj_create(settings_btn);
                 lv_obj_set_size(dot, 6, 6);
                 lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-                lv_obj_set_style_bg_color(dot, lv_color_white(), 0);
+                lv_obj_set_style_bg_color(dot, lv_color_hex(0x444444), 0);
                 lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
                 lv_obj_set_style_border_width(dot, 0, 0);
                 lv_obj_set_style_pad_all(dot, 0, 0);
                 lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-                lv_obj_align(dot, LV_ALIGN_CENTER, (i - 1) * 11, 0); // horizontal: -11, 0, +11
+                lv_obj_align(dot, LV_ALIGN_CENTER, 0, (i - 1) * 11); // vertikal: -11, 0, +11
             }
         
         // Weather data (top right) - Gas first, all one font size larger
@@ -3841,7 +3847,7 @@ void app_main()
     lv_obj_set_style_text_font(air_title_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(air_title_label, lv_color_black(), 0);
     lv_obj_set_style_text_align(air_title_label, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_align(air_title_label, LV_ALIGN_TOP_RIGHT, -10, 10);
+    lv_obj_align(air_title_label, LV_ALIGN_TOP_RIGHT, -10, 23);
 
     press_container = lv_obj_create(screen);
     lv_obj_clear_flag(press_container, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
@@ -3853,7 +3859,7 @@ void app_main()
     lv_obj_set_style_border_width(press_container, 0, 0);
     lv_obj_set_style_pad_all(press_container, 0, 0);
     lv_obj_set_style_pad_column(press_container, 4, 0);
-    lv_obj_align(press_container, LV_ALIGN_TOP_RIGHT, -10, 35);
+    lv_obj_align(press_container, LV_ALIGN_TOP_RIGHT, -10, 48);
 
     press_icon_label = lv_label_create(press_container);
     lv_label_set_text(press_icon_label, press_trend_arrow(NULL));
@@ -3872,7 +3878,7 @@ void app_main()
     lv_obj_set_style_text_font(humid_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(humid_label, lv_color_black(), 0);
     lv_obj_set_style_text_align(humid_label, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_align(humid_label, LV_ALIGN_TOP_RIGHT, -10, 60);
+    lv_obj_align(humid_label, LV_ALIGN_TOP_RIGHT, -10, 73);
 
     temp_label = lv_label_create(screen);
     snprintf(init_buf, sizeof(init_buf), "--.- °C");
@@ -3880,7 +3886,7 @@ void app_main()
     lv_obj_set_style_text_font(temp_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(temp_label, lv_color_black(), 0);
     lv_obj_set_style_text_align(temp_label, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_align(temp_label, LV_ALIGN_TOP_RIGHT, -10, 85);
+    lv_obj_align(temp_label, LV_ALIGN_TOP_RIGHT, -10, 98);
 
     // IMU-Werte als freistehende Labels (ca. 40% von oben, 30% vom rechten Rand)
     lv_coord_t disp_w = lv_disp_get_hor_res(NULL);
@@ -3892,94 +3898,94 @@ void app_main()
         disp_h = 480;
     }
 
-    // Innenraum-BME680 (addr 0x76) mittig platzieren, etwas tiefer (ca. +1/4 Displayhöhe)
-    lv_coord_t indoor_base_y = 170 + (disp_h / 4) - 35; // 15px höher
-    // Block so ausrichten, dass das rechte Ende (rechtsbündig) mittig im Display liegt
-    lv_coord_t indoor_block_x = (disp_w / 2) - 285; // +5px nach rechts
+    // Koordinaten für beide Blöcke vorab berechnen (werden getauscht)
+    lv_coord_t indoor_base_y = 170 + (disp_h / 4) - 35;
+    lv_coord_t indoor_block_x = (disp_w / 2) - 285;
+
+    lv_coord_t right_margin = (lv_coord_t)lrintf(disp_w * 0.30f) - 30 - 15;
+    if (right_margin < 0) right_margin = 0;
+    lv_coord_t top_offset = (lv_coord_t)lrintf(disp_h * 0.40f) - 40 + 10;
+    if (top_offset < 0) top_offset = 0;
+    lv_coord_t line_spacing = 18;
+
+    // Innenluft jetzt an IMU-Position (rechts oben)
+    lv_coord_t air_x = disp_w - right_margin - 160 - 3;
+    lv_coord_t air_y = top_offset - 20;
     air_title_label_in = lv_label_create(screen);
     lv_label_set_text(air_title_label_in, womo_locale_get_string(STR_AIR_INDOOR));
     lv_obj_set_style_text_font(air_title_label_in, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(air_title_label_in, lv_color_black(), 0);
-    lv_obj_set_width(air_title_label_in, 320);
+    lv_obj_set_width(air_title_label_in, 160);
     lv_obj_set_style_text_align(air_title_label_in, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(air_title_label_in, indoor_block_x, indoor_base_y);
+    lv_obj_set_pos(air_title_label_in, air_x, air_y);
 
     humid_label_in = lv_label_create(screen);
     lv_label_set_text(humid_label_in, "--.-- %");
     lv_obj_set_style_text_font(humid_label_in, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(humid_label_in, lv_color_black(), 0);
-    lv_obj_set_width(humid_label_in, 150);
+    lv_obj_set_width(humid_label_in, 75);
     lv_obj_set_style_text_align(humid_label_in, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(humid_label_in, indoor_block_x + 100, indoor_base_y + 25);
+    lv_obj_set_pos(humid_label_in, air_x + 11, air_y + 25);
 
     temp_label_in = lv_label_create(screen);
     lv_label_set_text(temp_label_in, "--.- °C");
     lv_obj_set_style_text_font(temp_label_in, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(temp_label_in, lv_color_black(), 0);
-    lv_obj_set_width(temp_label_in, 150);
+    lv_obj_set_width(temp_label_in, 75);
     lv_obj_set_style_text_align(temp_label_in, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(temp_label_in, indoor_block_x + 170, indoor_base_y + 25);
+    lv_obj_set_pos(temp_label_in, air_x + 85, air_y + 25);
 
     gas_label_in = lv_label_create(screen);
     lv_label_set_text(gas_label_in, PLACEHOLDER_IAQ);
     lv_obj_set_style_text_font(gas_label_in, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(gas_label_in, lv_color_black(), 0);
-    lv_obj_set_width(gas_label_in, 320);
+    lv_obj_set_width(gas_label_in, 160);
     lv_obj_set_style_text_align(gas_label_in, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(gas_label_in, indoor_block_x, indoor_base_y + 86);   // IAQ unten
+    lv_obj_set_pos(gas_label_in, air_x + 61, air_y + 68);  // IAQ hinter CO2 (gleiche Zeile)
 
     press_label_in = lv_label_create(screen);
     lv_label_set_text(press_label_in, PLACEHOLDER_CO2);
     lv_obj_set_style_text_font(press_label_in, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(press_label_in, lv_color_black(), 0);
-    lv_obj_set_width(press_label_in, 320);
+    lv_obj_set_width(press_label_in, 160);
     lv_obj_set_style_text_align(press_label_in, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(press_label_in, indoor_block_x, indoor_base_y + 68);  // CO2 Mitte
+    lv_obj_set_pos(press_label_in, air_x, air_y + 68);  // CO2 Mitte
 
     voc_label_in = lv_label_create(screen);
     lv_label_set_text(voc_label_in, PLACEHOLDER_BVOC);
     lv_obj_set_style_text_font(voc_label_in, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(voc_label_in, lv_color_black(), 0);
-    lv_obj_set_width(voc_label_in, 320);
+    lv_obj_set_width(voc_label_in, 160);
     lv_obj_set_style_text_align(voc_label_in, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(voc_label_in, indoor_block_x, indoor_base_y + 50);    // bVOC oben
+    lv_obj_set_pos(voc_label_in, air_x, air_y + 50);    // bVOC oben
 
     // Farben an aktuelles Theme anpassen (Tag/Nacht)
     apply_text_theme_colors();
 
-    lv_coord_t right_margin = (lv_coord_t)lrintf(disp_w * 0.30f) - 30 - 15;
-    if (right_margin < 0) {
-        right_margin = 0;
-    }
-    lv_coord_t top_offset = (lv_coord_t)lrintf(disp_h * 0.40f) - 40 + 10;
-    if (top_offset < 0) {
-        top_offset = 0;
-    }
-    lv_coord_t line_spacing = 18;
-
+    // IMU jetzt an Indoor-Position (links/Mitte) + 250px nach rechts, 20px tiefer
     imu_pitch_label = lv_label_create(screen);
     lv_label_set_text(imu_pitch_label, "Pitch: --.-°");
     lv_obj_set_style_text_font(imu_pitch_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(imu_pitch_label, lv_color_white(), 0);
-    lv_obj_align(imu_pitch_label, LV_ALIGN_TOP_RIGHT, -right_margin, top_offset);
+    lv_obj_set_style_text_color(imu_pitch_label, lv_color_black(), 0);
+    lv_obj_set_pos(imu_pitch_label, indoor_block_x + 250, indoor_base_y + 20);
 
     imu_roll_label = lv_label_create(screen);
     lv_label_set_text(imu_roll_label, "Roll : --.-°");
     lv_obj_set_style_text_font(imu_roll_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(imu_roll_label, lv_color_white(), 0);
-    lv_obj_align(imu_roll_label, LV_ALIGN_TOP_RIGHT, -right_margin, top_offset + line_spacing);
+    lv_obj_set_style_text_color(imu_roll_label, lv_color_black(), 0);
+    lv_obj_set_pos(imu_roll_label, indoor_block_x + 250, indoor_base_y + 20 + line_spacing);
 
     imu_heading_label = lv_label_create(screen);
     lv_label_set_text(imu_heading_label, "-- (---°)");
     lv_obj_set_style_text_font(imu_heading_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(imu_heading_label, lv_color_white(), 0);
-    lv_obj_align(imu_heading_label, LV_ALIGN_TOP_RIGHT, -right_margin, top_offset + (line_spacing * 2));
+    lv_obj_set_style_text_color(imu_heading_label, lv_color_black(), 0);
+    lv_obj_set_pos(imu_heading_label, indoor_block_x + 250, indoor_base_y + 20 + (line_spacing * 2));
 
     // Unsichtbarer Touch-Bereich über Pitch/Roll/Heading für Long-Press → Kalibrierung
     {
         lv_obj_t *imu_touch = lv_btn_create(screen);
         lv_obj_set_size(imu_touch, 180, line_spacing * 3 + 10);
-        lv_obj_align(imu_touch, LV_ALIGN_TOP_RIGHT, -right_margin + 10, top_offset - 5);
+        lv_obj_set_pos(imu_touch, indoor_block_x + 250 - 5, indoor_base_y + 20 - 5);
         lv_obj_set_style_bg_opa(imu_touch, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_opa(imu_touch, LV_OPA_TRANSP, 0);
         lv_obj_set_style_shadow_opa(imu_touch, LV_OPA_TRANSP, 0);
@@ -3993,21 +3999,22 @@ void app_main()
     if (gps_offset_x < 0) {
         gps_offset_x = 0;
     }
-    gps_label = lv_label_create(screen);
-    lv_label_set_text(gps_label, "GPS");
-    lv_obj_set_style_text_font(gps_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(gps_label, lv_color_black(), 0);
-    lv_obj_set_style_text_align(gps_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_border_width(gps_label, 2, 0);
-    lv_obj_set_style_border_color(gps_label, lv_color_black(), 0);
-    lv_obj_set_style_radius(gps_label, 6, 0);
-    lv_obj_set_style_pad_all(gps_label, 6, 0);
-    lv_obj_set_style_bg_color(gps_label, lv_color_hex(0xE0E0E0), 0);
-    lv_obj_set_style_bg_opa(gps_label, LV_OPA_30, 0);
-    lv_obj_add_flag(gps_label, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_align(gps_label, LV_ALIGN_BOTTOM_LEFT, 10, -10);
-    lv_obj_add_event_cb(gps_label, gps_label_event_cb, LV_EVENT_CLICKED, NULL);
-    gps_button = gps_label; // Alias für Theme-Farb-Updates in apply_text_theme_colors()
+    gps_button = lv_btn_create(screen);
+    lv_obj_set_size(gps_button, 36, 36);
+    lv_obj_align(gps_button, LV_ALIGN_BOTTOM_LEFT, 80, -13);
+    lv_obj_set_style_radius(gps_button, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(gps_button, lv_color_hex(0xC0C0C0), 0);
+    lv_obj_set_style_bg_opa(gps_button, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(gps_button, 0, 0);
+    lv_obj_set_style_pad_all(gps_button, 0, 0);
+    lv_obj_add_flag(gps_button, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(gps_button, gps_label_event_cb, LV_EVENT_CLICKED, NULL);
+    gps_label = gps_button; // Alias für bestehende Referenzen
+    // GPS-Icon direkt hier laden – gps_button existiert jetzt
+    gps_img = load_icon_png(gps_button,
+                            "/sdcard/images/icons-48(32)/location_32.png",
+                            &gps_icon_buf, &gps_icon_dsc,
+                            gps_img);
 
     /* GPS-Detail-Popup-Panel: erscheint rechts neben dem GPS-Button beim Klick.
      * Position: BOTTOM_LEFT, x=65 (GPS-Button ~55px breit + 10px Margin), y=-10.
@@ -4021,7 +4028,7 @@ void app_main()
     lv_obj_set_style_radius(gps_popup_panel, 6, 0);
     lv_obj_set_style_pad_all(gps_popup_panel, 6, 0);
     lv_obj_add_flag(gps_popup_panel, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_align(gps_popup_panel, LV_ALIGN_BOTTOM_LEFT, 65, -10);
+    lv_obj_align(gps_popup_panel, LV_ALIGN_BOTTOM_LEFT, 125, -10);
     gps_popup_text_label = lv_label_create(gps_popup_panel);
     lv_obj_set_style_text_font(gps_popup_text_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(gps_popup_text_label, lv_color_black(), 0);
@@ -4039,7 +4046,7 @@ void app_main()
     lv_obj_set_style_text_align(location_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_width(location_label, 200);
     lv_label_set_long_mode(location_label, LV_LABEL_LONG_DOT);
-    lv_obj_align(location_label, LV_ALIGN_BOTTOM_LEFT, 10 + 55, -16);
+    lv_obj_align(location_label, LV_ALIGN_BOTTOM_LEFT, 10 + 115, -16);
 
     // cm → Pixel Umrechnung (anpassbar für physische Displaymaße)
     const float DISP_WIDTH_CM = 15.5f;
@@ -4231,6 +4238,7 @@ void app_main()
     }
     
     // RS485 Debug label (über KFZ-Batterie, fallback unten links)
+#if CONFIG_LOG_DEFAULT_LEVEL >= ESP_LOG_INFO
     rs485_debug_label = lv_label_create(screen);
     lv_label_set_text(rs485_debug_label, womo_locale_get_string(STR_RS485_WAITING));
     lv_obj_set_style_text_font(rs485_debug_label, &lv_font_montserrat_14, 0);
@@ -4240,6 +4248,7 @@ void app_main()
     } else {
         lv_obj_align(rs485_debug_label, LV_ALIGN_BOTTOM_LEFT, 20, -60);
     }
+#endif // CONFIG_LOG_DEFAULT_LEVEL >= ESP_LOG_INFO
         
         // Mode label removed - theme now fully automatic based on real time
         
@@ -4248,24 +4257,25 @@ void app_main()
         status_label_last_text[0] = '\0';
         system_status_apply(true);
         lv_obj_set_style_text_color(status_label, lv_color_black(), 0);
-        lv_obj_set_style_border_width(status_label, 2, 0);
-        lv_obj_set_style_border_color(status_label, lv_color_black(), 0);
-        lv_obj_set_style_radius(status_label, 6, 0);
+        lv_obj_set_style_border_width(status_label, 0, 0);
+        lv_obj_set_style_radius(status_label, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_pad_all(status_label, 6, 0);
-        lv_obj_set_style_bg_color(status_label, lv_color_hex(0xE0E0E0), 0);
-        lv_obj_set_style_bg_opa(status_label, LV_OPA_30, 0); // 70% Durchscheinen
+        lv_obj_set_style_bg_color(status_label, lv_color_hex(0xC0C0C0), 0);
+        lv_obj_set_style_bg_opa(status_label, LV_OPA_COVER, 0);
         lv_obj_add_flag(status_label, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(status_label, status_label_event_cb, LV_EVENT_CLICKED, NULL);
         lv_obj_align(status_label, LV_ALIGN_BOTTOM_LEFT, 543, -10);  // 10px weiter nach links
         
-        // Unsichtbarer Touch-Bereich unten rechts zum Ein-/Ausblenden des Performance Monitors
+#if CONFIG_LOG_DEFAULT_LEVEL >= ESP_LOG_INFO
+        // Unsichtbarer Touch-Bereich rechts mitte zum Ein-/Ausblenden des Performance Monitors
         lv_obj_t *perf_toggle_btn = lv_obj_create(screen);
         lv_obj_set_size(perf_toggle_btn, 120, 80);
-        lv_obj_align(perf_toggle_btn, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+        lv_obj_align(perf_toggle_btn, LV_ALIGN_RIGHT_MID, 0, -20);
         lv_obj_set_style_bg_opa(perf_toggle_btn, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(perf_toggle_btn, 0, 0);
         lv_obj_add_flag(perf_toggle_btn, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(perf_toggle_btn, perf_monitor_toggle_event_cb, LV_EVENT_CLICKED, NULL);
+#endif // CONFIG_LOG_DEFAULT_LEVEL >= ESP_LOG_INFO
 
         // LVGL-Timer für 1s-Updates und UI-Updates
         lv_timer_create(time_update_timer_cb, 1000, NULL);

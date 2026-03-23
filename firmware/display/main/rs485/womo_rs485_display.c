@@ -1442,6 +1442,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
                     if (trend_hpa) s_latest_data.bme680.press_trend_slope_hpa_h = (float)trend_hpa->valuedouble;
                 }
             }
+            s_latest_data.bme_topic_rx_us = esp_timer_get_time();
             notify_snapshot = s_latest_data;
             xSemaphoreGive(s_data_mutex);
             topic_handled = true;
@@ -1459,6 +1460,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             if (b2)  s_latest_data.battery.battery2_v = (float)b2->valuedouble;
             if (cJSON_IsBool(nc1)) s_latest_data.battery.nc1 = cJSON_IsTrue(nc1);
             if (cJSON_IsBool(nc2)) s_latest_data.battery.nc2 = cJSON_IsTrue(nc2);
+            s_latest_data.bat_topic_rx_us = esp_timer_get_time();
             notify_snapshot = s_latest_data;
             xSemaphoreGive(s_data_mutex);
             topic_handled = true;
@@ -1522,6 +1524,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
                 if (v > 100) v = 100;
                 s_latest_data.gas.pct_b = v;
             }
+            s_latest_data.gas_topic_rx_us = esp_timer_get_time();
             notify_snapshot = s_latest_data;
             xSemaphoreGive(s_data_mutex);
             topic_handled = true;
@@ -1556,7 +1559,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             if (t2_rate1h && cJSON_IsNumber(t2_rate1h)) s_latest_data.tank.tank2_rate1h = (float)t2_rate1h->valuedouble;
             if (t2_rate2h && cJSON_IsNumber(t2_rate2h)) s_latest_data.tank.tank2_rate2h = (float)t2_rate2h->valuedouble;
             if (t2_rest_h && cJSON_IsNumber(t2_rest_h)) s_latest_data.tank.tank2_rest_h = (float)t2_rest_h->valuedouble;
-            
+            s_latest_data.tank_topic_rx_us = esp_timer_get_time();
             notify_snapshot = s_latest_data;
             xSemaphoreGive(s_data_mutex);
             topic_handled = true;
