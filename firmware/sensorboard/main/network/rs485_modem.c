@@ -73,7 +73,7 @@ static int64_t  s_last_ack_time_us  = 0;
 static int64_t  s_last_rx_us        = 0;
 static int64_t  s_last_rx_line_us   = 0;
 static int64_t  s_last_tx_us        = 0;   // letzter TX-Abschluss (für Empfangsfenster)
-static volatile int64_t s_echo_suppress_until_us = 0; // TX-Echo unterdrücken bis zu diesem Zeitpunkt
+static volatile bool s_echo_suppress = false; // TX-Echo: eigene Bytes auf Half-Duplex-Bus unterdrücken
 static int64_t  s_last_rx_heartbeat_us = 0;
 static int64_t  s_last_tx_heartbeat_us = 0;
 static bool     s_display_ready     = false;
@@ -284,17 +284,19 @@ static esp_err_t rs485_send_frame(const char *label, cJSON *payload, bool need_a
         vTaskDelay(pdMS_TO_TICKS((uint32_t)(wait_tx / 1000)));
     }
 
-    // TX-Zeit schätzen (zum Logging und Echo-Unterdrückung)
+    // TX-Zeit schätzen (zum Logging)
     uint32_t tx_time_ms = (uint32_t)((pos * 10 * 1000 + (SENSOR_RS485_BAUDRATE - 1)) / SENSOR_RS485_BAUDRATE);
 
-    // Echo-Suppressions-Fenster: TX-Dauer + 50 ms Puffer (eigene Bytes kommen auf RX zurück)
-    int64_t tx_dur_us = ((int64_t)pos * 10 * 1000000LL + (int64_t)SENSOR_RS485_BAUDRATE - 1) / (int64_t)SENSOR_RS485_BAUDRATE;
-    s_echo_suppress_until_us = esp_timer_get_time() + tx_dur_us + 50000LL;
-
+    // Half-Duplex: eigene TX-Bytes erscheinen auf RX → unterdrücken bis TX fertig + Buffer geleert
+    s_echo_suppress = true;
     xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
     esp_err_t wr_err = womo_rs485_write((const uint8_t *)buf, pos, pdMS_TO_TICKS(1000));
+    // womo_rs485_write ruft uart_wait_tx_done() – alle Bits sind jetzt physisch gesendet
     s_last_tx_us = esp_timer_get_time();   // Empfangsfenster ab jetzt
     xSemaphoreGive(s_tx_mutex);
+    // Echo-Bytes aus RX-Ringpuffer verwerfen, dann RX wieder freigeben
+    womo_rs485_flush_input();
+    s_echo_suppress = false;
     free(buf);
 
     if (wr_err != ESP_OK) {
@@ -567,13 +569,13 @@ static bool rs485_ac_present(void)
     return rs485_read_gpio_level(SENSOR_AC_SENSE_GPIO, false);
 }
 
-// 12V Bordnetz ein-/ausschalten per GPIO-Puls (Relais mit Nachlaufzeit)
+// 12V Bordnetz ein-/ausschalten per GPIO-Puls (bistabiles Relais, 2 s Puls)
 static esp_err_t rs485_set_12v_power(bool enable)
 {
     if (!s_power_gpio_inited) rs485_power_gpio_init();
     gpio_num_t pin = enable ? SENSOR_PWR_12V_ON_GPIO : SENSOR_PWR_12V_OFF_GPIO;
     gpio_set_level(pin, 1);
-    vTaskDelay(pdMS_TO_TICKS(200));  // Puls mind. 200 ms für Relais
+    vTaskDelay(pdMS_TO_TICKS(100));  // 100 ms Puls für bistabiles Relais
     gpio_set_level(pin, 0);
 
     // Bei 12V AUS wird Radio zwangsläufig abgeschaltet
@@ -594,8 +596,8 @@ static esp_err_t rs485_set_radio(bool enable)
         return ESP_ERR_INVALID_STATE;
     }
     s_radio_on = enable;
-    // TODO: GPIO-Steuerung für Multimedia ergänzen (SENSOR_MULTIMEDIA_PWR_GPIO)
-    ESP_LOGI(TAG, "Radio %s", enable ? "ON" : "OFF");
+    gpio_set_level(SENSOR_MULTIMEDIA_PWR_GPIO, enable ? 1 : 0); /* N-MOSFET: HIGH=EIN, LOW=AUS */
+    ESP_LOGI(TAG, "Radio %s (GPIO%d=%d)", enable ? "ON" : "OFF", SENSOR_MULTIMEDIA_PWR_GPIO, enable ? 1 : 0);
     return ESP_OK;
 }
 
@@ -1250,7 +1252,7 @@ static void rs485_rx_task(void *arg)
                     if (line_pos > 0) {
                         s_rx_line_buffer[line_pos] = '\0';
                         s_last_rx_line_us = s_last_rx_us;
-                        if (esp_timer_get_time() >= s_echo_suppress_until_us) {
+                        if (!s_echo_suppress) {
                             rs485_process_rx_line(s_rx_line_buffer);
                         } else {
                             ESP_LOGD(TAG, "TX-Echo unterdrückt: %s", s_rx_line_buffer);

@@ -88,10 +88,11 @@ esp_err_t analog_read_mv(int channel, int *mv_out)
     }
     // ADC-Spannung (0-3.3V bei 12-bit)
     int adc_mv = (raw * 3300) / 4095;
-    
-    // ALLE Kanäle nutzen Spannungsteiler 82kΩ/15kΩ (Verpolungsschutz!)
-    // Faktor 97/15: ADC sieht 15/97 der Eingangsspannung
-    int mv = (adc_mv * 97) / 15;
+
+    // ALLE Kanäle nutzen Spannungsteiler 100kΩ/22kΩ
+    // Faktor 122/22: ADC sieht 22/122 der Eingangsspannung
+    int mv = (adc_mv * 122) / 22;
+    ESP_LOGI(TAG, "ch=%d  raw=%d  adc_mv=%d mV  mv=%d mV (%.2f V)", channel, raw, adc_mv, mv, mv / 1000.0f);
     *mv_out = mv;
     return ESP_OK;
 }

@@ -20,7 +20,7 @@
  *   (ADC1_CH6, RTC, GPIO7) Display 5V | I/O/T|  🟨 |    7 | 7          S         7 | 41   | 🟩  | I/O/T | MTDI, GPIO41
  *     (ADC2_CH4, RTC, GPIO15) I2C SCL | I/O/T|  🟨 |   15 | 8          3         8 | 40   | 🟩  | I/O/T | MTDO, GPIO40
  *     (ADC2_CH5, RTC, GPIO16) I2C SDA | I/O/T|  🟨 |   16 | 9          -         9 | 39   | 🟩  | I/O/T | MTCK, GPIO39
- *        ADC2_CH6, U1TXD, RTC, GPIO17 | I/O/T|  ⬜ |   17 | 10         W        10 | 38   | 🟨  | I/O/T | RGB_LED  (GPIO38)
+ *(ADC2_CH6, U1TXD, RTC, GPIO17) Piezo | I/O/T|  🟨 |   17 | 10         W        10 | 38   | 🟨  | I/O/T | RGB_LED  (GPIO38)
  *        ADC2_CH7, U1RXD, RTC, GPIO18 | I/O/T|  ⬜ |   18 | 11         R        11 | 37   | 🟥  | I/O/T | ⚠ PSRAM (GPIO37, nicht nutzbar!)
  *  (ADC1_CH7, RTC) RS485 DE/RTS GPIO8 | I/O/T|  🟨 |    8 | 12         O        12 | 36   | 🟥  | I/O/T | ⚠ PSRAM (GPIO36, nicht nutzbar!)
  *                ADC1_CH2, RTC, GPIO3 | I/O/T|  ⬜ |    3 | 13         O        13 | 35   | 🟥  | I/O/T | ⚠ PSRAM (GPIO35, nicht nutzbar!)
@@ -140,11 +140,24 @@
 #define SENSOR_MULTIMEDIA_PWR_GPIO 13  // Schaltausgang: Multimedia Power
 
 // ====================================================================================
-// Display-Versorgung (direkte Mosfet-Steuerung, HIGH=ein / LOW=aus)
-// GPIO7: RTC-fähig, kein Strapping — wird im Deep Sleep LOW gehalten
-// Display wird über 5V USB versorgt (Mosfet schaltet USB-5V-Leitug)
+// Display-Versorgung (P-Kanal MOSFET Q4, AO3401A)
+// GPIO7: LOW = FET leitet = Display EIN
+//        Hi-Z (Input) = R21 (100k) zieht Gate auf 5V → Vgs≈0V → FET sperrt = Display AUS
+//        OUTPUT HIGH (3,3V) VERBOTEN: Vgs=−1,7V → AO3401A leitet → ~300mA Querstrom!
 // ====================================================================================
-#define SENSOR_DISPLAY_PWR_GPIO 7      // Ausgang: 5V USB Display-Versorgung (HIGH=ein)
+#define SENSOR_DISPLAY_PWR_GPIO 7      // P-MOSFET Q4: LOW=ein, Hi-Z/Input=aus
+
+// ====================================================================================
+// Buzzer (passiver Piezo-Transducer, z.B. Murata PKM22EPPH4001-B0)
+// GPIO17: frei, ADC2_CH6, RTC-fähig, LEDC-fähig — direkt ohne Transistor betreibbar
+// LEDC: Timer 1, Kanal 0, Low-Speed-Mode, 10-Bit-Auflösung
+// ====================================================================================
+#define SENSOR_BUZZER_GPIO          17          // Piezo-Anschluss
+#define SENSOR_BUZZER_LEDC_TIMER    LEDC_TIMER_1
+#define SENSOR_BUZZER_LEDC_CHANNEL  LEDC_CHANNEL_0
+#define SENSOR_BUZZER_LEDC_MODE     LEDC_LOW_SPEED_MODE
+#define SENSOR_BUZZER_LEDC_BITS     LEDC_TIMER_10_BIT
+#define SENSOR_BUZZER_DUTY          512          // 50% Tastverhältnis (lautester Ton)
 
 // ====================================================================================
 // Deep Sleep / Wakeup
@@ -195,11 +208,11 @@
 // Hier zentral je Modul einstellen, ohne Code zu ändern.
 // ====================================================================================
 #define LOG_LEVEL_SENSOR_MAIN    ESP_LOG_INFO
-#define LOG_LEVEL_DEEP_SLEEP     ESP_LOG_WARN
+#define LOG_LEVEL_DEEP_SLEEP     ESP_LOG_INFO
 #define LOG_LEVEL_RS485          ESP_LOG_WARN
-#define LOG_LEVEL_ANALOG         ESP_LOG_WARN
-#define LOG_LEVEL_BNO055         ESP_LOG_WARN    // bno055_app + BNO055-Komponente
-#define LOG_LEVEL_BME680         ESP_LOG_WARN    // bme680_app + bme680-Komponente
+#define LOG_LEVEL_ANALOG         ESP_LOG_INFO
+#define LOG_LEVEL_BNO055         ESP_LOG_INFO    // bno055_app + BNO055-Komponente
+#define LOG_LEVEL_BME680         ESP_LOG_INFO    // bme680_app + bme680-Komponente
 #define LOG_LEVEL_HX711          ESP_LOG_WARN
 #define LOG_LEVEL_GASBEE_BLE     ESP_LOG_WARN
 #define LOG_LEVEL_I2C_BUS        ESP_LOG_WARN

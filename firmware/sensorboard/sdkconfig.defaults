@@ -45,3 +45,9 @@ CONFIG_ESP_WIFI_IRAM_OPT=n
 CONFIG_ESP_WIFI_RX_IRAM_OPT=n
 CONFIG_SPI_FLASH_ROM_IMPL=y
 
+#
+# Logging: Standardlevel WARN – ESP_LOGI nur wo explizit per esp_log_level_set erlaubt
+#
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y
+CONFIG_LOG_DEFAULT_LEVEL=2
+

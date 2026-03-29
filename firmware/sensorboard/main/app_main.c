@@ -79,12 +79,12 @@ static void rgb_led_off(void)
 }
 
 /**
- * Display 12V einschalten (GPIO7 HIGH).
- * Wird direkt beim Wakeup aufgerufen – VOR allem anderen.
+ * Display 5V einschalten + 12V Bordnetz EIN-Puls.
+ * Wird direkt beim Boot/Wakeup aufgerufen – VOR allem anderen.
  */
 static void pwr_12v_on_early(void)
 {
-    /* Display 5V einschalten (GPIO7, Mosfet) */
+    /* Display 5V einschalten: P-Kanal MOSFET → Gate LOW = leitet */
     gpio_config_t cfg = {
         .pin_bit_mask   = BIT64(SENSOR_DISPLAY_PWR_GPIO),
         .mode           = GPIO_MODE_OUTPUT,
@@ -93,12 +93,11 @@ static void pwr_12v_on_early(void)
         .intr_type      = GPIO_INTR_DISABLE,
     };
     gpio_config(&cfg);
-    gpio_set_level(SENSOR_DISPLAY_PWR_GPIO, 1);
-    ESP_LOGI(TAG, "Display 5V EIN (Wakeup, GPIO%d HIGH)", SENSOR_DISPLAY_PWR_GPIO);
+    gpio_set_level(SENSOR_DISPLAY_PWR_GPIO, 0);  /* P-MOSFET: LOW = EIN */
+    ESP_LOGI(TAG, "Display 5V EIN (GPIO%d LOW, P-MOSFET leitet)", SENSOR_DISPLAY_PWR_GPIO);
 
-    /* LBE 12V-Relais einschalten (GPIO11, Puls ≥200 ms).
-     * Ohne diesen Puls bleibt das bistabile Relais im AUS-Zustand,
-     * rs485_board_power_on() liest LOW und das Display bekommt pwr_on=false. */
+    /* LBE 12V-Relais EIN: bistabiles Relais benötigt Puls 1-3 s auf GPIO11.
+     * GPIO11 (EIN) und GPIO12 (AUS) müssen im Ruhezustand LOW sein! */
     gpio_config_t cfg2 = {
         .pin_bit_mask   = BIT64(SENSOR_PWR_12V_ON_GPIO) | BIT64(SENSOR_PWR_12V_OFF_GPIO),
         .mode           = GPIO_MODE_OUTPUT,
@@ -107,28 +106,54 @@ static void pwr_12v_on_early(void)
         .intr_type      = GPIO_INTR_DISABLE,
     };
     gpio_config(&cfg2);
-    gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  0);
+    gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  0);   /* sicher LOW vor Puls */
     gpio_set_level(SENSOR_PWR_12V_OFF_GPIO, 0);
-    gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  1);
-    vTaskDelay(pdMS_TO_TICKS(200));
-    gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  0);
-    ESP_LOGI(TAG, "LBE 12V EIN (Wakeup, GPIO%d pulsed)", SENSOR_PWR_12V_ON_GPIO);
+    gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  1);   /* EIN-Puls starten */
+    vTaskDelay(pdMS_TO_TICKS(100));              /* 100 ms Puls (bistabiles Relais) */
+    gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  0);   /* Puls beenden → LOW */
+    ESP_LOGI(TAG, "LBE 12V EIN (GPIO%d 100ms-Puls abgeschlossen)", SENSOR_PWR_12V_ON_GPIO);
 }
 
 void app_main(void)
 {
     sensor_log_init();
 
+    /* Display 5V sperren – GPIO7 als Hi-Z Input konfigurieren.
+     * R21 (100k, Source→Gate) im Schaltplan zieht Gate passiv auf ~5V → Vgs≈0V → FET aus.
+     * OUTPUT HIGH (3,3V) wäre FALSCH: Vgs = 3,3−5 = −1,7V → AO3401A leitet → ~300mA Querstrom! */
+    gpio_config_t disp_cfg = {
+        .pin_bit_mask = BIT64(SENSOR_DISPLAY_PWR_GPIO),
+        .mode         = GPIO_MODE_INPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&disp_cfg);
+    /* GPIO13 (N-Kanal MOSFET Radio): OUTPUT LOW = sicher aus (kein passiver Pulldown in Hardware) */
+    gpio_config_t mm_cfg = {
+        .pin_bit_mask = BIT64(SENSOR_MULTIMEDIA_PWR_GPIO),
+        .mode         = GPIO_MODE_OUTPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&mm_cfg);
+    gpio_set_level(SENSOR_MULTIMEDIA_PWR_GPIO, 0); /* N-MOSFET: LOW = AUS (Radio aus beim Boot) */
+
     // ── Touch initialisieren (immer zuerst) ──────────────────────────
     deep_sleep_init();
 
-    // ── Wakeup-Behandlung (Hardware-Touch-Wakeup) ────────────────────
+    // ── Wakeup-Behandlung ────────────────────────────────────────────
     if (deep_sleep_wakeup_by_touch()) {
-        ESP_LOGI(TAG, "Touch-Wakeup erkannt → 12V EIN");
-        /* RS485-DE-Hold aufheben (wurde vor Sleep eingefroren) */
+        ESP_LOGI(TAG, "Touch-Wakeup erkannt → Hold aufheben");
+        /* RS485-DE-Hold aufheben (wurde vor Sleep eingefroren).
+         * SENSOR_DISPLAY_PWR_GPIO hat keinen Hold mehr – wurde als Input gesetzt. */
         gpio_hold_dis(SENSOR_RS485_DE_GPIO);
-        pwr_12v_on_early();
+    } else {
+        ESP_LOGI(TAG, "Cold Boot erkannt");
     }
+    /* Display und 12V immer einschalten (Cold Boot & Touch-Wakeup) */
+    pwr_12v_on_early();
 
     rgb_led_off();
 

@@ -18,18 +18,6 @@ static const char *TAG = "deep_sleep";
 static uint32_t s_initial_benchmark = 0;
 static uint32_t s_threshold         = 0;
 
-static void set_output_gpio(gpio_num_t pin, int level)
-{
-    gpio_config_t cfg = {
-        .pin_bit_mask   = BIT64(pin),
-        .mode           = GPIO_MODE_OUTPUT,
-        .pull_up_en     = GPIO_PULLUP_DISABLE,
-        .pull_down_en   = GPIO_PULLDOWN_DISABLE,
-        .intr_type      = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&cfg);
-    gpio_set_level(pin, level);
-}
 
 esp_err_t deep_sleep_init(void)
 {
@@ -112,14 +100,35 @@ void deep_sleep_enter(void)
     /* BNO055: Suspend-Modus (~0,2 µA statt 12,3 mA) */
     bno055_app_sleep();
 
+    /* 12V Bordnetz AUS: bistabiles Relais – 2s Puls auf GPIO12 (AUS), dann LOW */
+    gpio_set_direction(SENSOR_PWR_12V_OFF_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_direction(SENSOR_PWR_12V_ON_GPIO,  GPIO_MODE_OUTPUT);
+    gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  0);   /* sicher LOW */
+    gpio_set_level(SENSOR_PWR_12V_OFF_GPIO, 1);   /* AUS-Puls starten */
+    vTaskDelay(pdMS_TO_TICKS(100));              /* 100 ms Puls */
+    gpio_set_level(SENSOR_PWR_12V_OFF_GPIO, 0);   /* Puls beenden → LOW */
+    gpio_hold_en(SENSOR_PWR_12V_ON_GPIO);         /* LOW einfrieren im Sleep */
+    gpio_hold_en(SENSOR_PWR_12V_OFF_GPIO);
+    ESP_LOGI(TAG, "LBE 12V AUS (GPIO%d 100ms-Puls abgeschlossen)", SENSOR_PWR_12V_OFF_GPIO);
+
+    /* Multimedia (Radio) abschalten */
+    gpio_set_direction(SENSOR_MULTIMEDIA_PWR_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(SENSOR_MULTIMEDIA_PWR_GPIO, 0);
+    gpio_hold_en(SENSOR_MULTIMEDIA_PWR_GPIO);
+
     /* RS485-Transceiver: DE/RTS LOW halten (kein Empfangsstrom).
      * gpio_hold_en() friert den Pegel ein, auch wenn UART im Sleep aus ist. */
     gpio_set_direction(SENSOR_RS485_DE_GPIO, GPIO_MODE_OUTPUT);
     gpio_set_level(SENSOR_RS485_DE_GPIO, 0);
     gpio_hold_en(SENSOR_RS485_DE_GPIO);
 
-    /* Display 5V abschalten */
-    set_output_gpio(SENSOR_DISPLAY_PWR_GPIO, 0);
+    /* Display 5V abschalten: GPIO7 auf Hi-Z (Input) setzen.
+     * R21 (100k, Source→Gate) zieht Gate passiv auf ~5V → Vgs ≈ 0V → FET vollständig gesperrt.
+     * OUTPUT HIGH (3,3V) würde Vgs = −1,7V erzeugen → AO3401A leitet weiter → ~300mA Querstrom!
+     * gpio_hold_en ist nicht nötig: R21 hält Gate auch im Deep Sleep bei ~5V. */
+    gpio_set_direction(SENSOR_DISPLAY_PWR_GPIO, GPIO_MODE_INPUT);
+    /* kein gpio_hold_en – R21 übernimmt die passive Gate-Haltung */
+    ESP_LOGI(TAG, "Display 5V AUS: GPIO%d → Hi-Z (R21 zieht Gate auf 5V, Vgs≈0V)", SENSOR_DISPLAY_PWR_GPIO);
 
     /* ── Sleep einleiten ───────────────────────────────────────────── */
 

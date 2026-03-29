@@ -7,14 +7,14 @@ ESP-IDF v5.5.2 · ESP32-S3-WROOM-1 (N16R8)
 | Komponente | Beschreibung | Bus / Pin |
 |---|---|---|
 | **MCU** | Heemol ESP32-S3 N16R8 DevKitC-1 | — |
-| **IMU** | BNO055 – Lage, Kompass, Kalibrierung | I2C 0x28 |
+| **IMU** | BNO055 – direkt auf Platine, Lage, Kompass, Kalibrierung | I2C 0x28 |
 | **Klima innen** | BME680 – Temp, Feuchte, Druck, IAQ (BSEC) | I2C 0x76 |
 | **Klima außen** | BME680 – Temp, Feuchte, Druck, Trend (1h/3h) | I2C 0x77 |
 | **Gasfüllstand** | HX711 – 2× Wägezelle (Kanal A + B) | DOUT=GPIO47, SCK=GPIO45 |
 | **Batterien** | 2× ADC mit Spannungsteiler | Kfz=GPIO4, Board=GPIO5 |
 | **Tanks** | 2× Votronic kapazitiv (0–1V) | Frisch=GPIO1, Grau=GPIO2 |
 | **RTC** | PCF8523 – Echtzeituhr | I2C 0x68 |
-| **RS485** | MAX3485, Half-Duplex, 115200 8N1 | TX=GPIO9, RX=GPIO10, DE=GPIO8 |
+| **RS485** | MAX3485, Half-Duplex, 57600 8N1 | TX=GPIO9, RX=GPIO10, DE=GPIO8 |
 | **I2C** | 100 kHz, interne Pull-ups | SDA=GPIO16, SCL=GPIO15 |
 | **RGB-LED** | WS2812 (onboard) | GPIO48 |
 
@@ -22,16 +22,17 @@ ESP-IDF v5.5.2 · ESP32-S3-WROOM-1 (N16R8)
 
 | GPIO | Funktion | Richtung |
 |---|---|---|
-| 12 | 12V Bordnetz EIN | Ausgang |
-| 13 | 12V Bordnetz AUS | Ausgang |
+| 7  | Display 5V (P-MOSFET Q4: LOW=ein, Hi-Z=aus) | Ausgang |
+| 11 | 12V Bordnetz EIN (bistabiles Relais, Puls) | Ausgang |
+| 12 | 12V Bordnetz AUS (bistabiles Relais, Puls) | Ausgang |
+| 13 | Multimedia Power (N-MOSFET, HIGH=ein) | Ausgang |
 | 14 | 12V Bordnetz Feedback | Eingang |
 | 21 | 230V AC Sense | Eingang |
-| 11 | Multimedia Power | Ausgang |
 
 ### Spannungsteiler (ADC)
-Alle 4 Kanäle: **82 kΩ / 15 kΩ** Teiler → Faktor 97/15.
-- Batterien: 12V → ~1,85V am ADC
-- Tanks: Votronic 0–1V → ~0,15V am ADC, 0–1000 mV = 0–100%
+Alle Batterie-/Sense-Kanäle: **100 kΩ / 22 kΩ** Teiler → Faktor 122/22.
+- Batterien: 12V → ~2,17V am ADC (BZV55B3V3 Zener-Schutz)
+- Tanks: Votronic 0–1V → direkt am ADC, 0–1000 mV = 0–100%
 - Nicht angeschlossen: < 1V
 
 ## RS485-Protokoll (Topic-basiert, v2)
