@@ -52,16 +52,7 @@
         }
       },
       "diff_pair_dimensions": [],
-      "drc_exclusions": [
-        [
-          "silk_edge_clearance|188100000|67583320|2540b840-a9bb-4207-9aea-750571c7f6ee|fe98cb17-5506-41d3-afdd-03277e1280f6",
-          "Antenne"
-        ],
-        [
-          "silk_edge_clearance|192633120|64200000|c8bbea9e-0733-47fe-82b3-32c7b43a9c54|34d799d8-5be8-4a63-bca6-bcca49efdf81",
-          "Antenne"
-        ]
-      ],
+      "drc_exclusions": [],
       "meta": {
         "version": 2
       },

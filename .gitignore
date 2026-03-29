@@ -18,6 +18,11 @@ __pycache__/
 *.bak
 fp-info-cache
 ERC.rpt
+DRC.rpt
+*.lck
+hardware/schematics/*/gerber/
+hardware/schematics/*/production/
+hardware/schematics/*/bom/
 
 # Editor
 .vscode/
