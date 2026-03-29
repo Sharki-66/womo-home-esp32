@@ -71,7 +71,7 @@ CONFIG_LV_IMAGE_HEADER_CACHE_DEF_CNT=8
 # LVGL Sysmon: CPU-Last + FPS-Anzeige (rechts unten)
 CONFIG_LV_USE_SYSMON=y
 CONFIG_LV_USE_PERF_MONITOR=y
-CONFIG_LV_PERF_MONITOR_ALIGN_BOTTOM_RIGHT=y
+CONFIG_LV_PERF_MONITOR_ALIGN_RIGHT_MID=y
 # Compiler: -O2 statt -Og (Debug) – deutlich schnelleres Rendering und kürzere Bootzeit
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
 # Bootloader-Log auf WARN reduziert – spart ~30ms UART-Ausgabe beim 2nd-Stage-Bootloader

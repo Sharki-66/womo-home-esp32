@@ -19,7 +19,7 @@ ESP-IDF v5.5.2 · LVGL v8.4 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 - **Batterien**: 2× Balken mit Spannung, Warnung bei Unterspannung
 - **Tanks**: Frischwasser + Grauwasser mit Füllstand, Verbrauchsrate, Restdauer
 - **Gas**: 2× Flaschengewicht, aktiver Verbrauch, Restdauer
-- **Wetter**: Aktuelles WMO-Symbol + Temperatur (Open-Meteo), Unwetterwarnungen (Meteoalarm)
+- **Wetter**: Aktuelles WMO-Symbol + Temperatur (Open-Meteo), Tipp auf Icon → 5-Tage-Vorhersage-Modal; Auto-Popup bei Unwetterwarnungen (Meteoalarm)
 - **Konnektivität**: Modal mit AP-Status, WLAN-Scan/Connect, LTE Ein/Aus (Router UCI)
 - **Steuerung**: 12V Bordnetz + Multimedia per RS485-Kommandos ans Sensorboard
 - **Tag/Nacht**: Automatischer Themenwechsel, Backlight-Steuerung
@@ -46,13 +46,14 @@ main/
 │   ├── womo_tank               Tank-Widget
 │   ├── womo_gas_bottle         Gas-Flaschen-Widget
 │   ├── womo_weather            Wetter-Icon-Mapping (WMO → LVGL)
+│   ├── womo_forecast_modal     5-Tage-Vorhersage Modal (Open-Meteo daily)
 │   └── womo_connectivity_modal WLAN/LTE/AP-Steuerung
 ├── hardware/
 │   ├── waveshare_rgb_lcd_port  LCD + Touch + CH422G Init
 │   └── lvgl_port               LVGL Flush, Buffer, Task, Indev
 ├── network/
 │   ├── womo_wifi               STA-Verbindung (RUTX11)
-│   ├── womo_weather_http       Open-Meteo API
+│   ├── womo_weather_http       Open-Meteo API (aktuell + 5-Tage daily)
 │   ├── womo_geocode            Nominatim Reverse Geocoding
 │   ├── womo_meteoalarm         Meteoalarm CAP-Feed
 │   ├── womo_router_uci         RUTX11 UCI JSON-RPC
