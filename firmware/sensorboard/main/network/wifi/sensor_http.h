@@ -2,7 +2,7 @@
  * HTTP-Server für Parkhilfe (Künstlicher Horizont).
  *
  * Serviert horizon.html aus SPIFFS und stellt /api/imu als JSON-Endpunkt bereit.
- * Wird per RS485-Kommando (level_start / level_stop) gestartet / gestoppt.
+ * Wird beim Boot gestartet und läuft dauerhaft.
  */
 #pragma once
 

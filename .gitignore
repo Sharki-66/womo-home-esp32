@@ -30,6 +30,9 @@ hardware/schematics/*/bom/
 *.swp
 *~
 
+# Credentials (niemals einchecken!)
+firmware/shared/womo_credentials.h
+
 # OS
 .DS_Store
 Thumbs.db

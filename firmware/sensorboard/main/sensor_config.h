@@ -44,7 +44,7 @@
 // ====================================================================================
 // Board Information
 // ====================================================================================
-#define SENSOR_BOARD_NAME "ESP32-S3-WROMM-1"
+#define SENSOR_BOARD_NAME "ESP32-S3-WROOM-1"
 
 // ====================================================================================
 // I2C-Bus für Sensoren auf Header J1 (SDA=GPIO16, SCL=GPIO15)
@@ -120,13 +120,9 @@
 // ====================================================================================
 // Analog ADC (Battery & Tank Sensors)
 // ====================================================================================
-#define SENSOR_BATT1_ADC_UNIT 1
 #define SENSOR_BATT1_ADC_CHANNEL 3     // GPIO4 (Batt1 Kfz)
-#define SENSOR_BATT2_ADC_UNIT 1
 #define SENSOR_BATT2_ADC_CHANNEL 4     // GPIO5 (Batt2 Board)
-#define SENSOR_TANK1_ADC_UNIT 1
 #define SENSOR_TANK1_ADC_CHANNEL 0     // GPIO1 (Frischwasser)
-#define SENSOR_TANK2_ADC_UNIT 1
 #define SENSOR_TANK2_ADC_CHANNEL 1     // GPIO2 (Grauwasser)
 
 // ====================================================================================
@@ -182,6 +178,13 @@
 #define SENSOR_GAS_ACTIVE_EPS_KG    0.05f    // Mindest-Änderung für Verbrauchserkennung
 
 // =============================================================================
+// Tank Rate Calculation (EMA-based, analog zu Gas)
+// =============================================================================
+#define SENSOR_TANK_RATE_ALPHA_1H   0.2f     // EMA-Glättungsfaktor (1h-Fenster)
+#define SENSOR_TANK_RATE_ALPHA_2H   0.1f     // EMA-Glättungsfaktor (2h-Fenster)
+#define SENSOR_TANK_RATE_MIN_DT_SEC 30       // Minimaler Messpunkt-Abstand (Sek)
+
+// =============================================================================
 // WiFi STA Configuration (Verbindung zum RUTX11 Router)
 // =============================================================================
 #define SENSOR_WIFI_DEFAULT_SSID    WOMO_WIFI_DEFAULT_SSID
@@ -212,10 +215,10 @@
 #define LOG_LEVEL_RS485          ESP_LOG_WARN
 #define LOG_LEVEL_ANALOG         ESP_LOG_INFO
 #define LOG_LEVEL_BNO055         ESP_LOG_INFO    // bno055_app + BNO055-Komponente
-#define LOG_LEVEL_BME680         ESP_LOG_INFO    // bme680_app + bme680-Komponente
+#define LOG_LEVEL_BME680         ESP_LOG_INFO    // bme680_app + bme680-Komponente (DEBUG für Chip-ID Diagnose)
 #define LOG_LEVEL_HX711          ESP_LOG_WARN
 #define LOG_LEVEL_GASBEE_BLE     ESP_LOG_WARN
-#define LOG_LEVEL_I2C_BUS        ESP_LOG_WARN
+#define LOG_LEVEL_I2C_BUS        ESP_LOG_INFO    // temporär INFO für I2C-Scan Diagnose
 #define LOG_LEVEL_PCF8523        ESP_LOG_WARN
 #define LOG_LEVEL_TIME_SYNC      ESP_LOG_WARN
 #define LOG_LEVEL_WIFI           ESP_LOG_WARN    // wifi, mdns, esp_netif, dhcpc

@@ -137,16 +137,16 @@ static void hx711_task(void *arg)
                                    SENSOR_HX711_OFFSET_B, SENSOR_HX711_SCALE_B,
                                    &raw_b, &kg_b, &ok_b);
             }
+
+            s_last.raw_a = raw_a;
+            s_last.raw_b = raw_b;
+            s_last.kg_a = kg_a;
+            s_last.kg_b = kg_b;
+            s_last.valid_a = ok_a;
+            s_last.valid_b = ok_b;
+            s_last.timestamp_us = esp_timer_get_time();
             xSemaphoreGive(s_mutex);
         }
-
-        s_last.raw_a = raw_a;
-        s_last.raw_b = raw_b;
-        s_last.kg_a = kg_a;
-        s_last.kg_b = kg_b;
-        s_last.valid_a = ok_a;
-        s_last.valid_b = ok_b;
-        s_last.timestamp_us = esp_timer_get_time();
 
         if (ok_a || ok_b) {
             ESP_LOGI(TAG, "HX711 A=%ld (%.2f kg) %s | B=%ld (%.2f kg) %s",

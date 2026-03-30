@@ -8,8 +8,13 @@
  *
  * Hardware-spezifische Werte (GPIOs, UART-Port, Buffer-Größen) gehören
  * NICHT hierher, sondern in die jeweilige lokale Config.
+ *
+ * WiFi-Zugangsdaten stehen in womo_credentials.h (nicht im Git!).
+ * Zum Einrichten: womo_credentials.h.example → womo_credentials.h kopieren.
  */
 #pragma once
+
+#include "womo_credentials.h"
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Kategorie 1: RS485 Protokoll (MUSS identisch sein)
@@ -56,12 +61,8 @@
 //  Kategorie 3: Netzwerk / Infrastruktur
 // ═══════════════════════════════════════════════════════════════════════
 
-/** SSID des internen Router-AP (RUTX11). Beide Boards verbinden sich
- *  ausschließlich mit diesem Netz. */
-#define WOMO_WIFI_DEFAULT_SSID              "Malibu-622"
-
-/** WPA2-Passwort des internen Router-AP. */
-#define WOMO_WIFI_DEFAULT_PASS              "Wlan-XA622"
+// WOMO_WIFI_DEFAULT_SSID und WOMO_WIFI_DEFAULT_PASS werden aus
+// womo_credentials.h eingebunden (siehe oben).
 
 /** IP-Adresse des RUTX11 Routers im internen Netz. */
 #define WOMO_ROUTER_IP                      "192.168.10.1"

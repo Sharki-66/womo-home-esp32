@@ -3,14 +3,14 @@ menu "Example Configuration"
     menu "WiFi Configuration"
         config WOMO_WIFI_SSID
             string "Router-AP SSID"
-            default "Malibu-622"
+            default ""
             help
                 SSID des internen Router-AP (RUTX11).
                 Das Display verbindet sich ausschließlich mit diesem Netz.
 
         config WOMO_WIFI_PASSWORD
             string "Router-AP Password"
-            default "Wlan-XA622"
+            default ""
             help
                 WPA2-Passwort des internen Router-AP (RUTX11).
 

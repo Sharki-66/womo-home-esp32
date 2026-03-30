@@ -27,6 +27,8 @@
 #include "sensors/hx711_sensor.h"
 #include "sensors/analog_sensor.h"
 #include "time/time_sync.h"
+#include "hal/buzzer.h"
+#include "hal/buzzer_settings.h"
 
 #include <math.h>
 #include <stdbool.h>
@@ -359,6 +361,7 @@ esp_err_t rs485_modem_request_wifi_pass(void)
     cJSON_AddStringToObject(root, "type", "wifi_pass_request");
     cJSON_AddStringToObject(root, "cmd", "wifi_pass_request");
     esp_err_t err = rs485_send_frame("wifi_pass_request", root, true);
+    cJSON_Delete(root);
     return err;
 }
 
@@ -613,6 +616,8 @@ static void rs485_publish_ctrl(void)
     cJSON_AddBoolToObject(root, "pwr_on", rs485_board_power_on());
     cJSON_AddBoolToObject(root, "radio_on", s_radio_on);
     cJSON_AddBoolToObject(root, "ac_present", rs485_ac_present());
+    cJSON_AddBoolToObject(root, "buzzer_on", buzzer_settings_is_enabled());
+    cJSON_AddBoolToObject(root, "touch_click_on", buzzer_settings_touch_click_enabled());
 
     // RTC-Batteriestatus mitübertragen
     time_sync_status_t ts_status = {0};
@@ -670,9 +675,16 @@ static void rs485_publish_bme(void)
     if (!root) return;
     cJSON_AddStringToObject(root, "type", "bme");
 
-    // Indoor (0x76) – ohne Trend-State (nicht benötigt)
+    // Dynamische Adress-Keys basierend auf tatsächlicher Zuordnung
+    char key_in[5], key_out[5];
+    snprintf(key_in,  sizeof(key_in),  "0x%02x", bme.indoor_addr);
+    snprintf(key_out, sizeof(key_out), "0x%02x", bme.outdoor_addr);
+
+    // Indoor – ohne Trend-State (nicht benötigt)
     cJSON *in = cJSON_CreateObject();
     if (bme.indoor.valid) {
+        cJSON_AddStringToObject(in, "chip",
+            bme.indoor.chip == BME_CHIP_BME680 ? "bme680" : "bme280");
         cJSON_AddNumberToObject(in, "temp_c", round2(bme.indoor.temperature_c));
         cJSON_AddNumberToObject(in, "rh_pct", round2(bme.indoor.humidity_pct));
         cJSON_AddNumberToObject(in, "press_hpa", round2(bme.indoor.pressure_hpa));
@@ -690,17 +702,18 @@ static void rs485_publish_bme(void)
         cJSON_AddNumberToObject(in, "rh_pct", 0.0);
         cJSON_AddNumberToObject(in, "press_hpa", 0.0);
     }
-    cJSON_AddItemToObject(root, "0x76", in);
+    cJSON_AddItemToObject(root, key_in, in);
 
-    // Outdoor (0x77) – mit 5-stufigem Trend
+    // Outdoor – mit 5-stufigem Trend
     cJSON *out = cJSON_CreateObject();
     if (bme.outdoor.valid) {
+        cJSON_AddStringToObject(out, "chip",
+            bme.outdoor.chip == BME_CHIP_BME680 ? "bme680" : "bme280");
         cJSON_AddNumberToObject(out, "temp_c", round2(bme.outdoor.temperature_c));
         cJSON_AddNumberToObject(out, "rh_pct", round2(bme.outdoor.humidity_pct));
         cJSON_AddNumberToObject(out, "press_hpa", round2(bme.outdoor.pressure_hpa));
         
         // Luftdruck-Trend: bevorzugt 3h, Fallback 1h
-        // Display erwartet "press_trend_state" + "press_trend_hpa_h"
         {
             bool have_trend = false;
             bme680_pressure_trend_t trend_state = BME680_TREND_STEADY;
@@ -710,8 +723,6 @@ static void rs485_publish_bme(void)
                 trend_state = bme.outdoor.press_trend_3h_state;
                 trend_hpa_h = bme.outdoor.press_trend_3h_hpa_h;
                 have_trend = true;
-                // Wenn 1h eine andere Richtung zeigt → aktuellere 1h-Tendenz bevorzugen
-                // (z.B. 3h noch steigend, aber letzte Stunde bereits stagnierend/fallend)
                 if (bme.outdoor.press_trend_1h_valid) {
                     bool t3_rising  = (trend_state == BME680_TREND_RISING || trend_state == BME680_TREND_RISING_FAST);
                     bool t3_falling = (trend_state == BME680_TREND_FALLING || trend_state == BME680_TREND_FALLING_FAST);
@@ -751,7 +762,7 @@ static void rs485_publish_bme(void)
         cJSON_AddNumberToObject(out, "rh_pct", 0.0);
         cJSON_AddNumberToObject(out, "press_hpa", 0.0);
     }
-    cJSON_AddItemToObject(root, "0x77", out);
+    cJSON_AddItemToObject(root, key_out, out);
 
     rs485_send_frame("bme", root, false);
     cJSON_Delete(root);
@@ -933,57 +944,57 @@ static void rs485_publish_tank(void)
     int64_t now_us = esp_timer_get_time();
     bool tank1_state_changed = false;
     if (tank1_ok && s_tank1_state.last_ts_us > 0) {
-        double dt_h = (now_us - s_tank1_state.last_ts_us) / 3600000000.0;
-        if (dt_h > 0.01) {
-            double delta_l = tank1_liters - s_tank1_state.last_liters;
-            double rate = delta_l / dt_h;
-            if (dt_h < 1.5) {
-                s_tank1_state.rate1h = rate;
-                tank1_state_changed = true;
-            }
-            if (dt_h < 2.5) {
-                s_tank1_state.rate2h = rate;
-                tank1_state_changed = true;
-            }
-            tank1_rate1h = s_tank1_state.rate1h;
-            tank1_rate2h = s_tank1_state.rate2h;
-            // Restlaufzeit: Negativ bei Verbrauch
-            if (tank1_rate2h < -0.1 && tank1_liters > 0) {
-                tank1_rest_h = tank1_liters / (-tank1_rate2h);
-            }
+        double dt_s = (now_us - s_tank1_state.last_ts_us) / 1000000.0;
+        if (dt_s >= SENSOR_TANK_RATE_MIN_DT_SEC) {
+            double dt_h = dt_s / 3600.0;
+            double rate = (tank1_liters - s_tank1_state.last_liters) / dt_h;
+            s_tank1_state.rate1h = s_tank1_state.rate1h * (1.0 - SENSOR_TANK_RATE_ALPHA_1H)
+                                 + rate * SENSOR_TANK_RATE_ALPHA_1H;
+            s_tank1_state.rate2h = s_tank1_state.rate2h * (1.0 - SENSOR_TANK_RATE_ALPHA_2H)
+                                 + rate * SENSOR_TANK_RATE_ALPHA_2H;
+            s_tank1_state.last_liters = tank1_liters;
+            s_tank1_state.last_ts_us = now_us;
+            tank1_state_changed = true;
         }
+    } else if (tank1_ok) {
+        s_tank1_state.last_liters = tank1_liters;
+        s_tank1_state.last_ts_us = now_us;
     }
-    s_tank1_state.last_liters = tank1_liters;
-    s_tank1_state.last_ts_us = now_us;
+    tank1_rate1h = s_tank1_state.rate1h;
+    tank1_rate2h = s_tank1_state.rate2h;
+    // Restlaufzeit: Negativ bei Verbrauch
+    if (tank1_rate2h < -0.1 && tank1_liters > 0) {
+        tank1_rest_h = tank1_liters / (-tank1_rate2h);
+    }
 
     // Füllratenberechnung Grauwasser (92L, Füllung positiv)
     double tank2_liters = tank2_ok ? (tank2_pct / 100.0) * 92.0 : 0.0;
     double tank2_rate1h = 0.0, tank2_rate2h = 0.0, tank2_rest_h = 0.0;
     bool tank2_state_changed = false;
     if (tank2_ok && s_tank2_state.last_ts_us > 0) {
-        double dt_h = (now_us - s_tank2_state.last_ts_us) / 3600000000.0;
-        if (dt_h > 0.01) {
-            double delta_l = tank2_liters - s_tank2_state.last_liters;
-            double rate = delta_l / dt_h;
-            if (dt_h < 1.5) {
-                s_tank2_state.rate1h = rate;
-                tank2_state_changed = true;
-            }
-            if (dt_h < 2.5) {
-                s_tank2_state.rate2h = rate;
-                tank2_state_changed = true;
-            }
-            tank2_rate1h = s_tank2_state.rate1h;
-            tank2_rate2h = s_tank2_state.rate2h;
-            // Zeit bis voll: Positiv bei Füllung
-            double remaining_l = 92.0 - tank2_liters;
-            if (tank2_rate2h > 0.1 && remaining_l > 0) {
-                tank2_rest_h = remaining_l / tank2_rate2h;
-            }
+        double dt_s = (now_us - s_tank2_state.last_ts_us) / 1000000.0;
+        if (dt_s >= SENSOR_TANK_RATE_MIN_DT_SEC) {
+            double dt_h = dt_s / 3600.0;
+            double rate = (tank2_liters - s_tank2_state.last_liters) / dt_h;
+            s_tank2_state.rate1h = s_tank2_state.rate1h * (1.0 - SENSOR_TANK_RATE_ALPHA_1H)
+                                 + rate * SENSOR_TANK_RATE_ALPHA_1H;
+            s_tank2_state.rate2h = s_tank2_state.rate2h * (1.0 - SENSOR_TANK_RATE_ALPHA_2H)
+                                 + rate * SENSOR_TANK_RATE_ALPHA_2H;
+            s_tank2_state.last_liters = tank2_liters;
+            s_tank2_state.last_ts_us = now_us;
+            tank2_state_changed = true;
         }
+    } else if (tank2_ok) {
+        s_tank2_state.last_liters = tank2_liters;
+        s_tank2_state.last_ts_us = now_us;
     }
-    s_tank2_state.last_liters = tank2_liters;
-    s_tank2_state.last_ts_us = now_us;
+    tank2_rate1h = s_tank2_state.rate1h;
+    tank2_rate2h = s_tank2_state.rate2h;
+    // Zeit bis voll: Positiv bei Füllung
+    double remaining_l = 92.0 - tank2_liters;
+    if (tank2_rate2h > 0.1 && remaining_l > 0) {
+        tank2_rest_h = remaining_l / tank2_rate2h;
+    }
 
     // NVS speichern wenn State aktualisiert wurde
     if (tank1_state_changed || tank2_state_changed) {
@@ -1095,6 +1106,22 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
         s_ctrl_immediate = true;
     } else if (strcmp(cmd_str, "radio_off") == 0) {
         cmd_err = rs485_set_radio(false);
+        s_ctrl_immediate = true;
+    } else if (strcmp(cmd_str, "buzzer_warn") == 0) {
+        if (buzzer_settings_is_enabled()) buzzer_melody_level_warn();
+    } else if (strcmp(cmd_str, "buzzer_alarm") == 0) {
+        if (buzzer_settings_is_enabled()) buzzer_alarm();
+    } else if (strcmp(cmd_str, "buzzer_on") == 0) {
+        buzzer_settings_set_enabled(true);
+        s_ctrl_immediate = true;
+    } else if (strcmp(cmd_str, "buzzer_off") == 0) {
+        buzzer_settings_set_enabled(false);
+        s_ctrl_immediate = true;
+    } else if (strcmp(cmd_str, "touch_click_on") == 0) {
+        buzzer_settings_set_touch_click(true);
+        s_ctrl_immediate = true;
+    } else if (strcmp(cmd_str, "touch_click_off") == 0) {
+        buzzer_settings_set_touch_click(false);
         s_ctrl_immediate = true;
     } else if (strcmp(cmd_str, "imu_zero") == 0) {
         cmd_err = bno055_app_zero_pitch_roll();

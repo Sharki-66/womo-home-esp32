@@ -52,7 +52,6 @@ static int64_t s_fast_until_us = 0;
 static uint32_t s_fast_interval_ms = 200;
 static bool s_offset_cache_valid = false;
 static sensor_offset_t s_cached_offsets = {};
-static bool s_restore_attempted = false;
 static int64_t s_last_persist_check_us = 0;
 
 // ── Pitch/Roll Einbau-Offset (Nullpunkt-Kalibrierung) ───────────────────
@@ -144,10 +143,9 @@ static esp_err_t bno055_apply_axis_map(bno055_t *imu)
 
 static bool bno055_restore_calibration(bno055_t *imu)
 {
-    if (!imu || s_restore_attempted) {
+    if (!imu) {
         return false;
     }
-    s_restore_attempted = true;
 
     nvs_handle_t handle;
     esp_err_t err = nvs_open(BNO055_NVS_NAMESPACE, NVS_READONLY, &handle);
