@@ -2816,12 +2816,14 @@ static void router_poll_task(void *arg)
                          gps_tmp.speed_kmh);
             }
 
-            /* UTC-Zeit VOR der Critical Section parsen (mktime braucht Mutex) */
+            /* UTC-Zeit VOR der Critical Section parsen.
+             * timegm() interpretiert struct tm als UTC (kein Timezone-Offset),
+             * mktime() dagegen als Lokalzeit – das würde CET/CEST-Versatz doppeln. */
             int64_t gps_epoch = 0;
             if (gps_tmp.utc_time[0]) {
                 struct tm tm_gps = {0};
                 if (strptime(gps_tmp.utc_time, "%Y-%m-%d %H:%M:%S", &tm_gps)) {
-                    gps_epoch = (int64_t)mktime(&tm_gps);
+                    gps_epoch = (int64_t)timegm(&tm_gps);
                 }
             }
 

@@ -767,49 +767,6 @@ esp_err_t womo_rs485_send_display_ready(void)
     return err;
 }
 
-esp_err_t womo_rs485_send_wifi_control(bool enable, const char *ssid, const char *password)
-{
-    if (enable) {
-        bool have_ssid = (ssid && ssid[0] != '\0');
-        if (have_ssid) {
-            cJSON *root = cJSON_CreateObject();
-            if (!root) {
-                return ESP_ERR_NO_MEM;
-            }
-
-            cJSON_AddStringToObject(root, "cmd", "wifi_set_credentials");
-            cJSON_AddStringToObject(root, "ssid", ssid);
-            cJSON_AddStringToObject(root, "password", password ? password : "");
-
-            esp_err_t cred_err = rs485_send_frame(root, "wifi_set_credentials");
-            cJSON_Delete(root);
-            if (cred_err != ESP_OK) {
-                ESP_LOGW(TAG, "Failed to send WiFi credentials: %s", esp_err_to_name(cred_err));
-                return cred_err;
-            }
-            ESP_LOGI(TAG, "WiFi credentials sent for SSID '%s'", ssid);
-        } else {
-            ESP_LOGW(TAG, "WiFi enable requested without SSID - skipping credential update");
-        }
-
-        esp_err_t enable_err = rs485_send_simple_command("wifi_enable_sta");
-        if (enable_err == ESP_OK) {
-            ESP_LOGI(TAG, "Sent wifi_enable_sta command");
-        } else {
-            ESP_LOGW(TAG, "wifi_enable_sta command failed: %s", esp_err_to_name(enable_err));
-        }
-        return enable_err;
-    }
-
-    esp_err_t disable_err = rs485_send_simple_command("wifi_disable_sta");
-    if (disable_err == ESP_OK) {
-        ESP_LOGI(TAG, "Sent wifi_disable_sta command");
-    } else {
-        ESP_LOGW(TAG, "wifi_disable_sta command failed: %s", esp_err_to_name(disable_err));
-    }
-    return disable_err;
-}
-
 esp_err_t womo_rs485_send_wifi_credentials(const char *ssid, const char *pass)
 {
     if (!ssid || ssid[0] == '\0') {
@@ -834,18 +791,6 @@ esp_err_t womo_rs485_send_wifi_credentials(const char *ssid, const char *pass)
     return err;
 }
 
-
-esp_err_t womo_rs485_send_lte_control(bool enable)
-{
-    const char *cmd = enable ? "lte_enable" : "lte_disable";
-    esp_err_t err = rs485_send_simple_command(cmd);
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Sent %s command", cmd);
-    } else {
-        ESP_LOGW(TAG, "Failed to send %s command: %s", cmd, esp_err_to_name(err));
-    }
-    return err;
-}
 
 esp_err_t womo_rs485_send_gas_bottle_replace(uint8_t slot, const char *channel)
 {
@@ -1211,16 +1156,26 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         rs485_record_rx_seq(seq_value);
     }
 
-    // Systemzeit vom Sensor übernehmen, wenn unsere Zeit ungültig ist (vor NTP-Sync)
+    // Systemzeit vom Sensor übernehmen, wenn unsere Zeit ungültig ist (vor NTP-Sync).
+    // Timestamp immer in s_latest_data.timestamp_ms speichern (für periodischen Zeitsync).
     const cJSON *ts_obj = cJSON_GetObjectItem(root, "ts");
     if (cJSON_IsNumber(ts_obj)) {
+        int64_t sensor_ts_ms = (int64_t)ts_obj->valuedouble;
+
+        // timestamp_ms immer unter Mutex schreiben (ui_update_timer_cb liest dieses Feld)
+        if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+            s_latest_data.timestamp_ms = (uint64_t)sensor_ts_ms;
+            xSemaphoreGive(s_data_mutex);
+        } else {
+            ESP_LOGW(TAG, "timestamp_ms: Mutex-Timeout, Zeitsync-Feld nicht aktualisiert");
+        }
+
+        // Wenn Systemzeit < 2024 (ungültig), vom Sensor übernehmen
         time_t now;
         time(&now);
         struct tm timeinfo;
         localtime_r(&now, &timeinfo);
-        // Wenn Systemzeit < 2024 (ungültig), vom Sensor übernehmen
         if (timeinfo.tm_year < (2024 - 1900)) {
-            int64_t sensor_ts_ms = (int64_t)ts_obj->valuedouble;
             struct timeval tv = {
                 .tv_sec = sensor_ts_ms / 1000,
                 .tv_usec = (sensor_ts_ms % 1000) * 1000

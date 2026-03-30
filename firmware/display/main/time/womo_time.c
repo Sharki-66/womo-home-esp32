@@ -190,30 +190,3 @@ uint32_t womo_time_get_seconds_since_sync(void)
     return (uint32_t)(now - last_sync_time);
 }
 
-void womo_time_auto_sync(void)
-{
-    uint32_t seconds_since_sync = womo_time_get_seconds_since_sync();
-    
-    ESP_LOGI(TAG, "Auto-sync check: %lu seconds since last sync", seconds_since_sync);
-    
-    // If never synced or sync interval exceeded
-    if (!time_synced || seconds_since_sync >= WOMO_TIME_SYNC_INTERVAL_SEC) {
-        
-        // Try NTP first (when WiFi available)
-        // Note: Actual WiFi check should be implemented
-        ESP_LOGI(TAG, "Attempting NTP sync...");
-        esp_err_t ret = womo_time_sync_ntp(false);  // Non-blocking
-        
-        if (ret == ESP_OK) {
-            ESP_LOGI(TAG, "Auto-sync successful via NTP");
-            return;
-        }
-        
-        // Try RS485 Sensorboard time sync
-        // (handled in main.c time_update_timer_cb)
-        
-        ESP_LOGW(TAG, "Auto-sync failed - no sync source available");
-    } else {
-        ESP_LOGI(TAG, "Time sync not needed yet");
-    }
-}

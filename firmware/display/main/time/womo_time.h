@@ -24,7 +24,6 @@ typedef enum {
 } womo_time_source_t;
 
 // Time sync configuration
-#define WOMO_TIME_SYNC_INTERVAL_SEC (3600)  // Sync every hour
 #define WOMO_TIME_NTP_SERVER "pool.ntp.org"
 #define WOMO_TIME_TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3"  // Central European Time
 
@@ -105,13 +104,5 @@ bool womo_time_is_synced(void);
  * @return Seconds since last successful time sync
  */
 uint32_t womo_time_get_seconds_since_sync(void);
-
-/**
- * @brief Auto-sync task (call periodically or as task)
- * 
- * Attempts to sync time based on available sources
- * Should be called every hour or run as FreeRTOS task
- */
-void womo_time_auto_sync(void);
 
 #endif // WOMO_TIME_H
