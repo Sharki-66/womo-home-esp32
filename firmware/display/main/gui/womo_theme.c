@@ -43,8 +43,8 @@ esp_err_t womo_theme_init(float latitude, float longitude)
     location_lat = latitude;
     location_lon = longitude;
     
-    // TODO: Calculate actual sunrise/sunset based on location and date
-    // For now using default times
+    // Sonnenauf/-untergangszeiten werden vom router_poll_task via
+    // womo_sun_calc_times() + womo_theme_set_sun_times() aktualisiert.
     ESP_LOGI(TAG, "Sunrise: %02d:%02d, Sunset: %02d:%02d",
              sun_times.sunrise_hour, sun_times.sunrise_minute,
              sun_times.sunset_hour, sun_times.sunset_minute);
