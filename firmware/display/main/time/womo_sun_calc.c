@@ -17,8 +17,10 @@ static const char *TAG = "womo_sun_calc";
 #define DEG_TO_RAD (PI / 180.0)
 #define RAD_TO_DEG (180.0 / PI)
 
-// Solar zenith angle for civil twilight (96° for sunrise/sunset)
-#define CIVIL_TWILIGHT_ZENITH 96.0
+// Solar zenith angle for sunrise/sunset (90.833° inkl. atmosphärischer Refraktion).
+// NICHT 96° – das wäre der Beginn der bürgerlichen Dämmerung (civil twilight).
+// Das Theme addiert die 24-Min-Dämmerung selbst (WOMO_CIVIL_TWILIGHT_MINUTES).
+#define SUNRISE_SUNSET_ZENITH 90.833
 
 /**
  * @brief Calculate day of year (1-366)
@@ -96,7 +98,7 @@ bool womo_sun_calc_times(double latitude, double longitude, const struct tm *dat
     
     // Convert to radians
     double lat_rad = latitude * DEG_TO_RAD;
-    double zenith_rad = CIVIL_TWILIGHT_ZENITH * DEG_TO_RAD;
+    double zenith_rad = SUNRISE_SUNSET_ZENITH * DEG_TO_RAD;
     
     // Calculate solar declination (simplified formula)
     // More accurate would use equation of time, but this is good enough (±2 min error)
@@ -115,16 +117,15 @@ bool womo_sun_calc_times(double latitude, double longitude, const struct tm *dat
     double sunrise_utc = solar_noon - (hour_angle_deg / 15.0);
     double sunset_utc = solar_noon + (hour_angle_deg / 15.0);
     
-    // Get timezone offset from current time
+    // Get timezone offset from current time (including DST, newlib-compatible)
+    // Strategy: mktime(gmtime(now) with isdst=-1) treats the UTC fields as local
+    // time with automatic DST detection → result differs from now by exactly the
+    // current UTC offset (incl. DST: CET=+3600, CEST=+7200).
     time_t now = time(NULL);
-    struct tm tm_local;
     struct tm tm_utc;
-    localtime_r(&now, &tm_local);
     gmtime_r(&now, &tm_utc);
-    
-    // Calculate timezone offset in hours (simplified - assumes no DST complications during calculation)
-    int tz_offset_seconds = (int)difftime(mktime(&tm_local), mktime(&tm_utc));
-    double tz_offset_hours = tz_offset_seconds / 3600.0;
+    tm_utc.tm_isdst = -1;  // let mktime determine DST from date
+    double tz_offset_hours = difftime(now, mktime(&tm_utc)) / 3600.0;
     
     // Convert to local time
     double sunrise_local = sunrise_utc + tz_offset_hours;

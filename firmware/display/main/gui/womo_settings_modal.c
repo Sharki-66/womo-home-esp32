@@ -11,6 +11,8 @@
 #include "womo_thresholds.h"
 #include "womo_fonts_german.h"
 #include "../time/womo_time.h"
+#include "../rs485/womo_rs485_display.h"
+#include "../hardware/buzzer.h"
 #include "esp_log.h"
 #include <string.h>
 #include <stdio.h>
@@ -40,6 +42,10 @@ static bool      s_locale_cb_reg  = false;
 
 /* ── RTC-Batterie-Info-Labels ────────────────────────── */
 static lv_obj_t *s_rtc_info_lbl  = NULL;  // Mehrzeiliger Info-Block
+
+/* ── Ton-Toggle-Buttons ─────────────────────────── */
+static lv_obj_t *s_btn_tones     = NULL;
+static lv_obj_t *s_btn_touch     = NULL;
 
 static void settings_locale_cb(void)
 {
@@ -228,7 +234,7 @@ static void make_thresh_row(lv_obj_t *parent, int y,
 static void close_modal(void)
 {
     if (s_overlay) {
-        lv_obj_del_async(s_overlay);  /* async: kein Blockieren im Event-Callback */
+        lv_obj_del_async(s_overlay);
         s_overlay      = NULL;
         s_panel        = NULL;
         s_title_lbl    = NULL;
@@ -238,6 +244,8 @@ static void close_modal(void)
         s_row_lbl[0]   = NULL;
         s_row_lbl[1]   = NULL;
         s_row_lbl[2]   = NULL;
+        s_btn_tones    = NULL;
+        s_btn_touch    = NULL;
     }
 }
 
@@ -289,6 +297,40 @@ static void lang_en_cb(lv_event_t *e)
     }
 }
 
+/* ── Ton-Toggle-Callbacks ────────────────────────────────────────── */
+
+/* Hilfsfunktion: EIN/AUS-Button optisch aktualisieren */
+static void sound_btn_update(lv_obj_t *btn, bool on)
+{
+    lv_obj_set_style_bg_color(btn, on ? lv_color_hex(0x2E7D32) : lv_color_hex(0x757575), 0);
+    lv_obj_t *lbl = lv_obj_get_child(btn, 0);
+    if (lbl) lv_label_set_text(lbl, on ? "EIN" : "AUS");
+}
+
+static void sound_tones_cb(lv_event_t *e)
+{
+    if (!s_btn_tones) return;
+    lv_obj_t *lbl = lv_obj_get_child(s_btn_tones, 0);
+    bool currently_on = lbl && (lv_label_get_text(lbl)[0] == 'E');
+    bool new_state = !currently_on;
+    sound_btn_update(s_btn_tones, new_state);
+    womo_rs485_send_buzzer(new_state);
+    display_buzzer_set_enabled(new_state);  /* Lokalen Buzzer (Warn/Alarm) sofort schalten */
+    ESP_LOGI(TAG, "Systemtöne → %s", new_state ? "EIN" : "AUS");
+}
+
+static void sound_touch_cb(lv_event_t *e)
+{
+    if (!s_btn_touch) return;
+    lv_obj_t *lbl = lv_obj_get_child(s_btn_touch, 0);
+    bool currently_on = lbl && (lv_label_get_text(lbl)[0] == 'E');
+    bool new_state = !currently_on;
+    sound_btn_update(s_btn_touch, new_state);
+    womo_rs485_send_touch_click(new_state);
+    display_buzzer_set_click_enabled(new_state);  /* Lokalen Click-Ton sofort schalten */
+    ESP_LOGI(TAG, "Touch-Klick → %s", new_state ? "EIN" : "AUS");
+}
+
 /* ─────────────────────────────────────────────────────────────────── */
 /*  Public API                                                         */
 /* ─────────────────────────────────────────────────────────────────── */
@@ -332,7 +374,10 @@ void womo_settings_modal_show(lv_obj_t *parent)
     lv_obj_set_style_border_width(s_panel, 1, 0);
     lv_obj_set_style_border_color(s_panel, lv_color_hex(0xBBBBBB), 0);
     lv_obj_set_style_pad_all(s_panel, 0, 0);
-    lv_obj_clear_flag(s_panel, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(s_panel, LV_OBJ_FLAG_SCROLLABLE);
+    /* Panel MUSS clickable bleiben, damit Klicks nicht zum Overlay
+       durchfallen und das Modal versehentlich schließen. */
+    lv_obj_add_flag(s_panel, LV_OBJ_FLAG_CLICKABLE);
 
     /* ── Kopfzeile ──────────────────────────────────────── */
     lv_obj_t *header = lv_obj_create(s_panel);
@@ -523,6 +568,64 @@ void womo_settings_modal_show(lv_obj_t *parent)
     make_thresh_row(s_panel, row_y,      womo_locale_get_string(STR_THRESH_GAS),   &s_te.gas_warn,   &s_te.gas_crit,   false, &s_row_lbl[0]);
     make_thresh_row(s_panel, row_y + 44, womo_locale_get_string(STR_THRESH_FRESH), &s_te.fresh_warn, &s_te.fresh_crit, false, &s_row_lbl[1]);
     make_thresh_row(s_panel, row_y + 88, womo_locale_get_string(STR_THRESH_GREY),  &s_te.grey_warn,  &s_te.grey_crit,  true,  &s_row_lbl[2]);
+
+    /* ── Abschnitt: Töne ────────────────────────────────── */
+    /* Ton-Sektion beginnt unterhalb der letzten Grenzwert-Zeile     */
+    int sy = row_y + 88 + 40;  /* ~358 bei HDR_H=48, PAD=16         */
+
+    lv_obj_t *snd_sep = lv_obj_create(s_panel);
+    lv_obj_set_size(snd_sep, MODAL_W - 2 * PAD, 1);
+    lv_obj_set_pos(snd_sep, PAD, sy - 4);
+    lv_obj_set_style_bg_color(snd_sep, lv_color_hex(0xCCCCCC), 0);
+    lv_obj_set_style_border_width(snd_sep, 0, 0);
+    lv_obj_set_style_radius(snd_sep, 0, 0);
+    lv_obj_clear_flag(snd_sep, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    /* Aktuellen lokalen Zustand direkt aus dem Buzzer-Modul lesen.
+     * Das ist der autoritative State – wird beim Boot und bei jedem
+     * ctrl-Topic vom Sensorboard synchronisiert. */
+    bool buzzer_on   = display_buzzer_is_enabled();
+    bool touch_click = display_buzzer_is_click_enabled();
+
+    /* Systemtöne-Button */
+    lv_obj_t *lbl_tones = lv_label_create(s_panel);
+    lv_label_set_text(lbl_tones, womo_locale_get_string(STR_SOUND_TONES));
+    lv_obj_set_style_text_font(lbl_tones, &lv_font_montserrat_14_german, 0);
+    lv_obj_set_style_text_color(lbl_tones, lv_color_hex(0x333333), 0);
+    lv_obj_set_pos(lbl_tones, PAD, sy + 10);
+
+    s_btn_tones = lv_btn_create(s_panel);
+    lv_obj_set_size(s_btn_tones, 64, 30);
+    lv_obj_set_pos(s_btn_tones, 180, sy + 6);
+    lv_obj_set_style_radius(s_btn_tones, 6, 0);
+    lv_obj_set_style_border_width(s_btn_tones, 0, 0);
+    lv_obj_set_style_pad_all(s_btn_tones, 0, 0);
+    lv_obj_t *tones_lbl = lv_label_create(s_btn_tones);
+    lv_obj_set_style_text_font(tones_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_center(tones_lbl);
+    sound_btn_update(s_btn_tones, buzzer_on);
+    lv_obj_add_event_cb(s_btn_tones, sound_tones_cb, LV_EVENT_CLICKED, NULL);
+
+    /* Touch-Klick-Button */
+    lv_obj_t *lbl_touch = lv_label_create(s_panel);
+    lv_label_set_text(lbl_touch, womo_locale_get_string(STR_SOUND_TOUCH_CLICK));
+    lv_obj_set_style_text_font(lbl_touch, &lv_font_montserrat_14_german, 0);
+    lv_obj_set_style_text_color(lbl_touch, lv_color_hex(0x333333), 0);
+    lv_obj_set_pos(lbl_touch, 320, sy + 10);
+
+    s_btn_touch = lv_btn_create(s_panel);
+    lv_obj_set_size(s_btn_touch, 64, 30);
+    lv_obj_set_pos(s_btn_touch, 500, sy + 6);
+    lv_obj_set_style_radius(s_btn_touch, 6, 0);
+    lv_obj_set_style_border_width(s_btn_touch, 0, 0);
+    lv_obj_set_style_pad_all(s_btn_touch, 0, 0);
+    lv_obj_t *touch_lbl = lv_label_create(s_btn_touch);
+    lv_obj_set_style_text_font(touch_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_center(touch_lbl);
+    sound_btn_update(s_btn_touch, touch_click);
+    lv_obj_add_event_cb(s_btn_touch, sound_touch_cb, LV_EVENT_CLICKED, NULL);
+
+    /* Beide Buttons sind jetzt unabhängig – kein Verstecken mehr */
 
     /* Locale-Callback einmalig registrieren */
     if (!s_locale_cb_reg) {

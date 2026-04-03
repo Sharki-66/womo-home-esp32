@@ -3,6 +3,8 @@
  */
 
 #include "womo_time.h"
+#include "womo_sun_calc.h"
+#include "gui/womo_theme.h"
 #include "esp_log.h"
 #include "esp_sntp.h"
 #include <sys/time.h>
@@ -15,6 +17,10 @@ static const char *TAG = "womo_time";
 static womo_time_source_t last_sync_source = TIME_SOURCE_NONE;
 static time_t last_sync_time = 0;
 static bool time_synced = false;
+
+/* Gecachte Sonnenzeiten (gesetzt von womo_time_update_location) */
+static uint8_t s_sr_h = 0, s_sr_m = 0, s_ss_h = 0, s_ss_m = 0;
+static bool    s_sun_valid = false;
 
 /**
  * @brief SNTP sync notification callback
@@ -216,4 +222,35 @@ void womo_time_auto_sync(void)
     } else {
         ESP_LOGI(TAG, "Time sync not needed yet");
     }
+}
+
+bool womo_time_update_location(double latitude, double longitude)
+{
+    struct tm tm_now;
+    if (womo_time_get(&tm_now) != ESP_OK || tm_now.tm_year < (2024 - 1900)) {
+        ESP_LOGW(TAG, "update_location: Zeit noch nicht g\u00fcltig");
+        return false;
+    }
+
+    uint8_t sr_h, sr_m, ss_h, ss_m;
+    if (!womo_sun_calc_times(latitude, longitude, &tm_now,
+                             &sr_h, &sr_m, &ss_h, &ss_m)) {
+        return false;
+    }
+
+    s_sr_h = sr_h; s_sr_m = sr_m;
+    s_ss_h = ss_h; s_ss_m = ss_m;
+    s_sun_valid = true;
+
+    womo_theme_set_sun_times(sr_h, sr_m, ss_h, ss_m);
+    return true;
+}
+
+bool womo_time_get_sun_times(uint8_t *sr_h, uint8_t *sr_m,
+                              uint8_t *ss_h, uint8_t *ss_m)
+{
+    if (!s_sun_valid || !sr_h || !sr_m || !ss_h || !ss_m) return false;
+    *sr_h = s_sr_h; *sr_m = s_sr_m;
+    *ss_h = s_ss_h; *ss_m = s_ss_m;
+    return true;
 }

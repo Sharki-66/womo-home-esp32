@@ -10,7 +10,7 @@
 static const char *TAG = "womo_theme";
 
 // Current theme state
-static womo_theme_mode_t current_mode = WOMO_THEME_DAY;
+static womo_theme_mode_t current_mode = WOMO_THEME_NIGHT;
 static womo_status_level_t current_status = WOMO_STATUS_OK;
 static bool auto_mode_enabled = true;   // Auto mode for smooth twilight transitions
 
@@ -468,18 +468,20 @@ void womo_theme_apply_to_screen(lv_obj_t *screen)
 
 void womo_theme_reset(void)
 {
-    // Reset all cached state to force fresh evaluation
-    current_mode = WOMO_THEME_DAY;  // Safe default fallback
+    // Reset all cached state to force fresh evaluation.
+    // NIGHT als Default: passt zum dunklen Boot-Hintergrund (WOMO_COLOR_NIGHT_NORMAL)
+    // und blendet nicht. womo_theme_update() setzt den echten Mode nach Zeitvalidierung.
+    current_mode = WOMO_THEME_NIGHT;
     current_status = WOMO_STATUS_OK;
     auto_mode_enabled = true;
     
     // Invalidate cached twilight color
-    cached_twilight_color = WOMO_COLOR_DAY_NORMAL;
+    cached_twilight_color = WOMO_COLOR_NIGHT_NORMAL;
     last_computed_hour = 255;
     last_computed_minute = 255;
     is_twilight_cached = false;
     
-    ESP_LOGI(TAG, "Theme state reset to defaults (boot/power-on)");
+    ESP_LOGI(TAG, "Theme state reset to defaults (NIGHT, boot/power-on)");
 }
 
 void womo_theme_cycle_mode(void)

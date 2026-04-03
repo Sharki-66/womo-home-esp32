@@ -7,6 +7,7 @@
 #include "freertos/task.h"
 #include "womo_http_mutex.h"
 #include "isrg_root_x1_pem.h"
+#include "esp_heap_caps.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,15 +76,19 @@ esp_err_t womo_geocode_reverse_request(double latitude,
         strlcpy(s_ctx.language, "en", sizeof(s_ctx.language));
     }
 
-    BaseType_t created = xTaskCreate(
+    BaseType_t created = xTaskCreateWithCaps(
         geocode_task,
         "geocode_task",
         GEOCODE_TASK_STACK,
         NULL,
         GEOCODE_TASK_PRIO,
-        &s_ctx.task_handle);
+        &s_ctx.task_handle,
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 
     if (created != pdPASS) {
+        ESP_LOGW(TAG, "geocode_task create failed: internal_free=%u largest=%u",
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         s_ctx.task_handle = NULL;
         return ESP_ERR_NO_MEM;
     }

@@ -19,6 +19,7 @@
 #include "esp_lvgl_port_disp.h"
 #include "lvgl_port.h"
 #include "womo_theme.h"
+#include "buzzer.h"
 
 static const char *TAG = "lv_port";
 
@@ -81,6 +82,7 @@ static void touchpad_read(lv_indev_t *indev, lv_indev_data_t *data)
     esp_err_t ret = esp_lcd_touch_get_data(tp, &point, &touchpad_cnt, 1);
 
     if (ret == ESP_OK && touchpad_cnt > 0) {
+        bool rising_edge = !touch_state.is_pressed;  /* Flanke vor dem Setzen merken */
         touch_state.is_pressed        = true;
         touch_state.last_point.x      = point.x;
         touch_state.last_point.y      = point.y;
@@ -96,6 +98,9 @@ static void touchpad_read(lv_indev_t *indev, lv_indev_data_t *data)
         if (s_touch_wake_cb && s_touch_wake_cb()) {
             data->state            = LV_INDEV_STATE_RELEASED;
             touch_state.is_pressed = false;
+        } else if (rising_edge) {
+            /* Steigende Flanke: Touch-Klick-Ton (lokaler Buzzer, kein RS485) */
+            display_buzzer_click();
         }
     } else {
         /* Release-Filter: kurze Flacker-Unterdrückung */

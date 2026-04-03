@@ -102,6 +102,13 @@ static void apply_status_colors(womo_tank_t *tank, womo_status_level_t status)
     }
 
     lv_obj_set_style_bg_color(tank->tank_body, body_main, 0);
+
+    // Füllstand bleibt immer in der Tank-Standardfarbe.
+    if (tank->fill) {
+        lv_color_t fill_base = water_color_for_type(tank->type);
+        lv_obj_set_style_bg_color(tank->fill, fill_base, 0);
+        lv_obj_set_style_bg_grad_color(tank->fill, lv_color_darken(fill_base, 40), 0);
+    }
 }
 
 womo_tank_t *womo_tank_create(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, womo_tank_type_t type)

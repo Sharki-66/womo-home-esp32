@@ -143,6 +143,8 @@ typedef struct {
         bool ac_present;       // 230V Landstrom angeschlossen
         bool rtc_bat_low;      // BLF: RTC-Backup-Batterie schwach (<~1.2V)
         bool rtc_bat_switched; // BSF: Seit letztem Reset mind. 1× auf RTC-Batterie gelaufen
+        bool buzzer_on;        // Globale Systemtöne aktiv
+        bool touch_click_on;   // Touch-Klick-Ton aktiv
     } power;
 
     // Per-Topic Empfangszeitstempel (esp_timer_get_time(), 0 = noch nie empfangen)
@@ -185,6 +187,9 @@ esp_err_t womo_rs485_send_gas_bottle_replace(uint8_t slot, const char *channel);
 esp_err_t womo_rs485_send_pwr_12v(bool enable);
 esp_err_t womo_rs485_send_radio(bool enable);
 esp_err_t womo_rs485_send_imu_zero(void);
+esp_err_t womo_rs485_send_buzzer(bool enable);
+esp_err_t womo_rs485_send_touch_click(bool enable);
+esp_err_t womo_rs485_send_buzzer_alert(bool is_alarm); /* One-Shot: true=Alarm, false=Warnung */
 
 // Get latest sensor data (non-blocking)
 bool womo_rs485_get_latest_data(womo_sensor_data_t *data);

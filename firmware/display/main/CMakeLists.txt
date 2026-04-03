@@ -27,10 +27,12 @@ idf_component_register(
         "network/womo_geocode.c"
         "network/womo_router_uci.c"
         "network/womo_http_mutex.c"
+        "network/womo_buzzer_http.c"
         "storage/womo_sd.c"
         "rs485/womo_rs485_display.c"
         "hardware/lvgl_port.c"
         "hardware/waveshare_rgb_lcd_port.c"
+        "hardware/buzzer.c"
     INCLUDE_DIRS 
         "."
         "time"
@@ -44,11 +46,14 @@ idf_component_register(
         fatfs
         esp_wifi
         esp_http_client
+        esp_http_server
         esp-tls
         nvs_flash
         json
         driver
         esp_timer
+    EMBED_TXTFILES
+        "../spiffs/buzzer_studio.html"
 )
 
 # Warnungs-Unterdrückung für LVGL (Managed Component: lvgl__lvgl)

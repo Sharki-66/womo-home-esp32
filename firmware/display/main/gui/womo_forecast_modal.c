@@ -36,23 +36,23 @@ static const char *TAG = "forecast_modal";
 
 /* ── Meteoalarm-Warnbereich (unterhalb der 5 Spalten) ─────── */
 #define WARN_MAX_DISPLAY   3
-#define WARN_Y0            252   /* COL_CONTENT_Y0(4) + COL_CONTENT_H(242) + 6 */
+#define WARN_Y0            280   /* HDR_H(48) + COL_CONTENT_Y0(12) + COL_CONTENT_H(252) - 20px */
 #define WARN_DOT_SZ        12
 #define WARN_ROW_H         24
 
 #define WEATHER_ICON_DIR "/sdcard/images/weather-icons/black"
-#define DATAICON_DIR      "/sdcard/images"
 
 /* ── Interne Zustandsvariablen ───────────────────────────── */
 static lv_obj_t *s_overlay   = NULL;
 static lv_obj_t *s_panel     = NULL;
 static lv_obj_t *s_title_lbl = NULL;
 static lv_obj_t *s_loc_lbl   = NULL;  /* Ortsname im Header */
-/* Header-Sonnenzeiten: [☀-ico] [↑-ico] [SR-Label] [↓-ico] [SS-Label] */
-static lv_obj_t *s_hdr_ico_sun = NULL;
-static lv_obj_t *s_hdr_ico_up  = NULL;
+/* Header-Sonnenzeiten: [☀-sym] [↑-sym] [SR-Label] [↓-sym] [SS-Label]
+ * ☀ = Material wb_sunny U+E430, ↑ = arrow_upward U+E5D8, ↓ = arrow_downward U+E5DB */
+static lv_obj_t *s_hdr_ico_sun = NULL;  /* Material-Label wb_sunny (Outlined) */
+static lv_obj_t *s_hdr_ico_up  = NULL;  /* Material-Label arrow_upward (Outlined) */
 static lv_obj_t *s_hdr_lbl_sr  = NULL;  /* "HH:MM" Sonnenaufgang */
-static lv_obj_t *s_hdr_ico_dn  = NULL;
+static lv_obj_t *s_hdr_ico_dn  = NULL;  /* Material-Label arrow_downward (Outlined) */
 static lv_obj_t *s_hdr_lbl_ss  = NULL;  /* "HH:MM" Sonnenuntergang */
 
 /* Gespeicherte Standort-/Sonnenwerte für nachträgliches Öffnen */
@@ -83,21 +83,11 @@ static day_icon_t s_icons[COL_COUNT];
  *                              ic_sun_h.png       – Sonne (Stunden)
  *                              ic_wind.png        – Wind
  * Empfohlene Größe: 16×16 px, RGBA-PNG */
-#define DATA_ICON_SIZE  16
 
-typedef struct { uint8_t *buf; lv_image_dsc_t dsc; } small_icon_t;
-
-static small_icon_t s_sico_rain_prob = {0};
-static small_icon_t s_sico_sun_h     = {0};
-static small_icon_t s_sico_wind      = {0};
-static small_icon_t s_sico_sun_up    = {0};  /* up.png – Sonnenaufgang */
-static small_icon_t s_sico_sun_dn    = {0};  /* down.png – Sonnenuntergang */
-
-/* Kleine Icon-Objekte pro Spalte */
-static lv_obj_t *s_rain_ico[COL_COUNT];
-static lv_obj_t *s_prec_ico[COL_COUNT];
-static lv_obj_t *s_sunh_ico[COL_COUNT];
-static lv_obj_t *s_wind_ico[COL_COUNT];
+/* Icon-Label für Sonnenstunden pro Spalte (Material-Font wb_sunny Outlined) */
+static lv_obj_t *s_sunh_ico [COL_COUNT];
+static lv_obj_t *s_rain_ico [COL_COUNT];  /* water_drop vor Regenwahrscheinlichkeit */
+static lv_obj_t *s_wind_ico [COL_COUNT];  /* air vor Windgeschwindigkeit */
 
 /* ── Meteoalarm-Warnbereich ─────────────────────────────────── */
 static womo_meteoalarm_result_t s_meteoalarm     = {0};
@@ -227,76 +217,7 @@ static void free_icons(void)
     }
 }
 
-/* ── Kleinen Daten-Icon von SD laden ───────────────────── */
-static void load_small_icon_file(small_icon_t *si, const char *filename)
-{
-    if (!si || !womo_sd_is_mounted() || !filename) return;
-    char path[128];
-    snprintf(path, sizeof(path), "%s/%s", DATAICON_DIR, filename);
-    FILE *fp = fopen(path, "rb");
-    if (!fp) return;
-    fseek(fp, 0, SEEK_END);
-    long sz = ftell(fp);
-    rewind(fp);
-    if (sz <= 0 || sz > 16384) { fclose(fp); return; }
-    uint8_t *buf = heap_caps_malloc((size_t)sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!buf) buf = malloc((size_t)sz);
-    if (!buf) { fclose(fp); return; }
-    if (fread(buf, 1, (size_t)sz, fp) != (size_t)sz) { free(buf); fclose(fp); return; }
-    fclose(fp);
-    si->buf              = buf;
-    si->dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
-    si->dsc.header.w     = 0;
-    si->dsc.header.h     = 0;
-    si->dsc.data_size    = (uint32_t)sz;
-    si->dsc.header.cf    = LV_COLOR_FORMAT_RAW_ALPHA;
-    si->dsc.data         = buf;
-    ESP_LOGI(TAG, "Data icon geladen: %s (%ld B)", filename, sz);
-}
 
-static void load_data_icons(void)
-{
-    load_small_icon_file(&s_sico_rain_prob, "ic_rain.png");  /* Regenwahrscheinlichkeit % */
-    load_small_icon_file(&s_sico_sun_h,     "ic_sun.png");   /* Sonnenstunden + Header-Sonne */
-    load_small_icon_file(&s_sico_wind,      "ic_wind.png");  /* Wind m/s */
-    load_small_icon_file(&s_sico_sun_up,    "up.png");       /* Sonnenaufgang im Header */
-    load_small_icon_file(&s_sico_sun_dn,    "down.png");     /* Sonnenuntergang im Header */
-}
-
-static void free_data_icons(void)
-{
-    small_icon_t *all[] = { &s_sico_rain_prob, &s_sico_sun_h, &s_sico_wind,
-                            &s_sico_sun_up, &s_sico_sun_dn };
-    for (int k = 0; k < 5; k++) {
-        if (all[k]->buf) {
-            lv_image_cache_drop(&all[k]->dsc);
-            heap_caps_free(all[k]->buf);
-            all[k]->buf = NULL;
-        }
-    }
-}
-
-static void apply_data_icon_sources(void)
-{
-    for (int i = 0; i < COL_COUNT; i++) {
-        if (s_sico_rain_prob.buf && s_rain_ico[i]) {
-            lv_img_set_src(s_rain_ico[i], &s_sico_rain_prob.dsc);
-            lv_obj_clear_flag(s_rain_ico[i], LV_OBJ_FLAG_HIDDEN);
-        }
-        if (s_sico_sun_h.buf && s_sunh_ico[i]) {
-            lv_img_set_src(s_sunh_ico[i], &s_sico_sun_h.dsc);
-            lv_obj_clear_flag(s_sunh_ico[i], LV_OBJ_FLAG_HIDDEN);
-        }
-        if (s_sico_wind.buf && s_wind_ico[i]) {
-            lv_img_set_src(s_wind_ico[i], &s_sico_wind.dsc);
-            lv_obj_clear_flag(s_wind_ico[i], LV_OBJ_FLAG_HIDDEN);
-        }
-    }
-    /* Header-Sonnen-Icons */
-    if (s_sico_sun_h.buf  && s_hdr_ico_sun) { lv_img_set_src(s_hdr_ico_sun, &s_sico_sun_h.dsc);  lv_obj_clear_flag(s_hdr_ico_sun, LV_OBJ_FLAG_HIDDEN); }
-    if (s_sico_sun_up.buf && s_hdr_ico_up)  { lv_img_set_src(s_hdr_ico_up,  &s_sico_sun_up.dsc); lv_obj_clear_flag(s_hdr_ico_up,  LV_OBJ_FLAG_HIDDEN); }
-    if (s_sico_sun_dn.buf && s_hdr_ico_dn)  { lv_img_set_src(s_hdr_ico_dn,  &s_sico_sun_dn.dsc); lv_obj_clear_flag(s_hdr_ico_dn,  LV_OBJ_FLAG_HIDDEN); }
-}
 
 /* ── Spalten mit Forecast-Daten füllen ─────────────────── */
 static void fill_columns(const womo_weather_forecast_t *forecast)
@@ -386,7 +307,6 @@ static void close_modal(void)
 {
     if (!s_overlay) return;
     free_icons();
-    free_data_icons();
     lv_obj_del_async(s_overlay);
     s_overlay      = NULL;
     s_panel        = NULL;
@@ -407,7 +327,7 @@ static void close_modal(void)
         s_day_lbl[i] = s_date_lbl[i] = s_icon_img[i] = NULL;
         s_tmax_lbl[i] = s_tmin_lbl[i] = s_prec_lbl[i] = s_wind_lbl[i] = NULL;
         s_rain_lbl[i] = s_sun_lbl[i] = NULL;
-        s_rain_ico[i] = s_prec_ico[i] = s_sunh_ico[i] = s_wind_ico[i] = NULL;
+        s_sunh_ico[i] = s_rain_ico[i] = s_wind_ico[i] = NULL;
     }
 }
 
@@ -667,39 +587,38 @@ void womo_forecast_modal_show(lv_obj_t *parent, const womo_weather_forecast_t *f
 
     /* Sonnenzeiten rechts im Header: [☀] [↑] [SR] [↓] [SS]
      * Layout von rechts (Close-Btn endet bei x=632):
-     * SS-Zeit x=554 w=38 | ↓-ico x=538 | SR-Zeit x=498 w=38 | ↑-ico x=482 | ☀-ico x=466
-     * Alle Icons 14×14 px, y=(48-14)/2=17; Labels Höhe 16, y=(48-16)/2=16             */
-    #define HDR_ICO_SZ  14
-    #define HDR_ICO_Y   ((HDR_H - HDR_ICO_SZ) / 2)
+     * SS-Zeit x=554 | ↓-sym x=538 | SR-Zeit x=498 | ↑-sym x=482 | ☀-sym x=466
+     * Symbole: Material-Font 16 px Outlined (wb_sunny U+E430, arrow_upward U+E5D8, arrow_downward U+E5DB) */
     #define HDR_LBL_Y   ((HDR_H - 16) / 2)
 
-    s_hdr_ico_sun = lv_img_create(header);
-    lv_obj_set_size(s_hdr_ico_sun, HDR_ICO_SZ, HDR_ICO_SZ);
-    lv_obj_set_pos(s_hdr_ico_sun, MODAL_W - 190, HDR_ICO_Y);
-    lv_obj_add_flag(s_hdr_ico_sun, LV_OBJ_FLAG_HIDDEN);
+    s_hdr_ico_sun = lv_label_create(header);
+    lv_label_set_text(s_hdr_ico_sun, "\xee\x90\xb0");  /* Material Outlined: wb_sunny U+E430 */
+    lv_obj_set_style_text_color(s_hdr_ico_sun, lv_color_hex(0xFFEE88), 0);
+    lv_obj_set_style_text_font(s_hdr_ico_sun, &Material, 0);
+    lv_obj_set_pos(s_hdr_ico_sun, MODAL_W - 192, HDR_LBL_Y);
 
-    s_hdr_ico_up = lv_img_create(header);
-    lv_obj_set_size(s_hdr_ico_up, HDR_ICO_SZ, HDR_ICO_SZ);
-    lv_obj_set_pos(s_hdr_ico_up, MODAL_W - 172, HDR_ICO_Y);
-    lv_obj_add_flag(s_hdr_ico_up, LV_OBJ_FLAG_HIDDEN);
+    s_hdr_ico_up = lv_label_create(header);
+    lv_label_set_text(s_hdr_ico_up, "\xee\x97\x98");   /* Material Outlined: arrow_upward U+E5D8 */
+    lv_obj_set_style_text_color(s_hdr_ico_up, lv_color_hex(0xFFEE88), 0);
+    lv_obj_set_style_text_font(s_hdr_ico_up, &Material, 0);
+    lv_obj_set_pos(s_hdr_ico_up, MODAL_W - 174, HDR_LBL_Y);
 
     s_hdr_lbl_sr = lv_label_create(header);
     { char tbuf[8]; snprintf(tbuf, sizeof(tbuf), "%02u:%02u", s_sr_h, s_sr_m); lv_label_set_text(s_hdr_lbl_sr, tbuf); }
     lv_obj_set_style_text_color(s_hdr_lbl_sr, lv_color_hex(0xFFEE88), 0);
     lv_obj_set_style_text_font(s_hdr_lbl_sr, &lv_font_montserrat_14, 0);
-    lv_obj_set_size(s_hdr_lbl_sr, 38, 16);
     lv_obj_set_pos(s_hdr_lbl_sr, MODAL_W - 156, HDR_LBL_Y);
 
-    s_hdr_ico_dn = lv_img_create(header);
-    lv_obj_set_size(s_hdr_ico_dn, HDR_ICO_SZ, HDR_ICO_SZ);
-    lv_obj_set_pos(s_hdr_ico_dn, MODAL_W - 114, HDR_ICO_Y);
-    lv_obj_add_flag(s_hdr_ico_dn, LV_OBJ_FLAG_HIDDEN);
+    s_hdr_ico_dn = lv_label_create(header);
+    lv_label_set_text(s_hdr_ico_dn, "\xee\x97\x9b");   /* Material Outlined: arrow_downward U+E5DB */
+    lv_obj_set_style_text_color(s_hdr_ico_dn, lv_color_hex(0xFFEE88), 0);
+    lv_obj_set_style_text_font(s_hdr_ico_dn, &Material, 0);
+    lv_obj_set_pos(s_hdr_ico_dn, MODAL_W - 114, HDR_LBL_Y);
 
     s_hdr_lbl_ss = lv_label_create(header);
     { char tbuf[8]; snprintf(tbuf, sizeof(tbuf), "%02u:%02u", s_ss_h, s_ss_m); lv_label_set_text(s_hdr_lbl_ss, tbuf); }
     lv_obj_set_style_text_color(s_hdr_lbl_ss, lv_color_hex(0xFFEE88), 0);
     lv_obj_set_style_text_font(s_hdr_lbl_ss, &lv_font_montserrat_14, 0);
-    lv_obj_set_size(s_hdr_lbl_ss, 38, 16);
     lv_obj_set_pos(s_hdr_lbl_ss, MODAL_W - 96, HDR_LBL_Y);
 
     /* Schliessen-Button */
@@ -717,9 +636,9 @@ void womo_forecast_modal_show(lv_obj_t *parent, const womo_weather_forecast_t *f
     lv_obj_add_event_cb(close_btn, close_btn_cb, LV_EVENT_CLICKED, NULL);
 
     /* ── Inhaltsbereich: exakt wie Header aufgebaut (lv_obj_set_pos, radius=0, pad=0) ── */
-    /* Inhaltshöhe: Summe aller y-Schritte + letzte Elementhöhe = 242 px              */
-    #define COL_CONTENT_H    242
-    #define COL_CONTENT_Y0   4   /* direkt unter dem Header */
+    /* Inhaltshöhe: Summe aller y-Schritte + letzte Elementhöhe = 252 px              */
+    #define COL_CONTENT_H    252
+    #define COL_CONTENT_Y0   12   /* direkt unter dem Header */
     /* col_frame: direkt auf s_panel, identische Struktur wie header */
     lv_obj_t *col_frame = lv_obj_create(s_panel);
     lv_obj_set_size(col_frame, MODAL_W, MODAL_H - HDR_H);
@@ -826,64 +745,90 @@ void womo_forecast_modal_show(lv_obj_t *parent, const womo_weather_forecast_t *f
         }
         y += 8;
 
-        /* Regenwahrscheinlichkeit */
-        s_rain_ico[i] = lv_img_create(col_frame);
-        lv_obj_set_size(s_rain_ico[i], DATA_ICON_SIZE, DATA_ICON_SIZE);
-        lv_obj_set_pos(s_rain_ico[i], x + 22, y + 1);
-        lv_obj_add_flag(s_rain_ico[i], LV_OBJ_FLAG_HIDDEN);
+        /* Regenwahrscheinlichkeit – water_drop Icon + Wert */
+        s_rain_ico[i] = lv_label_create(col_frame);
+        lv_label_set_text(s_rain_ico[i], "\xee\x9e\x98");  /* Material Outlined: water_drop U+E798 */
+        lv_obj_set_style_text_font(s_rain_ico[i], &Material, 0);
+        lv_obj_set_style_text_color(s_rain_ico[i], lv_color_hex(0x0277BD), 0);
+        lv_obj_set_pos(s_rain_ico[i], x + 4, y);
         s_rain_lbl[i] = lv_label_create(col_frame);
         lv_label_set_text(s_rain_lbl[i], "--");
         lv_obj_set_style_text_font(s_rain_lbl[i], &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(s_rain_lbl[i], lv_color_hex(0x0277BD), 0);
-        lv_obj_set_size(s_rain_lbl[i], 70, 18);
-        lv_obj_set_style_text_align(s_rain_lbl[i], LV_TEXT_ALIGN_LEFT, 0);
-        lv_obj_set_pos(s_rain_lbl[i], x + 40, y);
+        lv_obj_set_size(s_rain_lbl[i], COL_W - 26, 18);
+        lv_obj_set_style_text_align(s_rain_lbl[i], LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_pos(s_rain_lbl[i], x + 22, y);
         y += 20;
 
-        /* Niederschlag mm – kein Symbol, zentriert */
+        /* Niederschlag mm – eingerückt wie mit Icon (gleiche Position wie rain/wind) */
         s_prec_lbl[i] = lv_label_create(col_frame);
         lv_label_set_text(s_prec_lbl[i], "--");
         lv_obj_set_style_text_font(s_prec_lbl[i], &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(s_prec_lbl[i], lv_color_hex(0x0277BD), 0);
-        lv_obj_set_size(s_prec_lbl[i], COL_W - 8, 18);
+        lv_obj_set_size(s_prec_lbl[i], COL_W - 26, 18);
         lv_obj_set_style_text_align(s_prec_lbl[i], LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_pos(s_prec_lbl[i], x + 4, y);
+        lv_obj_set_pos(s_prec_lbl[i], x + 22, y);
         y += 20;
 
-        /* Sonnenstunden */
-        s_sunh_ico[i] = lv_img_create(col_frame);
-        lv_obj_set_size(s_sunh_ico[i], DATA_ICON_SIZE, DATA_ICON_SIZE);
-        lv_obj_set_pos(s_sunh_ico[i], x + 22, y + 1);
-        lv_obj_add_flag(s_sunh_ico[i], LV_OBJ_FLAG_HIDDEN);
+        /* Trennstrich Wasser | Sonne */
+        { lv_obj_t *d = lv_obj_create(col_frame);
+          lv_obj_set_size(d, COL_W - 8, 1);
+          lv_obj_set_pos(d, x + 4, y + 2);
+          lv_obj_set_style_bg_color(d, lv_color_hex(0xBBBBBB), 0);
+          lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
+          lv_obj_set_style_border_width(d, 0, 0);
+          lv_obj_set_style_pad_all(d, 0, 0);
+          lv_obj_set_style_radius(d, 0, 0);
+          lv_obj_clear_flag(d, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE); }
+        y += 8;
+
+        /* Sonnenstunden – Material Outlined wb_sunny als festes Icon */
+        s_sunh_ico[i] = lv_label_create(col_frame);
+        lv_label_set_text(s_sunh_ico[i], "\xee\x90\xb0");  /* Material Outlined: wb_sunny U+E430 */
+        lv_obj_set_style_text_font(s_sunh_ico[i], &Material, 0);
+        lv_obj_set_style_text_color(s_sunh_ico[i], lv_color_hex(0xF9A825), 0);
+        lv_obj_set_pos(s_sunh_ico[i], x + 4, y);
         s_sun_lbl[i] = lv_label_create(col_frame);
         lv_label_set_text(s_sun_lbl[i], "--");
         lv_obj_set_style_text_font(s_sun_lbl[i], &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(s_sun_lbl[i], lv_color_hex(0xF57F17), 0);
-        lv_obj_set_size(s_sun_lbl[i], 70, 18);
-        lv_obj_set_style_text_align(s_sun_lbl[i], LV_TEXT_ALIGN_LEFT, 0);
-        lv_obj_set_pos(s_sun_lbl[i], x + 40, y);
+        lv_obj_set_size(s_sun_lbl[i], COL_W - 26, 18);
+        lv_obj_set_style_text_align(s_sun_lbl[i], LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_pos(s_sun_lbl[i], x + 22, y);
         y += 20;
 
-        /* Wind */
-        s_wind_ico[i] = lv_img_create(col_frame);
-        lv_obj_set_size(s_wind_ico[i], DATA_ICON_SIZE, DATA_ICON_SIZE);
-        lv_obj_set_pos(s_wind_ico[i], x + 22, y + 1);
-        lv_obj_add_flag(s_wind_ico[i], LV_OBJ_FLAG_HIDDEN);
+        /* Trennstrich Sonne | Wind */
+        { lv_obj_t *d = lv_obj_create(col_frame);
+          lv_obj_set_size(d, COL_W - 8, 1);
+          lv_obj_set_pos(d, x + 4, y + 2);
+          lv_obj_set_style_bg_color(d, lv_color_hex(0xBBBBBB), 0);
+          lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
+          lv_obj_set_style_border_width(d, 0, 0);
+          lv_obj_set_style_pad_all(d, 0, 0);
+          lv_obj_set_style_radius(d, 0, 0);
+          lv_obj_clear_flag(d, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE); }
+        y += 8;
+
+        /* Wind – air Icon + Wert */
+        s_wind_ico[i] = lv_label_create(col_frame);
+        lv_label_set_text(s_wind_ico[i], "\xee\xbf\x98");  /* Material Outlined: air U+EFD8 */
+        lv_obj_set_style_text_font(s_wind_ico[i], &Material, 0);
+        lv_obj_set_style_text_color(s_wind_ico[i], lv_color_hex(0x546E7A), 0);
+        lv_obj_set_pos(s_wind_ico[i], x + 4, y);
         s_wind_lbl[i] = lv_label_create(col_frame);
         lv_label_set_text(s_wind_lbl[i], "--");
         lv_obj_set_style_text_font(s_wind_lbl[i], &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(s_wind_lbl[i], lv_color_hex(0x546E7A), 0);
-        lv_obj_set_size(s_wind_lbl[i], 70, 18);
-        lv_obj_set_style_text_align(s_wind_lbl[i], LV_TEXT_ALIGN_LEFT, 0);
-        lv_obj_set_pos(s_wind_lbl[i], x + 40, y);
+        lv_obj_set_size(s_wind_lbl[i], COL_W - 26, 18);
+        lv_obj_set_style_text_align(s_wind_lbl[i], LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_pos(s_wind_lbl[i], x + 22, y);
     }
 
     /* Daten einsetzen */
     fill_columns(forecast);
-    /* Kleine Daten-Icons von SD laden und auf alle Spalten anwenden */
-    load_data_icons();
-    apply_data_icon_sources();
     /* Warnbereich aufbauen und mit letzten bekannten Warnungen füllen */
     build_warn_section(col_frame);
     update_warn_section();
+
+
 }

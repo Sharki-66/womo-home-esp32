@@ -403,31 +403,32 @@ void womo_gas_bottle_set_status(womo_gas_bottle_t *bottle, womo_status_level_t s
         return;
     }
 
-    // Default: neutral grey foot/Rumpf
+    // Fuß mit Prozentanzeige bleibt immer neutral, unabhängig vom Status.
+    lv_color_t foot_main_color = BOTTLE_GREY;
+    lv_color_t foot_grad_color = BOTTLE_GREY_DARK;
+
+    // Rumpf bekommt Statusfarben, Füllstand bleibt Standard-Gelb.
     lv_color_t main_color = BOTTLE_GREY;
     lv_color_t grad_color = BOTTLE_GREY_DARK;
-    lv_color_t fill_color = GAS_FILL_COLOR;
 
     switch (status) {
     case WOMO_STATUS_WARNING:
         main_color = lv_color_hex(0xFFA500); // Orange for warning
         grad_color = lv_color_hex(0xE68A00);
-        fill_color = main_color;
         break;
     case WOMO_STATUS_ERROR:
     case WOMO_STATUS_CRITICAL:
         main_color = lv_color_hex(0xE53935); // Red for critical/error
         grad_color = lv_color_hex(0xC62828);
-        fill_color = main_color;
         break;
     case WOMO_STATUS_OK:
     default:
         break;
     }
 
-    // Fuß einfärben
-    lv_obj_set_style_bg_color(bottle->ring_foot, main_color, 0);
-    lv_obj_set_style_bg_grad_color(bottle->ring_foot, grad_color, 0);
+    // Fuß einfärben (immer Standardfarbe)
+    lv_obj_set_style_bg_color(bottle->ring_foot, foot_main_color, 0);
+    lv_obj_set_style_bg_grad_color(bottle->ring_foot, foot_grad_color, 0);
 
     // Rumpf einfärben
     if (bottle->bottle_body) {
@@ -435,9 +436,9 @@ void womo_gas_bottle_set_status(womo_gas_bottle_t *bottle, womo_status_level_t s
         lv_obj_set_style_bg_grad_color(bottle->bottle_body, grad_color, 0);
     }
 
-    // Füllstand einfärben
+    // Füllstand immer in Standardfarbe (nicht Warn-/Fehlerfarbe)
     if (bottle->fill_bar) {
-        lv_obj_set_style_bg_color(bottle->fill_bar, fill_color, 0);
+        lv_obj_set_style_bg_color(bottle->fill_bar, GAS_FILL_COLOR, 0);
     }
 }
 

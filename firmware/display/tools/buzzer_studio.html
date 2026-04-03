@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>WoMoHome – Buzzer Sound Studio</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 24px; }
+    h1 { color: #00d4ff; margin-bottom: 4px; font-size: 1.4em; }
+    .subtitle { color: #888; font-size: 0.85em; margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px; }
+    .card {
+      background: #16213e; border: 1px solid #0f3460; border-radius: 10px;
+      padding: 16px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .card h2 { color: #00d4ff; font-size: 1em; display: flex; justify-content: space-between; align-items: center; }
+    .card h2 span.label { font-size: 0.75em; color: #888; font-weight: normal; }
+    .notes-table { width: 100%; border-collapse: collapse; font-size: 0.82em; }
+    .notes-table th {
+      background: #0f3460; color: #aaa; text-align: center; padding: 4px 6px;
+      font-weight: normal; font-size: 0.9em;
+    }
+    .notes-table td { padding: 3px 4px; text-align: center; border-bottom: 1px solid #1a2a4a; }
+    .notes-table input[type=number] {
+      width: 68px; background: #1a1a2e; border: 1px solid #0f3460;
+      color: #e0e0e0; padding: 2px 4px; border-radius: 4px; text-align: center; font-size: 0.95em;
+    }
+    .notes-table .rest { color: #555; font-style: italic; font-size: 0.8em; }
+    .notes-table tr:last-child td { border-bottom: none; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      padding: 7px 14px; border: none; border-radius: 6px; cursor: pointer;
+      font-size: 0.85em; font-weight: 600; transition: opacity 0.15s;
+    }
+    button:active { opacity: 0.7; }
+    .btn-play  { background: #00b894; color: #fff; }
+    .btn-stop  { background: #d63031; color: #fff; }
+    .btn-copy  { background: #636e72; color: #fff; }
+    .btn-add   { background: #0984e3; color: #fff; padding: 4px 10px; font-size: 0.78em; }
+    .btn-del   { background: transparent; border: 1px solid #d63031 !important; color: #d63031;
+                 padding: 2px 6px; font-size: 0.75em; border-radius: 4px; cursor: pointer; }
+    .waveform-row { display: flex; align-items: center; gap: 8px; font-size: 0.82em; color: #aaa; }
+    select {
+      background: #1a1a2e; border: 1px solid #0f3460; color: #e0e0e0;
+      padding: 3px 6px; border-radius: 4px; font-size: 0.85em;
+    }
+    .info { font-size: 0.75em; color: #888; border-top: 1px solid #0f3460; padding-top: 8px; }
+    .copy-box {
+      background: #0d1117; border: 1px solid #0f3460; border-radius: 6px;
+      padding: 10px; font-family: monospace; font-size: 0.78em; color: #79c0ff;
+      white-space: pre; overflow-x: auto; display: none; margin-top: 4px;
+    }
+    .piano { display: flex; gap: 2px; margin-top: 4px; flex-wrap: wrap; }
+    .piano button {
+      padding: 6px 8px; font-size: 0.72em; background: #0f3460; color: #ccc;
+      border: 1px solid #1a4a80; min-width: 38px;
+    }
+    .piano button:hover { background: #0984e3; color: #fff; }
+    .volume-row { display: flex; align-items: center; gap: 8px; font-size: 0.82em; color: #aaa; }
+    input[type=range] { cursor: pointer; accent-color: #00d4ff; }
+    .playing-indicator {
+      width: 8px; height: 8px; border-radius: 50%; background: #555;
+      display: inline-block; transition: background 0.1s;
+    }
+    .playing-indicator.active { background: #00b894; box-shadow: 0 0 6px #00b894; }
+  </style>
+</head>
+<body>
+<h1>🔊 WoMoHome Buzzer Sound Studio</h1>
+<p class="subtitle">Passiver Piezo · Square-Wave Simulation · Parameter anpassen → C-Code kopieren</p>
+
+<div class="volume-row" style="margin-bottom:16px;">
+  <span>Lautstärke:</span>
+  <input type="range" id="globalVolume" min="0" max="100" value="60" style="width:150px">
+  <span id="volLabel">60%</span>
+  &nbsp;&nbsp;
+  <span>Waveform:</span>
+  <select id="globalWave">
+    <option value="square" selected>Square (Piezo-nah)</option>
+    <option value="sawtooth">Sawtooth</option>
+    <option value="sine">Sine</option>
+    <option value="triangle">Triangle</option>
+  </select>
+</div>
+
+<div class="grid" id="sequencesGrid"></div>
+
+<script>
+// ─── Audio Context ───────────────────────────────────────────────
+let ctx = null;
+let gainNode = null;
+let stopFlag = false;
+let activeOsc = null;
+
+function getCtx() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    gainNode = ctx.createGain();
+    gainNode.gain.value = getVolume();
+    gainNode.connect(ctx.destination);
+  }
+  return ctx;
+}
+
+function getVolume() {
+  return document.getElementById('globalVolume').value / 100 * 0.8;
+}
+
+function getWave() {
+  return document.getElementById('globalWave').value;
+}
+
+document.getElementById('globalVolume').addEventListener('input', e => {
+  document.getElementById('volLabel').textContent = e.target.value + '%';
+  if (gainNode) gainNode.gain.value = getVolume();
+});
+
+// ─── Sequenzdaten ────────────────────────────────────────────────
+// Format: { freq: Hz, dur: ms }  freq=0 → Pause
+const sequences = [
+  {
+    id: 'click',
+    name: 'Click',
+    label: 'Touch-Rückmeldung',
+    notes: [
+      { freq: 4200, dur: 3 },
+      { freq: 200,  dur: 5 },
+    ]
+  },
+  {
+    id: 'warn',
+    name: 'Warn',
+    label: '3× kurze Beeps',
+    notes: [
+      { freq: 880, dur: 80 },
+      { freq: 0,   dur: 60 },
+      { freq: 880, dur: 80 },
+      { freq: 0,   dur: 60 },
+      { freq: 880, dur: 80 },
+    ]
+  },
+  {
+    id: 'alarm',
+    name: 'Alarm',
+    label: '3× langer Ton',
+    notes: [
+      { freq: 1760, dur: 500 },
+      { freq: 0,    dur: 100 },
+      { freq: 1760, dur: 500 },
+      { freq: 0,    dur: 100 },
+      { freq: 1760, dur: 500 },
+    ]
+  },
+  {
+    id: 'startup',
+    name: 'Startup',
+    label: 'C4–E4–G4–C5',
+    notes: [
+      { freq: 262, dur: 120 },
+      { freq: 330, dur: 120 },
+      { freq: 392, dur: 120 },
+      { freq: 523, dur: 200 },
+    ]
+  },
+  {
+    id: 'success',
+    name: 'Erfolg',
+    label: 'Positiv',
+    notes: [
+      { freq: 523, dur: 80 },
+      { freq: 659, dur: 80 },
+      { freq: 784, dur: 160 },
+    ]
+  },
+  {
+    id: 'error',
+    name: 'Fehler',
+    label: 'Negativ',
+    notes: [
+      { freq: 440, dur: 120 },
+      { freq: 0,   dur: 40 },
+      { freq: 330, dur: 200 },
+    ]
+  },
+];
+
+// ─── Notenreferenz (Piano) ────────────────────────────────────────
+const PIANO_NOTES = [
+  { n:'C3',  f:131 }, { n:'D3', f:147 }, { n:'E3', f:165 }, { n:'F3', f:175 },
+  { n:'G3',  f:196 }, { n:'A3', f:220 }, { n:'B3', f:247 },
+  { n:'C4',  f:262 }, { n:'D4', f:294 }, { n:'E4', f:330 }, { n:'F4', f:349 },
+  { n:'G4',  f:392 }, { n:'A4', f:440 }, { n:'B4', f:494 },
+  { n:'C5',  f:523 }, { n:'D5', f:587 }, { n:'E5', f:659 }, { n:'F5', f:698 },
+  { n:'G5',  f:784 }, { n:'A5', f:880 }, { n:'B5', f:988 },
+  { n:'C6',  f:1047},{ n:'A6', f:1760},{ n:'2kHz',f:2000},{ n:'3.2k',f:3200},
+  { n:'4.2k',f:4200},
+];
+
+// ─── UI Render ────────────────────────────────────────────────────
+function renderAll() {
+  const grid = document.getElementById('sequencesGrid');
+  grid.innerHTML = '';
+  sequences.forEach(seq => grid.appendChild(buildCard(seq)));
+}
+
+function buildCard(seq) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.id = 'card-' + seq.id;
+
+  const ind = `<span class="playing-indicator" id="ind-${seq.id}"></span>`;
+  card.innerHTML = `
+    <h2>${ind} ${seq.name} <span class="label">${seq.label}</span></h2>
+    <table class="notes-table">
+      <thead><tr>
+        <th>#</th><th>Frequenz (Hz)</th><th>Dauer (ms)</th><th></th>
+      </tr></thead>
+      <tbody id="tbody-${seq.id}"></tbody>
+    </table>
+    <div style="display:flex;gap:6px;">
+      <button class="btn-add" onclick="addNote('${seq.id}')">+ Note</button>
+      <button class="btn-add" style="background:#6c5ce7" onclick="addPause('${seq.id}')">+ Pause</button>
+    </div>
+    <details style="font-size:0.8em;color:#888;">
+      <summary style="cursor:pointer;user-select:none;">Piano-Referenz</summary>
+      <div class="piano" id="piano-${seq.id}"></div>
+    </details>
+    <div class="btn-row">
+      <button class="btn-play" onclick="playSeq('${seq.id}')">▶ Play</button>
+      <button class="btn-stop" onclick="stopAll()">■ Stop</button>
+      <button class="btn-copy" onclick="toggleCopy('${seq.id}')">{ } C-Code</button>
+    </div>
+    <div class="copy-box" id="copybox-${seq.id}"></div>
+    <div class="info" id="info-${seq.id}"></div>
+  `;
+
+  renderNotes(seq, card);
+
+  // Piano
+  const pianoDiv = card.querySelector(`#piano-${seq.id}`);
+  PIANO_NOTES.forEach(p => {
+    const btn = document.createElement('button');
+    btn.textContent = p.n;
+    btn.title = p.f + ' Hz';
+    btn.onclick = () => previewNote(p.f, 150);
+    pianoDiv.appendChild(btn);
+  });
+
+  return card;
+}
+
+function renderNotes(seq, root = document) {
+  const tbody = root.querySelector('#tbody-' + seq.id);
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  seq.notes.forEach((note, i) => {
+    const tr = document.createElement('tr');
+    if (note.freq === 0) {
+      tr.innerHTML = `
+        <td>${i+1}</td>
+        <td class="rest">─ Pause ─</td>
+        <td><input type="number" min="1" max="5000" value="${note.dur}"
+             onchange="seq_update('${seq.id}',${i},'dur',this.value)"></td>
+        <td><button class="btn-del" onclick="removeNote('${seq.id}',${i})">✕</button></td>`;
+    } else {
+      tr.innerHTML = `
+        <td>${i+1}</td>
+        <td><input type="number" min="20" max="20000" value="${note.freq}"
+             onchange="seq_update('${seq.id}',${i},'freq',this.value)"
+             title="Frequenz in Hz">
+            <button style="background:transparent;border:none;color:#aaa;cursor:pointer;font-size:0.9em;"
+              title="Vorschau" onclick="previewNote(${note.freq},${note.dur})">🔉</button>
+        </td>
+        <td><input type="number" min="1" max="5000" value="${note.dur}"
+             onchange="seq_update('${seq.id}',${i},'dur',this.value)"></td>
+        <td><button class="btn-del" onclick="removeNote('${seq.id}',${i})">✕</button></td>`;
+    }
+    tbody.appendChild(tr);
+  });
+  updateInfo(seq, root);
+}
+
+function seq_update(id, idx, field, val) {
+  const seq = sequences.find(s => s.id === id);
+  seq.notes[idx][field] = parseInt(val) || 0;
+  updateInfo(seq);
+}
+
+function addNote(id) {
+  const seq = sequences.find(s => s.id === id);
+  seq.notes.push({ freq: 1000, dur: 100 });
+  renderNotes(seq);
+}
+
+function addPause(id) {
+  const seq = sequences.find(s => s.id === id);
+  seq.notes.push({ freq: 0, dur: 60 });
+  renderNotes(seq);
+}
+
+function removeNote(id, idx) {
+  const seq = sequences.find(s => s.id === id);
+  seq.notes.splice(idx, 1);
+  renderNotes(seq);
+}
+
+function updateInfo(seq, root = document) {
+  const total = seq.notes.reduce((a, n) => a + n.dur, 0);
+  const el = root.querySelector('#info-' + seq.id);
+  if (el) el.textContent = `Gesamtdauer: ${total} ms  ·  ${seq.notes.length} Note(n)`;
+}
+
+// ─── Playback ─────────────────────────────────────────────────────
+function stopAll() {
+  stopFlag = true;
+  if (activeOsc) { try { activeOsc.stop(); } catch(e){} activeOsc = null; }
+  document.querySelectorAll('.playing-indicator').forEach(el => el.classList.remove('active'));
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function playSeq(id) {
+  stopAll();
+  stopFlag = false;
+  const seq = sequences.find(s => s.id === id);
+  const ind = document.getElementById('ind-' + id);
+  ind.classList.add('active');
+
+  const c = getCtx();
+
+  for (const note of seq.notes) {
+    if (stopFlag) break;
+    if (note.freq > 0) {
+      const osc = c.createOscillator();
+      osc.type = getWave();
+      osc.frequency.value = note.freq;
+      osc.connect(gainNode);
+      activeOsc = osc;
+      osc.start();
+      await sleep(note.dur);
+      try { osc.stop(); } catch(e){}
+      activeOsc = null;
+    } else {
+      await sleep(note.dur);
+    }
+    if (stopFlag) break;
+  }
+
+  ind.classList.remove('active');
+}
+
+function previewNote(freq, dur) {
+  if (freq <= 0) return;
+  const c = getCtx();
+  const osc = c.createOscillator();
+  osc.type = getWave();
+  osc.frequency.value = freq;
+  osc.connect(gainNode);
+  osc.start();
+  setTimeout(() => { try { osc.stop(); } catch(e){} }, Math.max(dur, 80));
+}
+
+// ─── C-Code Generator ─────────────────────────────────────────────
+function toggleCopy(id) {
+  const box = document.getElementById('copybox-' + id);
+  if (box.style.display === 'block') { box.style.display = 'none'; return; }
+  const seq = sequences.find(s => s.id === id);
+  const varName = 's_seq_' + id;
+  let lines = [`static const buzzer_note_t ${varName}[] = {`];
+  seq.notes.forEach(n => {
+    if (n.freq === 0) {
+      lines.push(`    {NOTE_REST, ${n.dur}},`);
+    } else {
+      lines.push(`    {${n.freq}, ${n.dur}},`);
+    }
+  });
+  lines.push(`    {NOTE_REST, 0}  /* Sequenzende */`);
+  lines.push(`};`);
+  box.textContent = lines.join('\n');
+  box.style.display = 'block';
+  // In Clipboard
+  navigator.clipboard && navigator.clipboard.writeText(box.textContent).catch(()=>{});
+}
+
+// ─── Init ─────────────────────────────────────────────────────────
+renderAll();
+</script>
+</body>
+</html>

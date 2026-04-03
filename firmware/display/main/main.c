@@ -7,7 +7,6 @@
 #include "hardware/waveshare_rgb_lcd_port.h"
 #include "lvgl.h"
 #include "time/womo_time.h"
-#include "time/womo_sun_calc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "gui/womo_theme.h"
@@ -27,8 +26,10 @@
 #include "network/womo_geocode.h"
 #include "network/womo_router_uci.h"
 #include "network/womo_http_mutex.h"
+#include "network/womo_buzzer_http.h"
 #include "storage/womo_sd.h"
 #include "rs485/womo_rs485_display.h"
+#include "hardware/buzzer.h"
 #include "nvs.h"
 #include "sdkconfig.h"
 #include <stdio.h>
@@ -74,9 +75,12 @@ static const char *PLACEHOLDER_GPS = "GPS : ---";
 static lv_obj_t *title_label = NULL;
 static lv_obj_t *time_label = NULL;
 static lv_obj_t *date_label = NULL;
+static lv_obj_t *status_btn = NULL;
 static lv_obj_t *status_label = NULL;
 static char status_label_last_text[80] = "";
+static lv_obj_t *status_inlay = NULL;
 static lv_obj_t *wifi_label = NULL;
+static lv_obj_t *wifi_inner_border = NULL;
 static lv_obj_t *wifi_icon_img = NULL;
 static lv_obj_t *lte_icon_img = NULL;
 // wifi_0_bar..wifi_4_bar + cellular_0_bar..cellular_4_bar
@@ -86,6 +90,7 @@ static uint8_t       *lte_icon_bufs[6]   = {0};  // signal_1..signal_6
 static lv_image_dsc_t lte_icon_dscs[6]   = {0};
 static lv_obj_t *backlight_btn = NULL;
 static lv_obj_t *settings_btn  = NULL;  // Drei-Punkte-Taste → Einstellungs-Modal
+static lv_obj_t *settings_inner_border = NULL;
 static lv_obj_t *backlight_img = NULL;
 static lv_obj_t *backlight_strike = NULL;  // schwarzer Strich durch das Icon
 static uint8_t  *backlight_icon_buf = NULL;
@@ -125,6 +130,7 @@ static lv_obj_t *gas_label_in = NULL;    // Indoor IAQ display
 static lv_obj_t *voc_label_in = NULL;    // Indoor bVOC display
 static lv_obj_t *air_title_label_in = NULL; // Air value heading indoor
 static lv_obj_t *air_title_label = NULL; // Air value heading
+static bool s_indoor_simple_view = false; // true = nur Temp+Feuchte Innen
 static lv_obj_t *imu_pitch_label = NULL;
 static lv_obj_t *imu_roll_label = NULL;
 static lv_obj_t *imu_heading_label = NULL;
@@ -141,10 +147,8 @@ static lv_obj_t *gps_popup_text_label = NULL; // Text-Label im GPS-Popup-Panel
 static lv_timer_t *backlight_quiet_timer = NULL;
 static bool quiet_hours_active = false;
 static lv_obj_t *bg_img = NULL;       // Background image widget
-static uint8_t *bg_png_data_day   = NULL;  // Gepufferte Tag-PNG (Ducato-weiss)
-static size_t   bg_png_size_day   = 0;
-static uint8_t *bg_png_data_night = NULL;  // Gepufferte Nacht-PNG (Ducato-grau)
-static size_t   bg_png_size_night = 0;
+static lv_draw_buf_t *bg_draw_buf_day   = NULL;  // Dekodierter Tag-Puffer (Ducato-weiss)
+static lv_draw_buf_t *bg_draw_buf_night = NULL;  // Dekodierter Nacht-Puffer (Ducato-grau)
 static int bg_last_day_state = -1;   // -1 unknown, 0 night, 1 day (aktuell angezeigt)
 static lv_obj_t *logo_img = NULL;    // Malibu-Logo über Ducato
 static uint8_t *logo_png_data = NULL; // Geladener Logo-PNG-Puffer
@@ -238,7 +242,18 @@ static womo_status_level_t system_status_current_level = WOMO_STATUS_OK;
 static womo_string_id_t system_status_current_detail = STR_MAX;
 static womo_status_level_t system_status_sensor_level = WOMO_STATUS_OK;
 
-// --- Sensor-Fehler-Stapel: pro Quelle aktueller und quittierter Level ---
+// --- Sensor-Fehler-Stapel: pro Quelle aktueller, gelatchter und quittierter Level ---
+//
+// Fehler-Management:
+//   1. "current" wird jeden Tick neu evaluiert (Sensor-Schwellwert-Vergleich).
+//   2. "latched" steigt mit current (sticky), fällt erst nach Quittierung +
+//      stabiler Erholung (ok_streak >= SENSOR_ERR_OK_DEBOUNCE).
+//   3. "acked" wird per Touch-Quittierung auf latched gesetzt.
+//   4. Unquittiert = latched > acked → System-Alarm, Buzzer.
+//   5. Widget-Farbe folgt "current" (Echtzeit), nicht latched/acked.
+//
+#define SENSOR_ERR_OK_DEBOUNCE  6   // 6 Ticks × 500 ms = 3 s stabile Erholung nötig
+
 typedef enum {
     SENSOR_ERR_SRC_GAS = 0,
     SENSOR_ERR_SRC_FRESH,
@@ -254,8 +269,10 @@ static const char * const sensor_err_src_name[SENSOR_ERR_SRC_MAX] = {
 };
 
 typedef struct {
-    womo_status_level_t current;  // Aktuell ermittelter Level (jeden Tick neu)
-    womo_status_level_t acked;    // Per Touch quittierter Level
+    womo_status_level_t current;   // Aktuell evaluierter Level (jeden Tick neu berechnet)
+    womo_status_level_t latched;   // Gelatchter Level (steigt mit current, fällt erst nach Quittierung + Erholung)
+    womo_status_level_t acked;     // Per Touch quittierter Level
+    uint8_t ok_streak;             // Aufeinanderfolgende Ticks mit current == OK
 } sensor_err_state_t;
 
 static sensor_err_state_t sensor_err_states[SENSOR_ERR_SRC_MAX] = {0};
@@ -282,6 +299,7 @@ static void gps_format_coordinate(double value, bool is_latitude, char *out, siz
 static void ui_update_timer_cb(lv_timer_t *timer);
 static void wifi_label_event_cb(lv_event_t *event);
 static void status_label_event_cb(lv_event_t *event);
+static void status_button_update_layout(void);
 static void backlight_button_event_cb(lv_event_t *event);
 static void settings_button_event_cb(lv_event_t *event);
 void router_leds_button_event_cb(lv_event_t *event);
@@ -318,6 +336,7 @@ static void imu_zero_close_modal(void);
 static void imu_zero_msgbox_event_cb(lv_event_t *event);
 static void perf_monitor_toggle_event_cb(lv_event_t *e);
 static void imu_zero_area_cb(lv_event_t *event);
+static void indoor_air_long_press_cb(lv_event_t *event);
 static void on_locale_changed(void);
 static void on_thresholds_changed(void);
 
@@ -833,6 +852,43 @@ static void status_label_apply_text(const char *text)
     lv_label_set_text(status_label, text);
     strncpy(status_label_last_text, text, sizeof(status_label_last_text) - 1);
     status_label_last_text[sizeof(status_label_last_text) - 1] = '\0';
+    status_button_update_layout();
+}
+
+static void status_button_update_layout(void)
+{
+    if (!status_btn || !status_label) {
+        return;
+    }
+
+    lv_obj_update_layout(status_label);
+    lv_coord_t label_w = lv_obj_get_width(status_label);
+    lv_coord_t label_h = lv_obj_get_height(status_label);
+
+    lv_coord_t btn_w = label_w + 24;
+    lv_coord_t btn_h = label_h + 18;
+    if (btn_w < 90) {
+        btn_w = 90;
+    }
+    if (btn_h < 34) {
+        btn_h = 34;
+    }
+
+    lv_obj_set_size(status_btn, btn_w, btn_h);
+    lv_obj_center(status_label);
+
+    if (status_inlay) {
+        lv_coord_t inlay_w = btn_w - 6;
+        lv_coord_t inlay_h = btn_h - 6;
+        if (inlay_w < 1) {
+            inlay_w = 1;
+        }
+        if (inlay_h < 1) {
+            inlay_h = 1;
+        }
+        lv_obj_set_size(status_inlay, inlay_w, inlay_h);
+        lv_obj_center(status_inlay);
+    }
 }
 
 static womo_string_id_t status_level_to_locale_id(womo_status_level_t level)
@@ -1015,8 +1071,17 @@ static void rs485_event_handler(womo_rs485_event_t event, void *user_data)
 }
 
 
+// lodepng_decode32 ist in managed_components/lvgl__lvgl (lodepng.c) definiert.
+// ACHTUNG LVGL v9: Rückgabe ist ein lv_draw_buf_t* (gecastet zu unsigned char*),
+// KEIN roher Pixel-Pointer! Pixel liegen in draw_buf->data.
+extern unsigned lodepng_decode32(unsigned char **out, unsigned *w, unsigned *h,
+                                  const unsigned char *in, size_t insize);
+
 // Load background image from SD card
 // `is_day` steuert, ob die helle (day) oder graue (night) Ducato-Variante geladen wird.
+// Das PNG wird sofort vollständig dekodiert (ARGB8888 im PSRAM), damit LVGL beim
+// Rendern keinen lodepng-Decoder mehr aufruft – verhindert lv_realloc-Fehler
+// bei fragmentiertem PSRAM nach langer Laufzeit.
 static bool load_background_image(lv_obj_t *screen, bool is_day)
 {
     if (!womo_sd_is_mounted()) {
@@ -1024,125 +1089,138 @@ static bool load_background_image(lv_obj_t *screen, bool is_day)
         return false;
     }
 
-    // Keep SD-CS asserted via CH422G before accessing files
     womo_ch422g_assert_sd_cs();
-    
-    const char *day_path = "/sdcard/images/Ducato-weiss.png";
-    const char *night_path = "/sdcard/images/Ducato-grau.png";
 
-    // Zeiger auf die Puffer- und Deskriptor-Variablen je nach Tag/Nacht
-    // Wichtig: je ein eigener Deskriptor, damit LVGL den Pointer-Wechsel
-    // (img_dsc_day ↔ img_dsc_night) als echten Quellwechsel erkennt und
-    // nicht den alten Cache-Eintrag zurückliefert.
-    static lv_image_dsc_t img_dsc_day;
-    static lv_image_dsc_t img_dsc_night;
-    lv_image_dsc_t *dsc      = is_day ? &img_dsc_day   : &img_dsc_night;
-    uint8_t       **png_buf  = is_day ? &bg_png_data_day : &bg_png_data_night;
-    size_t         *png_sz   = is_day ? &bg_png_size_day  : &bg_png_size_night;
+    lv_draw_buf_t **p_draw_buf = is_day ? &bg_draw_buf_day : &bg_draw_buf_night;
 
-    if (bg_last_day_state == (is_day ? 1 : 0) && bg_img != NULL && *png_buf != NULL) {
-        // Passendes Bild bereits geladen und angezeigt – nichts tun
-        ESP_LOGD(TAG, "Background image already loaded and cached (%s)", is_day ? "day" : "night");
+    // Passendes Bild bereits angezeigt – nichts tun
+    if (bg_last_day_state == (is_day ? 1 : 0) && bg_img != NULL && *p_draw_buf != NULL) {
+        ESP_LOGD(TAG, "Background already shown (%s)", is_day ? "day" : "night");
         return true;
     }
 
-    const char *img_path = is_day ? day_path : night_path;
+    // Puffer dieser Variante schon dekodiert?
+    if (*p_draw_buf != NULL) {
+        // screen == NULL → reiner Preload-Aufruf, Widget bereits live → nicht anfassen
+        if (!screen || !bg_img) {
+            ESP_LOGD(TAG, "Background %s already preloaded", is_day ? "day" : "night");
+            return true;
+        }
+        // Widget anzeigen: schneller Swap, kein erneuter Decode
+        lv_img_set_src(bg_img, *p_draw_buf);
+        bg_last_day_state = is_day ? 1 : 0;
+        lv_obj_move_to_index(bg_img, 0);
+        ESP_LOGI(TAG, "Background switched to preloaded %s image", is_day ? "day" : "night");
+        return true;
+    }
+
+    const char *img_path = is_day ? "/sdcard/images/Ducato-weiss.png"
+                                  : "/sdcard/images/Ducato-grau.png";
     struct stat st;
-    
+
     ESP_LOGI(TAG, "Loading background image (%s): %s", is_day ? "day" : "night", img_path);
-    
+
     womo_ch422g_assert_sd_cs();
     if (stat(img_path, &st) != 0) {
         ESP_LOGW(TAG, "Background image not found: %s", img_path);
         return false;
     }
-    
-    // Open file with ESP-IDF FATFS
+
     womo_ch422g_assert_sd_cs();
     FILE *fp = fopen(img_path, "rb");
     if (!fp) {
         ESP_LOGE(TAG, "Failed to open image file: %s", img_path);
         return false;
     }
-    
-    // Get file size
+
     fseek(fp, 0, SEEK_END);
     long file_size = ftell(fp);
     fseek(fp, 0, SEEK_SET);
-    
-    if (file_size <= 0 || file_size > 5 * 1024 * 1024) {  // Max 5MB
+
+    if (file_size <= 0 || file_size > 5 * 1024 * 1024) {
         ESP_LOGE(TAG, "Invalid file size: %ld bytes", file_size);
         fclose(fp);
         return false;
     }
-    
-    // Allocate buffer for PNG data
+
+    // Komprimiertes PNG in temporären Puffer lesen
     uint8_t *png_data = heap_caps_malloc(file_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!png_data) {
         ESP_LOGE(TAG, "Failed to allocate %ld bytes for PNG", file_size);
         fclose(fp);
         return false;
     }
-    
-    // Read file into buffer
+
     size_t bytes_read = fread(png_data, 1, file_size, fp);
     fclose(fp);
-    
-    if (bytes_read != file_size) {
-        ESP_LOGE(TAG, "Read only %d of %ld bytes", bytes_read, file_size);
+
+    if (bytes_read != (size_t)file_size) {
+        ESP_LOGE(TAG, "Read only %u of %ld bytes", bytes_read, file_size);
         heap_caps_free(png_data);
         return false;
     }
-    
-    ESP_LOGI(TAG, "PNG file loaded: %ld bytes", file_size);
 
-    // LVGL Image-Deskriptor: komprimiertes PNG, LVGL-Decoder (lodepng) dekodiert
-    // beim ersten Render und legt das Ergebnis im Image-Cache (LV_CACHE_DEF_SIZE)
-    // ab → jeder weitere Redraw ist ein billiger Cache-Hit ohne Decoder-Aufruf.
-    // WICHTIG: img_dsc_day / img_dsc_night sind SEPARATE Deskriptoren, damit
-    // LVGL den Zeigerwechsel Tag↔Nacht als echten Quellwechsel erkennt und
-    // nicht den alten (falschen) Cache-Eintrag zurückliefert.
-    dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
-    dsc->header.w     = 0;  // PNG-Decoder ermittelt Größe
-    dsc->header.h     = 0;
-    dsc->header.cf    = LV_COLOR_FORMAT_RAW_ALPHA;
-    dsc->data         = png_data;
-    dsc->data_size    = (uint32_t)file_size;
+    ESP_LOGI(TAG, "PNG file loaded: %ld bytes – decoding...", file_size);
 
-    // Alten komprimierten Puffer dieser Seite freigeben (falls vorhanden)
-    if (*png_buf) {
-        heap_caps_free(*png_buf);
-        *png_buf = NULL;
-        *png_sz  = 0;
+    // PNG dekodieren.
+    // LVGL v9 lodepng_decode32 gibt einen lv_draw_buf_t* zurück (als unsigned char*
+    // gecastet). Der eigentliche Pixel-Puffer liegt in draw_buf->data.
+    unsigned img_w = 0, img_h = 0;
+    lv_draw_buf_t *draw_buf = NULL;
+    unsigned decode_err = lodepng_decode32((unsigned char **)&draw_buf, &img_w, &img_h,
+                                           png_data, (size_t)file_size);
+    heap_caps_free(png_data);  // komprimiertes PNG sofort freigeben
+    png_data = NULL;
+
+    if (decode_err || !draw_buf) {
+        ESP_LOGE(TAG, "lodepng_decode32 failed (err=%u) – no background", decode_err);
+        if (draw_buf) lv_draw_buf_destroy(draw_buf);
+        return false;
     }
 
-    // Create image object if not existing
+    // lodepng liefert RGBA; LVGL ARGB8888 = BGRA auf LE-ESP32 → R↔B tauschen.
+    // (identisch mit convert_color_depth() in lv_lodepng.c)
+    {
+        uint32_t px = img_w * img_h;
+        lv_color32_t *p = (lv_color32_t *)draw_buf->data;
+        for (uint32_t i = 0; i < px; i++) {
+            uint8_t blue = p[i].blue;
+            p[i].blue = p[i].red;
+            p[i].red = blue;
+        }
+    }
+
+    ESP_LOGI(TAG, "PNG decoded: %ux%u → %lu bytes ARGB8888 (%s)",
+             img_w, img_h, (unsigned long)draw_buf->data_size,
+             esp_ptr_external_ram(draw_buf->data) ? "PSRAM" : "iRAM");
+
+    // Alten draw_buf freigeben falls vorhanden
+    if (*p_draw_buf) {
+        lv_draw_buf_destroy(*p_draw_buf);
+    }
+    *p_draw_buf = draw_buf;
+
+    // screen == NULL → reiner Preload-Aufruf (z. B. zweite Variante beim Boot)
+    // Puffer ist ab hier bereit; Widget wird erst beim nächsten nicht-NULL-Aufruf erzeugt.
+    if (!screen) {
+        ESP_LOGI(TAG, "Background %s preloaded (not displayed)", is_day ? "day" : "night");
+        return true;
+    }
+
+    // Widget erstellen falls noch nicht vorhanden
     if (!bg_img) {
         bg_img = lv_img_create(screen);
-        // IMPORTANT: Set as background layer with explicit Z-index
         lv_obj_move_background(bg_img);
         lv_obj_set_style_pad_all(bg_img, 0, 0);
-        // Position and size
         lv_obj_set_size(bg_img, 800, 480);
         lv_obj_align(bg_img, LV_ALIGN_CENTER, 0, 0);
     }
 
-    // Set image source (PNG will be decoded once)
-    // Durch separate Deskriptoren erkennt LVGL den Tag/Nacht-Wechsel als
-    // neuen Zeiger und invalidiert den alten Cache-Eintrag korrekt.
-    lv_img_set_src(bg_img, dsc);
-
-    *png_buf          = png_data;
-    *png_sz           = (size_t)file_size;
+    lv_img_set_src(bg_img, draw_buf);
     bg_last_day_state = is_day ? 1 : 0;
-    
-    // Use PNG's own transparency: Ducato = opaque, free areas = transparent
-    // No additional opacity - let PNG alpha channel control transparency
     lv_obj_set_style_img_opa(bg_img, LV_OPA_COVER, 0);
-    
-    // Ensure image stays in background
     lv_obj_move_to_index(bg_img, 0);
-    
+
     ESP_LOGI(TAG, "Background image applied to screen");
     return true;
 }
@@ -1666,7 +1744,22 @@ static void ui_update_timer_cb(lv_timer_t *timer)
                     last_iaq_text_in[sizeof(last_iaq_text_in) - 1] = '\0';
                 }
                 uint16_t iaq = snapshot.bme680_indoor.iaq;
-                lv_color_t c = iaq <= 100 ? lv_color_make(0, 180, 0) : (iaq <= 200 ? lv_color_make(255, 165, 0) : lv_color_make(192, 0, 0));
+                // Entprellung: Rot erst nach 3 aufeinanderfolgenden Messungen > 200
+                // (~45 s bei 15-s-BME-Intervall). Kurze Kochduft-Spitzen loesen kein Rot aus.
+                static uint8_t s_iaq_alarm_count = 0;
+                if (iaq > 200) {
+                    if (s_iaq_alarm_count < 3) s_iaq_alarm_count++;
+                } else {
+                    s_iaq_alarm_count = 0;
+                }
+                lv_color_t c;
+                if (iaq <= 100) {
+                    c = lv_color_make(0, 180, 0);
+                } else if (iaq <= 200 || s_iaq_alarm_count < 3) {
+                    c = lv_color_make(255, 165, 0);  // orange: erhoehte Belastung
+                } else {
+                    c = lv_color_make(192, 0, 0);     // rot: anhaltend schlechte Luft
+                }
                 lv_obj_set_style_text_color(gas_label_in, c, 0);
             }
             if (press_label_in) {
@@ -2142,22 +2235,44 @@ gas_done:
         }
     }
 
-    // Sensor-Fehler-Stapel: Erholung berücksichtigen (acked auf current absenken)
+    // Sensor-Fehler-Stapel: Latching + Debounce
+    //
+    // current (pro Tick evaluiert) steuert den Latch:
+    //   - current > OK  → Latch hochziehen (sticky), ok_streak resetten
+    //   - current == OK → ok_streak hochzählen; Latch darf nur fallen wenn
+    //                      (a) bereits quittiert (acked >= latched) UND
+    //                      (b) genug aufeinanderfolgende OK-Ticks (Entprellung)
+    //
     for (int _si = 0; _si < SENSOR_ERR_SRC_MAX; _si++) {
-        if (sensor_err_states[_si].current < sensor_err_states[_si].acked) {
-            sensor_err_states[_si].acked = sensor_err_states[_si].current;
+        if (sensor_err_states[_si].current > WOMO_STATUS_OK) {
+            // Fehler aktiv → Latch hochziehen, OK-Streak resetten
+            sensor_err_states[_si].ok_streak = 0;
+            if (sensor_err_states[_si].current > sensor_err_states[_si].latched) {
+                sensor_err_states[_si].latched = sensor_err_states[_si].current;
+            }
+        } else {
+            // Sensor meldet OK
+            if (sensor_err_states[_si].ok_streak < 255) {
+                sensor_err_states[_si].ok_streak++;
+            }
+            // Latch darf nur fallen wenn quittiert UND stabil erholt
+            if (sensor_err_states[_si].acked >= sensor_err_states[_si].latched &&
+                sensor_err_states[_si].ok_streak >= SENSOR_ERR_OK_DEBOUNCE) {
+                sensor_err_states[_si].latched = WOMO_STATUS_OK;
+                sensor_err_states[_si].acked   = WOMO_STATUS_OK;
+            }
         }
     }
 
-    // Unquittierte Fehler: current > acked
+    // Unquittierte Fehler: latched > acked
     womo_status_level_t stack_max = WOMO_STATUS_OK;
     int stack_show_idx = -1;
     int stack_pending = 0;
     for (int _si = 0; _si < SENSOR_ERR_SRC_MAX; _si++) {
-        if (sensor_err_states[_si].current > sensor_err_states[_si].acked) {
+        if (sensor_err_states[_si].latched > sensor_err_states[_si].acked) {
             stack_pending++;
-            if (sensor_err_states[_si].current > stack_max) {
-                stack_max = sensor_err_states[_si].current;
+            if (sensor_err_states[_si].latched > stack_max) {
+                stack_max = sensor_err_states[_si].latched;
                 stack_show_idx = _si;
             }
         }
@@ -2179,6 +2294,19 @@ gas_done:
         if (system_status_sensor_level != WOMO_STATUS_OK) {
             system_status_apply_sensor_level(WOMO_STATUS_OK);
         }
+    }
+
+    // Buzzer: steigende Flanke → lokaler Ton (direkt, kein RS485)
+    {
+        static womo_status_level_t s_prev_stack_max = WOMO_STATUS_OK;
+        if (stack_max > s_prev_stack_max) {
+            if (stack_max >= WOMO_STATUS_ERROR) {
+                display_buzzer_alarm();
+            } else {
+                display_buzzer_warn();
+            }
+        }
+        s_prev_stack_max = stack_max;
     }
 
     if (gps_label) {
@@ -2429,9 +2557,9 @@ static void time_update_timer_cb(lv_timer_t *timer)
     // Textfarben + BG-Farbe aktualisieren. Reagiert innerhalb 1 s auf
     // NTP-Korrektur oder Dämmerungsübergang – statt bisher 60 s.
     if (womo_theme_is_auto_mode() && time_valid_now) {
-        /* Sentinel: != jeder gültiger Mode → erzwingt beim ersten Tick ein Update,
-           selbst wenn boot-Ducato bereits korrekt geladen wurde. */
-        static womo_theme_mode_t last_applied_mode = (womo_theme_mode_t)0xFF;
+        /* Letzter angewandter Mode – mit -1 initialisiert, damit der erste
+           Timer-Tick ein Update erzwingt (Boot-Sync). */
+        static womo_theme_mode_t last_applied_mode = (womo_theme_mode_t)-1;
         womo_theme_mode_t new_mode = womo_theme_update(womo_theme_get_status());
 
         if (new_mode != last_applied_mode) {
@@ -2866,11 +2994,14 @@ static void router_poll_task(void *arg)
                          gps_tmp.speed_kmh);
             }
 
-            /* UTC-Zeit VOR der Critical Section parsen (mktime braucht Mutex) */
+            /* Lokalzeit vom Router parsen (gpsctl -e gibt Lokalzeit zurück).
+             * tm_isdst = -1 → mktime() ermittelt DST automatisch aus dem Datum,
+             * sonst würde im Sommer (CEST) fälschlicherweise CET angenommen. */
             int64_t gps_epoch = 0;
             if (gps_tmp.utc_time[0]) {
                 struct tm tm_gps = {0};
                 if (strptime(gps_tmp.utc_time, "%Y-%m-%d %H:%M:%S", &tm_gps)) {
+                    tm_gps.tm_isdst = -1;  // DST auto-detect (nicht explizit 0=Winterzeit)
                     gps_epoch = (int64_t)mktime(&tm_gps);
                 }
             }
@@ -2896,18 +3027,16 @@ static void router_poll_task(void *arg)
             womo_weather_http_set_location(gps_tmp.latitude, gps_tmp.longitude);
             /* Meteoalarm mit gleichen Koordinaten versorgen */
             womo_meteoalarm_set_location(gps_tmp.latitude, gps_tmp.longitude);
-            
-            /* Sonnenauf-/-untergangszeiten berechnen und aktualisieren */
-            struct tm tm_now;
-            if (womo_time_get(&tm_now) == ESP_OK && tm_now.tm_year >= (2024 - 1900)) {
+
+            /* Sonnenzeiten berechnen + Theme und Forecast-Modal aktualisieren */
+            if (womo_time_update_location(gps_tmp.latitude, gps_tmp.longitude)) {
                 uint8_t sr_h, sr_m, ss_h, ss_m;
-                if (womo_sun_calc_times(gps_tmp.latitude, gps_tmp.longitude, &tm_now,
-                                       &sr_h, &sr_m, &ss_h, &ss_m)) {
-                    womo_theme_set_sun_times(sr_h, sr_m, ss_h, ss_m);
-                    /* Forecast-Modal mit Ort + Sonnenzeiten versorgen */
+                womo_time_get_sun_times(&sr_h, &sr_m, &ss_h, &ss_m);
+                if (lvgl_port_lock(0)) {
                     womo_forecast_modal_set_location(
                         location_last_text[0] ? location_last_text : NULL,
                         sr_h, sr_m, ss_h, ss_m);
+                    lvgl_port_unlock();
                 }
             }
         } else if (g_err != ESP_OK && poll_count <= 3) {
@@ -3111,6 +3240,33 @@ static void imu_zero_area_cb(lv_event_t *event)
     imu_zero_show_modal();
 }
 
+static void indoor_air_long_press_cb(lv_event_t *event)
+{
+    if (!event || lv_event_get_code(event) != LV_EVENT_LONG_PRESSED) return;
+    s_indoor_simple_view = !s_indoor_simple_view;
+    if (gas_label_in)   { if (s_indoor_simple_view) lv_obj_add_flag(gas_label_in,   LV_OBJ_FLAG_HIDDEN); else lv_obj_clear_flag(gas_label_in,   LV_OBJ_FLAG_HIDDEN); }
+    if (press_label_in) { if (s_indoor_simple_view) lv_obj_add_flag(press_label_in, LV_OBJ_FLAG_HIDDEN); else lv_obj_clear_flag(press_label_in, LV_OBJ_FLAG_HIDDEN); }
+    if (voc_label_in)   { if (s_indoor_simple_view) lv_obj_add_flag(voc_label_in,   LV_OBJ_FLAG_HIDDEN); else lv_obj_clear_flag(voc_label_in,   LV_OBJ_FLAG_HIDDEN); }
+    /* Feuchte + Temp: nebeneinander (Vollansicht) oder untereinander (Einfachansicht) */
+    if (humid_label_in && temp_label_in && air_title_label_in) {
+        lv_coord_t bx = lv_obj_get_x(air_title_label_in);
+        lv_coord_t by = lv_obj_get_y(air_title_label_in);
+        if (s_indoor_simple_view) {
+            lv_obj_set_style_text_align(humid_label_in, LV_TEXT_ALIGN_RIGHT, 0);
+            lv_obj_set_width(humid_label_in, 160);
+            lv_obj_set_pos(humid_label_in, bx, by + 22);
+            lv_obj_set_style_text_align(temp_label_in, LV_TEXT_ALIGN_RIGHT, 0);
+            lv_obj_set_width(temp_label_in, 160);
+            lv_obj_set_pos(temp_label_in,  bx, by + 44);
+        } else {
+            lv_obj_set_width(humid_label_in, 75);
+            lv_obj_set_pos(humid_label_in, bx + 11, by + 25);
+            lv_obj_set_width(temp_label_in, 75);
+            lv_obj_set_pos(temp_label_in,  bx + 85, by + 25);
+        }
+    }
+}
+
 static void wifi_label_event_cb(lv_event_t *event)
 {
     if (!event || lv_event_get_code(event) != LV_EVENT_CLICKED) {
@@ -3193,10 +3349,10 @@ static void status_label_event_cb(lv_event_t *event)
         return;
     }
 
-    // Aktuell angezeigten Fehler quittieren (acked = current)
+    // Aktuell angezeigten Fehler quittieren (acked = latched)
     if (sensor_err_display_idx >= 0 && sensor_err_display_idx < SENSOR_ERR_SRC_MAX) {
         sensor_err_states[sensor_err_display_idx].acked =
-            sensor_err_states[sensor_err_display_idx].current;
+            sensor_err_states[sensor_err_display_idx].latched;
         ESP_LOGI(TAG, "Sensorstatus '%s' (Level=%d) quittiert",
                  sensor_err_src_name[sensor_err_display_idx],
                  sensor_err_states[sensor_err_display_idx].acked);
@@ -3207,10 +3363,10 @@ static void status_label_event_cb(lv_event_t *event)
     int next_idx = -1;
     int pending_count = 0;
     for (int i = 0; i < SENSOR_ERR_SRC_MAX; i++) {
-        if (sensor_err_states[i].current > sensor_err_states[i].acked) {
+        if (sensor_err_states[i].latched > sensor_err_states[i].acked) {
             pending_count++;
-            if (sensor_err_states[i].current > stack_max) {
-                stack_max = sensor_err_states[i].current;
+            if (sensor_err_states[i].latched > stack_max) {
+                stack_max = sensor_err_states[i].latched;
                 next_idx = i;
             }
         }
@@ -3594,6 +3750,7 @@ void app_main()
     esp_log_level_set("geocode",          LOG_LEVEL_GEOCODE);
     esp_log_level_set("router_uci",       LOG_LEVEL_ROUTER_UCI);
     esp_log_level_set("http_mutex",       LOG_LEVEL_HTTP_MUTEX);
+    esp_log_level_set("womo_buzz_http",   LOG_LEVEL_BUZZER_HTTP);
     esp_log_level_set("womo_sd",          LOG_LEVEL_SD);
     esp_log_level_set("womo_time",        LOG_LEVEL_TIME);
     esp_log_level_set("womo_sun_calc",    LOG_LEVEL_SUN_CALC);
@@ -3614,6 +3771,10 @@ void app_main()
     // Initialisierung + Theme + Ducato explizit eingeschaltet.
     wavesahre_rgb_lcd_bl_off();
 
+    // Buzzer so früh wie möglich – braucht nur LEDC + GPIO, kein Display/WiFi
+    display_buzzer_init();
+    display_buzzer_startup();
+
     // Initialize time management
     womo_time_init();
     rs485_watchdog_start_us = esp_timer_get_time();
@@ -3626,13 +3787,25 @@ void app_main()
     ESP_LOGI(TAG, "WiFi async connect: %s (Hintergrund)", WIFI_SSID);
     womo_wifi_connect_async(WIFI_SSID, WIFI_PASSWORD, 1);
 
+#if WOMO_ENABLE_BUZZER_STUDIO_HTTP
+    esp_err_t buzzer_http_err = womo_buzzer_http_start();
+    if (buzzer_http_err == ESP_OK) {
+        ESP_LOGI(TAG, "Buzzer-Studio HTTP aktiv: /buzzer_studio.html");
+    } else {
+        ESP_LOGW(TAG, "Buzzer-Studio HTTP Start fehlgeschlagen: %s", esp_err_to_name(buzzer_http_err));
+    }
+#else
+    ESP_LOGI(TAG, "Buzzer-Studio HTTP deaktiviert (WOMO_ENABLE_BUZZER_STUDIO_HTTP=0)");
+#endif
+
     // Initialize theme (default location: Central Europe)
     // Sonnenzeiten werden automatisch via GPS berechnet (router_poll_task)
     womo_theme_init(50.0, 10.0);  // Approximate Germany
     womo_theme_reset();  // Reset cached state (wichtig bei Power-Cycle!)
     
-    // Fallback sunrise/sunset (wird bei erstem GPS-Fix überschrieben)
-    womo_theme_set_sun_times(7, 0, 18, 0);  // Reasonable defaults for Central Europe
+    // Fallback sunrise/sunset – MESZ-Durchschnitt für Zentraleuropa.
+    // Wird bei erstem GPS-Fix oder nach NTP-Sync via sun_calc überschrieben.
+    womo_theme_set_sun_times(6, 30, 20, 0);
     
     // Initialize display (uses I2C for touch controller)
     waveshare_esp32_s3_rgb_lcd_init();
@@ -3673,10 +3846,8 @@ void app_main()
     // Cache zurücksetzen beim Boot, damit Theme+Ducato korrekt geladen werden
     bg_last_day_state  = -1;
     bg_img             = NULL;
-    bg_png_data_day    = NULL;
-    bg_png_size_day    = 0;
-    bg_png_data_night  = NULL;
-    bg_png_size_night  = 0;
+    bg_draw_buf_day    = NULL;
+    bg_draw_buf_night  = NULL;
     
     if (lvgl_port_lock(0)) {
         lv_obj_t *screen = lv_scr_act();
@@ -3685,9 +3856,10 @@ void app_main()
         lv_obj_add_event_cb(screen, screen_event_handler, LV_EVENT_CLICKED, NULL);
         lvgl_touch_set_wake_cb(touch_wake_cb);
 
-        // Initiales Theme: Fallback-Hintergrund OHNE Theme-Update (Zeit noch nicht valid!)
-        // Das echte Theme+Ducato wird später nach Zeitvalidierung geladen.
-        lv_obj_set_style_bg_color(screen, lv_color_hex(0x87CEEB), 0);  // Hellblau als Fallback
+        // Initiales Theme: Dunkelblau (Nacht) als Fallback.
+        // Besser zu dunkel als zu hell – blendet nicht und ist nachts korrekt.
+        // Das echte Theme+Ducato wird nach Zeitvalidierung geladen.
+        lv_obj_set_style_bg_color(screen, WOMO_COLOR_NIGHT_NORMAL, 0);
         lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
         
         // Initialize locale system
@@ -3723,15 +3895,24 @@ void app_main()
         
         // Create WiFi/LTE status button (top left) – Pill-Form, links WiFi, rechts LTE
         wifi_label = lv_btn_create(screen);
-        lv_obj_set_size(wifi_label, 104, 40);
+        lv_obj_set_size(wifi_label, 108, 44);
         lv_obj_set_style_radius(wifi_label, LV_RADIUS_CIRCLE, 0);  // Pill-Form (halbkreisförmige Enden)
         lv_obj_set_style_bg_color(wifi_label, lv_color_hex(0xC0C0C0), 0);
         lv_obj_set_style_bg_opa(wifi_label, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(wifi_label, 0, 0);
         lv_obj_set_style_pad_all(wifi_label, 0, 0);
-        lv_obj_align(wifi_label, LV_ALIGN_TOP_LEFT, 80, 14);
+        lv_obj_align(wifi_label, LV_ALIGN_TOP_LEFT, 78, 12);
         lv_obj_add_flag(wifi_label, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(wifi_label, wifi_label_event_cb, LV_EVENT_CLICKED, NULL);
+        wifi_inner_border = lv_obj_create(wifi_label);
+        lv_obj_set_size(wifi_inner_border, 100, 36);
+        lv_obj_set_style_radius(wifi_inner_border, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_opa(wifi_inner_border, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(wifi_inner_border, 2, 0);
+        lv_obj_set_style_border_color(wifi_inner_border, lv_color_hex(0x000000), 0);
+        lv_obj_set_style_pad_all(wifi_inner_border, 0, 0);
+        lv_obj_center(wifi_inner_border);
+        lv_obj_clear_flag(wifi_inner_border, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
         // Trennlinie mittig zwischen WiFi und LTE
         lv_obj_t *wifi_divider = lv_obj_create(wifi_label);
         lv_obj_set_size(wifi_divider, 2, 24);
@@ -3815,8 +3996,8 @@ void app_main()
 
             // Drei-Punkte-Button (⋮) → öffnet Einstellungs-Modal, rechts neben WiFi-Button
             settings_btn = lv_btn_create(screen);
-            lv_obj_set_size(settings_btn, 28, 40);
-            lv_obj_align(settings_btn, LV_ALIGN_TOP_LEFT, 242, 24);
+            lv_obj_set_size(settings_btn, 32, 44);
+            lv_obj_align(settings_btn, LV_ALIGN_TOP_LEFT, 240, 22);
             lv_obj_set_style_transform_rotation(settings_btn, 900, 0); // 90°
             lv_obj_set_style_radius(settings_btn, LV_RADIUS_CIRCLE, 0);
             lv_obj_set_style_bg_color(settings_btn, lv_color_hex(0xC0C0C0), 0);
@@ -3826,6 +4007,15 @@ void app_main()
             lv_obj_set_style_pad_all(settings_btn, 0, 0);
             lv_obj_add_flag(settings_btn, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_add_event_cb(settings_btn, settings_button_event_cb, LV_EVENT_CLICKED, NULL);
+            settings_inner_border = lv_obj_create(settings_btn);
+            lv_obj_set_size(settings_inner_border, 26, 38);
+            lv_obj_set_style_radius(settings_inner_border, LV_RADIUS_CIRCLE, 0);
+            lv_obj_set_style_bg_opa(settings_inner_border, LV_OPA_TRANSP, 0);
+            lv_obj_set_style_border_width(settings_inner_border, 2, 0);
+            lv_obj_set_style_border_color(settings_inner_border, lv_color_hex(0x000000), 0);
+            lv_obj_set_style_pad_all(settings_inner_border, 0, 0);
+            lv_obj_center(settings_inner_border);
+            lv_obj_clear_flag(settings_inner_border, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
             // Drei vertikale Punkte (⋮)
             for (int i = 0; i < 3; i++) {
                 lv_obj_t *dot = lv_obj_create(settings_btn);
@@ -3959,6 +4149,18 @@ void app_main()
     lv_obj_set_style_text_align(voc_label_in, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(voc_label_in, air_x, air_y + 50);    // bVOC oben
 
+    /* Unsichtbarer Touch-Bereich über dem Innen-Luftblock: Long-Press → Einfachansicht toggle */
+    {
+        lv_obj_t *air_in_touch = lv_btn_create(screen);
+        lv_obj_set_size(air_in_touch, 163, 85);
+        lv_obj_set_pos(air_in_touch, air_x, air_y);
+        lv_obj_set_style_bg_opa(air_in_touch, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_opa(air_in_touch, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_shadow_opa(air_in_touch, LV_OPA_TRANSP, 0);
+        lv_obj_clear_flag(air_in_touch, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_event_cb(air_in_touch, indoor_air_long_press_cb, LV_EVENT_LONG_PRESSED, NULL);
+    }
+
     // Farben an aktuelles Theme anpassen (Tag/Nacht)
     apply_text_theme_colors();
 
@@ -4046,7 +4248,7 @@ void app_main()
     lv_obj_set_style_text_align(location_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_width(location_label, 200);
     lv_label_set_long_mode(location_label, LV_LABEL_LONG_DOT);
-    lv_obj_align(location_label, LV_ALIGN_BOTTOM_LEFT, 10 + 115, -16);
+    lv_obj_align(location_label, LV_ALIGN_BOTTOM_LEFT, 10 + 115, -19);
 
     // cm → Pixel Umrechnung (anpassbar für physische Displaymaße)
     const float DISP_WIDTH_CM = 15.5f;
@@ -4252,19 +4454,30 @@ void app_main()
         
         // Mode label removed - theme now fully automatic based on real time
         
-        // Create status label (right bottom - higher to avoid FPS overlay)
-        status_label = lv_label_create(screen);
+        // Create status button with inner inlay (right bottom)
+        status_btn = lv_btn_create(screen);
+        lv_obj_set_style_radius(status_btn, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(status_btn, lv_color_hex(0xC0C0C0), 0);
+        lv_obj_set_style_bg_opa(status_btn, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(status_btn, 0, 0);
+        lv_obj_set_style_pad_all(status_btn, 0, 0);
+        lv_obj_add_flag(status_btn, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(status_btn, status_label_event_cb, LV_EVENT_CLICKED, NULL);
+
+        status_inlay = lv_obj_create(status_btn);
+        lv_obj_set_style_radius(status_inlay, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_opa(status_inlay, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(status_inlay, 2, 0);
+        lv_obj_set_style_border_color(status_inlay, lv_color_hex(0x000000), 0);
+        lv_obj_set_style_pad_all(status_inlay, 0, 0);
+        lv_obj_clear_flag(status_inlay, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+
+        status_label = lv_label_create(status_btn);
+        lv_obj_set_style_text_color(status_label, lv_color_black(), 0);
+
         status_label_last_text[0] = '\0';
         system_status_apply(true);
-        lv_obj_set_style_text_color(status_label, lv_color_black(), 0);
-        lv_obj_set_style_border_width(status_label, 0, 0);
-        lv_obj_set_style_radius(status_label, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_pad_all(status_label, 6, 0);
-        lv_obj_set_style_bg_color(status_label, lv_color_hex(0xC0C0C0), 0);
-        lv_obj_set_style_bg_opa(status_label, LV_OPA_COVER, 0);
-        lv_obj_add_flag(status_label, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(status_label, status_label_event_cb, LV_EVENT_CLICKED, NULL);
-        lv_obj_align(status_label, LV_ALIGN_BOTTOM_LEFT, 543, -10);  // 10px weiter nach links
+        lv_obj_align(status_btn, LV_ALIGN_BOTTOM_LEFT, 539, -10);
         
 #if CONFIG_LOG_DEFAULT_LEVEL >= ESP_LOG_INFO
         // Unsichtbarer Touch-Bereich rechts mitte zum Ein-/Ausblenden des Performance Monitors
@@ -4341,13 +4554,27 @@ void app_main()
         if (!time_ok) {
             ESP_LOGW(TAG, "No time source available after 5s – using DAY default");
         }
+
+        // Sonnenzeiten sofort berechnen (mit Fallback-Koordinaten),
+        // damit das Boot-Theme korrekte Tages-/Nachtgrenzen hat.
+        // Wird später durch exakte GPS-Koordinaten überschrieben.
+        if (time_ok) {
+            if (womo_time_update_location(50.0, 10.0)) {
+                uint8_t sr_h, sr_m, ss_h, ss_m;
+                womo_time_get_sun_times(&sr_h, &sr_m, &ss_h, &ss_m);
+                ESP_LOGI(TAG, "Boot sun times (approx): sunrise=%02d:%02d sunset=%02d:%02d",
+                         sr_h, sr_m, ss_h, ss_m);
+            }
+        }
     }
 
     // ── Theme + Ducato mit korrekter Uhrzeit laden ─────────────────────
     // Zeit ist jetzt gültig (NTP oder RS485) oder Fallback auf DAY.
-    // Kein explizites Cache-Invalidieren: Falls der LVGL-Timer-CB das
-    // Bild bereits korrekt geladen hat (bg_last_day_state gesetzt),
-    // erkennt load_background_image() das und überspringt den SD-Zugriff.
+    // Beide Ducato-Bilder werden sequenziell vorab dekodiert (je 1,5 MB ARGB8888
+    // in PSRAM), damit beim späteren Theme-Wechsel (Tag↔Nacht nach Stunden) nur
+    // ein Widget-Swap nötig ist – kein erneuter lodepng-Decode mehr.
+    // WICHTIG: Sequenziell! Jeder Decode freigt seinen tmp-PNG-Puffer vor dem
+    // nächsten, sodass nie zwei 1,5-MB-Decode-Puffer gleichzeitig belegt sind.
     if (lvgl_port_lock(0)) {
         womo_theme_mode_t boot_mode = womo_theme_update(WOMO_STATUS_OK);
         bool boot_is_day = theme_mode_is_daylike(boot_mode);
@@ -4355,6 +4582,7 @@ void app_main()
         ESP_LOGI(TAG, "Boot theme: %s (mode=%d, ducato=%s)",
                  mode_names[boot_mode], boot_mode, boot_is_day ? "weiss" : "grau");
 
+        // Zuerst die Boot-Variante laden und anzeigen
         load_background_image(lv_scr_act(), boot_is_day);
         load_logo_image(lv_scr_act());
         apply_text_theme_colors();
@@ -4363,18 +4591,28 @@ void app_main()
         lvgl_port_unlock();
     }
 
+    // Zweite Ducato-Variante (die aktuell NICHT gezeigte) nachladen –
+    // außerhalb des LVGL-Locks, da nur PNG geladen/dekodiert wird (kein Widget-Zugriff).
+    // Nach diesem Preload stehen beide Puffer bereit: Theme-Wechsel = schneller Swap.
+    {
+        womo_theme_mode_t cur_mode = womo_theme_update(WOMO_STATUS_OK);
+        bool cur_is_day = theme_mode_is_daylike(cur_mode);
+        load_background_image(NULL, !cur_is_day);  // NULL = kein Widget erstellen beim Preload
+    }
+
     // Router UCI Client initialisieren + Poll-Task VOR Backlight starten
     // damit Connectivity-Modal schneller Daten hat
     womo_router_uci_init();
     s_router_mutex = xSemaphoreCreateMutex();
     if (s_router_mutex) {
-        BaseType_t rc = xTaskCreateWithCaps(router_poll_task,
+        /* Stack MUSS im internen RAM liegen – NVS-Operationen (nvs_set_str) deaktivieren
+         * den Cache; ein PSRAM-Stack wäre danach nicht mehr erreichbar → Assert. */
+        BaseType_t rc = xTaskCreate(router_poll_task,
                                      "router_poll",
                                      8192,
                                      NULL,
                                      4,
-                                     &s_router_poll_handle,
-                                     MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+                                     &s_router_poll_handle);
         if (rc != pdPASS) {
             s_router_poll_handle = NULL;
             ESP_LOGW(TAG, "Router-Poll-Task konnte nicht gestartet werden");

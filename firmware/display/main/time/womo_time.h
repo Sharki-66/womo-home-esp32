@@ -114,4 +114,35 @@ uint32_t womo_time_get_seconds_since_sync(void);
  */
 void womo_time_auto_sync(void);
 
+/* ── Sonnenzeiten ─────────────────────────────────────────────────────── */
+
+/**
+ * @brief Koordinaten aktualisieren und Sonnenzeiten neu berechnen.
+ *
+ * Berechnet Sonnenauf-/-untergang für den aktuellen Tag und übergibt das
+ * Ergebnis intern an womo_theme_set_sun_times().  Kann jederzeit aufgerufen
+ * werden, wenn sich der Standort ändert (GPS-Fix, Boot-Fallback, …).
+ *
+ * @param latitude   Breitengrad (-90 … +90)
+ * @param longitude  Längengrad (-180 … +180)
+ * @return true  – Berechnung erfolgreich, sun_times aktualisiert
+ * @return false – Zeit noch nicht gültig oder Koordinaten ungültig
+ */
+bool womo_time_update_location(double latitude, double longitude);
+
+/**
+ * @brief Zuletzt berechnete Sonnenzeiten zurückgeben.
+ *
+ * Gibt den gecachten Wert des letzten womo_time_update_location()-Aufrufes
+ * zurück, ohne eine Neuberechnung auszulösen.
+ *
+ * @param sr_h  Sonnenaufgang Stunde (Ausgabe)
+ * @param sr_m  Sonnenaufgang Minute (Ausgabe)
+ * @param ss_h  Sonnenuntergang Stunde (Ausgabe)
+ * @param ss_m  Sonnenuntergang Minute (Ausgabe)
+ * @return true wenn Wert gültig (mindestens einmal berechnet)
+ */
+bool womo_time_get_sun_times(uint8_t *sr_h, uint8_t *sr_m,
+                              uint8_t *ss_h, uint8_t *ss_m);
+
 #endif // WOMO_TIME_H

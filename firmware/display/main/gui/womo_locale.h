@@ -105,6 +105,10 @@ typedef enum {
     STR_GAS_REAR,
     // Settings modal title
     STR_SETTINGS_TITLE,
+    // Sound section in settings
+    STR_SOUND_SECTION,
+    STR_SOUND_TONES,
+    STR_SOUND_TOUCH_CLICK,
     // Battery label
     STR_BATTERY_KFZ,
     // Forecast modal

@@ -28,6 +28,7 @@
 #define LOG_LEVEL_GEOCODE        ESP_LOG_WARN   // network/womo_geocode.c
 #define LOG_LEVEL_ROUTER_UCI     ESP_LOG_WARN   // network/womo_router_uci.c
 #define LOG_LEVEL_HTTP_MUTEX     ESP_LOG_WARN   // network/womo_http_mutex.c
+#define LOG_LEVEL_BUZZER_HTTP    ESP_LOG_INFO   // network/womo_buzzer_http.c
 
 // ── Speicher ─────────────────────────────────────────────────────────────────────────
 #define LOG_LEVEL_SD             ESP_LOG_WARN   // storage/womo_sd.c
@@ -48,3 +49,18 @@
 #define LOG_LEVEL_CONN_MODAL     ESP_LOG_WARN   // gui/womo_connectivity_modal.c
 #define LOG_LEVEL_SETTINGS_MODAL ESP_LOG_WARN   // gui/womo_settings_modal.c
 #define LOG_LEVEL_ROUTER_LEDS    ESP_LOG_WARN   // gui/womo_router_leds_modal.c
+
+// ====================================================================================
+// Buzzer – Piezo on Display-Board
+// GPIO6: als ADC herausgeführt, keine andere Funktion → Piezo anschließen
+// ====================================================================================
+#define DISPLAY_BUZZER_GPIO          6
+#define DISPLAY_BUZZER_LEDC_MODE     LEDC_LOW_SPEED_MODE
+#define DISPLAY_BUZZER_LEDC_TIMER    LEDC_TIMER_0
+#define DISPLAY_BUZZER_LEDC_CHANNEL  LEDC_CHANNEL_0
+#define DISPLAY_BUZZER_LEDC_BITS     LEDC_TIMER_10_BIT
+#define DISPLAY_BUZZER_DUTY          (512)   /* 50% duty bei 10-Bit */
+
+// Optionales Live-Sound-Studio via HTTP API + SPIFFS-Seite
+// 1 = aktiv, 0 = vollständig auskompiliert
+#define WOMO_ENABLE_BUZZER_STUDIO_HTTP 1

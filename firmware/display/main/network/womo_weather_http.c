@@ -10,6 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "womo_http_mutex.h"
+#include "esp_heap_caps.h"
 #include <stdlib.h>
 #include <math.h>
 
@@ -109,16 +110,20 @@ esp_err_t womo_weather_http_start(womo_weather_http_callback_t callback, void *u
     s_ctx.user_data = user_data;
     s_ctx.stop_requested = false;
 
-    BaseType_t created = xTaskCreate(
+    BaseType_t created = xTaskCreateWithCaps(
         weather_http_task,
         "om_task",
         WEATHER_HTTP_TASK_STACK,
         NULL,
         WEATHER_HTTP_TASK_PRIO,
-        &s_ctx.task_handle
+        &s_ctx.task_handle,
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT
     );
 
     if (created != pdPASS) {
+        ESP_LOGW(TAG, "om_task create failed: internal_free=%u largest=%u",
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         s_ctx.task_handle = NULL;
         return ESP_ERR_NO_MEM;
     }

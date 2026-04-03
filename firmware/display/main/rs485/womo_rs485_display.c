@@ -16,6 +16,7 @@
 #include <sys/time.h>
 #include "network/womo_wifi.h"
 #include "time/womo_time.h"
+#include "hardware/buzzer.h"
 
 static const char *TAG = "rs485_display";
 
@@ -915,6 +916,42 @@ esp_err_t womo_rs485_send_imu_zero(void)
     return err;
 }
 
+esp_err_t womo_rs485_send_buzzer(bool enable)
+{
+    const char *cmd = enable ? "buzzer_on" : "buzzer_off";
+    esp_err_t err = rs485_send_simple_command(cmd);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Sent %s command", cmd);
+    } else {
+        ESP_LOGW(TAG, "Failed to send %s: %s", cmd, esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t womo_rs485_send_touch_click(bool enable)
+{
+    const char *cmd = enable ? "touch_click_on" : "touch_click_off";
+    esp_err_t err = rs485_send_simple_command(cmd);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Sent %s command", cmd);
+    } else {
+        ESP_LOGW(TAG, "Failed to send %s: %s", cmd, esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t womo_rs485_send_buzzer_alert(bool is_alarm)
+{
+    const char *cmd = is_alarm ? "buzzer_alarm" : "buzzer_warn";
+    esp_err_t err = rs485_send_simple_command(cmd);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Sent %s command", cmd);
+    } else {
+        ESP_LOGW(TAG, "Failed to send %s: %s", cmd, esp_err_to_name(err));
+    }
+    return err;
+}
+
 static void rs485_flush_line(char *line_buffer, size_t *line_pos)
 {
     if (*line_pos == 0) {
@@ -1342,11 +1379,21 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             cJSON *ac        = cJSON_GetObjectItem(root, "ac_present");
             cJSON *rtc_bat   = cJSON_GetObjectItem(root, "rtc_bat_low");
             cJSON *rtc_bsf   = cJSON_GetObjectItem(root, "rtc_bat_switched");
+            cJSON *buzzer    = cJSON_GetObjectItem(root, "buzzer_on");
+            cJSON *touch_clk = cJSON_GetObjectItem(root, "touch_click_on");
             if (cJSON_IsBool(pwr_on))   s_latest_data.power.pwr_12v_on       = cJSON_IsTrue(pwr_on);
             if (cJSON_IsBool(radio))    s_latest_data.power.radio_on          = cJSON_IsTrue(radio);
             if (cJSON_IsBool(ac))       s_latest_data.power.ac_present        = cJSON_IsTrue(ac);
             if (cJSON_IsBool(rtc_bat))  s_latest_data.power.rtc_bat_low       = cJSON_IsTrue(rtc_bat);
             if (cJSON_IsBool(rtc_bsf))  s_latest_data.power.rtc_bat_switched  = cJSON_IsTrue(rtc_bsf);
+            if (cJSON_IsBool(buzzer)) {
+                s_latest_data.power.buzzer_on = cJSON_IsTrue(buzzer);
+                display_buzzer_set_enabled(s_latest_data.power.buzzer_on);
+            }
+            if (cJSON_IsBool(touch_clk)) {
+                s_latest_data.power.touch_click_on = cJSON_IsTrue(touch_clk);
+                display_buzzer_set_click_enabled(s_latest_data.power.touch_click_on);
+            }
             notify_snapshot = s_latest_data;
             xSemaphoreGive(s_data_mutex);
             topic_handled = true;
