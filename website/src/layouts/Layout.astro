@@ -1,0 +1,25 @@
+---
+import '../styles/global.css';
+interface Props {
+  title?: string;
+  description?: string;
+}
+const {
+  title = 'WoMoHome – Smart System fürs Wohnmobil',
+  description = 'WoMoHome: Batterie, Tank, Gas, Klima, GPS und mehr – alles im Blick. Selbst bauen oder fertig kaufen.',
+} = Astro.props;
+---
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+  </head>
+  <body class="text-gray-100 font-sans antialiased" style="background:#191970;">
+    <slot />
+  </body>
+</html>

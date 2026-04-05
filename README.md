@@ -85,7 +85,7 @@ Das Projekt nutzt das [Espressif ESP-IDF](https://docs.espressif.com/projects/es
 - `womo-sensor.code-workspace` – Sensorboard-Entwicklung
 - `womo-display.code-workspace` – Display-Entwicklung
 
-**!!! Ich habe den ganzen Code im Vibe Coding erzeugt !!!**
+**!!! Der gesammte Code wurde im Vibe Coding erzeugt !!!**
 
 ## 📜 Lizenz
 
@@ -96,3 +96,17 @@ Privates Projekt. Siehe [LICENSE](LICENSE).
 | Display (Vorderseite) | Sensorboard (Rückseite) |
 |---|---|
 | ![Display Vorderseite](docs/images/PXL_20260223_190708372.jpg) | ![Sensorboard Rückseite](docs/images/PXL_20260223_191625640.jpg) |
+
+## 🖥️ Display-Screenshots
+
+| Nacht-Ansicht | GPS |
+|---|---|
+| ![Nacht-Ansicht](website/public/photos/screen12.jpg) | ![GPS](website/public/photos/screen9.jpg) |
+
+| Wetter | Einstellungen |
+|---|---|
+| ![Wetter](website/public/photos/screen2.jpg) | ![Einstellungen](website/public/photos/screen7.jpg) |
+
+| Gas wechseln | Nivellieren |
+|---|---|
+| ![Gas wechseln](website/public/photos/screen13.jpg) | ![Nivellieren](website/public/photos/screen15.jpg) |

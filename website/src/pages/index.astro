@@ -1,0 +1,329 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout>
+
+  <!-- NAV -->
+  <header class="fixed top-0 inset-x-0 z-50 backdrop-blur border-b" style="background:rgba(15,15,69,0.88);border-color:rgba(255,255,255,0.10)">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2">
+        <img src="/logo.png" alt="WoMoHome Logo" class="h-12 w-12 rounded-full" />
+        <span class="text-xl font-bold text-amber-400 tracking-tight">WoMoHome</span>
+      </a>
+      <nav class="hidden md:flex gap-6 text-sm text-gray-300">
+        <a href="#features" class="hover:text-amber-400 transition">Features</a>
+        <a href="#selbstbau" class="hover:text-amber-400 transition">Selbst bauen</a>
+        <a href="#kaufen" class="hover:text-amber-400 transition">Kaufen</a>
+        <a href="#faq" class="hover:text-amber-400 transition">FAQ</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="min-h-screen flex flex-col items-center justify-center text-center px-4 pt-24 pb-16 relative overflow-hidden" style="background:#0f0f45">
+    <div class="absolute inset-0" style="background:linear-gradient(180deg,#0f0f45 0%,#191970 50%,#0f0f45 100%)"></div>
+    <div class="relative z-10 flex flex-col items-center w-full">
+    <img src="/logo.png" alt="WoMoHome" class="h-32 w-32 md:h-40 md:w-40 rounded-full shadow-2xl shadow-amber-400/20 mb-8 ring-4 ring-amber-400/30" />
+    <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 max-w-3xl">
+      Dein Wohnmobil.<br /><span class="text-amber-400">Immer im Blick.</span>
+    </h1>
+    <p class="text-lg md:text-xl text-gray-400 max-w-2xl mb-10">
+      WoMoHome ist ein selbst entwickeltes Smart-Home-System für Wohnmobile – mit Touch-Display, 
+      Sensorboard, LTE-Router und vollständiger Eigenversorgungsüberwachung.
+    </p>
+    <div class="flex flex-wrap justify-center gap-4">
+      <!-- Foto-Thumbnails -->
+      <div class="flex flex-wrap justify-center gap-3 mt-2 w-full max-w-2xl">
+        {([{n:12,label:"Nacht Ansicht"},{n:9,label:"GPS"}]).map(({n,label}) => (
+          <div class="flex flex-col items-center" style="width:30%">
+            <div class="rounded-xl overflow-hidden border border-white/15 shadow-lg cursor-pointer hover:ring-2 hover:ring-amber-400 transition w-full"
+                 onclick={`document.getElementById('lb').style.display='flex';document.getElementById('lb-img').src='/photos/screen${n}.jpg'`}>
+              <img src={`/photos/screen${n}.jpg`} alt={label} class="w-full h-28 md:h-36 object-cover hover:scale-105 transition-transform duration-500" />
+            </div>
+            <span class="text-xs text-gray-400 mt-1">{label}</span>
+          </div>
+        ))}
+        <!-- 2×2-Collage → Hover-Galerie -->
+        <div class="flex flex-col items-center group/collage" style="width:30%;position:relative">
+          <!-- Thumbnail -->
+          <div class="rounded-xl overflow-hidden border border-white/15 shadow-lg transition relative w-full h-28 md:h-36 hover:ring-2 hover:ring-amber-400">
+            <div class="grid grid-cols-2 gap-px bg-white/10 w-full h-full">
+              {[2,7,13,15].map(n => (
+                <img src={`/photos/screen${n}.jpg`} alt="" class="w-full h-full object-cover" />
+              ))}
+            </div>
+            <div class="absolute inset-0 flex items-center justify-center bg-black/30 group-hover/collage:bg-black/10 transition">
+              <span class="text-white text-xs font-semibold bg-black/50 px-2 py-1 rounded-full group-hover/collage:hidden">+4 Bilder</span>
+            </div>
+          </div>
+          <!-- Hover-Panel mit 4 Bildern -->
+          <div class="absolute z-50 left-1/2 -translate-x-1/2"
+               style="bottom:calc(100% + 0.5rem);width:440px;visibility:hidden;opacity:0;transition:opacity 0.2s;pointer-events:none"
+               id="collage-panel">
+            <div style="background:#0f0f45;border:1px solid rgba(255,255,255,0.15);border-radius:1rem;padding:0.75rem;box-shadow:0 8px 40px rgba(0,0,0,0.8);display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+              {([{n:2,cap:"Wetter"},{n:7,cap:"Einstellungen"},{n:13,cap:"Gas wechseln"},{n:15,cap:"Nivellieren"}]).map(({n,cap}) => (
+                <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer"
+                     onclick={`event.stopPropagation();document.getElementById('lb').style.display='flex';document.getElementById('lb-img').src='/photos/screen${n}.jpg'`}>
+                  <img src={`/photos/screen${n}.jpg`} alt={cap}
+                       style="width:100%;border-radius:0.5rem;border:1px solid rgba(255,255,255,0.1)" />
+                  <span style="font-size:0.7rem;color:#9ca3af;margin-top:0.25rem">{cap}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <span class="text-xs text-gray-400 mt-1">Weitere Bilder</span>
+        </div>
+        <script is:inline>
+          document.addEventListener('DOMContentLoaded', function() {
+            var wrap = document.querySelector('.group\\/collage');
+            if (!wrap) return;
+            var panel = wrap.querySelector('#collage-panel');
+            if (!panel) return;
+            wrap.addEventListener('mouseenter', function() { panel.style.visibility='visible'; panel.style.opacity='1'; panel.style.pointerEvents='auto'; });
+            wrap.addEventListener('mouseleave', function() { panel.style.visibility='hidden'; panel.style.opacity='0'; panel.style.pointerEvents='none'; });
+          });
+        </script>
+      </div>
+    </div>
+    <!-- Schnellübersicht-Badges -->
+    <div class="flex flex-wrap justify-center gap-3 mt-14 text-sm text-gray-400">
+      {["🔥 Gas", "💧 Tanks", "🔋 Batterie", "✈️ Künstlicher Horizont", "🌡️ Klima / IAQ", "📡 LTE & GPS", "🖥️ 7\" Touch-Display"].map(f => (
+        <span class="bg-gray-800 border border-gray-700 px-3 py-1 rounded-full">{f}</span>
+      ))}
+    </div>
+    </div>
+  </section>
+
+  <!-- WAS IST WOMOHOME? -->
+  <section class="py-24 px-4 bg-gray-900">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">Was ist WoMoHome?</h2>
+      <p class="text-center text-gray-400 max-w-2xl mx-auto mb-16">
+        Drei Komponenten, die zusammen ein vollständiges Fahrzeugmanagementsystem bilden.
+      </p>
+      <div class="grid md:grid-cols-3 gap-8">
+        {[
+          {
+            icon: "🖥️",
+            title: "Display-Einheit",
+            chip: "ESP32-S3 · 7\" Touch",
+            desc: "Visualisiert alle Sensor- und Statusdaten in Echtzeit. Steuert Bordnetz und Multimedia per Touch. LVGL-basierte Benutzeroberfläche."
+          },
+          {
+            icon: "🔧",
+            title: "Sensorboard",
+            chip: "ESP32-S3 · RS485",
+            desc: "Erfasst Batterien, Tanks, Gas, Temperatur/Luftdruck/IAQ (2× BME680), Inklination (BNO055) und Wägezellen (HX711). Kommuniziert per RS485."
+          },
+          {
+            icon: "📡",
+            title: "LTE-Router",
+            chip: "Teltonika RUTX11",
+            desc: "OpenWRT-basierter Router mit LTE, WLAN-AP, GNSS und HotSpot. Liefert Konnektivität und GPS-Daten für das gesamte System."
+          }
+        ].map(c => (
+          <div class="rounded-2xl p-8 flex flex-col gap-4" style="background:#132742;border:1px solid rgba(255,255,255,0.08)">
+            <div class="text-5xl">{c.icon}</div>
+            <div>
+              <h3 class="text-xl font-bold mb-1">{c.title}</h3>
+              <span class="text-xs text-amber-400 font-mono bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded">{c.chip}</span>
+            </div>
+            <p class="text-gray-400 text-sm leading-relaxed">{c.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features" class="py-24 px-4 bg-gray-950">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">Alle Features</h2>
+      <p class="text-center text-gray-400 max-w-xl mx-auto mb-16">Alles was ein Wohnmobil-Fahrer braucht – in einem System.</p>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {[
+          { icon: "🔥", title: "Gasverbrauch",          desc: "Zwei Gasflaschen per Wägezelle. Füllstand 0–100 %, Verbrauchsrate, Restlaufzeit, automatische Umschaltung.",                                                                                   link: null },
+          { icon: "💧", title: "Tank-Überwachung",     desc: "Frisch- und Grauwasser kapazitiv per Votronic-Sensor, Anzeige 0–100 %.",                                                                                                           link: null },
+          { icon: "🔋", title: "Batteriemonitor",      desc: "Bordnetz- und Aufbaubatterie in Volt – kontinuierlich überwacht.",                                                                                                                    link: null },
+          { icon: "✈️", title: "Künstlicher Horizont", desc: "Der Sensorboard-Webserver stellt die Anzeige als Webseite bereit – abrufbar von jedem Handy, Tablet oder Autoradio im WLAN.",          link: "/horizont" },
+          { icon: "🌡️", title: "Klima & Luftqualität", desc: "Innen + Außen: Temperatur, Luftfeuchte, Druck. Innen zusätzlich Luftqualität (IAQ, eCO₂, bVOC).",                                                                                      link: null },
+          { icon: "📡", title: "LTE & GPS",             desc: "Echtzeit-Signalstärke, Provider, GPS-Position – direkt vom RUTX11 Router.",                                                                                                          link: null },
+          { icon: "🖥️", title: "7\" Touch-Display",    desc: "800×480 px IPS-Panel mit GT911 kapazitivem Touch – vollständig per Finger bedienbar.",                                                                                               link: null },
+          { icon: "🌐", title: "WLAN-Management",       desc: "Hotspot, gespeicherte Netzwerke, SSID-Scan, Passwort-Eingabe per QWERTZ-Tastatur. WLAN und LTE per Touch abschaltbar.",                                                          link: null },
+          { icon: "🔌", title: "Bordnetz-Steuerung",    desc: "12V-Bordnetz und Multimedia per Touch oder Automatik ein-/ausschalten.",                                                                                                             link: null },
+        ].map(f => (
+          <a href={f.link ?? undefined}
+             class={`bg-gray-900 border border-gray-800 rounded-xl p-6 flex gap-4 items-start transition ${f.link ? 'hover:border-amber-400 cursor-pointer' : 'hover:border-amber-400/40'}`}
+             style={f.link ? '' : 'pointer-events:none;'}>
+            <span class="text-3xl">{f.icon}</span>
+            <div class="flex-1">
+              <h3 class="font-semibold mb-1 flex items-center gap-2">
+                {f.title}
+                {f.link && <span class="text-xs text-amber-400 border border-amber-400/40 px-1.5 py-0.5 rounded">Demo →</span>}
+              </h3>
+              <p class="text-gray-400 text-sm">{f.desc}</p>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- SELBST BAUEN -->
+  <section id="selbstbau" class="py-24 px-4 bg-gray-900">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">Selbst bauen</h2>
+      <p class="text-center text-gray-400 max-w-2xl mx-auto mb-16">
+        Alle Quellen sind öffentlich verfügbar. Mit etwas Elektronikkenntnissen
+        lässt sich das System vollständig selbst aufbauen.
+      </p>
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <!-- Hardware-Liste -->
+        <div>
+          <h3 class="text-xl font-bold mb-6 text-amber-400">Hardware-Liste</h3>
+          <ul class="space-y-3 text-sm">
+            {[
+              { comp: "Display",      desc: "Waveshare ESP32-S3-Touch-LCD-7 (7\", 800×480)", indent: false },
+              { comp: "Sensorboard",  desc: "Heemol ESP32-S3-DevKitC-1 (N16R8)",            indent: false },
+              { comp: "├ Horizont",   desc: "BNO055 (I²C, Pitch/Roll/Heading)",              indent: true  },
+              { comp: "├ Klima inn.", desc: "BME680 (Temperatur / Feuchte / IAQ / BSEC)",     indent: true  },
+              { comp: "├ Klima auß.", desc: "BME680 (Temperatur / Feuchte / Druck)",           indent: true  },
+              { comp: "├ Gas",        desc: "2× Wägezelle + HX711 ADC",                      indent: true  },
+              { comp: "├ Tanks",      desc: "2× Votronic kapazitive Sensoren",               indent: true  },
+              { comp: "└ Zeit",       desc: "RTC (Echtzeituhr, I²C)",                         indent: true  },
+              { comp: "Router",       desc: "Teltonika RUTX11 (LTE / WLAN / GNSS)",          indent: false },
+              { comp: "└ Relais",     desc: "2× Kfz-Relais mit Freilaufdiode",               indent: true  },
+            ].map(({ comp, desc, indent }) => (
+              <li class={`flex gap-3 ${indent ? 'pl-6 opacity-85' : ''}`}>
+                <span class={`font-semibold w-36 shrink-0 text-amber-400 ${indent ? 'font-mono text-xs pt-1' : ''}`}>{comp}</span>
+                <span class="text-gray-400">{desc}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <!-- Ressourcen -->
+        <div class="space-y-6">
+          <div class="bg-gray-800 border border-gray-700 rounded-xl p-6">
+            <h3 class="font-bold mb-2">💻 Firmware (ESP-IDF)</h3>
+            <p class="text-gray-400 text-sm mb-4">Die Firmware für Sensorboard und Display ist vollständig in C mit ESP-IDF 5.x entwickelt. Das Sensorboard-Hardware-Design entstand in KiCad.</p>
+            <a href="https://github.com/Sharki-66/womo-home-esp32" target="_blank" rel="noopener" class="text-amber-400 text-sm hover:underline">→ GitHub: Sharki-66/womo-home-esp32</a>
+          </div>
+          <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-amber-400/60 transition">
+              <h3 class="font-bold mb-2">🛠️ Schaltpläne</h3>
+            <p class="text-gray-400 text-sm mb-4">Sensorboard in KiCad, lizenziert unter CERN-OHL-P v2.</p>
+            <a href="/schaltplan" class="text-amber-400 text-sm hover:underline">→ Schaltplan ansehen →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- KAUFEN / KONTAKT -->
+  <section id="kaufen" class="py-24 px-4 bg-gray-950">
+    <div class="max-w-2xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">Fertig kaufen</h2>
+      <p class="text-gray-400 mb-12">
+        Du möchtest das System fertig aufgebaut und getestet? Schreib mir – ich kläre Verfügbarkeit, 
+        Lieferumfang und Preis individuell.
+      </p>
+      <form
+        action="mailto:info@womohome.de"
+        method="get"
+        class="bg-gray-900 border border-gray-700 rounded-2xl p-8 text-left space-y-5"
+      >
+        <div>
+          <label class="block text-sm font-semibold mb-2">Name</label>
+          <input type="text" name="name" placeholder="Max Mustermann"
+            class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-amber-400 transition" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">E-Mail</label>
+          <input type="email" name="email" placeholder="max@example.de"
+            class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-amber-400 transition" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Interesse</label>
+          <select name="interest" class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-gray-100 focus:outline-none focus:border-amber-400 transition">
+            <option value="komplett">Komplettsystem (Display + Sensorboard + Router)</option>
+            <option value="display">Nur Display-Einheit</option>
+            <option value="sensor">Nur Sensorboard</option>
+            <option value="bausatz">Bausatz / Teilkomponenten</option>
+            <option value="frage">Allgemeine Frage</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Nachricht</label>
+          <textarea name="body" rows="4" placeholder="Deine Fragen, Wünsche oder Anmerkungen..."
+            class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-amber-400 transition resize-none"></textarea>
+        </div>
+        <button type="submit"
+          class="w-full bg-amber-400 text-gray-950 font-bold py-4 rounded-xl text-lg hover:bg-amber-300 transition shadow-lg shadow-amber-400/20">
+          Anfrage senden
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="py-24 px-4 bg-gray-900">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-3xl md:text-4xl font-bold text-center mb-16">Häufige Fragen</h2>
+      <div class="space-y-6">
+        {[
+          {
+            q: "Welche Wohnmobile sind kompatibel?",
+            a: "Entwickelt und erprobt auf einem Malibu Kastenwagen mit Schaudt LT 45X Steuergerät (EBL/Panel). Grundsätzlich geeignet für alle Fahrzeuge mit 12V-Bordnetz und Schaudt-kompatiblem Anzeige-/Kontrollpanel – mit ggf. kleinen Anpassungen.",
+            link: { href: "/LT_45x.pdf", label: "📎 Bedienungsanleitung Schaudt LT 45X (PDF)" }
+          },
+          {
+            q: "Brauche ich Programmierkenntnisse zum Selbstbau?",
+            a: "Für den reinen Aufbau nach Schaltplan nein. Für Anpassungen an eigene Sensorik sind ESP-IDF-Grundkenntnisse hilfreich."
+          },
+          {
+            q: "Funktioniert das System ohne Internetverbindung?",
+            a: "Ja. Sensorboard und Display kommunizieren per RS485 vollständig offline. LTE und GPS sind optional."
+          },
+          {
+            q: "Was kostet das Komplettsystem fertig aufgebaut?",
+            a: "Preis auf Anfrage – abhängig von Komponenten und Einbau. Einfach das Kontaktformular nutzen."
+          },
+          {
+            q: "Wird das Projekt weiterentwickelt?",
+            a: "Ja. Aktuell laufende Projekte: LVGL v9 Migration, verbesserte Gaslogik, Web-Konfiguration über den Router."
+          }
+        ].map(item => (
+          <details class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden group">
+            <summary class="px-6 py-4 font-semibold cursor-pointer list-none flex justify-between items-center hover:text-amber-400 transition">
+              {item.q}
+              <span class="text-gray-500 group-open:rotate-180 transition-transform">▾</span>
+            </summary>
+            <p class="px-6 pb-5 text-gray-400 text-sm leading-relaxed">
+              {item.a}
+              {item.link && <a href={item.link.href} target="_blank" rel="noopener" class="block mt-2 text-amber-400 hover:underline">{item.link.label}</a>}
+            </p>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="py-10 px-4 border-t text-center text-gray-500 text-sm" style="background:#0f0f45;border-color:rgba(255,255,255,0.10)">
+    <p class="mb-2">
+      <span class="text-amber-400 font-bold">WoMoHome</span> – Open Hardware Projekt · 
+      Entwickelt mit ❤️ und ESP-IDF
+    </p>
+    <p class="mb-2">© {new Date().getFullYear()} Hajo Harms · Alle Rechte vorbehalten</p>
+    <p>
+      <a href="/impressum" class="hover:text-amber-400 transition">Impressum</a>
+    </p>
+  </footer>
+
+  <!-- Lightbox -->
+  <div id="lb" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.92);align-items:center;justify-content:center"
+       onclick="this.style.display='none'">
+    <img id="lb-img" src="" alt="" style="max-width:95vw;max-height:90vh;border-radius:1rem;box-shadow:0 0 60px rgba(0,0,0,0.8)" />
+  </div>
+
+
+</Layout>

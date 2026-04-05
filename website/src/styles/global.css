@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@layer base {
+  /* Farbschema identisch zum Display Nacht-Modus (womo_theme.h) */
+  :root {
+    --c-bg-deep:    #191970;   /* Midnight Blue – exakt WOMO_COLOR_NIGHT_NORMAL */
+    --c-bg-mid:     #1e1e8f;   /* etwas heller */
+    --c-bg-card:    #14145a;   /* Karten / Panels */
+    --c-bg-inset:   #0f0f45;   /* Inputs / tiefste Ebene */
+    --c-border:     rgba(255,255,255,0.10);
+    --c-border-h:   rgba(251,191,36,0.5);
+  }
+}
+
+.bg-gray-950 { background: var(--c-bg-inset) !important; }
+.bg-gray-900 { background: var(--c-bg-deep)  !important; }
+.bg-gray-800 { background: var(--c-bg-card)  !important; }
+.bg-gray-700 { background: var(--c-bg-inset) !important; }
+.border-gray-800 { border-color: var(--c-border) !important; }
+.border-gray-700 { border-color: var(--c-border) !important; }
+.border-gray-600 { border-color: var(--c-border) !important; }

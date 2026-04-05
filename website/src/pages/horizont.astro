@@ -1,0 +1,291 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="WoMoHome – Künstlicher Horizont Demo" description="Live-Demo des WoMoHome Künstlichen Horizonts mit BNO055 Sensor">
+
+  <!-- NAV -->
+  <header class="fixed top-0 inset-x-0 z-50 backdrop-blur border-b" style="background:rgba(15,15,69,0.88);border-color:rgba(255,255,255,0.10)">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="/" class="flex items-center gap-1 text-gray-300 hover:text-amber-400 transition text-sm font-semibold border border-white/20 px-3 py-1.5 rounded-lg hover:border-amber-400">
+          ← Startseite
+        </a>
+        <a href="/" class="flex items-center gap-2">
+          <img src="/logo.png" alt="WoMoHome Logo" class="h-12 w-12 rounded-full" />
+          <span class="text-xl font-bold text-amber-400 tracking-tight">WoMoHome</span>
+        </a>
+      </div>
+      <nav class="hidden md:flex gap-6 text-sm text-gray-300">
+        <a href="#demo" class="hover:text-amber-400 transition">Demo</a>
+        <a href="#info" class="hover:text-amber-400 transition">Technik</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="pt-28 pb-10 px-4 text-center" style="background:linear-gradient(180deg,#0f0f45 0%,#191970 60%,#0f0f45 100%)">
+    <div class="inline-flex items-center gap-2 bg-blue-400/10 border border-blue-400/30 text-blue-300 text-xs font-semibold px-3 py-1 rounded-full mb-6">
+      ✈️ BNO055 · Echtzeit-Demo
+    </div>
+    <h1 class="text-4xl md:text-6xl font-extrabold mb-4">Künstlicher Horizont</h1>
+    <p class="text-gray-400 max-w-xl mx-auto">
+      Der Sensorboard-Webserver liefert diese Anzeige als Webseite – abrufbar von jedem Handy, Tablet oder Autoradio im WLAN. Hier läuft die Demo mit simulierten Bewegungsdaten.
+    </p>
+  </section>
+
+  <!-- DEMO -->
+  <section id="demo" style="background:linear-gradient(180deg,#191970 0%,#0f0f45 100%);" class="px-4 pb-16">
+    <div class="max-w-lg mx-auto">
+
+      <!-- Horizont-Widget (1:1 aus horizon.html übernommen) -->
+      <div style="background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01));border-radius:12px;padding:18px;border:1px solid rgba(255,255,255,0.06);">
+        <h2 style="margin:4px 0 6px;font-size:20px;text-align:center;color:#e6eef2;font-family:Inter,system-ui,sans-serif;">WoMoHome : Parkhilfe</h2>
+        <div style="width:100%;max-width:560px;aspect-ratio:1/1;margin:6px auto;">
+          <svg id="svg" viewBox="0 0 400 400" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <clipPath id="circleClip"><circle cx="200" cy="200" r="185" /></clipPath>
+              <linearGradient id="skyGrad" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0" stop-color="#9fe0ff"/><stop offset="1" stop-color="#7fd1ff"/>
+              </linearGradient>
+            </defs>
+            <circle cx="200" cy="200" r="196" fill="#0d1f35" opacity="0.98"/>
+            <circle cx="200" cy="200" r="188" fill="#0b1828"/>
+            <circle cx="200" cy="200" r="186" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+            <g clip-path="url(#circleClip)">
+              <g id="horizon" transform="rotate(0 200 200) translate(0,0)">
+                <rect x="-800" y="-800" width="2400" height="1600" fill="url(#skyGrad)"/>
+                <rect x="-800" y="200" width="2400" height="1200" fill="#be7326"/>
+              </g>
+              <g id="heading-clip-group">
+                <g id="heading-band" transform="translate(0,52)"></g>
+              </g>
+              <g id="vscale" transform="translate(200,200)" fill="#fff" font-family="Inter,Arial,Helvetica,sans-serif"></g>
+              <g id="roll-scale-left"></g>
+              <circle cx="200" cy="200" r="185" fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="12"/>
+              <circle cx="200" cy="200" r="186" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            </g>
+            <g id="axis-rot" transform="rotate(0 200 200)">
+              <g transform="translate(200,200)">
+                <line x1="-178" x2="178" y1="0" y2="0" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.98"/>
+                <rect x="-2" y="-8" width="4" height="16" rx="2" fill="#ffffff"></rect>
+              </g>
+            </g>
+            <circle cx="200" cy="200" r="2.6" fill="#dcdcdc" stroke="rgba(0,0,0,0.18)" stroke-width="0.9"></circle>
+          </svg>
+        </div>
+
+        <!-- Wertanzeige -->
+        <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:10px;font-family:Inter,system-ui,sans-serif;">
+          {[
+            { id: "rollVal",  label: "ROLL"  },
+            { id: "pitchVal", label: "PITCH" },
+          ].map(({ id, label }) => (
+            <div style="background:rgba(255,255,255,0.04);padding:10px 12px;border-radius:10px;min-width:86px;text-align:center;">
+              <div style="font-size:12px;color:#9aa6ad;">{label}</div>
+              <div id={id} style="font-weight:700;font-size:18px;color:#fff;">--.-°</div>
+            </div>
+          ))}
+        </div>
+
+        <!-- Kalibrierung -->
+        <div style="margin-top:12px;background:rgba(255,255,255,0.03);padding:10px 12px;border-radius:10px;font-family:Inter,system-ui,sans-serif;">
+          <div style="font-size:12px;color:#9aa6ad;margin-bottom:4px;">Kalibrierung (SYS / G / A / M)</div>
+          <div style="display:flex;gap:8px;font-weight:700;font-size:18px;align-items:center;">
+            <span id="calSys"  class="cal-0">3</span> /
+            <span id="calGyro" class="cal-3">3</span> /
+            <span id="calAccel"class="cal-3">3</span> /
+            <span id="calMag"  class="cal-2">2</span>
+          </div>
+        </div>
+        <div style="margin-top:10px;text-align:center;font-size:14px;color:#a0cfff;font-family:Inter,system-ui,sans-serif;">
+          ✨ Demo-Modus – simulierte Werte
+        </div>
+      </div>
+
+      <!-- Auto-Demo startet automatisch -->
+      <div class="mt-6 flex justify-center">
+        <button id="btnStop" class="bg-blue-800/60 hover:bg-blue-700/80 border border-blue-500/40 text-blue-200 text-sm font-semibold px-6 py-2 rounded-lg transition">⏹ Anhalten</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- TECHNIK -->
+  <section id="info" class="py-20 px-4" style="background:#0f0f45;">
+    <div class="max-w-4xl mx-auto">
+      <h2 class="text-3xl font-bold text-center mb-12">Technik dahinter</h2>
+      <div class="grid md:grid-cols-3 gap-6">
+        {[
+          { icon: "🧭", title: "BNO055 IMU", desc: "9-Achsen-Sensor (Accel + Gyro + Mag) mit eingebautem Fusionsalgorithmus. Liefert absolute Orientierung in Quaternionen / Euler-Winkeln." },
+          { icon: "🌐", title: "Webserver auf Sensorboard", desc: "Der ESP32-S3 des Sensorboards betreibt einen HTTP-Server (ESP-IDF httpd). Die Horizont-Seite liegt im SPIFFS-Flash und wird im WLAN an jedes Gerät ausgeliefert – Handy, Tablet, Autoradio." },
+          { icon: "⚡", title: "ESP32-S3 Sensorboard", desc: "Läuft mit ESP-IDF 5.x. Der IMU-Task liest den BNO055 und stellt die Daten über eine JSON-API (/api/imu) für die Webseite bereit." },
+        ].map(c => (
+          <div class="rounded-xl p-6 flex flex-col gap-3" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);">
+            <span class="text-4xl">{c.icon}</span>
+            <h3 class="font-bold">{c.title}</h3>
+            <p class="text-gray-400 text-sm leading-relaxed">{c.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="py-10 px-4 border-t border-blue-900/40 text-center text-gray-500 text-sm" style="background:#0f0f45;">
+    <p><span class="text-amber-400 font-bold">WoMoHome</span> &ndash; <a href="/" class="hover:text-amber-400 transition">← Startseite</a></p>
+  </footer>
+
+</Layout>
+
+<style>
+  body { background: #191970 !important; }
+  .cal-0{color:#ff4d4f}
+  .cal-1{color:#ffb347}
+  .cal-2{color:#ffe156}
+  .cal-3{color:#00c853}
+</style>
+
+<script>
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var cx = 200, cy = 200;
+  var pitchFactor = 6, maxScale = 15;
+  var halfArc = 45, anglePerUnit = halfArc / maxScale;
+  var scaleR = 170, innerR = 154, labelInnerR = innerR - 12;
+
+  var rollValBox    = document.getElementById('rollVal');
+  var pitchValBox   = document.getElementById('pitchVal');
+  var horizon       = document.getElementById('horizon');
+  var axisRot       = document.getElementById('axis-rot');
+  var vscale        = document.getElementById('vscale');
+  var rollScaleLeft = document.getElementById('roll-scale-left');
+  var btnStop       = document.getElementById('btnStop');
+
+  function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+  function rad(d) { return d * Math.PI / 180; }
+
+  function buildVScale() {
+    vscale.innerHTML = '';
+    for (var deg = -15; deg <= 15; deg++) {
+      var y = -deg * pitchFactor;
+      var major = deg % 5 === 0;
+      var line = document.createElementNS(SVG_NS, 'line');
+      line.setAttribute('x1', major ? '-10' : '-4');
+      line.setAttribute('x2', major ?  '10' :  '4');
+      line.setAttribute('y1', String(y));
+      line.setAttribute('y2', String(y));
+      line.setAttribute('stroke', '#fff');
+      line.setAttribute('stroke-width', major ? '1.2' : '1.0');
+      line.setAttribute('stroke-linecap', 'round');
+      vscale.appendChild(line);
+      if (major) {
+        var t = document.createElementNS(SVG_NS, 'text');
+        t.setAttribute('x', '22');
+        t.setAttribute('y', String(y + 4));
+        t.setAttribute('fill', '#fff');
+        t.setAttribute('font-size', '14');
+        t.setAttribute('text-anchor', 'start');
+        t.textContent = deg + '\u00b0';
+        vscale.appendChild(t);
+      }
+    }
+  }
+
+  var markerUp, markerDown;
+  function buildRollScale() {
+    rollScaleLeft.innerHTML = '';
+    function addTick(angleDeg, major, label) {
+      var theta = rad(angleDeg);
+      var xo = cx + scaleR * Math.cos(theta), yo = cy - scaleR * Math.sin(theta);
+      var xi = cx + innerR * Math.cos(theta), yi = cy - innerR * Math.sin(theta);
+      var l = document.createElementNS(SVG_NS, 'line');
+      l.setAttribute('x1', String(xi)); l.setAttribute('y1', String(yi));
+      l.setAttribute('x2', String(xo)); l.setAttribute('y2', String(yo));
+      l.setAttribute('stroke', major ? '#fff' : 'rgba(255,255,255,0.6)');
+      l.setAttribute('stroke-width', major ? '3' : '1.2');
+      l.setAttribute('stroke-linecap', 'round');
+      rollScaleLeft.appendChild(l);
+      if (label !== null) {
+        var lx = cx + labelInnerR * Math.cos(theta);
+        var ly = cy - labelInnerR * Math.sin(theta);
+        var t = document.createElementNS(SVG_NS, 'text');
+        t.setAttribute('x', String(lx)); t.setAttribute('y', String(ly));
+        t.setAttribute('fill', '#fff'); t.setAttribute('font-size', '14');
+        t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'middle');
+        t.textContent = label;
+        rollScaleLeft.appendChild(t);
+      }
+    }
+    addTick(180, true, '0\u00b0');
+    for (var v = 1; v <= maxScale; v++) {
+      addTick(180 - v * anglePerUnit, v % 5 === 0, v % 5 === 0 ? '+' + v + '\u00b0' : null);
+      addTick(180 + v * anglePerUnit, v % 5 === 0, v % 5 === 0 ? '-' + v + '\u00b0' : null);
+    }
+    markerUp   = document.createElementNS(SVG_NS, 'circle');
+    markerDown = document.createElementNS(SVG_NS, 'circle');
+    [markerUp, markerDown].forEach(function(m) {
+      m.setAttribute('r', '6'); m.setAttribute('fill', '#fff'); m.setAttribute('opacity', '0');
+      rollScaleLeft.appendChild(m);
+    });
+  }
+
+  function setMarker(marker, mag, up) {
+    var clamped = Math.min(Math.abs(mag), maxScale);
+    var angleDeg = up ? (180 - clamped * anglePerUnit) : (180 + clamped * anglePerUnit);
+    var theta = rad(angleDeg);
+    marker.setAttribute('cx', String(cx + scaleR * Math.cos(theta)));
+    marker.setAttribute('cy', String(cy - scaleR * Math.sin(theta)));
+    marker.setAttribute('opacity', Math.abs(mag) > maxScale ? '0.6' : '0.98');
+  }
+
+  function updateAll(roll, pitch) {
+    var rc = clamp(roll,  -maxScale, maxScale);
+    var pc = clamp(pitch, -30, 30);
+    rollValBox.textContent  = roll.toFixed(1)  + '\u00b0';
+    pitchValBox.textContent = pitch.toFixed(1) + '\u00b0';
+    horizon.setAttribute('transform', 'rotate(' + rc + ' 200 200) translate(0,' + Math.round(pc * pitchFactor) + ')');
+    axisRot.setAttribute('transform', 'rotate(' + rc + ' 200 200)');
+    if (roll > 0) {
+      setMarker(markerUp, roll, true);
+      markerUp.setAttribute('opacity', Math.abs(roll) > maxScale ? '0.6' : '0.98');
+      markerDown.setAttribute('opacity', '0');
+    } else if (roll < 0) {
+      setMarker(markerDown, roll, false);
+      markerDown.setAttribute('opacity', Math.abs(roll) > maxScale ? '0.6' : '0.98');
+      markerUp.setAttribute('opacity', '0');
+    } else {
+      markerUp.setAttribute('opacity', '0');
+      markerDown.setAttribute('opacity', '0');
+    }
+  }
+
+  buildVScale();
+  buildRollScale();
+  updateAll(0, 0);
+
+  var autoTimer = null;
+  var running = true;
+  var t = 0;
+
+  function autoStep() {
+    t += 0.012;
+    updateAll(
+      Math.sin(t * 0.7) * 10,
+      Math.sin(t * 0.4 + 1) * 6
+    );
+    autoTimer = requestAnimationFrame(autoStep);
+  }
+
+  autoTimer = requestAnimationFrame(autoStep);
+
+  btnStop.addEventListener('click', function() {
+    if (running) {
+      cancelAnimationFrame(autoTimer);
+      autoTimer = null;
+      btnStop.textContent = '\u25b6 Fortsetzen';
+      running = false;
+    } else {
+      autoTimer = requestAnimationFrame(autoStep);
+      btnStop.textContent = '\u23f9 Anhalten';
+      running = true;
+    }
+  });
+</script>

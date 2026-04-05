@@ -1,0 +1,68 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Schaltpläne – WoMoHome" description="WoMoHome Sensorboard Schaltplan in KiCad, lizenziert unter CERN-OHL-P v2.">
+
+  <!-- NAV -->
+  <header class="fixed top-0 inset-x-0 z-50 backdrop-blur border-b" style="background:rgba(15,15,69,0.88);border-color:rgba(255,255,255,0.10)">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="/" class="flex items-center gap-1 text-gray-300 hover:text-amber-400 transition text-sm font-semibold border border-white/20 px-3 py-1.5 rounded-lg hover:border-amber-400">
+          ← Startseite
+        </a>
+        <a href="/" class="flex items-center gap-2">
+          <img src="/logo.png" alt="WoMoHome Logo" class="h-12 w-12 rounded-full" />
+          <span class="text-xl font-bold text-amber-400 tracking-tight">WoMoHome</span>
+        </a>
+      </div>
+      <nav class="hidden md:flex gap-6 text-sm text-gray-300">
+        <a href="/#features" class="hover:text-amber-400 transition">Features</a>
+        <a href="/#selbstbau" class="hover:text-amber-400 transition">Selbst bauen</a>
+        <a href="/#kaufen" class="hover:text-amber-400 transition">Kaufen</a>
+        <a href="/horizont" class="hover:text-amber-400 transition">✈️ Demo</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- INHALT -->
+  <main class="pt-24 pb-20 px-4" style="background:#191970;min-height:100vh">
+    <div class="max-w-5xl mx-auto">
+
+      <!-- Zurück + Überschrift -->
+      <!-- Überschrift -->
+      <div class="text-center mb-10">
+        <h1 class="text-3xl md:text-4xl font-extrabold mb-3">Sensorboard – Schaltplan</h1>
+        <p class="text-gray-400 text-sm">Rev. 0.2 · ESP32-S3 DevKitC-1 (N16R8) · KiCad 8 · CERN-OHL-P v2</p>
+        <p class="text-gray-500 text-xs mt-1">
+          Enthält: 2× BME680 (I²C) · BNO055 (IMU) · HX711 (Wägezellen) · PCF8523 (RTC) · RS485 · Batterie-ADC · Tank-ADC
+        </p>
+      </div>
+
+      <!-- Schaltplan SVG -->
+      <div class="rounded-2xl overflow-hidden border border-white/10 bg-white shadow-2xl">
+        <img src="/Sensorboard.svg" alt="WoMoHome Sensorboard Schaltplan Rev. 0.2" class="w-full h-auto" />
+      </div>
+
+      <!-- Metadaten + Links -->
+      <div class="mt-8 grid sm:grid-cols-3 gap-4 text-sm">
+        <div class="bg-white/5 border border-white/10 rounded-xl p-4">
+          <div class="text-amber-400 font-semibold mb-1">Lizenz</div>
+          <div class="text-gray-300">CERN Open Hardware Licence<br/>Permissive v2 (CERN-OHL-P)</div>
+          <a href="https://ohwr.org/cern_ohl_p_v2.txt" target="_blank" rel="noopener" class="text-amber-400 text-xs hover:underline mt-1 block">→ Lizenztext</a>
+        </div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-4">
+          <div class="text-amber-400 font-semibold mb-1">Quelldateien</div>
+          <div class="text-gray-300">KiCad 8 · .kicad_sch<br/>Gerber + iBOM enthalten</div>
+          <a href="https://github.com/Sharki-66/womo-home-esp32/tree/main/hardware/schematics/Sensorboard" target="_blank" rel="noopener" class="text-amber-400 text-xs hover:underline mt-1 block">→ GitHub</a>
+        </div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-4">
+          <div class="text-amber-400 font-semibold mb-1">Bedienungsanleitung</div>
+          <div class="text-gray-300">Schaudt LT 45X<br/>EBL/Kontrollpanel</div>
+          <a href="/LT_45x.pdf" target="_blank" rel="noopener" class="text-amber-400 text-xs hover:underline mt-1 block">→ PDF herunterladen</a>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+</Layout>

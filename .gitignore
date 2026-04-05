@@ -28,6 +28,11 @@ hardware/schematics/*/bom/
 .vscode/
 .idea/
 *.swp
+
+# Website
+website/node_modules/
+website/.astro/
+website/dist/
 *~
 
 # Credentials (niemals einchecken!)
