@@ -113,4 +113,4 @@ Privates Projekt. Siehe [LICENSE](LICENSE).
 
 | Nivellieren |
 |---|
-| ![Park-Hilfe](website/public/photos/Screen18.jpg) |
+| ![Park-Hilfe](website/public/photos/Screen18.png  ) |
