@@ -6,7 +6,7 @@
 
 Wer mit dem Wohnmobil unterwegs ist, kennt das Problem: Wie viel Gas ist noch in der Flasche? Reicht der Strom? Ist der Frischwassertank bald leer? Wie kalt wird es draußen über Nacht? Die serienmäßigen Anzeigen im Fahrzeug sind oft ungenau, schlecht ablesbar oder schlicht nicht vorhanden.
 
-**WoMo Home** ersetzt das klassische EBL-Panel durch ein selbstgebautes System, das alle Betriebsdaten des Wohnmobils erfasst, intelligent aufbereitet und auf einem 7-Zoll-Touchdisplay darstellt – jederzeit aktuell, übersichtlich und von überall im Fahrzeug erreichbar.
+**WoMo Home** ersetzt das klassische EBL-Panel (LT 45x) durch ein selbstgebautes System, das alle Betriebsdaten des Wohnmobils erfasst, intelligent aufbereitet und auf einem 7-Zoll-Touchdisplay darstellt – jederzeit aktuell, übersichtlich und von überall im Fahrzeug erreichbar.
 
 ## 🎯 Was wird überwacht?
 
