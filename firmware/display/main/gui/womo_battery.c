@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "womo_battery.h"
 #include "womo_fonts_german.h"
 #include "esp_log.h"

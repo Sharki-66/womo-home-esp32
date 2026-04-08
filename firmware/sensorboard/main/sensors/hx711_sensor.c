@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "sensors/hx711_sensor.h"
 
 #include "freertos/FreeRTOS.h"

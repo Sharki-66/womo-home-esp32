@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 /**
  * WiFi STA-Modul – verbindet sich mit dem RUTX11 Router.
  *

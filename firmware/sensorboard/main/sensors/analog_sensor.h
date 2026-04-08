@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #pragma once
 
 #include <stdint.h>
@@ -14,8 +20,13 @@ esp_err_t analog_init(void);
 esp_err_t analog_read_raw(int channel, int *raw_out);
 
 // Liest und konvertiert einen ADC1-Kanal in Millivolt.
-// Spannungsteiler 82kΩ/15kΩ: Faktor 97/15 wird intern angewendet.
+// Batterie-Kanaele: Spannungsteiler 100k/22k wird intern beruecksichtigt.
+// Tank-Kanaele: direkte 0-1V Messung, optionaler Kalibrierfaktor aus sensor_config.h.
 esp_err_t analog_read_mv(int channel, int *mv_out);
+
+// Wie analog_read_mv(), aber mittelt über 'samples' Einzelmessungen
+// (Median-of-3 Variante: bei 3 Samples wird der Median genommen).
+esp_err_t analog_read_mv_avg(int channel, int *mv_out, int samples);
 
 #ifdef __cplusplus
 }

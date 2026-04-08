@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 /**
  * RS485 Sensor-Link – Topic-basierte Kommunikation zum Display
  *
@@ -27,8 +33,6 @@
 #include "sensors/hx711_sensor.h"
 #include "sensors/analog_sensor.h"
 #include "time/time_sync.h"
-#include "hal/buzzer.h"
-#include "hal/buzzer_settings.h"
 
 #include <math.h>
 #include <stdbool.h>
@@ -110,12 +114,19 @@ static const char *heading_to_compass(float heading_deg)
     return dirs[index];
 }
 
-static inline int adc_mv_to_percent(int mv)
+static inline int adc_mv_to_percent_cal(int mv, int empty_mv, int full_mv)
 {
-    // Tank-Sensoren: 0-1V = 0-100%
-    if (mv < 0) mv = 0;
-    if (mv > 1000) mv = 1000;
-    return (mv * 100) / 1000;
+    // Kanalbezogene Tank-Kalibrierung: EMPTY_MV..FULL_MV => 0..100%
+    if (full_mv <= empty_mv) {
+        return 0;
+    }
+    if (mv <= empty_mv) {
+        return 0;
+    }
+    if (mv >= full_mv) {
+        return 100;
+    }
+    return ((mv - empty_mv) * 100) / (full_mv - empty_mv);
 }
 
 static TickType_t ms_to_ticks(uint32_t ms)
@@ -616,8 +627,6 @@ static void rs485_publish_ctrl(void)
     cJSON_AddBoolToObject(root, "pwr_on", rs485_board_power_on());
     cJSON_AddBoolToObject(root, "radio_on", s_radio_on);
     cJSON_AddBoolToObject(root, "ac_present", rs485_ac_present());
-    cJSON_AddBoolToObject(root, "buzzer_on", buzzer_settings_is_enabled());
-    cJSON_AddBoolToObject(root, "touch_click_on", buzzer_settings_touch_click_enabled());
 
     // RTC-Batteriestatus mitübertragen
     time_sync_status_t ts_status = {0};
@@ -776,13 +785,13 @@ static void rs485_publish_bat(void)
     cJSON_AddStringToObject(root, "type", "bat");
 
     // Batterie 1 (Kfz): <1V = nicht angeschlossen → nc=true
-    bool batt1_ok = (analog_read_mv(SENSOR_BATT1_ADC_CHANNEL, &mv) == ESP_OK);
+    bool batt1_ok = (analog_read_mv_avg(SENSOR_BATT1_ADC_CHANNEL, &mv, 3) == ESP_OK);
     bool batt1_connected = batt1_ok && (mv > 1000);  // > 1V = verbunden
     cJSON_AddNumberToObject(root, "b1", round2(batt1_connected ? (double)mv / 1000.0 : 0.0));
     cJSON_AddBoolToObject(root, "nc1", !batt1_connected);
 
     // Batterie 2 (Board): <1V = nicht angeschlossen → nc=true
-    bool batt2_ok = (analog_read_mv(SENSOR_BATT2_ADC_CHANNEL, &mv) == ESP_OK);
+    bool batt2_ok = (analog_read_mv_avg(SENSOR_BATT2_ADC_CHANNEL, &mv, 3) == ESP_OK);
     bool batt2_connected = batt2_ok && (mv > 1000);  // > 1V = verbunden
     cJSON_AddNumberToObject(root, "b2", round2(batt2_connected ? (double)mv / 1000.0 : 0.0));
     cJSON_AddBoolToObject(root, "nc2", !batt2_connected);
@@ -933,10 +942,10 @@ static void rs485_publish_tank(void)
     if (!root) return;
     cJSON_AddStringToObject(root, "type", "tank");
 
-    bool tank1_ok = (analog_read_mv(SENSOR_TANK1_ADC_CHANNEL, &mv) == ESP_OK);
-    int tank1_pct = tank1_ok ? adc_mv_to_percent(mv) : 0;
-    bool tank2_ok = (analog_read_mv(SENSOR_TANK2_ADC_CHANNEL, &mv) == ESP_OK);
-    int tank2_pct = tank2_ok ? adc_mv_to_percent(mv) : 0;
+    bool tank1_ok = (analog_read_mv_avg(SENSOR_TANK1_ADC_CHANNEL, &mv, 3) == ESP_OK);
+    int tank1_pct = tank1_ok ? adc_mv_to_percent_cal(mv, SENSOR_TANK1_EMPTY_MV, SENSOR_TANK1_FULL_MV) : 0;
+    bool tank2_ok = (analog_read_mv_avg(SENSOR_TANK2_ADC_CHANNEL, &mv, 3) == ESP_OK);
+    int tank2_pct = tank2_ok ? adc_mv_to_percent_cal(mv, SENSOR_TANK2_EMPTY_MV, SENSOR_TANK2_FULL_MV) : 0;
 
     // Verbrauchsberechnung Frischwasser (100L, Verbrauch negativ)
     double tank1_liters = tank1_ok ? (tank1_pct / 100.0) * 100.0 : 0.0;
@@ -1106,22 +1115,6 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
         s_ctrl_immediate = true;
     } else if (strcmp(cmd_str, "radio_off") == 0) {
         cmd_err = rs485_set_radio(false);
-        s_ctrl_immediate = true;
-    } else if (strcmp(cmd_str, "buzzer_warn") == 0) {
-        if (buzzer_settings_is_enabled()) buzzer_melody_level_warn();
-    } else if (strcmp(cmd_str, "buzzer_alarm") == 0) {
-        if (buzzer_settings_is_enabled()) buzzer_alarm();
-    } else if (strcmp(cmd_str, "buzzer_on") == 0) {
-        buzzer_settings_set_enabled(true);
-        s_ctrl_immediate = true;
-    } else if (strcmp(cmd_str, "buzzer_off") == 0) {
-        buzzer_settings_set_enabled(false);
-        s_ctrl_immediate = true;
-    } else if (strcmp(cmd_str, "touch_click_on") == 0) {
-        buzzer_settings_set_touch_click(true);
-        s_ctrl_immediate = true;
-    } else if (strcmp(cmd_str, "touch_click_off") == 0) {
-        buzzer_settings_set_touch_click(false);
         s_ctrl_immediate = true;
     } else if (strcmp(cmd_str, "imu_zero") == 0) {
         cmd_err = bno055_app_zero_pitch_roll();

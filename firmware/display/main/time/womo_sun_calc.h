@@ -1,4 +1,10 @@
 /*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/*
  * WoMo Sun Calculation
  * 
  * Calculates sunrise and sunset times based on GPS coordinates and date

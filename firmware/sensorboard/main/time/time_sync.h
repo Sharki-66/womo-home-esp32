@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #pragma once
 
 #include "esp_err.h"
@@ -9,14 +15,14 @@ extern "C" {
 #endif
 
 /**
- * @brief Zeit-Synchronisations-Modul für Modem-Board
- * 
+ * @brief Zeit-Synchronisations-Modul für Sensorboard
+ *
  * Hierarchie der Zeitquellen:
- * 1. GPS (primär, ~1s Genauigkeit)
- * 2. LTE Netzwerkzeit via AT+CCLK (sekundär, ~1s Genauigkeit)
- * 3. PCF8523 RTC (Backup offline, Drift ~2ppm = ~5min/Monat)
- * 
- * Modem ist Zeitzentrale: Zeit wird via RS485 an Display verteilt.
+ * 1. NTP via WiFi (primär, nach Router-Verbindung)
+ * 2. PCF8523 RTC (Backup offline, Drift ~2ppm = ~5min/Monat)
+ *
+ * GPS/LTE-Funktionen sind für zukünftige Erweiterung vorgesehen,
+ * werden aktuell auf dem Sensorboard nicht aufgerufen.
  */
 
 /**

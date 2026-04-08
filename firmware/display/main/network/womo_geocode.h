@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #ifndef WOMO_GEOCODE_H
 #define WOMO_GEOCODE_H
 

@@ -1,7 +1,7 @@
 /*
- * SPDX-FileCopyrightText: 2023-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
  *
- * SPDX-License-Identifier: CC0-1.0
+ * SPDX-License-Identifier: MIT
  */
 
 #include "hardware/waveshare_rgb_lcd_port.h"
@@ -33,6 +33,7 @@
 #include "nvs.h"
 #include "sdkconfig.h"
 #include <stdio.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include <dirent.h>
 #include <string.h>
@@ -63,6 +64,7 @@ static const char *PLACEHOLDER_GPS = "GPS : ---";
 #define QUIET_TOUCH_TIMEOUT_MS (5 * 60 * 1000)
 
 #include "gui/womo_thresholds.h"
+/* lodepng nicht mehr benötigt – Screenshot schreibt BMP ohne Zwischenpuffer */
 
 // Default thresholds werden jetzt über womo_thresholds.h verwaltet (veränderbar via Einstellungen)
 
@@ -319,6 +321,11 @@ static void backlight_start_quiet_timer(void);
 static void backlight_stop_quiet_timer(void);
 static void wifi_autoretry_task(void *arg);
 static void router_poll_task(void *arg);
+#if WOMO_ENABLE_SCREENSHOT
+static void screenshot_task(void *arg);
+static void take_screenshot(void);
+static void screenshot_indev_cb(lv_event_t *e);
+#endif /* WOMO_ENABLE_SCREENSHOT */
 static bool is_quiet_hours(const struct tm *timeinfo);
 static void backlight_set(bool on);
 static bool theme_mode_is_daylike(womo_theme_mode_t mode);
@@ -1055,9 +1062,9 @@ static void rs485_event_handler(womo_rs485_event_t event, void *user_data)
     switch (event) {
         case WOMO_RS485_EVENT_HELLO:
             ESP_LOGI(TAG, "RS485 hello empfangen - Sensorboard ist bereit");
-            if (rs485_waiting_for_handshake) {
-                rs485_waiting_for_handshake = false;
-            }
+            rs485_waiting_for_handshake = false;
+            /* Immer mit display_ready antworten – auch nach Sensor-Neustart */
+            womo_rs485_send_display_ready();
             break;
         case WOMO_RS485_EVENT_HEARTBEAT:
             // Heartbeats dienen aktuell nur zur Diagnose
@@ -2312,12 +2319,15 @@ gas_done:
     if (gps_label) {
         bool gps_ready = false;
         if (snapshot.gps.valid) {
-            // Nur anzeigen, wenn Koordinaten plausibel und genug Satelliten vorhanden sind
+            // Nur anzeigen, wenn Koordinaten plausibel sind.
+            // sats_ok: RUTX11 meldet manchmal 0 Satelliten trotz gültigem Fix (fix_status>=2 bereits
+            // in womo_router_get_gps() geprüft) – daher keine Filterung nach Satellitenanzahl.
+            // conf_ok: RUTX11 liefert accuracy 0 wenn nicht unterstützt; 0 = unbekannt, nicht ungültig
+            // → >= 0.0f akzeptieren (negative Werte wären Datenfehler).
             const bool coords_finite = isfinite(snapshot.gps.latitude) && isfinite(snapshot.gps.longitude);
             const bool coords_nonzero = fabs(snapshot.gps.latitude) + fabs(snapshot.gps.longitude) > 0.0001;
-            const bool sats_ok = snapshot.gps.satellites > 0;
-            const bool conf_ok = !isfinite(snapshot.gps.confidence_m) || snapshot.gps.confidence_m > 0.0f;
-            gps_ready = coords_finite && coords_nonzero && sats_ok && conf_ok;
+            const bool conf_ok = !isfinite(snapshot.gps.confidence_m) || snapshot.gps.confidence_m >= 0.0f;
+            gps_ready = coords_finite && coords_nonzero && conf_ok;
         }
 
         if (gps_ready) {
@@ -2927,16 +2937,36 @@ static void router_poll_task(void *arg)
     (void)arg;
     const TickType_t interval = pdMS_TO_TICKS(ROUTER_POLL_INTERVAL_MS);
     static int poll_count = 0;
+    static bool was_connected = false;
 
     /* Erste Poll-Abfrage sofort wenn WiFi connected */
 
     for (;;) {
         /* WiFi-Watchdog: Versucht automatisch zu reconnecten wenn Verbindung verloren */
         womo_wifi_watchdog();
-        
-        if (!womo_wifi_is_connected()) {
+
+        bool now_connected = womo_wifi_is_connected();
+
+        if (!now_connected) {
+            if (was_connected) {
+                /* Verbindung verloren: gecachte Router-Daten löschen damit die
+                 * Anzeige nicht "hängt" und nach Reconnect sofort neu pollt. */
+                if (s_router_mutex) {
+                    xSemaphoreTake(s_router_mutex, portMAX_DELAY);
+                    memset(&s_router_wifi, 0, sizeof(s_router_wifi));
+                    memset(&s_router_lte,  0, sizeof(s_router_lte));
+                    xSemaphoreGive(s_router_mutex);
+                }
+                poll_count = 0;  /* Nach Reconnect wieder mit kurzen Intervallen pollen */
+                was_connected = false;
+            }
             vTaskDelay(interval);
             continue;
+        }
+
+        if (!was_connected) {
+            was_connected = true;
+            poll_count = 0;  /* Ersten Poll nach Reconnect sofort und mit dichten Intervallen */
         }
 
         poll_count++;
@@ -3316,9 +3346,212 @@ void router_leds_button_event_cb(lv_event_t *event)
     womo_router_leds_modal_show(lv_scr_act(), &snapshot);
 }
 
+/* ── Screenshot ─────────────────────────────────────────────────────────── */
+#if WOMO_ENABLE_SCREENSHOT
+
+/* Screenshot-Implementierung: liest Frame-Buffer direkt (RGB565, bereits im PSRAM).
+ * Schreibt BMP 24-Bit ohne Zwischenpuffer – jede Zeile (~2400 B Stack-Puffer).
+ * Peak-RAM-Verbrauch: < 4 KB. Keine große Allokation, kein OOM-Risiko.
+ */
+
+/* RGB565 → RGB888 BGR-Reihenfolge für BMP für eine einzelne Zeile */
+static void rgb565_row_to_bgr888(const uint16_t *src, uint8_t *dst, uint32_t width)
+{
+    for (uint32_t x = 0; x < width; x++) {
+        uint16_t px = src[x];
+        dst[x * 3 + 0] = (uint8_t)(((px >>  0) & 0x1F) * 255 / 31);  /* B */
+        dst[x * 3 + 1] = (uint8_t)(((px >>  5) & 0x3F) * 255 / 63);  /* G */
+        dst[x * 3 + 2] = (uint8_t)(((px >> 11) & 0x1F) * 255 / 31);  /* R */
+    }
+}
+
+static void screenshot_task(void *arg)
+{
+    volatile bool *running = (volatile bool *)arg;
+
+    if (!womo_sd_is_mounted()) {
+        ESP_LOGW(TAG, "Screenshot: SD-Card nicht eingehängt");
+        if (running) *running = false;
+        vTaskDelete(NULL);
+        return;
+    }
+
+    int mk = mkdir(WOMO_SCREENSHOT_DIR, 0777);
+    if (mk != 0 && errno != EEXIST) {
+        ESP_LOGE(TAG, "Screenshot: mkdir fehlgeschlagen errno=%d (%s)", errno, strerror(errno));
+        if (running) *running = false;
+        vTaskDelete(NULL);
+        return;
+    }
+    ESP_LOGI(TAG, "Screenshot: Verzeichnis %s (%s)", WOMO_SCREENSHOT_DIR,
+             mk == 0 ? "angelegt" : "existiert bereits");
+
+    /* Schreibbarkeit der SD-Karte vorab testen */
+    {
+        char test_path[64];
+        snprintf(test_path, sizeof(test_path), WOMO_SCREENSHOT_DIR "/.wtest");
+        FILE *tf = fopen(test_path, "wb");
+        if (!tf) {
+            ESP_LOGE(TAG, "Screenshot: SD-Karte nicht beschreibbar (errno=%d: %s) "
+                     "– Schreibschutz-Tab oder defektes Dateisystem?", errno, strerror(errno));
+            if (running) *running = false;
+            vTaskDelete(NULL);
+            return;
+        }
+        fclose(tf);
+        remove(test_path);
+        ESP_LOGI(TAG, "Screenshot: SD-Karte beschreibbar");
+    }
+
+    /* Frame-Buffer holen – existiert bereits im PSRAM, 0 Bytes extra */
+    void *fb0 = NULL, *fb1 = NULL;
+    esp_err_t fb_err = womo_lcd_get_frame_buffer(&fb0, &fb1);
+    if (fb_err != ESP_OK || !fb0) {
+        ESP_LOGE(TAG, "Screenshot: Frame-Buffer nicht verfügbar (%s)", esp_err_to_name(fb_err));
+        if (running) *running = false;
+        vTaskDelete(NULL);
+        return;
+    }
+    const uint16_t *fb = (const uint16_t *)fb0;
+
+    const uint32_t W = EXAMPLE_LCD_H_RES; /* 800 */
+    const uint32_t H = EXAMPLE_LCD_V_RES; /* 480 */
+
+    /* Dateiname (.bmp) */
+    time_t now = time(NULL);
+    struct tm tm_now;
+    localtime_r(&now, &tm_now);
+    char path[64];
+    snprintf(path, sizeof(path), WOMO_SCREENSHOT_DIR "/screen_%02d%02d%02d.bmp",
+             tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec);
+
+    /* BMP-Header aufbauen (54 Bytes: BITMAPFILEHEADER + BITMAPINFOHEADER).
+     * 800×3 = 2400 B pro Zeile, bereits 4-Byte-aligniert – kein Padding nötig. */
+    const uint32_t row_bytes   = W * 3u;          /* 2400 */
+    const uint32_t pixel_bytes = row_bytes * H;    /* 1 152 000 */
+    const uint32_t file_size   = 54u + pixel_bytes;
+    uint8_t hdr[54];
+    memset(hdr, 0, sizeof(hdr));
+    /* BITMAPFILEHEADER */
+    hdr[0] = 'B'; hdr[1] = 'M';
+    hdr[2]  = (uint8_t)(file_size);         hdr[3]  = (uint8_t)(file_size >> 8);
+    hdr[4]  = (uint8_t)(file_size >> 16);   hdr[5]  = (uint8_t)(file_size >> 24);
+    hdr[10] = 54; /* Pixel-Daten-Offset */
+    /* BITMAPINFOHEADER */
+    hdr[14] = 40; /* Header-Größe */
+    hdr[18] = (uint8_t)(W);        hdr[19] = (uint8_t)(W >> 8);
+    hdr[20] = (uint8_t)(W >> 16);  hdr[21] = (uint8_t)(W >> 24);
+    hdr[22] = (uint8_t)(H);        hdr[23] = (uint8_t)(H >> 8);
+    hdr[24] = (uint8_t)(H >> 16);  hdr[25] = (uint8_t)(H >> 24);
+    hdr[26] = 1;  /* Farbebenen */
+    hdr[28] = 24; /* Bits pro Pixel */
+    /* Kompression=0, imageSize=0, xPPM=0, yPPM=0, Farbtabelle=0 */
+
+    FILE *fp = fopen(path, "wb");
+    if (!fp) {
+        ESP_LOGE(TAG, "Screenshot: fopen fehlgeschlagen: %s (errno=%d)", path, errno);
+        if (running) *running = false;
+        vTaskDelete(NULL);
+        return;
+    }
+    if (fwrite(hdr, 1, sizeof(hdr), fp) != sizeof(hdr)) {
+        int err = errno;
+        ESP_LOGE(TAG, "Screenshot: Header-Schreibfehler errno=%d (%s)", err, strerror(err));
+        fclose(fp);
+        remove(path);
+        if (running) *running = false;
+        vTaskDelete(NULL);
+        return;
+    }
+
+    /* BMP speichert Zeilen von unten nach oben → reverse row order.
+     * row_buf ist einzige Allokation: 2400 Bytes auf dem Task-Stack. */
+    uint8_t row_buf[EXAMPLE_LCD_H_RES * 3u];
+    bool write_ok = true;
+    int write_errno = 0;
+    for (int y = (int)H - 1; y >= 0; y--) {
+        rgb565_row_to_bgr888(fb + (uint32_t)y * W, row_buf, W);
+        if (fwrite(row_buf, 1, row_bytes, fp) != row_bytes) {
+            write_errno = errno;
+            write_ok = false;
+            break;
+        }
+    }
+    int close_err = fclose(fp);
+    if (close_err != 0 && write_ok) {
+        write_errno = errno;
+        write_ok = false;
+    }
+
+    if (write_ok) {
+        ESP_LOGI(TAG, "Screenshot gespeichert: %s (%"PRIu32" KB, %"PRIu32"x%"PRIu32")",
+                 path, file_size / 1024u, W, H);
+    } else {
+        ESP_LOGE(TAG, "Screenshot: Schreibfehler errno=%d (%s)", write_errno, strerror(write_errno));
+        remove(path);
+    }
+    if (running) *running = false;
+    vTaskDelete(NULL);
+}
+
+static void take_screenshot(void)
+{
+    static volatile bool s_screenshot_running = false;
+    if (s_screenshot_running) {
+        ESP_LOGW(TAG, "Screenshot läuft bereits");
+        return;
+    }
+    s_screenshot_running = true;
+    BaseType_t rc = xTaskCreateWithCaps(screenshot_task, "screenshot",
+                                         WOMO_SCREENSHOT_STACK_SIZE,
+                                         (void *)&s_screenshot_running,
+                                         WOMO_SCREENSHOT_TASK_PRIORITY, NULL,
+                                         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (rc != pdPASS) {
+        s_screenshot_running = false;
+        ESP_LOGE(TAG, "Screenshot-Task konnte nicht gestartet werden");
+    }
+}
+
+#endif /* WOMO_ENABLE_SCREENSHOT */
+
+/* Gesetzt beim Long-Press, konsumiert beim folgenden CLICKED-Event.
+ * Verhindert Backlight-Toggle nach einem Long-Press-Screenshot. */
+static volatile bool s_long_press_consumed = false;
+
+#if WOMO_ENABLE_SCREENSHOT
+/* Globaler Indev-Long-Press-Handler: Screenshot, unabhängig von offenem Modal.
+ * Läuft auf dem Indev direkt – kein Widget muss den Touch erhalten.
+ * Kein Backlight-Toggle hier: nur Screenshot, s_long_press_consumed setzen. */
+static void screenshot_indev_cb(lv_event_t *e)
+{
+    if (lv_event_get_code(e) != LV_EVENT_LONG_PRESSED) return;
+    if (!backlight_on) return;   /* Display aus – nichts tun */
+
+    ESP_LOGI(TAG, "Long-Press → Screenshot");
+    take_screenshot();
+
+    /* Nachfolgenden CLICKED-Event auf allen Widgets blockieren */
+    s_long_press_consumed = true;
+    lv_indev_t *indev = lv_event_get_indev(e);
+    if (indev) lv_indev_reset(indev, NULL);
+}
+#endif /* WOMO_ENABLE_SCREENSHOT */
+
+
 static void backlight_button_event_cb(lv_event_t *event)
 {
-    if (!event || lv_event_get_code(event) != LV_EVENT_CLICKED) {
+    lv_event_code_t code = lv_event_get_code(event);
+    if (!event) return;
+
+    if (code != LV_EVENT_CLICKED) {
+        return;
+    }
+
+    /* Einen Long-Press-Release absorbieren und ignorieren */
+    if (s_long_press_consumed) {
+        s_long_press_consumed = false;
+        ESP_LOGD(TAG, "Backlight button: Long-Press-Release ignoriert");
         return;
     }
 
@@ -3632,7 +3865,7 @@ static void radio_send_timer_cb(lv_timer_t *timer)
 
 static void classic_button_event_cb(lv_event_t *event)
 {
-    if (!event || lv_event_get_code(event) != LV_EVENT_CLICKED) {
+    if (!event || lv_event_get_code(event) != LV_EVENT_LONG_PRESSED) {
         return;
     }
     // Debounce: vorherigen noch nicht gesendeten Befehl abbrechen
@@ -3943,7 +4176,7 @@ void app_main()
         lv_obj_set_style_border_width(classic_btn, 0, 0);
         lv_obj_set_style_border_color(classic_btn, lv_color_hex(0x7A7A7A), 0);
         lv_obj_add_flag(classic_btn, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(classic_btn, classic_button_event_cb, LV_EVENT_CLICKED, NULL);
+        lv_obj_add_event_cb(classic_btn, classic_button_event_cb, LV_EVENT_LONG_PRESSED, NULL);
         classic_label = lv_label_create(classic_btn);
         simple_toggle_button_update(classic_btn, classic_label, classic_on, "", lv_color_hex(0x2E7D32));
         update_classic_icon(lv_color_hex(0x2E7D32), classic_on);
@@ -3990,6 +4223,7 @@ void app_main()
             lv_obj_set_style_border_color(backlight_btn, lv_color_hex(0x7A7A7A), 0);
             lv_obj_add_flag(backlight_btn, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_add_event_cb(backlight_btn, backlight_button_event_cb, LV_EVENT_CLICKED, NULL);
+            lv_obj_add_event_cb(backlight_btn, backlight_button_event_cb, LV_EVENT_LONG_PRESSED, NULL);
 
             backlight_update_label(); // setzt Button-Farbe
             preload_icons();           // alle Icons einmalig von SD laden
@@ -4499,6 +4733,23 @@ void app_main()
 
         apply_text_theme_colors();
 
+#if WOMO_ENABLE_SCREENSHOT
+        /* Globaler Long-Press-Handler: Screenshot auch bei geöffnetem Modal,
+         * da der Backlight-Button dann vom Overlay verdeckt wäre. */
+        {
+            lv_indev_t *indev = lv_indev_get_next(NULL);
+            while (indev) {
+                if (lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER) {
+                    lv_indev_add_event_cb(indev, screenshot_indev_cb,
+                                         LV_EVENT_LONG_PRESSED, NULL);
+                    ESP_LOGI(TAG, "Screenshot Long-Press-Handler registriert (indev=%p)", (void*)indev);
+                    break;
+                }
+                indev = lv_indev_get_next(indev);
+            }
+        }
+#endif /* WOMO_ENABLE_SCREENSHOT */
+
         lvgl_port_unlock();
     }  // Ende LVGL-Lock
 
@@ -4591,28 +4842,32 @@ void app_main()
         lvgl_port_unlock();
     }
 
+#if WOMO_ENABLE_SCREENSHOT
     // Zweite Ducato-Variante (die aktuell NICHT gezeigte) nachladen –
     // außerhalb des LVGL-Locks, da nur PNG geladen/dekodiert wird (kein Widget-Zugriff).
     // Nach diesem Preload stehen beide Puffer bereit: Theme-Wechsel = schneller Swap.
+    // Nur wenn Screenshot aktiv: kostet ~1,5 MB PSRAM, wird für lv_snapshot_take benötigt.
     {
         womo_theme_mode_t cur_mode = womo_theme_update(WOMO_STATUS_OK);
         bool cur_is_day = theme_mode_is_daylike(cur_mode);
         load_background_image(NULL, !cur_is_day);  // NULL = kein Widget erstellen beim Preload
     }
+#endif /* WOMO_ENABLE_SCREENSHOT */
 
     // Router UCI Client initialisieren + Poll-Task VOR Backlight starten
     // damit Connectivity-Modal schneller Daten hat
     womo_router_uci_init();
     s_router_mutex = xSemaphoreCreateMutex();
     if (s_router_mutex) {
-        /* Stack MUSS im internen RAM liegen – NVS-Operationen (nvs_set_str) deaktivieren
-         * den Cache; ein PSRAM-Stack wäre danach nicht mehr erreichbar → Assert. */
-        BaseType_t rc = xTaskCreate(router_poll_task,
-                                     "router_poll",
-                                     8192,
-                                     NULL,
-                                     4,
-                                     &s_router_poll_handle);
+        /* Router-Poll macht HTTP + JSON + Mutex – kein NVS, kein Cache-Disable.
+         * PSRAM-Stack ist sicher. Interner Heap ist nach PNG-Decode fragmentiert. */
+        BaseType_t rc = xTaskCreateWithCaps(router_poll_task,
+                                             "router_poll",
+                                             8192,
+                                             NULL,
+                                             4,
+                                             &s_router_poll_handle,
+                                             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (rc != pdPASS) {
             s_router_poll_handle = NULL;
             ESP_LOGW(TAG, "Router-Poll-Task konnte nicht gestartet werden");
@@ -4631,12 +4886,13 @@ void app_main()
     }
 
     if (wifi_autoretry_handle == NULL) {
-        BaseType_t created = xTaskCreate(wifi_autoretry_task,
+        BaseType_t created = xTaskCreateWithCaps(wifi_autoretry_task,
                                          "wifi_autoretry",
                                          4096,
                                          NULL,
                                          4,
-                                         &wifi_autoretry_handle);
+                                         &wifi_autoretry_handle,
+                                         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (created != pdPASS) {
             wifi_autoretry_handle = NULL;
             ESP_LOGW(TAG, "Failed to start WiFi auto-rescan task");

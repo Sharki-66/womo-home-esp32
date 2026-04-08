@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 /**
  * @file womo_font_test.h
  * @brief Font testing utilities - demonstrates extended character sets

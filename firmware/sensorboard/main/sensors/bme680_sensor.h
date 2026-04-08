@@ -1,11 +1,23 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "esp_err.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef enum {
+	BME_CHIP_NONE = 0,
+	BME_CHIP_BME680,
+} bme_chip_type_t;
 
 typedef enum {
 	BME680_TREND_FALLING_FAST = -2,  // < -2.5 hPa/3h
@@ -17,6 +29,7 @@ typedef enum {
 
 typedef struct {
 	bool valid;
+	bme_chip_type_t chip;      // BME_CHIP_BME280 oder BME_CHIP_BME680
 	float temperature_c;
 	float humidity_pct;
 	float pressure_hpa;
@@ -44,8 +57,10 @@ typedef struct {
 } bme680_reading_t;
 
 typedef struct {
-	bme680_reading_t indoor;   // I2C 0x76
-	bme680_reading_t outdoor;  // I2C 0x77
+	bme680_reading_t indoor;
+	bme680_reading_t outdoor;
+	uint8_t indoor_addr;   // Physische I2C-Adresse (0x76 oder 0x77)
+	uint8_t outdoor_addr;
 } bme680_snapshot_t;
 
 esp_err_t bme680_app_start(void);

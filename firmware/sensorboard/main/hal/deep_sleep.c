@@ -1,8 +1,15 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "deep_sleep.h"
 #include "sensor_config.h"
 #include "esp_sleep.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
+#include "driver/rtc_io.h"
 #include "driver/touch_pad.h"
 #include "sensors/hx711_sensor.h"
 #include "sensors/bno055_sensor.h"
@@ -56,6 +63,9 @@ static void touch_monitor_task(void *arg)
     (void)arg;
     ESP_LOGI(TAG, "Touch-Monitor aktiv (GPIO%d).", SENSOR_WAKEUP_GPIO);
 
+    bool was_touched = false;
+    uint32_t log_count = 0;
+
     while (true) {
         uint32_t raw = 0;
         touch_pad_read_raw_data(WAKEUP_TOUCH_PAD, &raw);
@@ -63,17 +73,22 @@ static void touch_monitor_task(void *arg)
         int32_t delta = (int32_t)raw - (int32_t)s_initial_benchmark;
         bool touched  = (delta > (int32_t)s_threshold);
 
-        if (touched) {
+        /* Alle 5 s Diagnose-Log (50 × 100 ms) */
+        if (++log_count >= 50) {
+            ESP_LOGI(TAG, "Touch-Diag: roh=%" PRIu32 " baseline=%" PRIu32
+                     " delta=%" PRId32 " schwelle=+%" PRIu32 " touched=%d",
+                     raw, s_initial_benchmark, delta, s_threshold, (int)touched);
+            log_count = 0;
+        }
+
+        if (touched && !was_touched) {
             ESP_LOGW(TAG, "<<< TOUCH! >>> GPIO%d | roh=%" PRIu32
                      " delta=+%" PRId32 " schwelle=+%" PRIu32,
                      SENSOR_WAKEUP_GPIO, raw, delta, s_threshold);
-        } else {
-            ESP_LOGI(TAG, "kein Touch     GPIO%d | roh=%" PRIu32
-                     " delta=%" PRId32 " schwelle=+%" PRIu32,
-                     SENSOR_WAKEUP_GPIO, raw, delta, s_threshold);
         }
+        was_touched = touched;
 
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -93,6 +108,23 @@ void deep_sleep_enter(void)
              SENSOR_WAKEUP_GPIO, s_threshold);
 
     /* ── Peripherie abschalten ─────────────────────────────────────── */
+
+    /* Display 5V abschalten: GPIO7 – ZUERST, solange 5V noch stabil.
+     * KRITISCHE REIHENFOLGE:
+     *  1. rtc_gpio_init: Pad-Kontrolle an RTC übergeben
+     *  2. RTC_GPIO_MODE_INPUT_ONLY: Output-Treiber deaktivieren (wenn noch OUTPUT LOW aktiv,
+     *     würde rtc_gpio_hold_en() genau dieses LOW einfrieren → R21 verliert gegen Hold)
+     *  3. Pulldown/Pullup aus: kein interner Gegenwiderstand zu R21
+     *  4. Kurz warten: R21 (100k) lädt Gate-Kapazität auf ~5V (Source-Potential)
+     *  5. rtc_gpio_hold_en: HIGH-Zustand (Gate ≈ 5V) einfrieren → Vgs ≈ 0V → AO3401A sperrt
+     * OUTPUT HIGH (3,3V) am normalen GPIO verboten: Vgs = −1,7V → AO3401A leitet → ~300mA! */
+    rtc_gpio_init(SENSOR_DISPLAY_PWR_GPIO);
+    rtc_gpio_set_direction(SENSOR_DISPLAY_PWR_GPIO, RTC_GPIO_MODE_INPUT_ONLY);
+    rtc_gpio_pulldown_dis(SENSOR_DISPLAY_PWR_GPIO);
+    rtc_gpio_pullup_dis(SENSOR_DISPLAY_PWR_GPIO);
+    vTaskDelay(pdMS_TO_TICKS(50));   /* R21 (100k) zieht Gate auf ~5V – 50ms für RC-Ladezeit */
+    rtc_gpio_hold_en(SENSOR_DISPLAY_PWR_GPIO);
+    ESP_LOGI(TAG, "Display 5V AUS: GPIO%d → RTC Input + Hold (Gate ~5V, Vgs≈0V)", SENSOR_DISPLAY_PWR_GPIO);
 
     /* HX711: Power-Down (SCK HIGH > 60 µs → ~0,1 µA statt 1,5 mA) */
     hx711_app_sleep();
@@ -121,14 +153,6 @@ void deep_sleep_enter(void)
     gpio_set_direction(SENSOR_RS485_DE_GPIO, GPIO_MODE_OUTPUT);
     gpio_set_level(SENSOR_RS485_DE_GPIO, 0);
     gpio_hold_en(SENSOR_RS485_DE_GPIO);
-
-    /* Display 5V abschalten: GPIO7 auf Hi-Z (Input) setzen.
-     * R21 (100k, Source→Gate) zieht Gate passiv auf ~5V → Vgs ≈ 0V → FET vollständig gesperrt.
-     * OUTPUT HIGH (3,3V) würde Vgs = −1,7V erzeugen → AO3401A leitet weiter → ~300mA Querstrom!
-     * gpio_hold_en ist nicht nötig: R21 hält Gate auch im Deep Sleep bei ~5V. */
-    gpio_set_direction(SENSOR_DISPLAY_PWR_GPIO, GPIO_MODE_INPUT);
-    /* kein gpio_hold_en – R21 übernimmt die passive Gate-Haltung */
-    ESP_LOGI(TAG, "Display 5V AUS: GPIO%d → Hi-Z (R21 zieht Gate auf 5V, Vgs≈0V)", SENSOR_DISPLAY_PWR_GPIO);
 
     /* ── Sleep einleiten ───────────────────────────────────────────── */
 

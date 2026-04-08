@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "womo_buzzer_http.h"
 
 #if WOMO_ENABLE_BUZZER_STUDIO_HTTP

@@ -1,4 +1,10 @@
 /*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/*
  * womo_thresholds.c – Grenzwert-Speicher mit Change-Callbacks und NVS-Persistenz
  */
 #include "womo_thresholds.h"

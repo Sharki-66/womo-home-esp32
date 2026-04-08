@@ -1,4 +1,10 @@
 /*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/*
  * womo_settings_modal.c – Einstellungs-Modal
  *
  * Größe und Grundstruktur analog zum Connectivity-Modal.

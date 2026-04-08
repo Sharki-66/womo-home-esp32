@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "womo_gas_bottle.h"
 #include "esp_log.h"
 #include <stdio.h>

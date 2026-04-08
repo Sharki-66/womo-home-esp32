@@ -1,7 +1,7 @@
 /*
- * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
  *
- * SPDX-License-Identifier: CC0-1.0
+ * SPDX-License-Identifier: MIT
  */
 
 #include "waveshare_rgb_lcd_port.h"
@@ -18,7 +18,15 @@ static const char *TAG = "womo_display";
 static i2c_master_bus_handle_t s_i2c_bus = NULL;
 static i2c_master_dev_handle_t s_ch422g_cfg_handle = NULL;
 static i2c_master_dev_handle_t s_ch422g_data_handle = NULL;
-static bool s_ch422g_backlight_on = false; // Boot mit BL=off; wird erst nach dem ersten vollständigen LVGL-Render true
+/* CH422G Output-Register – ein zentraler Zustandsbyte, nie direkt overschreiben.
+ * Bit 2 (0x04) = Backlight    (1 = an)
+ * Bit 4 (0x10) = SD-CS#       (1 = inaktiv/high, 0 = aktiv/low)
+ * Initialwert 0x1A: BL aus, SD-CS inaktiv, Basisbits gesetzt. */
+#define CH422G_BIT_BL     (0x04u)
+#define CH422G_BIT_SD_CSn (0x10u)
+static uint8_t s_ch422g_output  = 0x1Au;   /* aktueller Ausgabezustand */
+static bool    s_ch422g_backlight_on = false; /* Schnell-Abfrage ohne Bitoperation */
+static esp_lcd_panel_handle_t s_rgb_panel_handle = NULL; // Globales Handle für Frame-Buffer-Zugriff (Screenshot)
 
 #define GT911_I2C_FREQ_HZ        400000
 
@@ -131,16 +139,16 @@ esp_err_t womo_ch422g_assert_sd_cs(void)
         return err;
     }
 
-    // EXIO4 low für SD-CS, Backlight-Bit gemäß aktuellem Zustand lassen
-    uint8_t data = s_ch422g_backlight_on ? 0x0E : 0x0A;
-    err = ch422g_write_byte(s_ch422g_data_handle, data);
+    /* EXIO4 low = SD-CS aktiv; Backlight-Bit und alle anderen Bits beibehalten */
+    s_ch422g_output &= ~CH422G_BIT_SD_CSn;
+    err = ch422g_write_byte(s_ch422g_data_handle, s_ch422g_output);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "CH422G data write failed for SD-CS: %s", esp_err_to_name(err));
         return err;
     }
 
-    ESP_LOGI(TAG, "CH422G SD-CS asserted via EXIO4 (data=0x%02X)", data);
+    ESP_LOGI(TAG, "CH422G SD-CS asserted via EXIO4 (reg=0x%02X)", s_ch422g_output);
     return ESP_OK;
 }
 
@@ -198,7 +206,7 @@ void gpio_init(void)
 esp_err_t waveshare_esp32_s3_rgb_lcd_init()
 {
     ESP_LOGI(TAG, "Install RGB LCD panel driver"); // Log the start of the RGB LCD panel driver installation
-    esp_lcd_panel_handle_t panel_handle = NULL; // Declare a handle for the LCD panel
+    esp_lcd_panel_handle_t panel_handle = NULL; // Lokale Variable – wird nach Init in s_rgb_panel_handle gespeichert
     esp_lcd_rgb_panel_config_t panel_config = {
         .clk_src = LCD_CLK_SRC_DEFAULT, // Set the clock source for the panel
         .timings =  {
@@ -251,6 +259,7 @@ esp_err_t waveshare_esp32_s3_rgb_lcd_init()
 
     // Create a new RGB panel with the specified configuration
     ESP_ERROR_CHECK(esp_lcd_new_rgb_panel(&panel_config, &panel_handle));
+    s_rgb_panel_handle = panel_handle; // für späteren Frame-Buffer-Zugriff speichern
 
     ESP_LOGI(TAG, "Initialize RGB LCD panel"); // Log the initialization of the RGB LCD panel
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle)); // Initialize the LCD panel
@@ -338,15 +347,16 @@ esp_err_t wavesahre_rgb_lcd_bl_on()
     ESP_RETURN_ON_ERROR(ensure_ch422g_handles(), TAG, "CH422G handles not ready for backlight on");
 
     s_ch422g_backlight_on = true;
+    s_ch422g_output |= CH422G_BIT_BL;  /* BL-Bit setzen, SD-CS-Bit unverändert */
 
-    ESP_LOGI(TAG, "Backlight ON (CH422G)");
+    ESP_LOGI(TAG, "Backlight ON (CH422G, reg=0x%02X)", s_ch422g_output);
 
     // Configure CH422G to output mode
     uint8_t write_buf = 0x01;
     ESP_RETURN_ON_ERROR(i2c_master_transmit(s_ch422g_cfg_handle, &write_buf, 1, I2C_MASTER_TIMEOUT_MS), TAG, "CH422G mode write failed");
 
-    // Pull the backlight pin high to light the screen backlight
-    write_buf = 0x1E;
+    // Backlight-Bit high, alle anderen Bits (inkl. SD-CS) aus s_ch422g_output
+    write_buf = s_ch422g_output;
     ESP_RETURN_ON_ERROR(i2c_master_transmit(s_ch422g_data_handle, &write_buf, 1, I2C_MASTER_TIMEOUT_MS), TAG, "CH422G data write failed");
     return ESP_OK;
 }
@@ -357,17 +367,28 @@ esp_err_t wavesahre_rgb_lcd_bl_off()
     ESP_RETURN_ON_ERROR(ensure_ch422g_handles(), TAG, "CH422G handles not ready for backlight off");
 
     s_ch422g_backlight_on = false;
+    s_ch422g_output &= ~CH422G_BIT_BL; /* BL-Bit löschen, SD-CS-Bit unverändert */
 
-    ESP_LOGI(TAG, "Backlight OFF (CH422G)");
+    ESP_LOGI(TAG, "Backlight OFF (CH422G, reg=0x%02X)", s_ch422g_output);
 
     // Configure CH422G to output mode
     uint8_t write_buf = 0x01;
     ESP_RETURN_ON_ERROR(i2c_master_transmit(s_ch422g_cfg_handle, &write_buf, 1, I2C_MASTER_TIMEOUT_MS), TAG, "CH422G mode write failed");
 
-    // Turn off the screen backlight by pulling the backlight pin low
-    write_buf = 0x1A;
+    // Backlight-Bit low, alle anderen Bits (inkl. SD-CS) aus s_ch422g_output
+    write_buf = s_ch422g_output;
     ESP_RETURN_ON_ERROR(i2c_master_transmit(s_ch422g_data_handle, &write_buf, 1, I2C_MASTER_TIMEOUT_MS), TAG, "CH422G data write failed");
     return ESP_OK;
 }
 
-
+esp_err_t womo_lcd_get_frame_buffer(void **fb0_out, void **fb1_out)
+{
+    if (!s_rgb_panel_handle) return ESP_ERR_INVALID_STATE;
+    if (fb0_out) *fb0_out = NULL;
+    if (fb1_out) *fb1_out = NULL;
+#if LVGL_PORT_LCD_RGB_BUFFER_NUMS >= 2
+    return esp_lcd_rgb_panel_get_frame_buffer(s_rgb_panel_handle, 2, fb0_out, fb1_out);
+#else
+    return esp_lcd_rgb_panel_get_frame_buffer(s_rgb_panel_handle, 1, fb0_out);
+#endif
+}

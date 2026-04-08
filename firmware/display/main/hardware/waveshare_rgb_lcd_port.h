@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #ifndef _RGB_LCD_H_
 #define _RGB_LCD_H_
 
@@ -72,6 +78,13 @@ void example_lvgl_unlock(void);
 esp_err_t waveshare_esp32_s3_rgb_lcd_init();
 
 esp_err_t womo_ch422g_assert_sd_cs(void);
+
+/**
+ * Gibt Pointer auf den aktuell vom LCD angezeigten Frame-Buffer zurück (RGB565).
+ * Größe: EXAMPLE_LCD_H_RES × EXAMPLE_LCD_V_RES × 2 Bytes.
+ * Nur lesend verwenden – DMA schreibt gleichzeitig darauf.
+ */
+esp_err_t womo_lcd_get_frame_buffer(void **fb0_out, void **fb1_out);
 
 esp_err_t wavesahre_rgb_lcd_bl_on();
 esp_err_t wavesahre_rgb_lcd_bl_off();

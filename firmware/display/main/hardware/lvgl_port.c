@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2023-2026 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms (modifiziert)
  *
  * SPDX-License-Identifier: Apache-2.0
  *

@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "womo_rs485_display.h"
 #include "womo_config.h"
 #include "driver/uart.h"
@@ -230,11 +236,15 @@ static void rs485_add_pending(uint32_t seq, const char *label)
     entry.label[sizeof(entry.label) - 1] = '\0';
 
     bool stored = false;
-    bool duplicate = false;
     taskENTER_CRITICAL(&s_pending_cmd_lock);
     for (size_t i = 0; i < RS485_MAX_PENDING_CMDS; ++i) {
         if (s_pending_cmds[i].in_use && strncmp(s_pending_cmds[i].label, label, sizeof(s_pending_cmds[i].label)) == 0) {
-            duplicate = true;
+            /* Bereits ausstehend: seq + Zeitstempel aktualisieren, damit das ACK
+             * der erneut gesendeten Nachricht den Eintrag korrekt auflöst. */
+            s_pending_cmds[i].seq     = seq;
+            s_pending_cmds[i].sent_us = entry.sent_us;
+            s_pending_cmds[i].warned  = false;
+            stored = true;
             break;
         }
         if (!s_pending_cmds[i].in_use && !stored) {
@@ -243,11 +253,6 @@ static void rs485_add_pending(uint32_t seq, const char *label)
         }
     }
     taskEXIT_CRITICAL(&s_pending_cmd_lock);
-
-    if (duplicate) {
-        ESP_LOGW(TAG, "Command %s already awaiting ACK; skipping duplicate tracking", label);
-        return;
-    }
 
     if (!stored) {
         ESP_LOGW(TAG, "Pending command buffer full, dropping tracking for %s (seq=%lu)",
@@ -325,7 +330,8 @@ static void rs485_check_command_timeouts(void)
         }
         int64_t age_us = now_us - s_pending_cmds[i].sent_us;
         if (age_us >= timeout_us) {
-            s_pending_cmds[i].warned = true;
+            s_pending_cmds[i].in_use = false;   /* Slot freigeben, nicht nur warnen */
+            s_pending_cmds[i].warned = false;
             if (expired_count < RS485_MAX_PENDING_CMDS) {
                 expired[expired_count].seq = s_pending_cmds[i].seq;
                 expired[expired_count].age_us = age_us;
