@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "womo_connectivity_modal.h"
 #include "gui/womo_router_leds_modal.h"
 
@@ -14,6 +20,7 @@
 #include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_heap_caps.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -974,12 +981,13 @@ static void wifi_scan_event_cb(lv_event_t *e)
     }
     set_wifi_activity_text(womo_locale_get_string(STR_WIFI_SCANNING_STATUS));
 
-    BaseType_t created = xTaskCreate(router_scan_task,
+    BaseType_t created = xTaskCreateWithCaps(router_scan_task,
                                      "router_scan",
                                      8192,
                                      NULL,
                                      TASK_PRIO,
-                                     &s_ctx.wifi_scan_task);
+                                     &s_ctx.wifi_scan_task,
+                                     MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (created != pdPASS) {
         s_ctx.wifi_scan_task = NULL;
         s_ctx.scan_in_progress = false;

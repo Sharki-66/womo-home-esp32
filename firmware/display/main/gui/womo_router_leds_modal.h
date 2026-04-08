@@ -1,4 +1,10 @@
 /*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/*
  * WoMo Router LED Status Modal
  *
  * Zeigt eine visuelle Darstellung der LEDs des RUTX11-Routers

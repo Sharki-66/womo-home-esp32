@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 /**
  * @file womo_meteoalarm.c
  * @brief Meteoalarm Unwetterwarnungen (Stufen 2+3) – GPS-basiert

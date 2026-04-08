@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #pragma once
 
 /*
@@ -64,3 +70,17 @@
 // Optionales Live-Sound-Studio via HTTP API + SPIFFS-Seite
 // 1 = aktiv, 0 = vollständig auskompiliert
 #define WOMO_ENABLE_BUZZER_STUDIO_HTTP 1
+
+// ====================================================================================
+// Screenshot
+// Long-Press anywhere auf dem Display speichert PNG auf SD-Card
+// Pfad:    /sdcard/screenshots/screen_HHMMSS.png
+// Stack:   PSRAM (MALLOC_CAP_SPIRAM), 32 KiB  – lodepng + FAT-I/O
+// Methode: Liest Frame-Buffer direkt (RGB565, existiert bereits im PSRAM).
+//          Kein lv_snapshot, kein zusätzlicher Pixel-Puffer → ~400 KB Peak (PNG-Output).
+// 1 = aktiv, 0 = vollständig auskompiliert
+// ====================================================================================
+#define WOMO_ENABLE_SCREENSHOT         0
+#define WOMO_SCREENSHOT_DIR            "/sdcard/screenshots"
+#define WOMO_SCREENSHOT_STACK_SIZE     (32768)
+#define WOMO_SCREENSHOT_TASK_PRIORITY  (3)

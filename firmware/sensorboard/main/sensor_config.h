@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #pragma once
 
 #include "womo_config.h"
@@ -20,8 +26,8 @@
  *   (ADC1_CH6, RTC, GPIO7) Display 5V | I/O/T|  🟨 |    7 | 7          S         7 | 41   | 🟩  | I/O/T | MTDI, GPIO41
  *     (ADC2_CH4, RTC, GPIO15) I2C SCL | I/O/T|  🟨 |   15 | 8          3         8 | 40   | 🟩  | I/O/T | MTDO, GPIO40
  *     (ADC2_CH5, RTC, GPIO16) I2C SDA | I/O/T|  🟨 |   16 | 9          -         9 | 39   | 🟩  | I/O/T | MTCK, GPIO39
- *(ADC2_CH6, U1TXD, RTC, GPIO17) Piezo | I/O/T|  🟨 |   17 | 10         W        10 | 38   | 🟨  | I/O/T | RGB_LED  (GPIO38)
- *        ADC2_CH7, U1RXD, RTC, GPIO18 | I/O/T|  ⬜ |   18 | 11         R        11 | 37   | 🟥  | I/O/T | ⚠ PSRAM (GPIO37, nicht nutzbar!)
+ * (ADC2_CH6, U1TXD, RTC, GPIO17) frei | I/O/T|  ⬜ |   17 | 10         W        10 | 38   | 🟨  | I/O/T | RGB_LED  (GPIO38)
+ * (ADC2_CH7, U1RXD, RTC, GPIO18) frei | I/O/T|  ⬜ |   18 | 11         R        11 | 37   | 🟥  | I/O/T | ⚠ PSRAM (GPIO37, nicht nutzbar!)
  *  (ADC1_CH7, RTC) RS485 DE/RTS GPIO8 | I/O/T|  🟨 |    8 | 12         O        12 | 36   | 🟥  | I/O/T | ⚠ PSRAM (GPIO36, nicht nutzbar!)
  *                ADC1_CH2, RTC, GPIO3 | I/O/T|  ⬜ |    3 | 13         O        13 | 35   | 🟥  | I/O/T | ⚠ PSRAM (GPIO35, nicht nutzbar!)
  *                   GPIO46, STRAP/LOG | I/O/T|  🟩 |   46 | 14         M        14 | 0    | 🟩  | I/O/T | BOOT/STRAP, GPIO0
@@ -125,6 +131,60 @@
 #define SENSOR_TANK1_ADC_CHANNEL 0     // GPIO1 (Frischwasser)
 #define SENSOR_TANK2_ADC_CHANNEL 1     // GPIO2 (Grauwasser)
 
+// Batterie-Kalibrierung (U_kalibriert = U_gemessen * SCALE + OFFSET_mV)
+// Batt1: 2026-03-31 gegen Multimeter abgeglichen (11.6V -> 12.3V).
+#define SENSOR_BATT1_CAL_SCALE 1.00f
+#define SENSOR_BATT1_CAL_OFFSET_MV 0
+#define SENSOR_BATT2_CAL_SCALE 1.00f
+#define SENSOR_BATT2_CAL_OFFSET_MV 0
+
+// Tank-Kalibrierung (U_kalibriert = U_gemessen * SCALE + OFFSET_mV)
+// Hinweis: 0-1V Sensoren liegen direkt am ADC (kein Spannungsteiler).
+// Feinabgleich gegen Multimeter moeglich, falls ADC systematisch abweicht.
+#define SENSOR_TANK1_CAL_SCALE 1.00f
+#define SENSOR_TANK1_CAL_OFFSET_MV 0
+#define SENSOR_TANK2_CAL_SCALE 1.00f
+#define SENSOR_TANK2_CAL_OFFSET_MV 0
+
+// Tank-Prozent-Mapping pro Kanal (EMPTY_MV..FULL_MV => 0..100%)
+// Frischwasser-Referenz: voll bei ca. 1005 mV gemessen.
+#define SENSOR_TANK1_EMPTY_MV 0
+#define SENSOR_TANK1_FULL_MV 1000
+#define SENSOR_TANK2_EMPTY_MV 0
+#define SENSOR_TANK2_FULL_MV 1000
+
+// ====================================================================================
+// TODO: Wohnmobil-Tanksensoren (4-Stufen Reed-Schwimmer, 5 Leitungen)
+// ====================================================================================
+// Die originalen WoMo-Tanksensoren haben 5 Leitungen:
+//   Masse, 25%, 50%, 75%, Voll (100%)
+// Die Schalter schließen kumulativ (bei 75% sind 25%+50%+75% alle geschlossen).
+//
+// Geplante Lösung: 1 ADC-Pin pro Tank über ein Widerstandsnetzwerk
+//   Vorgeschlagene Pins: GPIO17 (ADC2_CH6) für Tank1, GPIO18 (ADC2_CH7) für Tank2
+//   Beide Pins sind aktuell frei (⬜).
+//
+// Schaltung (Beispielbelegung, R-Werte noch zu verifizieren):
+//   3.3V ─── R_pull(10kΩ) ─── ADC-Pin
+//   25%-Schalter  ─── R1(4kΩ) ───┐
+//   50%-Schalter  ─── R2(3kΩ) ───┤── ADC-Pin
+//   75%-Schalter  ─── R3(2kΩ) ───┤
+//  100%-Schalter  ─── R4(1kΩ) ───┘
+//   Signalmasse   ─── GND
+//
+// Erwartete ADC-Spannungen (5 eindeutige Pegel), ca.:
+//   0%   → ~3300 mV   (kein Schalter geschlossen)
+//   25%  → ~2350 mV
+//   50%  → ~1650 mV
+//   75%  → ~1130 mV
+//  100%  →  ~140 mV
+//
+// Implementierung (noch ausstehend):
+//   - analog_sensor.c: Pegelerkennung anhand ADC-Spannungsschwellen
+//   - sensor_config.h: GPIO + Schwellwerte hier eintragen
+//   - Bestehende SENSOR_TANK1/2_ADC_CHANNEL bzw. neue Defines anlegen
+// ====================================================================================
+
 // ====================================================================================
 // Board Power / Multimedia GPIOs (LBE-Steuerung über bistabiles Relais)
 // ====================================================================================
@@ -142,18 +202,6 @@
 //        OUTPUT HIGH (3,3V) VERBOTEN: Vgs=−1,7V → AO3401A leitet → ~300mA Querstrom!
 // ====================================================================================
 #define SENSOR_DISPLAY_PWR_GPIO 7      // P-MOSFET Q4: LOW=ein, Hi-Z/Input=aus
-
-// ====================================================================================
-// Buzzer (passiver Piezo-Transducer, z.B. Murata PKM22EPPH4001-B0)
-// GPIO17: frei, ADC2_CH6, RTC-fähig, LEDC-fähig — direkt ohne Transistor betreibbar
-// LEDC: Timer 1, Kanal 0, Low-Speed-Mode, 10-Bit-Auflösung
-// ====================================================================================
-#define SENSOR_BUZZER_GPIO          17          // Piezo-Anschluss
-#define SENSOR_BUZZER_LEDC_TIMER    LEDC_TIMER_1
-#define SENSOR_BUZZER_LEDC_CHANNEL  LEDC_CHANNEL_0
-#define SENSOR_BUZZER_LEDC_MODE     LEDC_LOW_SPEED_MODE
-#define SENSOR_BUZZER_LEDC_BITS     LEDC_TIMER_10_BIT
-#define SENSOR_BUZZER_DUTY          512          // 50% Tastverhältnis (lautester Ton)
 
 // ====================================================================================
 // Deep Sleep / Wakeup
@@ -215,7 +263,7 @@
 #define LOG_LEVEL_RS485          ESP_LOG_WARN
 #define LOG_LEVEL_ANALOG         ESP_LOG_INFO
 #define LOG_LEVEL_BNO055         ESP_LOG_INFO    // bno055_app + BNO055-Komponente
-#define LOG_LEVEL_BME680         ESP_LOG_INFO    // bme680_app + bme680-Komponente (DEBUG für Chip-ID Diagnose)
+#define LOG_LEVEL_BME680         ESP_LOG_INFO    // bme680_app + bme680-Komponente
 #define LOG_LEVEL_HX711          ESP_LOG_WARN
 #define LOG_LEVEL_GASBEE_BLE     ESP_LOG_WARN
 #define LOG_LEVEL_I2C_BUS        ESP_LOG_INFO    // temporär INFO für I2C-Scan Diagnose

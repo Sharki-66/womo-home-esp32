@@ -1,7 +1,7 @@
 dependencies:
-  idf: ">=5.0"
-  cmake_utilities: "0.*"
+  idf: '>=5.0'
+  cmake_utilities: 0.*
 
-  espressif/i2c_bus: "*"
-  espressif/mdns: "*"
-  espressif/led_strip: "*"
+  espressif/i2c_bus: '*'
+  espressif/mdns: '*'
+  espressif/led_strip: '*'

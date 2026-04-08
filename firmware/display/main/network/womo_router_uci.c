@@ -1,4 +1,10 @@
 /*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/*
  * WoMo Router UCI Client – Implementierung
  *
  * Kommuniziert mit dem RUTX11-Router über JSON-RPC 2.0 / ubus

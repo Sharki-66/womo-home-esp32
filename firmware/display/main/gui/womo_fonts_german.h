@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 /**
  * @file womo_fonts_german.h
  * @brief Deutsche Montserrat-Schriftarten mit Umlauten

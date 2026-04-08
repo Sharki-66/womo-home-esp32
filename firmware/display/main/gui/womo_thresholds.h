@@ -1,4 +1,10 @@
 /*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/*
  * womo_thresholds.h – Grenzwerte für Warn-/Alarm-Schwellen
  *
  * Gas, Frisch- und Grauwassertank.

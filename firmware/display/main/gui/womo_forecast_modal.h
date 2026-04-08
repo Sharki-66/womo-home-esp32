@@ -1,4 +1,10 @@
 /*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/*
  * womo_forecast_modal.h – 5-Tage Wetter-Vorhersage Modal
  *
  * Öffnet sich wenn der Nutzer auf das Wetter-Icon tippt.

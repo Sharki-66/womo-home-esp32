@@ -1,4 +1,10 @@
 /*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/*
  * womo_forecast_modal.c – 5-Tage Wetter-Vorhersage Modal
  *
  * Layout: 640×420 px Panel (identisch mit anderen Modals).

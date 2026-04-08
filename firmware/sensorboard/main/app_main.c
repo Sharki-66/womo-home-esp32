@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2023-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms (modifiziert)
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -25,6 +26,7 @@
 #include "hal/deep_sleep.h"
 #include "led_strip.h"
 #include "driver/gpio.h"
+#include "driver/rtc_io.h"
 
 static const char *TAG = "sensor_main";
 
@@ -120,7 +122,10 @@ void app_main(void)
 
     /* Display 5V sperren – GPIO7 als Hi-Z Input konfigurieren.
      * R21 (100k, Source→Gate) im Schaltplan zieht Gate passiv auf ~5V → Vgs≈0V → FET aus.
-     * OUTPUT HIGH (3,3V) wäre FALSCH: Vgs = 3,3−5 = −1,7V → AO3401A leitet → ~300mA Querstrom! */
+     * OUTPUT HIGH (3,3V) wäre FALSCH: Vgs = 3,3−5 = −1,7V → AO3401A leitet → ~300mA Querstrom!
+     * Nach Deep Sleep: rtc_gpio_isolate() aufheben, dann normalen GPIO-Modus zurücksetzen. */
+    rtc_gpio_hold_dis(SENSOR_DISPLAY_PWR_GPIO);
+    rtc_gpio_deinit(SENSOR_DISPLAY_PWR_GPIO);
     gpio_config_t disp_cfg = {
         .pin_bit_mask = BIT64(SENSOR_DISPLAY_PWR_GPIO),
         .mode         = GPIO_MODE_INPUT,
@@ -144,10 +149,9 @@ void app_main(void)
     deep_sleep_init();
 
     // ── Wakeup-Behandlung ────────────────────────────────────────────
-    if (deep_sleep_wakeup_by_touch()) {
+    bool is_touch_wakeup = deep_sleep_wakeup_by_touch();
+    if (is_touch_wakeup) {
         ESP_LOGI(TAG, "Touch-Wakeup erkannt → Hold aufheben");
-        /* RS485-DE-Hold aufheben (wurde vor Sleep eingefroren).
-         * SENSOR_DISPLAY_PWR_GPIO hat keinen Hold mehr – wurde als Input gesetzt. */
         gpio_hold_dis(SENSOR_RS485_DE_GPIO);
     } else {
         ESP_LOGI(TAG, "Cold Boot erkannt");

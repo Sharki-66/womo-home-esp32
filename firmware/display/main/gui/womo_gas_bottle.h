@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #ifndef WOMO_GAS_BOTTLE_H
 #define WOMO_GAS_BOTTLE_H
 

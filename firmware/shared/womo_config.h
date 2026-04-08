@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 /**
  * @file womo_config.h
  * @brief Gemeinsame Konfiguration für Display und Sensorboard.

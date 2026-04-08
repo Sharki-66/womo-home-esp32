@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "womo_weather_http.h"
 
 #include "sdkconfig.h"
@@ -57,6 +63,7 @@ typedef struct {
 } weather_http_ctx_t;
 
 static weather_http_ctx_t s_ctx = {0};
+static int s_last_http_status = 0;  /* letzter HTTP-Statuscode aus perform_request */
 
 static esp_err_t weather_http_fetch(womo_weather_http_data_t *out_data, womo_weather_forecast_t *out_forecast);
 static esp_err_t weather_http_parse_json(const char *json, womo_weather_http_data_t *out_data, womo_weather_forecast_t *out_forecast);
@@ -194,13 +201,23 @@ static void weather_http_task(void *arg)
                 s_ctx.forecast_callback(&forecast, s_ctx.forecast_user_data);
             }
         } else {
-            ESP_LOGW(TAG, "Weather fetch failed (%s) – retry in 10 s",
-                     esp_err_to_name(err));
-            /* Bei Fehler (DNS noch nicht bereit, kein Internet, etc.)
-             * kurz warten und erneut versuchen statt die vollen 5 min. */
-            if (!s_ctx.stop_requested) {
-                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10000));
+            /* HTTP 429: Rate-Limit – langes Backoff damit Open-Meteo sich erholt */
+            if (s_last_http_status == 429) {
+                ESP_LOGW(TAG, "Weather fetch failed (%s) – rate limited (429), retry in 15 min",
+                         esp_err_to_name(err));
+                if (!s_ctx.stop_requested) {
+                    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(15UL * 60UL * 1000UL));
+                }
+            } else {
+                ESP_LOGW(TAG, "Weather fetch failed (%s) – retry in 30 s",
+                         esp_err_to_name(err));
+                /* Bei Fehler (DNS noch nicht bereit, kein Internet, etc.)
+                 * kurz warten und erneut versuchen statt die vollen 5 min. */
+                if (!s_ctx.stop_requested) {
+                    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(30000));
+                }
             }
+            s_last_http_status = 0;
             continue;
         }
 
@@ -291,8 +308,10 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
 
     if (status != 200) {
         ESP_LOGW(TAG, "Open-Meteo status %d", status);
+        s_last_http_status = status;
         return ESP_FAIL;
     }
+    s_last_http_status = status;
 
     if (response->length == 0) {
         ESP_LOGW(TAG, "Empty weather response");

@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 /**
  * @file womo_http_mutex.c
  * @brief Globaler Mutex für HTTPS-Requests (TLS-Session-Serialisierung).

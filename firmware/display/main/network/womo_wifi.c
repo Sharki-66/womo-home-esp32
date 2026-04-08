@@ -1,4 +1,10 @@
 /*
+ * SPDX-FileCopyrightText: 2025-2026 Hajo Harms
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/*
  * WoMo WiFi Manager - Implementation
  */
 
@@ -313,8 +319,11 @@ esp_err_t womo_wifi_connect(const char *ssid, const char *password, uint8_t max_
         ESP_LOGE(TAG, "WiFi FAIL_BIT gesetzt - Verbindung fehlgeschlagen");
         return ESP_FAIL;
     } else {
-        // Timeout nach 15s – Status zurücksetzen damit autoretry nicht skippt
-        current_status = WOMO_WIFI_DISCONNECTED;
+        // Timeout nach 15s – Status zurücksetzen damit autoretry nicht skippt.
+        // Race-Schutz: IP_GOT_IP kann genau beim Timeout-Ablauf gefeuert haben.
+        if (current_status != WOMO_WIFI_CONNECTED) {
+            current_status = WOMO_WIFI_DISCONNECTED;
+        }
         ESP_LOGE(TAG, "WiFi Timeout (15s) - kein CONNECTED oder FAIL bit");
         return ESP_ERR_TIMEOUT;
     }
@@ -449,7 +458,17 @@ void womo_wifi_watchdog(void)
 
 bool womo_wifi_is_connected(void)
 {
-    return (current_status == WOMO_WIFI_CONNECTED);
+    /* Primär: ESP-Netif-Zustand als Ground-Truth.
+     * Wenn das Interface eine IP-Adresse hat, ist der Link wirklich oben –
+     * unabhängig davon ob current_status durch einen Race noch DISCONNECTED zeigt. */
+    if (sta_netif && esp_netif_is_netif_up(sta_netif)) {
+        if (current_status != WOMO_WIFI_CONNECTED) {
+            ESP_LOGI(TAG, "is_connected: netif up → synchronisiere status auf CONNECTED");
+            current_status = WOMO_WIFI_CONNECTED;
+        }
+        return true;
+    }
+    return false;
 }
 
 int8_t womo_wifi_get_rssi(void)
@@ -697,8 +716,10 @@ esp_err_t womo_wifi_connect_async(const char *ssid, const char *password, uint8_
     if (start_err == ESP_ERR_WIFI_CONN || start_err == ESP_ERR_INVALID_STATE) {
         retry_count = 0;
         esp_wifi_connect();
-        current_status = WOMO_WIFI_CONNECTING;
     }
+    /* In beiden Pfaden (Erststart + bereits gestartet) auf CONNECTING setzen,
+     * damit wifi_autoretry_task und watchdog wissen dass ein Verbindungsversuch läuft. */
+    current_status = WOMO_WIFI_CONNECTING;
     ESP_LOGI(TAG, "WiFi async connect gestartet (SSID='%s')", ssid);
     return ESP_OK;
 }
@@ -721,7 +742,12 @@ esp_err_t womo_wifi_wait_connected(uint32_t timeout_ms)
         ESP_LOGE(TAG, "WiFi FAIL_BIT – Verbindung fehlgeschlagen");
         return ESP_FAIL;
     } else {
-        current_status = WOMO_WIFI_DISCONNECTED;
+        /* Timeout: nur zurücksetzen wenn der Event-Handler nicht inzwischen CONNECTED
+         * gesetzt hat (Race: IP_EVENT_STA_GOT_IP kann zwischen Timeout-Ablauf und
+         * diesem Reset aufgetreten sein). */
+        if (current_status != WOMO_WIFI_CONNECTED) {
+            current_status = WOMO_WIFI_DISCONNECTED;
+        }
         ESP_LOGE(TAG, "WiFi Timeout (%"PRIu32"ms)", timeout_ms);
         return ESP_ERR_TIMEOUT;
     }
