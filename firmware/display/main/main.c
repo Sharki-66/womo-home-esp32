@@ -27,6 +27,7 @@
 #include "network/womo_router_uci.h"
 #include "network/womo_http_mutex.h"
 #include "network/womo_buzzer_http.h"
+#include "network/womo_display_http.h"
 #include "storage/womo_sd.h"
 #include "rs485/womo_rs485_display.h"
 #include "hardware/buzzer.h"
@@ -626,6 +627,12 @@ static void geocode_result_cb(const womo_geocode_result_t *result, void *user_da
         }
         lvgl_port_unlock();
     }
+
+    /* Ortsname ans Web-Dashboard weitergeben */
+    if (result->short_name[0] || result->display_name[0]) {
+        const char *loc = result->short_name[0] ? result->short_name : result->display_name;
+        womo_display_http_update_status(WOMO_DASH_STATUS_OK, NULL, true, loc);
+    }
 }
 
 static void geocode_trigger_if_needed(const womo_sensor_data_t *snapshot)
@@ -1010,6 +1017,21 @@ static void system_status_apply(bool force_label_update)
         }
     } else if (force_label_update || level_changed || detail_changed) {
         status_label_update_default();
+    }
+
+    /* Web-Dashboard: Status bei Änderungen aktualisieren */
+    if (level_changed || force_label_update) {
+        womo_dash_status_t dash_lvl = WOMO_DASH_STATUS_OK;
+        if (resolved == WOMO_STATUS_WARNING) {
+            dash_lvl = WOMO_DASH_STATUS_WARN;
+        } else if (resolved == WOMO_STATUS_CRITICAL || resolved == WOMO_STATUS_ERROR) {
+            dash_lvl = WOMO_DASH_STATUS_CRIT;
+        }
+        bool rs485_ok = !rs485_timeout_active && latest_data_valid;
+        womo_display_http_update_status(dash_lvl,
+                                        sensor_detail_text[0] ? sensor_detail_text : NULL,
+                                        rs485_ok,
+                                        location_last_text[0] ? location_last_text : NULL);
     }
 }
 
@@ -3013,6 +3035,12 @@ static void router_poll_task(void *arg)
             xSemaphoreGive(s_router_mutex);
         }
 
+        /* Web-Dashboard mit Router-Daten versorgen */
+        womo_display_http_update_router(
+            (w_err == ESP_OK) ? &wifi_tmp : NULL,
+            (l_err == ESP_OK) ? &lte_tmp  : NULL,
+            (a_err == ESP_OK) ? &ap_tmp   : NULL);
+
         /* ── GPS vom Router (GNSS-Antenne am RUTX11) ──────────── */
         womo_router_gps_t gps_tmp = {0};
         esp_err_t g_err = womo_router_get_gps(&gps_tmp);
@@ -3984,6 +4012,7 @@ void app_main()
     esp_log_level_set("router_uci",       LOG_LEVEL_ROUTER_UCI);
     esp_log_level_set("http_mutex",       LOG_LEVEL_HTTP_MUTEX);
     esp_log_level_set("womo_buzz_http",   LOG_LEVEL_BUZZER_HTTP);
+    esp_log_level_set("womo_disp_http",   LOG_LEVEL_DISPLAY_HTTP);
     esp_log_level_set("womo_sd",          LOG_LEVEL_SD);
     esp_log_level_set("womo_time",        LOG_LEVEL_TIME);
     esp_log_level_set("womo_sun_calc",    LOG_LEVEL_SUN_CALC);
@@ -4030,6 +4059,19 @@ void app_main()
 #else
     ESP_LOGI(TAG, "Buzzer-Studio HTTP deaktiviert (WOMO_ENABLE_BUZZER_STUDIO_HTTP=0)");
 #endif
+
+    // Display-Dashboard HTTP-Server (Port 8080)
+    {
+        esp_err_t disp_http_err = womo_display_http_init();
+        if (disp_http_err == ESP_OK) {
+            disp_http_err = womo_display_http_start();
+        }
+        if (disp_http_err == ESP_OK) {
+            ESP_LOGI(TAG, "Display-Dashboard HTTP aktiv auf Port %d", WOMO_DISPLAY_HTTP_PORT);
+        } else {
+            ESP_LOGW(TAG, "Display-Dashboard HTTP Start fehlgeschlagen: %s", esp_err_to_name(disp_http_err));
+        }
+    }
 
     // Initialize theme (default location: Central Europe)
     // Sonnenzeiten werden automatisch via GPS berechnet (router_poll_task)
@@ -4963,5 +5005,8 @@ static void rs485_data_received(const womo_sensor_data_t *data, void *user_data)
     latest_packet_count = rs485_packet_count;
     latest_data_valid = true;
     taskEXIT_CRITICAL(&display_data_spinlock);
+
+    // Web-Dashboard mit aktuellen Sensordaten versorgen
+    womo_display_http_update_sensor(&snapshot);
 }
 

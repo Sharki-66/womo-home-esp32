@@ -35,6 +35,7 @@
 #define LOG_LEVEL_ROUTER_UCI     ESP_LOG_WARN   // network/womo_router_uci.c
 #define LOG_LEVEL_HTTP_MUTEX     ESP_LOG_WARN   // network/womo_http_mutex.c
 #define LOG_LEVEL_BUZZER_HTTP    ESP_LOG_INFO   // network/womo_buzzer_http.c
+#define LOG_LEVEL_DISPLAY_HTTP   ESP_LOG_INFO   // network/womo_display_http.c
 
 // ── Speicher ─────────────────────────────────────────────────────────────────────────
 #define LOG_LEVEL_SD             ESP_LOG_WARN   // storage/womo_sd.c

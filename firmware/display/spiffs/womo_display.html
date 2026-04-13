@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=800,initial-scale=1">
+<title>WoMo Home Control</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  width:800px;height:480px;overflow:hidden;
+  position:relative;
+  font-family:"Segoe UI","Noto Sans",system-ui,sans-serif;
+  background:var(--bg,#87CEEB);
+  color:var(--text,#000);
+  user-select:none;
+}
+/* Day / Night themes */
+body.day{--bg:#87CEEB;--text:#000;--text-inv:#fff;--btn-bg:rgba(192,192,192,0.85);--btn-border:#000;--btn-dot:#444;--popup-bg:rgba(224,224,224,0.92)}
+body.night{--bg:#191970;--text:#fff;--text-inv:#000;--btn-bg:rgba(100,100,130,0.85);--btn-border:#aaa;--btn-dot:#ccc;--popup-bg:rgba(48,48,80,0.92)}
+
+/* Ducato silhouette – pure CSS van shape overlay */
+.ducato-silhouette{
+  position:absolute;
+  top:0;left:0;width:100%;height:100%;
+  pointer-events:none;
+  z-index:0;
+}
+
+/* All positioned elements sit on z-index 1 */
+.widget{position:absolute;z-index:1}
+
+/* ── Labels ────────────────────────────────── */
+.lbl{position:absolute;z-index:1;white-space:nowrap;color:var(--text)}
+.lbl-title{font-size:20px;font-weight:700;left:50%;transform:translateX(-50%);top:5px}
+.lbl-time{font-size:18px;font-weight:600;left:50%;transform:translateX(-50%);top:35px;letter-spacing:1px}
+.lbl-date{font-size:14px;left:310px;bottom:15px}
+.lbl-sm{font-size:12px}
+.lbl-14{font-size:12px}
+.lbl-right{text-align:right}
+
+/* ── Pill button (WiFi/LTE, Status, Settings) ─ */
+.pill{
+  position:absolute;z-index:1;
+  border-radius:999px;
+  background:var(--btn-bg);
+  border:2px solid var(--btn-border);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  font-size:11px;font-weight:600;color:var(--text);
+  overflow:hidden;
+}
+
+/* ── Round icon button (classic, radio, shore, backlight, gps) ─ */
+.round-btn{
+  position:absolute;z-index:1;
+  border-radius:50%;
+  background:var(--btn-bg);
+  border:2px solid var(--btn-border);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  font-size:11px;font-weight:700;
+  color:var(--text);
+}
+.round-btn.active{border-color:transparent;color:#fff}
+.round-btn.btn-green.active{background:#2E7D32}
+.round-btn.btn-blue.active{background:#1565C0}
+.round-btn.btn-amber.active{background:#F9A825;color:#000}
+
+/* ── Signal icons ─────────────────────────── */
+.sig-icon{display:flex;align-items:flex-end;gap:1px;height:18px}
+.sig-bar-el{width:3px;background:currentColor;border-radius:1px}
+
+/* ── WiFi/LTE pill internals ─────────────── */
+.conn-pill{width:108px;height:44px;left:78px;top:12px}
+.conn-pill .divider{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:2px;height:24px;background:rgba(128,128,128,0.6)}
+.conn-half{width:50%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+.conn-label{font-size:9px;font-weight:600;color:var(--text)}
+.conn-led{width:8px;height:8px;border-radius:50%}
+.led-on{background:#00c878;box-shadow:0 0 5px #00c878}
+.led-off{background:#c0392b;box-shadow:0 0 5px #c0392b}
+.led-unk{background:#f39c12;box-shadow:0 0 5px #f39c12}
+
+/* ── Dots menu (settings btn) ─────────────── */
+.dots-btn{width:32px;height:44px;left:240px;top:22px;flex-direction:column;gap:8px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--btn-dot)}
+
+/* ── Outdoor air block (top-right) ─────────── */
+.air-out{top:15px;right:10px;text-align:right}
+.air-out .title{font-size:13px;font-weight:700;color:var(--text)}
+.air-out .val{font-size:13px;color:var(--text);margin-top:3px}
+
+/* ── Indoor air block ────────────────────── */
+.air-in{position:absolute;z-index:1;right:10px;top:140px;text-align:right}
+.air-in .title{font-size:13px;font-weight:700}
+.air-in .row{display:flex;justify-content:flex-end;gap:8px;font-size:13px;margin-top:3px}
+.air-in .row2{font-size:11px;margin-top:2px}
+
+/* ── IMU block ───────────────────────────── */
+.imu-block{position:absolute;z-index:1;left:365px;top:275px}
+.imu-block .imu-row{font-size:12px;line-height:18px;color:var(--text)}
+
+/* ── Tank widget (SVG-based) ─────────────── */
+.tank-widget{position:absolute;z-index:1}
+.tank-svg{display:block}
+
+/* ── Gas bottle (SVG-based) ─────────────── */
+.gas-widget{position:absolute;z-index:1}
+.gas-svg{display:block}
+
+/* ── Battery widget (SVG-based) ─────────── */
+.bat-widget{position:absolute;z-index:1}
+.bat-svg{display:block}
+
+/* ── Status pill ─────────────────────────── */
+.status-pill{left:539px;bottom:10px;height:38px;padding:0 10px;font-size:12px;background:var(--btn-bg);border:2px solid var(--btn-border)}
+.status-ok{border-color:#007700;color:#007700}
+.status-warn{border-color:#c07000;color:#c07000}
+.status-crit{border-color:#cc0000;color:#cc0000}
+
+/* ── GPS popup ───────────────────────────── */
+.gps-popup{display:none;position:absolute;z-index:10;left:125px;bottom:10px;
+  background:var(--popup-bg);border:2px solid var(--btn-border);
+  border-radius:6px;padding:6px 8px;font-size:12px;color:var(--text);
+  min-width:160px;max-width:240px}
+
+/* ── Gas info / Tank info ─────────────────── */
+.gas-info{position:absolute;z-index:1;left:30px;top:242px;text-align:right;font-size:12px;line-height:16px;color:var(--text)}
+.tank-info{position:absolute;z-index:1;left:30px;top:125px;text-align:right;font-size:12px;line-height:16px;color:var(--text)}
+
+/* ── Location label ──────────────────────── */
+.loc-label{position:absolute;z-index:1;left:125px;bottom:19px;font-size:12px;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── RS485 status ────────────────────────── */
+.rs485-status{position:absolute;z-index:1;left:50%;transform:translateX(-50%);top:60px;font-size:11px;color:#cc3300;font-weight:600;display:none}
+
+/* ── Spinner (loading state) ─────────────── */
+.refresh-dot{position:absolute;z-index:2;right:6px;top:6px;width:8px;height:8px;border-radius:50%;background:#888;transition:background .3s}
+.refresh-dot.active{background:#00b894}
+
+/* Shore caption */
+.shore-caption{position:absolute;z-index:1;font-size:11px;color:var(--text);text-align:center}
+</style>
+</head>
+<body class="day">
+
+<!-- Refresh indicator -->
+<div class="refresh-dot" id="rdot" title="Daten werden geladen..."></div>
+
+<!-- ── Ducato background SVG ──────────────── -->
+<svg class="ducato-silhouette" viewBox="0 0 800 480" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+  <!-- Day Ducato outline (semi-transparent white van shape) -->
+  <g id="ducato-day" opacity="0.18" fill="none" stroke="#fff" stroke-width="2">
+    <!-- Van body -->
+    <path d="M60,380 L60,220 Q62,195 80,185 L150,140 Q165,125 195,120 L580,118 Q620,118 650,130 L720,165 Q740,175 745,200 L748,380 Z"/>
+    <!-- Roof rack / wind deflector -->
+    <path d="M190,118 L190,90 Q192,70 220,65 L560,65 Q588,68 600,80 L610,118"/>
+    <!-- Front windshield -->
+    <path d="M640,135 L700,168 Q730,182 735,210 L735,250 L600,250 L600,130 Z"/>
+    <!-- Rear panel -->
+    <path d="M60,220 L60,380"/>
+    <!-- Wheel arches -->
+    <ellipse cx="195" cy="385" rx="55" ry="32"/>
+    <ellipse cx="620" cy="385" rx="55" ry="32"/>
+    <!-- Side windows -->
+    <rect x="200" y="150" width="120" height="75" rx="6"/>
+    <rect x="340" y="150" width="120" height="75" rx="6"/>
+    <rect x="480" y="150" width="100" height="75" rx="6"/>
+  </g>
+  <!-- Night Ducato outline (semi-transparent lighter color) -->
+  <g id="ducato-night" opacity="0" fill="none" stroke="#9090c0" stroke-width="2">
+    <path d="M60,380 L60,220 Q62,195 80,185 L150,140 Q165,125 195,120 L580,118 Q620,118 650,130 L720,165 Q740,175 745,200 L748,380 Z"/>
+    <path d="M190,118 L190,90 Q192,70 220,65 L560,65 Q588,68 600,80 L610,118"/>
+    <path d="M640,135 L700,168 Q730,182 735,210 L735,250 L600,250 L600,130 Z"/>
+    <ellipse cx="195" cy="385" rx="55" ry="32"/>
+    <ellipse cx="620" cy="385" rx="55" ry="32"/>
+    <rect x="200" y="150" width="120" height="75" rx="6"/>
+    <rect x="340" y="150" width="120" height="75" rx="6"/>
+    <rect x="480" y="150" width="100" height="75" rx="6"/>
+  </g>
+</svg>
+
+<!-- ── Title ───────────────────────────────── -->
+<div class="lbl lbl-title" id="title">WoMo Home Control</div>
+
+<!-- ── Time / Date ────────────────────────── -->
+<div class="lbl lbl-time" id="time-lbl">--:--:--</div>
+<div class="lbl lbl-date" id="date-lbl">--.--.----</div>
+
+<!-- ── WiFi/LTE pill ─────────────────────── -->
+<div class="pill conn-pill" title="WLAN / LTE Status" onclick="openConnModal()">
+  <div class="conn-half">
+    <div class="sig-icon" id="wifi-sig"></div>
+    <div class="conn-led led-unk" id="wifi-led"></div>
+    <div class="conn-label">WiFi</div>
+  </div>
+  <div class="divider"></div>
+  <div class="conn-half">
+    <div class="sig-icon" id="lte-sig"></div>
+    <div class="conn-led led-unk" id="lte-led"></div>
+    <div class="conn-label">LTE</div>
+  </div>
+</div>
+
+<!-- ── Classic (12V / KFZ) button ──────────── -->
+<div class="round-btn btn-green" id="classic-btn"
+     style="left:10px;top:10px;width:48px;height:48px;"
+     title="12V Bordnetz (Langdruck)">
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M14 3v8M14 3l-4 4M14 3l4 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="14" cy="17" r="7" stroke="currentColor" stroke-width="2"/>
+    <line x1="11" y1="17" x2="17" y2="17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  </svg>
+</div>
+
+<!-- ── Radio (Multimedia) button ────────────── -->
+<div class="round-btn btn-blue" id="radio-btn"
+     style="left:10px;bottom:10px;width:48px;height:48px;"
+     title="Multimedia">
+  <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="3" y="9" width="20" height="13" rx="2.5" stroke="currentColor" stroke-width="2"/>
+    <circle cx="13" cy="15.5" r="3" stroke="currentColor" stroke-width="1.8"/>
+    <circle cx="13" cy="15.5" r="1" fill="currentColor"/>
+    <rect x="6" y="12" width="3" height="2" rx="0.5" fill="currentColor"/>
+    <path d="M7 9 Q10 4 13 4 Q16 4 19 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+  </svg>
+</div>
+
+<!-- ── Settings dots button ────────────────── -->
+<div class="pill dots-btn" title="Einstellungen">
+  <div class="dot"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+</div>
+
+<!-- ── Shore power indicator ──────────────── -->
+<div class="round-btn btn-amber" id="shore-btn"
+     style="left:376px;bottom:10px;width:48px;height:48px;"
+     title="230V Landstrom">
+  <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="13,3 20,14 15,14 17,23 6,12 11,12" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+  </svg>
+</div>
+<div class="shore-caption" id="shore-cap" style="left:376px;bottom:0px;width:48px">220 V</div>
+
+<!-- ── Backlight button ─────────────────────── -->
+<div class="round-btn" id="backlight-btn"
+     style="right:10px;bottom:10px;width:48px;height:48px;background:rgba(245,220,60,0.85);border-color:transparent;"
+     title="Display-Helligkeit">
+  <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="13" cy="13" r="5" stroke="#7A5500" stroke-width="2"/>
+    <line x1="13" y1="2" x2="13" y2="5" stroke="#7A5500" stroke-width="2" stroke-linecap="round"/>
+    <line x1="13" y1="21" x2="13" y2="24" stroke="#7A5500" stroke-width="2" stroke-linecap="round"/>
+    <line x1="2" y1="13" x2="5" y2="13" stroke="#7A5500" stroke-width="2" stroke-linecap="round"/>
+    <line x1="21" y1="13" x2="24" y2="13" stroke="#7A5500" stroke-width="2" stroke-linecap="round"/>
+    <line x1="5.3" y1="5.3" x2="7.4" y2="7.4" stroke="#7A5500" stroke-width="2" stroke-linecap="round"/>
+    <line x1="18.6" y1="18.6" x2="20.7" y2="20.7" stroke="#7A5500" stroke-width="2" stroke-linecap="round"/>
+    <line x1="20.7" y1="5.3" x2="18.6" y2="7.4" stroke="#7A5500" stroke-width="2" stroke-linecap="round"/>
+    <line x1="7.4" y1="18.6" x2="5.3" y2="20.7" stroke="#7A5500" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+</div>
+
+<!-- ── GPS button ─────────────────────────── -->
+<div class="round-btn" id="gps-btn"
+     style="left:80px;bottom:13px;width:36px;height:36px;background:var(--btn-bg);"
+     title="GPS Position" onclick="toggleGpsPopup()">
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10 2C7.2 2 5 4.2 5 7c0 4 5 11 5 11s5-7 5-11c0-2.8-2.2-5-5-5z" fill="currentColor" opacity="0.85"/>
+    <circle cx="10" cy="7" r="2" fill="white"/>
+  </svg>
+</div>
+
+<!-- GPS popup -->
+<div class="gps-popup" id="gps-popup">
+  <div id="gps-coords">GPS: –</div>
+  <div id="gps-alt" style="margin-top:3px">Höhe: – m</div>
+  <div id="gps-spd" style="margin-top:2px">Geschw.: – km/h</div>
+  <div id="gps-sat" style="margin-top:2px">Sats: –</div>
+</div>
+
+<!-- ── Location label ─────────────────────── -->
+<div class="loc-label" id="loc-label">Standort...</div>
+
+<!-- ── Outdoor air values (top right) ──────── -->
+<div class="lbl air-out" id="air-out-block">
+  <div class="title" id="air-out-title">Außen</div>
+  <div class="val" id="air-press">---- hPa →</div>
+  <div class="val" id="air-humid">--.- %</div>
+  <div class="val" id="air-temp">--.- °C</div>
+</div>
+
+<!-- ── Indoor air values ─────────────────── -->
+<div class="air-in" id="air-in-block">
+  <div class="title">Innen</div>
+  <div class="row">
+    <span id="in-humid">--.- %</span>
+    <span id="in-temp">--.- °C</span>
+  </div>
+  <div class="row2" style="text-align:right">
+    <div id="in-co2">CO2 ---- ppm</div>
+    <div id="in-iaq">IAQ --</div>
+    <div id="in-voc">bVOC --.- ppm</div>
+  </div>
+</div>
+
+<!-- ── IMU block ──────────────────────────── -->
+<div class="imu-block" id="imu-block">
+  <div class="imu-row" id="imu-pitch">Pitch: --.-°</div>
+  <div class="imu-row" id="imu-roll">Roll : --.-°</div>
+  <div class="imu-row" id="imu-hdg">-- (---°)</div>
+</div>
+
+<!-- ── Tank info label ─────────────────────── -->
+<div class="tank-info" id="tank-info">
+  Frisch: –<br>Grau: –
+</div>
+
+<!-- ── Gas info label ─────────────────────── -->
+<div class="gas-info" id="gas-info">
+  Gas (--):<br>--.- kg<br>--.- kg/h<br>--.- h
+</div>
+
+<!-- ── Fresh water tank (SVG widget) ─────── -->
+<div class="tank-widget" style="left:125px;top:90px">
+  <svg class="tank-svg" id="tank-fresh-svg" width="35" height="110" viewBox="0 0 35 110">
+    <!-- tank body -->
+    <rect x="5" y="10" width="25" height="80" rx="4" fill="#cce4ff" stroke="#3380cc" stroke-width="2"/>
+    <!-- fill level (updated by JS) -->
+    <clipPath id="cf"><rect x="5" y="10" width="25" height="80" rx="4"/></clipPath>
+    <rect id="tank-fresh-fill" x="5" y="90" width="25" height="0" clip-path="url(#cf)" fill="#4da6ff" opacity="0.7"/>
+    <!-- inlet pipe (top) -->
+    <rect x="13" y="3" width="4" height="10" rx="1" fill="#3380cc"/>
+    <rect x="10" y="2" width="10" height="4" rx="2" fill="#3380cc"/>
+    <!-- outlet pipe (bottom) -->
+    <rect x="13" y="90" width="4" height="12" rx="1" fill="#3380cc"/>
+    <!-- percent label -->
+    <text id="tank-fresh-lbl" x="17" y="55" text-anchor="middle" font-size="11" fill="#1a5c9e" font-weight="600">–%</text>
+    <!-- caption -->
+    <text x="17" y="108" text-anchor="middle" font-size="10" fill="#1a5c9e">Frisch</text>
+  </svg>
+</div>
+
+<!-- ── Grey water tank (SVG widget) ────────── -->
+<div class="tank-widget" style="left:195px;top:90px">
+  <svg class="tank-svg" id="tank-grey-svg" width="35" height="110" viewBox="0 0 35 110">
+    <rect x="5" y="10" width="25" height="80" rx="4" fill="#e8e8e8" stroke="#888" stroke-width="2"/>
+    <clipPath id="cg"><rect x="5" y="10" width="25" height="80" rx="4"/></clipPath>
+    <rect id="tank-grey-fill" x="5" y="90" width="25" height="0" clip-path="url(#cg)" fill="#a0a0a0" opacity="0.7"/>
+    <rect x="13" y="90" width="4" height="12" rx="1" fill="#888"/>
+    <rect x="6" y="76" width="5" height="5" rx="1" fill="#888"/>
+    <text id="tank-grey-lbl" x="17" y="55" text-anchor="middle" font-size="11" fill="#555" font-weight="600">–%</text>
+    <text x="17" y="108" text-anchor="middle" font-size="10" fill="#555">Grau</text>
+  </svg>
+</div>
+
+<!-- ── Gas bottle A (SVG widget) ────────────── -->
+<div class="gas-widget" style="left:108px;top:215px">
+  <svg class="gas-svg" id="gas-a-svg" width="38" height="100" viewBox="0 0 38 100">
+    <!-- bottle body -->
+    <rect id="gas-a-body" x="6" y="18" width="22" height="60" rx="5" fill="#d0d0d0" stroke="#888" stroke-width="1.5"/>
+    <!-- fill bar -->
+    <clipPath id="ga"><rect x="6" y="18" width="22" height="60" rx="5"/></clipPath>
+    <rect id="gas-a-fill" x="6" y="78" width="22" height="0" clip-path="url(#ga)" fill="#f0c030" opacity="0.85"/>
+    <!-- cap -->
+    <rect x="10" y="10" width="14" height="10" rx="3" fill="#aaa" stroke="#888" stroke-width="1"/>
+    <!-- handle -->
+    <rect x="14" y="5" width="6" height="8" rx="2" fill="#999"/>
+    <!-- ring foot -->
+    <ellipse cx="17" cy="80" rx="12" ry="3.5" fill="none" stroke="#888" stroke-width="1.5"/>
+    <!-- scale lines -->
+    <line x1="28" y1="48" x2="32" y2="48" stroke="#888" stroke-width="1"/>
+    <text x="33" y="51" font-size="7" fill="#888">50</text>
+    <!-- weight label -->
+    <text id="gas-a-lbl" x="17" y="55" text-anchor="middle" font-size="9" fill="#555" font-weight="600">–.-kg</text>
+    <!-- caption V/H -->
+    <text x="17" y="10" text-anchor="middle" font-size="9" fill="#555">V</text>
+    <text x="17" y="98" text-anchor="middle" font-size="10" fill="#555">Vorne</text>
+  </svg>
+</div>
+
+<!-- ── Gas bottle B (SVG widget) ────────────── -->
+<div class="gas-widget" style="left:178px;top:215px">
+  <svg class="gas-svg" id="gas-b-svg" width="38" height="100" viewBox="0 0 38 100">
+    <rect id="gas-b-body" x="6" y="18" width="22" height="60" rx="5" fill="#d0d0d0" stroke="#888" stroke-width="1.5"/>
+    <clipPath id="gb"><rect x="6" y="18" width="22" height="60" rx="5"/></clipPath>
+    <rect id="gas-b-fill" x="6" y="78" width="22" height="0" clip-path="url(#gb)" fill="#f0c030" opacity="0.85"/>
+    <rect x="10" y="10" width="14" height="10" rx="3" fill="#aaa" stroke="#888" stroke-width="1"/>
+    <rect x="14" y="5" width="6" height="8" rx="2" fill="#999"/>
+    <ellipse cx="17" cy="80" rx="12" ry="3.5" fill="none" stroke="#888" stroke-width="1.5"/>
+    <line x1="28" y1="48" x2="32" y2="48" stroke="#888" stroke-width="1"/>
+    <text x="33" y="51" font-size="7" fill="#888">50</text>
+    <text id="gas-b-lbl" x="17" y="55" text-anchor="middle" font-size="9" fill="#555" font-weight="600">–.-kg</text>
+    <text x="17" y="10" text-anchor="middle" font-size="9" fill="#555">H</text>
+    <text x="17" y="98" text-anchor="middle" font-size="10" fill="#555">Hinten</text>
+  </svg>
+</div>
+
+<!-- ── KFZ Battery widget ─────────────────── -->
+<div class="bat-widget" style="left:630px;top:330px">
+  <svg class="bat-svg" id="bat-kfz-svg" width="48" height="70" viewBox="0 0 48 70">
+    <!-- terminal nubs -->
+    <rect x="10" y="2" width="8" height="5" rx="2" fill="#888"/>
+    <rect x="30" y="2" width="8" height="5" rx="2" fill="#888"/>
+    <!-- body -->
+    <rect x="4" y="7" width="40" height="52" rx="4" fill="#ddd" stroke="#888" stroke-width="1.5"/>
+    <!-- fill level -->
+    <clipPath id="bkfz"><rect x="4" y="7" width="40" height="52" rx="4"/></clipPath>
+    <rect id="bat-kfz-fill" x="4" y="59" width="40" height="0" clip-path="url(#bkfz)" fill="#2E7D32" opacity="0.7"/>
+    <!-- + / – symbols -->
+    <text x="13" y="4" font-size="9" fill="#555" text-anchor="middle">+</text>
+    <text x="35" y="4" font-size="9" fill="#555" text-anchor="middle">–</text>
+    <!-- voltage label -->
+    <text id="bat-kfz-lbl" x="24" y="36" text-anchor="middle" font-size="12" fill="#333" font-weight="700">--.–V</text>
+    <text x="24" y="68" text-anchor="middle" font-size="10" fill="#555">Kfz</text>
+  </svg>
+</div>
+
+<!-- ── Board Battery widget ───────────────── -->
+<div class="bat-widget" style="left:418px;top:330px">
+  <svg class="bat-svg" id="bat-board-svg" width="48" height="70" viewBox="0 0 48 70">
+    <rect x="10" y="2" width="8" height="5" rx="2" fill="#888"/>
+    <rect x="30" y="2" width="8" height="5" rx="2" fill="#888"/>
+    <rect x="4" y="7" width="40" height="52" rx="4" fill="#ddd" stroke="#888" stroke-width="1.5"/>
+    <clipPath id="bboard"><rect x="4" y="7" width="40" height="52" rx="4"/></clipPath>
+    <rect id="bat-board-fill" x="4" y="59" width="40" height="0" clip-path="url(#bboard)" fill="#2E7D32" opacity="0.7"/>
+    <text x="13" y="4" font-size="9" fill="#555" text-anchor="middle">+</text>
+    <text x="35" y="4" font-size="9" fill="#555" text-anchor="middle">–</text>
+    <text id="bat-board-lbl" x="24" y="36" text-anchor="middle" font-size="12" fill="#333" font-weight="700">--.–V</text>
+    <text x="24" y="68" text-anchor="middle" font-size="10" fill="#555">Board</text>
+  </svg>
+</div>
+
+<!-- ── Status pill ────────────────────────── -->
+<div class="pill status-pill status-ok" id="status-pill">✓ OK</div>
+
+<!-- ── RS485 connection indicator ────────── -->
+<div class="rs485-status" id="rs485-status">⚠ RS485 – kein Sensorboard</div>
+
+<script>
+// ─── Config ───────────────────────────────
+const POLL_MS = 5000;
+const API_URL = '/api/status';
+
+// ─── State ────────────────────────────────
+let gpsVisible = false;
+
+// ─── Helpers ──────────────────────────────
+function $(id){return document.getElementById(id)}
+function setText(id,v){const el=$(id);if(el)el.textContent=v}
+function setHtml(id,v){const el=$(id);if(el)el.innerHTML=v}
+function setClass(id,cls){const el=$(id);if(el){el.className=el.className.replace(/ led-\w+/g,'').replace(/ active/g,'');el.classList.add(cls)}}
+
+function sigBars(pct,id,color){
+  const el=$(id);if(!el)return;
+  const n=Math.round((pct||0)/20)+1; // 1-5 bars
+  let h='';
+  for(let i=1;i<=5;i++){
+    const ht=4+i*3;
+    const op=i<=n?1:0.2;
+    h+=`<div class="sig-bar-el" style="height:${ht}px;opacity:${op};background:${color}"></div>`;
+  }
+  el.innerHTML=h;
+}
+
+function connLed(id,on){
+  const el=$(id);if(!el)return;
+  el.className='conn-led '+(on===null?'led-unk':on?'led-on':'led-off');
+}
+
+// ─── Battery fill helper ──────────────────
+function setBatFill(fillId,lblId,voltage,vmin,vmax){
+  const v=parseFloat(voltage)||0;
+  const pct=v<0.1?0:Math.max(0,Math.min(100,(v-vmin)/(vmax-vmin)*100));
+  const h=Math.round(pct*52/100); // 52px fill height
+  const fillEl=$(fillId);
+  if(fillEl){fillEl.setAttribute('y',String(59-h));fillEl.setAttribute('height',String(h));}
+  const col=pct<20?'#c0392b':pct<40?'#e67e22':'#2E7D32';
+  if(fillEl)fillEl.setAttribute('fill',col);
+  setText(lblId,v<0.1?'– V':`${v.toFixed(1)}V`);
+}
+
+// ─── Tank fill helper ─────────────────────
+function setTankFill(fillId,lblId,pct){
+  const p=Math.max(0,Math.min(100,pct||0));
+  const h=Math.round(p*80/100); // 80px total fill area
+  const fillEl=$(fillId);
+  if(fillEl){fillEl.setAttribute('y',String(90-h));fillEl.setAttribute('height',String(h));}
+  setText(lblId,p>0?`${p}%`:'–%');
+}
+
+// ─── Gas bottle fill helper ───────────────
+function setGasFill(fillId,bodyId,lblId,pct,weightKg){
+  const p=Math.max(0,Math.min(100,pct||0));
+  const h=Math.round(p*60/100); // 60px bottle height
+  const fillEl=$(fillId);
+  if(fillEl){fillEl.setAttribute('y',String(78-h));fillEl.setAttribute('height',String(h));}
+  const col=p<15?'#c0392b':p<30?'#e67e22':'#f0c030';
+  if(fillEl)fillEl.setAttribute('fill',col);
+  setText(lblId,weightKg!=null?`${weightKg.toFixed(1)}kg`:'–kg');
+}
+
+// ─── Clock ────────────────────────────────
+function tickClock(){
+  const now=new Date();
+  const hh=String(now.getHours()).padStart(2,'0');
+  const mm=String(now.getMinutes()).padStart(2,'0');
+  const ss=String(now.getSeconds()).padStart(2,'0');
+  setText('time-lbl',`${hh}:${mm}:${ss}`);
+  const dd=String(now.getDate()).padStart(2,'0');
+  const mo=String(now.getMonth()+1).padStart(2,'0');
+  const yy=now.getFullYear();
+  setText('date-lbl',`${dd}.${mo}.${yy}`);
+  // Day/Night theme based on hour
+  const h=now.getHours();
+  const isDay=(h>=7&&h<20);
+  document.body.className=isDay?'day':'night';
+  const dDay=$('ducato-day'),dNight=$('ducato-night');
+  if(dDay)dDay.setAttribute('opacity',isDay?'0.18':'0');
+  if(dNight)dNight.setAttribute('opacity',isDay?'0':'0.22');
+}
+setInterval(tickClock,1000);
+tickClock();
+
+// ─── GPS popup toggle ─────────────────────
+function toggleGpsPopup(){
+  const p=$('gps-popup');if(!p)return;
+  gpsVisible=!gpsVisible;
+  p.style.display=gpsVisible?'block':'none';
+}
+
+// ─── Apply JSON status ────────────────────
+function applyStatus(d){
+  // ── Theme ──────────────────────────────
+  if(d.theme){
+    const day=(d.theme==='day');
+    document.body.className=day?'day':'night';
+    const dDay=$('ducato-day'),dNight=$('ducato-night');
+    if(dDay)dDay.setAttribute('opacity',day?'0.18':'0');
+    if(dNight)dNight.setAttribute('opacity',day?'0':'0.22');
+  }
+
+  // ── Time ───────────────────────────────
+  if(d.time){setText('time-lbl',d.time);}
+  if(d.date){setText('date-lbl',d.date);}
+
+  // ── Power / Control ────────────────────
+  const pwr=d.power||{};
+  const classicBtn=$('classic-btn');
+  if(classicBtn){
+    classicBtn.classList.toggle('active',!!pwr.pwr_12v_on);
+  }
+  const radioBtn=$('radio-btn');
+  if(radioBtn){
+    radioBtn.classList.toggle('active',!!pwr.radio_on);
+  }
+  const shoreBtn=$('shore-btn');
+  if(shoreBtn){
+    shoreBtn.classList.toggle('active',!!pwr.ac_present);
+  }
+
+  // ── WiFi ───────────────────────────────
+  const wifi=d.wifi||{};
+  connLed('wifi-led',wifi.connected||null);
+  sigBars(wifi.signal_pct||0,'wifi-sig',wifi.connected?'#00c878':'#888');
+
+  // ── LTE ────────────────────────────────
+  const lte=d.lte||{};
+  connLed('lte-led',lte.registered||null);
+  sigBars(lte.signal_pct||0,'lte-sig',lte.registered?'#00c878':'#888');
+
+  // ── GPS ────────────────────────────────
+  const gps=d.gps||{};
+  if(gps.valid){
+    const lat=gps.lat!=null?gps.lat.toFixed(5):'–';
+    const lon=gps.lon!=null?gps.lon.toFixed(5):'–';
+    setText('gps-coords',`${lat}° / ${lon}°`);
+    setText('gps-alt',`Höhe: ${gps.alt_m!=null?gps.alt_m.toFixed(0):'–'} m`);
+    setText('gps-spd',`Geschw.: ${gps.spd_kmh!=null?gps.spd_kmh.toFixed(1):'–'} km/h`);
+    setText('gps-sat',`Sats: ${gps.sats||'–'}`);
+  }
+
+  // ── Location ───────────────────────────
+  if(d.location){setText('loc-label',d.location);}
+
+  // ── Outdoor air ────────────────────────
+  const bme=d.bme_out||{};
+  if(bme.valid){
+    const trend=d.press_trend||'→';
+    setText('air-press',`${bme.press_hpa!=null?bme.press_hpa.toFixed(0):'----'} hPa ${trend}`);
+    setText('air-humid',`${bme.rh_pct!=null?bme.rh_pct.toFixed(1):'--.-'} %`);
+    setText('air-temp',`${bme.temp_c!=null?bme.temp_c.toFixed(1):'--.-'} °C`);
+  }
+
+  // ── Indoor air ─────────────────────────
+  const bme_in=d.bme_in||{};
+  if(bme_in.valid){
+    setText('in-humid',`${bme_in.rh_pct!=null?bme_in.rh_pct.toFixed(1):'--.-'} %`);
+    setText('in-temp',`${bme_in.temp_c!=null?bme_in.temp_c.toFixed(1):'--.-'} °C`);
+    setText('in-co2',bme_in.eco2_ppm!=null?`CO2 ${bme_in.eco2_ppm.toFixed(0)} ppm`:'CO2 ---- ppm');
+    setText('in-iaq',bme_in.iaq!=null?`IAQ ${bme_in.iaq}`:'IAQ --');
+    setText('in-voc',bme_in.bvoc_ppm!=null?`bVOC ${bme_in.bvoc_ppm.toFixed(1)} ppm`:'bVOC --.- ppm');
+  }
+
+  // ── IMU ────────────────────────────────
+  const imu=d.imu||{};
+  if(imu.valid){
+    setText('imu-pitch',`Pitch: ${imu.pitch_deg!=null?(imu.pitch_deg>=0?'+':'')+imu.pitch_deg.toFixed(1):'--.-'}°`);
+    setText('imu-roll',`Roll : ${imu.roll_deg!=null?(imu.roll_deg>=0?'+':'')+imu.roll_deg.toFixed(1):'--.-'}°`);
+    const dir=imu.direction||'–';
+    const hdg=imu.heading_deg!=null?imu.heading_deg.toFixed(1):'---';
+    setText('imu-hdg',`${dir} (${hdg}°)`);
+  }
+
+  // ── Tanks ──────────────────────────────
+  const tank=d.tank||{};
+  if(tank.valid){
+    setTankFill('tank-fresh-fill','tank-fresh-lbl',tank.fresh_pct);
+    setTankFill('tank-grey-fill','tank-grey-lbl',tank.grey_pct);
+    const fr=tank.fresh_rate_lh!=null?` ${tank.fresh_rate_lh.toFixed(1)}L/h`:'';
+    const gr=tank.grey_rate_lh!=null?` ${tank.grey_rate_lh.toFixed(1)}L/h`:'';
+    setHtml('tank-info',`Frisch: ${tank.fresh_pct!=null?tank.fresh_pct+'%':'–'}${fr}<br>Grau: ${tank.grey_pct!=null?tank.grey_pct+'%':'–'}${gr}`);
+  }
+
+  // ── Gas bottles ────────────────────────
+  const gas=d.gas||{};
+  if(gas.valid){
+    setGasFill('gas-a-fill','gas-a-body','gas-a-lbl',gas.pct_a,gas.net_a_kg);
+    setGasFill('gas-b-fill','gas-b-body','gas-b-lbl',gas.pct_b,gas.net_b_kg);
+    const act=gas.active_idx===0?'V':'H';
+    const rest=gas.rest_h!=null?`${gas.rest_h.toFixed(1)} h`:'–';
+    const rate=gas.rate_kgph_1h!=null?`${gas.rate_kgph_1h.toFixed(2)} kg/h`:'–';
+    setHtml('gas-info',`Gas (${act}):<br>${gas.net_kg!=null?gas.net_kg.toFixed(2)+'kg':'–'}<br>${rate}<br>${rest}`);
+  }
+
+  // ── Batteries ──────────────────────────
+  const bat=d.battery||{};
+  if(bat.valid){
+    setBatFill('bat-kfz-fill','bat-kfz-lbl',bat.bat1_v,10.5,14.4);
+    setBatFill('bat-board-fill','bat-board-lbl',bat.bat2_v,10.5,14.4);
+  }
+
+  // ── Status ─────────────────────────────
+  const sp=$('status-pill');
+  if(sp&&d.status){
+    const s=d.status;
+    sp.className='pill status-pill';
+    if(s==='ok'){sp.classList.add('status-ok');sp.textContent='✓ OK';}
+    else if(s==='warn'){sp.classList.add('status-warn');sp.textContent='⚠ '+( d.status_text||'Warnung');}
+    else if(s==='crit'){sp.classList.add('status-crit');sp.textContent='✖ '+(d.status_text||'Kritisch');}
+    else{sp.classList.add('status-ok');sp.textContent=d.status_text||s;}
+  }
+
+  // ── RS485 state ────────────────────────
+  const rs=$('rs485-status');
+  if(rs){rs.style.display=(d.rs485_ok===false)?'block':'none';}
+}
+
+// ─── Poll loop ────────────────────────────
+let firstLoad=true;
+async function poll(){
+  const dot=$('rdot');
+  if(dot)dot.classList.add('active');
+  try{
+    const r=await fetch(`${API_URL}?_=${Date.now()}`);
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    const d=await r.json();
+    applyStatus(d);
+    firstLoad=false;
+  }catch(e){
+    if(firstLoad){
+      // Show demo/placeholder state on load error
+      console.warn('API nicht erreichbar:',e.message);
+    }
+  }finally{
+    if(dot)setTimeout(()=>dot.classList.remove('active'),400);
+  }
+}
+poll();
+setInterval(poll,POLL_MS);
+</script>
+</body>
+</html>

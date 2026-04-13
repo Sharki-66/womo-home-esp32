@@ -28,6 +28,7 @@ idf_component_register(
         "network/womo_router_uci.c"
         "network/womo_http_mutex.c"
         "network/womo_buzzer_http.c"
+        "network/womo_display_http.c"
         "storage/womo_sd.c"
         "rs485/womo_rs485_display.c"
         "hardware/lvgl_port.c"
@@ -54,6 +55,7 @@ idf_component_register(
         esp_timer
     EMBED_TXTFILES
         "../spiffs/buzzer_studio.html"
+        "../spiffs/womo_display.html"
 )
 
 # Warnungs-Unterdrückung für LVGL (Managed Component: lvgl__lvgl)
