@@ -201,6 +201,8 @@ static esp_err_t status_get_handler(httpd_req_t *req)
         if (hx.valid_a && hx.valid_b)
             cJSON_AddNumberToObject(j_hx, "sum_kg", (double)(hx.kg_a + hx.kg_b));
     }
+    cJSON_AddNumberToObject(j_hx, "fill_kg", SENSOR_GAS_FILL_KG);
+    cJSON_AddNumberToObject(j_hx, "tare_kg", SENSOR_GAS_TARE_KG);
 
     /* ── Batterie (ADC) ──────────────────────────────────────────────── */
     int mv = 0;
@@ -215,15 +217,17 @@ static esp_err_t status_get_handler(httpd_req_t *req)
     /* ── Tanks (ADC) ─────────────────────────────────────────────────── */
     cJSON *j_tank = cJSON_AddObjectToObject(root, "tank");
     bool t1_ok = (analog_read_mv(SENSOR_TANK1_ADC_CHANNEL, &mv) == ESP_OK);
-    int t1_pct  = t1_ok ? ((mv < 0 ? 0 : mv > 1000 ? 1000 : mv) * 100 / 1000) : 0;
+    int t1_mv   = t1_ok ? (mv < 0 ? 0 : mv > SENSOR_TANK_ADC_MAX_MV ? SENSOR_TANK_ADC_MAX_MV : mv) : 0;
+    int t1_pct  = t1_ok ? (t1_mv * 100 / SENSOR_TANK_ADC_MAX_MV) : 0;
     bool t2_ok  = (analog_read_mv(SENSOR_TANK2_ADC_CHANNEL, &mv) == ESP_OK);
-    int t2_pct  = t2_ok ? ((mv < 0 ? 0 : mv > 1000 ? 1000 : mv) * 100 / 1000) : 0;
+    int t2_mv   = t2_ok ? (mv < 0 ? 0 : mv > SENSOR_TANK_ADC_MAX_MV ? SENSOR_TANK_ADC_MAX_MV : mv) : 0;
+    int t2_pct  = t2_ok ? (t2_mv * 100 / SENSOR_TANK_ADC_MAX_MV) : 0;
     cJSON_AddNumberToObject(j_tank, "t1_pct", t1_pct);
     cJSON_AddNumberToObject(j_tank, "t2_pct", t2_pct);
     cJSON_AddBoolToObject(j_tank, "nc1", !t1_ok);
     cJSON_AddBoolToObject(j_tank, "nc2", !t2_ok);
-    cJSON_AddNumberToObject(j_tank, "t1_l", t1_ok ? (t1_pct / 100.0) * 100.0 : 0.0);
-    cJSON_AddNumberToObject(j_tank, "t2_l", t2_ok ? (t2_pct / 100.0) *  92.0 : 0.0);
+    cJSON_AddNumberToObject(j_tank, "t1_l", t1_ok ? (t1_pct / 100.0) * SENSOR_TANK1_CAPACITY_L : 0.0);
+    cJSON_AddNumberToObject(j_tank, "t2_l", t2_ok ? (t2_pct / 100.0) * SENSOR_TANK2_CAPACITY_L : 0.0);
 
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -313,7 +317,7 @@ esp_err_t sensor_http_start(void)
     config.uri_match_fn       = httpd_uri_match_wildcard;
     config.max_open_sockets   = 4;
     config.lru_purge_enable   = true;
-    config.max_uri_handlers   = 4;  /* /api/imu, /api/status, /*, OPTIONS */
+    config.max_uri_handlers   = 4;  /* /api/imu, /api/status, /* */
 
     err = httpd_start(&s_server, &config);
     if (err != ESP_OK) {

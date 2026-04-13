@@ -361,12 +361,12 @@ function gasColor(pct) {
   return 'var(--crit)';
 }
 
-/* FILL Gasflasche: 0-100% der Flaschenkapazität = 0-100% Balken */
-const GAS_FILL_KG = 11.0;
-const GAS_TARE_KG = 10.5;
+/* Gasflasche: kg → Füllstand-Prozent (fill_kg/tare_kg von Server, Fallback-Werte) */
+let GAS_FILL_KG = 11.0;
+let GAS_TARE_KG = 10.5;
 function kgToPct(kg) {
   const net = kg - GAS_TARE_KG;
-  const p = (net / GAS_FILL_KG) * 100;
+  const p = GAS_FILL_KG > 0 ? (net / GAS_FILL_KG) * 100 : 0;
   return clamp(p, 0, 100);
 }
 
@@ -402,8 +402,8 @@ function applyData(d) {
     const pitch = Number(imu.pitch_deg || 0);
     const yaw   = Number(imu.yaw_deg   || 0);
 
-    $('i-roll').textContent  = (roll  >= 0 ? '+' : '') + fmt1(roll)  + '°';
-    $('i-pitch').textContent = (pitch >= 0 ? '+' : '') + fmt1(pitch) + '°';
+    $('i-roll').textContent  = (roll  > 0 ? '+' : '') + fmt1(roll)  + '°';
+    $('i-pitch').textContent = (pitch > 0 ? '+' : '') + fmt1(pitch) + '°';
     $('i-hdg').textContent   = fmt1(yaw) + '°';
 
     /* Roll/Pitch Farbgebung: > 1° warn, > 3° crit */
@@ -496,6 +496,9 @@ function applyData(d) {
 
   /* HX711 Gas */
   const hx = d.hx || {};
+  /* Konstanten vom Server übernehmen wenn vorhanden */
+  if (hx.fill_kg > 0) GAS_FILL_KG = Number(hx.fill_kg);
+  if (hx.tare_kg >= 0) GAS_TARE_KG = Number(hx.tare_kg);
   if (!hx.nc && hx.valid) {
     if (hx.a_kg !== undefined) {
       const pa = kgToPct(Number(hx.a_kg));

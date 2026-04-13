@@ -202,6 +202,9 @@
 #define SENSOR_SPIFFS_BASE_PATH     "/spiffs"
 #define SENSOR_SPIFFS_PARTITION     "storage"
 #define SENSOR_SPIFFS_MAX_FILES     6
+#define SENSOR_TANK1_CAPACITY_L     100.0f   // Frischwasser (Liter)
+#define SENSOR_TANK2_CAPACITY_L      92.0f   // Grauwasser (Liter)
+#define SENSOR_TANK_ADC_MAX_MV      1000     // 0–1 V Votronic-Sensor = 0–100%
 
 // NTP Zeit-Synchronisation (setzt RTC nach WiFi-Verbindung)
 #define SENSOR_NTP_SERVER           "pool.ntp.org"
