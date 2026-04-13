@@ -92,15 +92,16 @@ static esp_err_t handle_status(httpd_req_t *req)
     /* ── Uhrzeit aus System-RTC ─────────────────────────────────────── */
     char time_str[12] = "--:--:--";
     char date_str[14] = "--.--.----";
-    struct tm tinfo;
-    if (womo_time_get(&tinfo) == ESP_OK && tinfo.tm_year >= (2024 - 1900)) {
+    struct tm tinfo = {0};
+    bool time_valid = (womo_time_get(&tinfo) == ESP_OK && tinfo.tm_year >= (2024 - 1900));
+    if (time_valid) {
         strftime(time_str, sizeof(time_str), "%H:%M:%S", &tinfo);
         strftime(date_str, sizeof(date_str), "%d.%m.%Y",  &tinfo);
     }
 
     /* ── Tag/Nacht-Theme bestimmen ──────────────────────────────────── */
     const char *theme = "day";
-    if (tinfo.tm_year >= (2024 - 1900)) {
+    if (time_valid) {
         int h = tinfo.tm_hour;
         theme = (h >= 7 && h < 20) ? "day" : "night";
     }
