@@ -11,6 +11,9 @@
     {
       "name": "🔵 GasBee (firmware/gasbee) - ESP32-C3",
       "path": "firmware/gasbee"
+    },
+    {
+      "path": "website"
     }
   ],
   "settings": {

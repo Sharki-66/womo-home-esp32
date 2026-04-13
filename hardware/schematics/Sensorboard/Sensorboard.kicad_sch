@@ -6851,7 +6851,7 @@
 	)
 	(wire
 		(pts
-			(xy 236.22 50.8) (xy 254 50.8)
+			(xy 236.22 50.8) (xy 248.92 50.8)
 		)
 		(stroke
 			(width 0)
@@ -9501,7 +9501,7 @@
 	)
 	(wire
 		(pts
-			(xy 257.81 50.8) (xy 261.62 50.8)
+			(xy 257.81 50.8) (xy 256.54 50.8)
 		)
 		(stroke
 			(width 0)
@@ -11930,7 +11930,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 257.81 50.8 90)
+		(at 252.73 50.8 90)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -11938,7 +11938,7 @@
 		(dnp no)
 		(uuid "3bae2c47-28f1-4e62-a352-da886affbcc8")
 		(property "Reference" "R13"
-			(at 252.73 48.26 90)
+			(at 247.65 48.26 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11946,7 +11946,7 @@
 			)
 		)
 		(property "Value" "100"
-			(at 252.984 53.848 90)
+			(at 247.904 53.848 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11954,7 +11954,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 257.81 52.578 90)
+			(at 252.73 52.578 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11963,7 +11963,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 257.81 50.8 0)
+			(at 252.73 50.8 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11972,7 +11972,7 @@
 			)
 		)
 		(property "Description" "Resistor"
-			(at 257.81 50.8 0)
+			(at 252.73 50.8 0)
 			(effects
 				(font
 					(size 1.27 1.27)

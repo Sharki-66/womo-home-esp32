@@ -12,7 +12,7 @@ import Layout from '../layouts/Layout.astro';
       </a>
       <nav class="hidden md:flex gap-6 text-sm text-gray-300">
         <a href="#features" class="hover:text-amber-400 transition">Features</a>
-        <a href="#selbstbau" class="hover:text-amber-400 transition">Selbst bauen</a>
+        <a href="/selbstbau" class="hover:text-amber-400 transition">Selbst bauen</a>
         <a href="#kaufen" class="hover:text-amber-400 transition">Kaufen</a>
         <a href="#faq" class="hover:text-amber-400 transition">FAQ</a>
       </nav>
@@ -28,7 +28,7 @@ import Layout from '../layouts/Layout.astro';
       Dein Wohnmobil.<br /><span class="text-amber-400">Immer im Blick.</span>
     </h1>
     <p class="text-lg md:text-xl text-gray-400 max-w-2xl mb-10">
-      WoMoHome ist ein selbst entwickeltes Smart-Home-System für Wohnmobile – mit Touch-Display, 
+      WoMoHome ist ein selbst entwickeltes Smart-Home-System für Wohnmobile (ersetzt die LT 48x Panel)– mit Touch-Display, 
       Sensorboard, LTE-Router und vollständiger Eigenversorgungsüberwachung.
     </p>
     <div class="flex flex-wrap justify-center gap-4">
@@ -118,8 +118,8 @@ import Layout from '../layouts/Layout.astro';
           {
             icon: "📡",
             title: "LTE-Router",
-            chip: "Teltonika RUTX11",
-            desc: "OpenWRT-basierter Router mit LTE, WLAN-AP, GNSS und HotSpot. Liefert Konnektivität und GPS-Daten für das gesamte System."
+            chip: "Teltonika RUTX11 / RUT50X",
+            desc: "OpenWRT-basierter Router mit LTE, WLAN-AP, GNSS und HotSpot. Erprobt mit dem RUTX11 (Dual-LTE, WLAN) und dem kompakteren RUT50X (Single-LTE). Andere OpenWRT-Router sind grundsätzlich möglich, erfordern jedoch ggf. Anpassungen an der Firmware."
           }
         ].map(c => (
           <div class="rounded-2xl p-8 flex flex-col gap-4" style="background:#132742;border:1px solid rgba(255,255,255,0.08)">
@@ -147,7 +147,7 @@ import Layout from '../layouts/Layout.astro';
           { icon: "🔋", title: "Batteriemonitor",      desc: "Bordnetz- und Aufbaubatterie in Volt – kontinuierlich überwacht.",                                                                                                                    link: null },
           { icon: "✈️", title: "Künstlicher Horizont", desc: "Der Sensorboard-Webserver stellt die Anzeige als Webseite bereit – abrufbar von jedem Handy, Tablet oder Autoradio im WLAN.",          link: "/horizont" },
           { icon: "🌡️", title: "Klima & Luftqualität", desc: "Innen + Außen: Temperatur, Luftfeuchte, Druck. Innen zusätzlich Luftqualität (IAQ, eCO₂, bVOC).",                                                                                      link: null },
-          { icon: "📡", title: "LTE & GPS",             desc: "Echtzeit-Signalstärke, Provider, GPS-Position – direkt vom RUTX11 Router.",                                                                                                          link: null },
+          { icon: "📡", title: "LTE & GPS",             desc: "Echtzeit-Signalstärke, Provider, GPS-Position – direkt vom Router (RUTX11 / RUT50X oder kompatibler OpenWRT-Router).",                                                                                                          link: null },
           { icon: "🖥️", title: "7\" Touch-Display",    desc: "800×480 px IPS-Panel mit GT911 kapazitivem Touch – vollständig per Finger bedienbar.",                                                                                               link: null },
           { icon: "🌐", title: "WLAN-Management",       desc: "Hotspot, gespeicherte Netzwerke, SSID-Scan, Passwort-Eingabe per QWERTZ-Tastatur. WLAN und LTE per Touch abschaltbar.",                                                          link: null },
           { icon: "🔌", title: "Bordnetz-Steuerung",    desc: "12V-Bordnetz und Multimedia per Touch oder Automatik ein-/ausschalten.",                                                                                                             link: null },
@@ -169,62 +169,29 @@ import Layout from '../layouts/Layout.astro';
     </div>
   </section>
 
-  <!-- SELBST BAUEN -->
+  <!-- SELBST BAUEN – Teaser -->
   <section id="selbstbau" class="py-24 px-4 bg-gray-900">
-    <div class="max-w-6xl mx-auto">
-      <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">Selbst bauen</h2>
-      <p class="text-center text-gray-400 max-w-2xl mx-auto mb-16">
-        Alle Quellen sind öffentlich verfügbar. Mit etwas Elektronikkenntnissen
-        lässt sich das System vollständig selbst aufbauen.
+    <div class="max-w-3xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">Lieber selbst bauen?</h2>
+      <p class="text-gray-400 max-w-xl mx-auto mb-10">
+        Alle Quelldateien – Firmware (ESP-IDF), Schaltplan (KiCad) und Hardware-Stückliste –
+        sind öffentlich auf GitHub verfügbar. Mit etwas Elektronikkenntnissen lässt sich das
+        System vollständig selbst aufbauen.
       </p>
-      <div class="grid md:grid-cols-2 gap-12 items-start">
-        <!-- Hardware-Liste -->
-        <div>
-          <h3 class="text-xl font-bold mb-6 text-amber-400">Hardware-Liste</h3>
-          <ul class="space-y-3 text-sm">
-            {[
-              { comp: "Display",      desc: "Waveshare ESP32-S3-Touch-LCD-7 (7\", 800×480)", indent: false },
-              { comp: "Sensorboard",  desc: "Heemol ESP32-S3-DevKitC-1 (N16R8)",            indent: false },
-              { comp: "├ Horizont",   desc: "BNO055 (I²C, Pitch/Roll/Heading)",              indent: true  },
-              { comp: "├ Klima inn.", desc: "BME680 (Temperatur / Feuchte / IAQ / BSEC)",     indent: true  },
-              { comp: "├ Klima auß.", desc: "BME680 (Temperatur / Feuchte / Druck)",           indent: true  },
-              { comp: "├ Gas",        desc: "2× Wägezelle + HX711 ADC",                      indent: true  },
-              { comp: "├ Tanks",      desc: "2× Votronic kapazitive Sensoren",               indent: true  },
-              { comp: "└ Zeit",       desc: "RTC (Echtzeituhr, I²C)",                         indent: true  },
-              { comp: "Router",       desc: "Teltonika RUTX11 (LTE / WLAN / GNSS)",          indent: false },
-              { comp: "└ Relais",     desc: "2× Kfz-Relais mit Freilaufdiode",               indent: true  },
-            ].map(({ comp, desc, indent }) => (
-              <li class={`flex gap-3 ${indent ? 'pl-6 opacity-85' : ''}`}>
-                <span class={`font-semibold w-36 shrink-0 text-amber-400 ${indent ? 'font-mono text-xs pt-1' : ''}`}>{comp}</span>
-                <span class="text-gray-400">{desc}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <!-- Ressourcen -->
-        <div class="space-y-6">
-          <div class="bg-gray-800 border border-gray-700 rounded-xl p-6">
-            <h3 class="font-bold mb-2">💻 Firmware (ESP-IDF)</h3>
-            <p class="text-gray-400 text-sm mb-4">Die Firmware für Sensorboard und Display ist vollständig in C mit ESP-IDF 5.x entwickelt. Das Sensorboard-Hardware-Design entstand in KiCad.</p>
-            <a href="https://github.com/Sharki-66/womo-home-esp32" target="_blank" rel="noopener" class="text-amber-400 text-sm hover:underline">→ GitHub: Sharki-66/womo-home-esp32</a>
-          </div>
-          <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-amber-400/60 transition">
-              <h3 class="font-bold mb-2">🛠️ Schaltpläne</h3>
-            <p class="text-gray-400 text-sm mb-4">Sensorboard in KiCad, lizenziert unter CERN-OHL-P v2.</p>
-            <a href="/schaltplan" class="text-amber-400 text-sm hover:underline">→ Schaltplan ansehen →</a>
-          </div>
-        </div>
-      </div>
+      <a href="/selbstbau"
+         class="inline-block bg-transparent border-2 border-amber-400 text-amber-400 font-bold py-4 px-10 rounded-xl text-lg hover:bg-amber-400 hover:text-gray-950 transition shadow-lg shadow-amber-400/10">
+        → Zur Selbstbau-Anleitung
+      </a>
     </div>
   </section>
 
   <!-- KAUFEN / KONTAKT -->
   <section id="kaufen" class="py-24 px-4 bg-gray-950">
     <div class="max-w-2xl mx-auto text-center">
-      <h2 class="text-3xl md:text-4xl font-bold mb-4">Fertig kaufen</h2>
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">Sensorboard kaufen</h2>
       <p class="text-gray-400 mb-12">
-        Du möchtest das System fertig aufgebaut und getestet? Schreib mir – ich kläre Verfügbarkeit, 
-        Lieferumfang und Preis individuell.
+        Du möchtest das Sensorboard fertig bestückt und getestet? Schreib mir –
+        ich kläre Verfügbarkeit, Lieferumfang und Preis individuell.
       </p>
       <form
         action="mailto:info@womohome.de"
@@ -242,12 +209,9 @@ import Layout from '../layouts/Layout.astro';
             class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-amber-400 transition" />
         </div>
         <div>
-          <label class="block text-sm font-semibold mb-2">Interesse</label>
+          <label class="block text-sm font-semibold mb-2">Betreff</label>
           <select name="interest" class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-gray-100 focus:outline-none focus:border-amber-400 transition">
-            <option value="komplett">Komplettsystem (Display + Sensorboard + Router)</option>
-            <option value="display">Nur Display-Einheit</option>
-            <option value="sensor">Nur Sensorboard</option>
-            <option value="bausatz">Bausatz / Teilkomponenten</option>
+            <option value="sensorboard">Sensorboard kaufen</option>
             <option value="frage">Allgemeine Frage</option>
           </select>
         </div>
@@ -284,8 +248,8 @@ import Layout from '../layouts/Layout.astro';
             a: "Ja. Sensorboard und Display kommunizieren per RS485 vollständig offline. LTE und GPS sind optional."
           },
           {
-            q: "Was kostet das Komplettsystem fertig aufgebaut?",
-            a: "Preis auf Anfrage – abhängig von Komponenten und Einbau. Einfach das Kontaktformular nutzen."
+            q: "Was kostet das Sensorboard fertig aufgebaut?",
+            a: "Diese Information ist noch im Aufbau. Bei Interesse einfach das Kontaktformular nutzen – ich melde mich sobald Preise und Verfügbarkeit feststehen."
           },
           {
             q: "Wird das Projekt weiterentwickelt?",

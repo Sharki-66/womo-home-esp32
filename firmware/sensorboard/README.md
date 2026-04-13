@@ -8,8 +8,8 @@ ESP-IDF v5.5.2 · ESP32-S3-WROOM-1 (N16R8)
 |---|---|---|
 | **MCU** | Heemol ESP32-S3 N16R8 DevKitC-1 | — |
 | **IMU** | BNO055 – direkt auf Platine, Lage, Kompass, Kalibrierung | I2C 0x28 |
-| **Klima innen** | BME680 – Temp, Feuchte, Druck, IAQ (BSEC) | I2C 0x76 |
-| **Klima außen** | BME680 – Temp, Feuchte, Druck, Trend (1h/3h) | I2C 0x77 |
+| **Klima innen** | BME680 – Temp, Feuchte, Druck, IAQ (BSEC) | I2C 0x76 oder 0x77 (Auto-Detect) |
+| **Klima außen** | BME680 – Temp, Feuchte, Druck, Trend (1h/3h) | I2C 0x76 oder 0x77 |
 | **Gasfüllstand** | HX711 – 2× Wägezelle (Kanal A + B) | DOUT=GPIO47, SCK=GPIO45 |
 | **Batterien** | 2× ADC mit Spannungsteiler | Kfz=GPIO4, Board=GPIO5 |
 | **Tanks** | 2× Votronic kapazitiv (0–1V) | Frisch=GPIO1, Grau=GPIO2 |
@@ -30,10 +30,13 @@ ESP-IDF v5.5.2 · ESP32-S3-WROOM-1 (N16R8)
 | 21 | 230V AC Sense | Eingang |
 
 ### Spannungsteiler (ADC)
-Alle Batterie-/Sense-Kanäle: **100 kΩ / 22 kΩ** Teiler → Faktor 122/22.
+Nur Batteriekanaele nutzen den **100 kOhm / 22 kOhm** Teiler (Faktor 122/22).
 - Batterien: 12V → ~2,17V am ADC (BZV55B3V3 Zener-Schutz)
 - Tanks: Votronic 0–1V → direkt am ADC, 0–1000 mV = 0–100%
 - Nicht angeschlossen: < 1V
+- Batterie-Feinabgleich je Kanal über `SENSOR_BATT1_CAL_SCALE` / `SENSOR_BATT1_CAL_OFFSET_MV` und `SENSOR_BATT2_CAL_SCALE` / `SENSOR_BATT2_CAL_OFFSET_MV` in `main/sensor_config.h`
+- Tank-Feinabgleich je Kanal über `SENSOR_TANK1_CAL_SCALE` / `SENSOR_TANK1_CAL_OFFSET_MV` und `SENSOR_TANK2_CAL_SCALE` / `SENSOR_TANK2_CAL_OFFSET_MV` in `main/sensor_config.h`
+- Tank-Prozent-Mapping je Kanal über `SENSOR_TANKx_EMPTY_MV` und `SENSOR_TANKx_FULL_MV` (lineare Abbildung auf 0–100%) in `main/sensor_config.h`
 
 ## RS485-Protokoll (Topic-basiert, v2)
 CRLF-terminierte ASCII-JSON-Zeilen. Round-Robin, max. 1 Topic pro 100 ms.
@@ -48,7 +51,7 @@ CRLF-terminierte ASCII-JSON-Zeilen. Round-Robin, max. 1 Topic pro 100 ms.
 | `tank` | 10 s | t1, t2, nc1, nc2, t1_l, t2_l, rate1h/2h, rest_h |
 | `hx` | 10 s | a, b, sum, nc |
 | `gas` | 10 s | active, net, rate1h/2h, rest_h, cap_kg, pct, pct_a/b |
-| `bme` | 15 s | 0x76: temp_c, rh_pct, press_hpa, iaq, eco2_ppm; 0x77: + press_trend_state, press_trend_hpa_h |
+| `bme` | 15 s | "0xNN":{chip, temp_c, rh_pct, press_hpa, gas_kohm?, iaq?, press_trend_state?} – Adress-Keys dynamisch per Auto-Detect |
 
 Nach `display_ready`: Initial-Burst aller Topics sofort.
 
@@ -73,7 +76,7 @@ main/
 │   └── sensor_i2c_bus      I2C-Bus Init
 ├── sensors/
 │   ├── analog_sensor       ADC (Batterien, Tanks)
-│   ├── bme680_sensor       BME680 + BSEC + Drucktrend
+│   ├── bme680_sensor       BME680 (2×) + BSEC + Drucktrend
 │   ├── bno055_sensor       IMU + Kalibrierung
 │   └── hx711_sensor        Wägezellen (Gas)
 ├── network/

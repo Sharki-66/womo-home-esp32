@@ -1,0 +1,16 @@
+CERN Open Hardware Licence Version 2 - Permissive (CERN-OHL-P v2)
+
+Copyright (C) 2024-2026 Hajo / WoMoHome
+Source: https://github.com/Sharki-66/womo-home-esp32
+
+This hardware design (schematics, layout, KiCad files) is licensed under the
+CERN Open Hardware Licence Version 2 - Permissive.
+
+You may redistribute and modify this hardware design under the terms of the
+CERN-OHL-P v2 (https://ohwr.org/cern_ohl_p_v2.txt).
+
+This hardware design is distributed WITHOUT ANY EXPRESS OR IMPLIED WARRANTY,
+INCLUDING OF MERCHANTABILITY, SATISFACTORY QUALITY AND FITNESS FOR A
+PARTICULAR PURPOSE. Please see the CERN-OHL-P v2 for applicable conditions.
+
+Full licence text: https://ohwr.org/cern_ohl_p_v2.txt

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WoMoHome Buzzer Studio</title>
+  <style>
+    :root {
+      --bg: #10172a;
+      --panel: #17213a;
+      --line: #27406a;
+      --text: #d8e4ff;
+      --muted: #93a6cf;
+      --ok: #16a34a;
+      --warn: #dc2626;
+      --btn: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: "Segoe UI", "Noto Sans", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top right, #1d2a4a, var(--bg));
+    }
+    h1 { margin: 0 0 8px; font-size: 1.5rem; }
+    p { margin: 0 0 16px; color: var(--muted); }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 14px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(23, 33, 58, 0.85);
+    }
+    input, button, select {
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #0f1730;
+      color: var(--text);
+      padding: 8px;
+    }
+    button {
+      cursor: pointer;
+      background: var(--btn);
+      border-color: #1e4dc7;
+      font-weight: 600;
+    }
+    button.secondary {
+      background: #1f3b73;
+      border-color: #315394;
+    }
+    button.stop { background: var(--warn); border-color: #b11f1f; }
+    button.delete {
+      background: #7f1d1d;
+      border-color: #991b1b;
+      padding: 6px 10px;
+    }
+    .status { margin-left: auto; font-size: 0.9rem; color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: var(--panel);
+    }
+    .card h2 { margin: 0 0 8px; font-size: 1rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td {
+      border-bottom: 1px solid #223559;
+      text-align: center;
+      padding: 6px 4px;
+      font-size: 0.85rem;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    td input { width: 88px; }
+    .row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .hint { margin-top: 8px; font-size: 0.8rem; color: var(--muted); }
+    @media (max-width: 600px) {
+      body { padding: 12px; }
+      .status { width: 100%; margin-left: 0; }
+      td input { width: 72px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>WoMoHome Buzzer Studio</h1>
+  <p>Direkte Ausgabe am Display-Piezo per HTTP API.</p>
+
+  <div class="toolbar">
+    <label for="apiBase">Display API:</label>
+    <input id="apiBase" type="text" value="" size="30" placeholder="leer = gleicher Host">
+    <button onclick="ping()">Ping</button>
+    <button class="stop" onclick="stopPlayback()">Stop</button>
+    <label for="volSlider" style="margin-left:12px;">&#x1F50A; Gerät:</label>
+    <input id="volSlider" type="range" min="5" max="100" value="80" step="5"
+      oninput="gVolume=+this.value;document.getElementById('volVal').textContent=this.value+'%'"
+      style="width:100px;cursor:pointer;accent-color:#2563eb;">
+    <span id="volVal" style="min-width:3em;color:#86efac;font-weight:600;">80%</span>
+    <span class="status" id="status">Bereit</span>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <details style="margin:12px 0;background:#1e2030;border-radius:8px;padding:10px 16px;">
+    <summary style="cursor:pointer;color:#a0aec0;font-size:0.85em;user-select:none;">🎵 Noten-Referenz (klicken zum Einfügen)</summary>
+    <div style="margin-top:10px;overflow-x:auto;">
+      <table style="border-collapse:collapse;font-size:0.82em;color:#e2e8f0;">
+        <thead><tr style="color:#63b3ed;">
+          <th style="padding:4px 10px;text-align:left;">Note</th>
+          <th style="padding:4px 10px;">Oktave 4</th>
+          <th style="padding:4px 10px;">Oktave 5</th>
+          <th style="padding:4px 10px;">Oktave 6</th>
+        </tr></thead>
+        <tbody id="noteRef"></tbody>
+      </table>
+      <p style="color:#718096;font-size:0.78em;margin-top:6px;">Klick auf eine Frequenz → in aktive Freq-Eingabe einfügen. Piezo klingt in Oktave 5–6 am deutlichsten.</p>
+    </div>
+  </details>
+
+  <script>
+    let gVolume = 80;
+
+    const NOTE_TABLE = [
+      {name:"C",  f4:262,  f5:523,  f6:1047},
+      {name:"D",  f4:294,  f5:587,  f6:1175},
+      {name:"E",  f4:330,  f5:659,  f6:1319},
+      {name:"F",  f4:349,  f5:698,  f6:1397},
+      {name:"G",  f4:392,  f5:784,  f6:1568},
+      {name:"A",  f4:440,  f5:880,  f6:1760},
+      {name:"H",  f4:494,  f5:988,  f6:1976},
+    ];
+    let _lastFreqInput = null;
+    document.addEventListener('focusin', e => {
+      if (e.target && e.target.type === 'number') _lastFreqInput = e.target;
+    });
+    function insertFreq(hz) {
+      if (_lastFreqInput) {
+        _lastFreqInput.value = hz;
+        _lastFreqInput.dispatchEvent(new Event('change'));
+        _lastFreqInput.focus();
+      }
+    }
+    function buildNoteTable() {
+      const tb = document.getElementById('noteRef');
+      NOTE_TABLE.forEach(n => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="padding:4px 10px;font-weight:bold;color:#fbd38d;">${n.name}</td>` +
+          [n.f4,n.f5,n.f6].map(f=>`<td style="padding:4px 10px;text-align:center;">
+            <button onclick="insertFreq(${f})" style="background:#2d3748;color:#90cdf4;border:1px solid #4a5568;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.9em;">${f} Hz</button>
+          </td>`).join('');
+        tb.appendChild(tr);
+      });
+    }
+    buildNoteTable();
+    const presets = [
+      {
+        id: "click",
+        title: "Click",
+        notes: [
+          // A5 – einzelner sauberer Ton, kein Metallklang
+          { freq_hz: 880, dur_ms: 10, pause_ms: 0 }
+        ]
+      },
+      {
+        id: "warn",
+        title: "Warnung",
+        notes: [
+          { freq_hz: 880, dur_ms: 80, pause_ms: 60 },
+          { freq_hz: 880, dur_ms: 80, pause_ms: 60 },
+          { freq_hz: 880, dur_ms: 80, pause_ms: 0 }
+        ]
+      },
+      {
+        id: "alarm",
+        title: "Alarm",
+        notes: [
+          { freq_hz: 1760, dur_ms: 180, pause_ms: 70 },
+          { freq_hz: 1760, dur_ms: 180, pause_ms: 70 },
+          { freq_hz: 1760, dur_ms: 180, pause_ms: 0 }
+        ]
+      },
+      {
+        id: "startup",
+        title: "Startup",
+        notes: [
+          // G5–A5–C6–E6 aufsteigendes Arpeggio – „System bereit"
+          { freq_hz: 784,  dur_ms: 80,  pause_ms: 0 },
+          { freq_hz: 880,  dur_ms: 80,  pause_ms: 0 },
+          { freq_hz: 1047, dur_ms: 80,  pause_ms: 0 },
+          { freq_hz: 1319, dur_ms: 200, pause_ms: 0 }
+        ]
+      },
+      {
+        id: "success",
+        title: "Erfolg",
+        notes: [
+          // G5–C6–E6 hell aufsteigend – kurze positive Bestätigung
+          { freq_hz: 784,  dur_ms: 80,  pause_ms: 0 },
+          { freq_hz: 1047, dur_ms: 100, pause_ms: 0 },
+          { freq_hz: 1319, dur_ms: 180, pause_ms: 0 }
+        ]
+      },
+      {
+        id: "error",
+        title: "Fehler",
+        notes: [
+          // A5→A4 Oktavfall – unmissverständlich negativ
+          { freq_hz: 880, dur_ms: 100, pause_ms: 0 },
+          { freq_hz: 440, dur_ms: 150, pause_ms: 0 }
+        ]
+      }
+    ];
+
+    function getBase() {
+      const value = document.getElementById("apiBase").value.trim();
+      return value || window.location.origin;
+    }
+
+    function setStatus(msg, isError = false) {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      el.style.color = isError ? "#fca5a5" : "#86efac";
+    }
+
+    async function apiPost(path, payload) {
+      const res = await fetch(getBase() + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(path + " -> " + res.status + " " + txt);
+      }
+      return res.json().catch(() => ({}));
+    }
+
+    async function ping() {
+      try {
+        const res = await fetch(getBase() + "/api/buzzer/ping");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        await res.json();
+        setStatus("Ping OK: " + getBase());
+      } catch (e) {
+        setStatus("Ping Fehler: " + e.message, true);
+      }
+    }
+
+    async function stopPlayback() {
+      try {
+        await apiPost("/api/buzzer/stop", {});
+        setStatus("Stop gesendet");
+      } catch (e) {
+        setStatus("Stop Fehler: " + e.message, true);
+      }
+    }
+
+    function num(id) {
+      return Number(document.getElementById(id).value || 0);
+    }
+
+    function updateTotal(seq) {
+      const sum = seq.notes.reduce((acc, n) => acc + n.dur_ms + n.pause_ms, 0);
+      document.getElementById("total-" + seq.id).textContent = "Gesamt: " + sum + " ms, Toene: " + seq.notes.length;
+    }
+
+    function addRow(tbody, seq, idx) {
+      const n = seq.notes[idx];
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td>" + (idx + 1) + "</td>" +
+        "<td><input id='f-" + seq.id + "-" + idx + "' type='number' min='0' max='20000' value='" + n.freq_hz + "'></td>" +
+        "<td><input id='d-" + seq.id + "-" + idx + "' type='number' min='1' max='5000' value='" + n.dur_ms + "'></td>" +
+        "<td><input id='p-" + seq.id + "-" + idx + "' type='number' min='0' max='5000' value='" + n.pause_ms + "'></td>" +
+        "<td><button class='delete' onclick=\"removeNote('" + seq.id + "'," + idx + ")\">-</button></td>";
+      tbody.appendChild(tr);
+    }
+
+    function renderRows(seq) {
+      const tbody = document.getElementById("tb-" + seq.id);
+      tbody.innerHTML = "";
+      for (let i = 0; i < seq.notes.length; i++) {
+        addRow(tbody, seq, i);
+      }
+      updateTotal(seq);
+    }
+
+    function syncFromInputs(seq) {
+      seq.notes.forEach((n, idx) => {
+        n.freq_hz = num("f-" + seq.id + "-" + idx);
+        n.dur_ms = num("d-" + seq.id + "-" + idx);
+        n.pause_ms = num("p-" + seq.id + "-" + idx);
+      });
+      updateTotal(seq);
+    }
+
+    function addNote(id) {
+      const seq = presets.find(p => p.id === id);
+      if (!seq) {
+        return;
+      }
+
+      syncFromInputs(seq);
+      const last = seq.notes[seq.notes.length - 1] || { freq_hz: 1200, dur_ms: 100, pause_ms: 40 };
+      seq.notes.push({
+        freq_hz: last.freq_hz,
+        dur_ms: last.dur_ms,
+        pause_ms: last.pause_ms
+      });
+      renderRows(seq);
+      setStatus("Ton hinzugefuegt: " + seq.title);
+    }
+
+    function removeNote(id, idx) {
+      const seq = presets.find(p => p.id === id);
+      if (!seq) {
+        return;
+      }
+
+      syncFromInputs(seq);
+      if (seq.notes.length <= 1) {
+        setStatus("Mindestens ein Ton muss bleiben", true);
+        return;
+      }
+
+      seq.notes.splice(idx, 1);
+      renderRows(seq);
+      setStatus("Ton entfernt: " + seq.title);
+    }
+
+    async function playSeq(id) {
+      try {
+        const seq = presets.find(p => p.id === id);
+        syncFromInputs(seq);
+        await apiPost("/api/buzzer/play", { notes: seq.notes, volume: gVolume });
+        setStatus("Abgespielt: " + seq.title + " (" + gVolume + "%)");
+      } catch (e) {
+        setStatus("Play Fehler: " + e.message, true);
+      }
+    }
+
+    function render() {
+      const grid = document.getElementById("grid");
+      grid.innerHTML = "";
+
+      presets.forEach(seq => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML =
+          "<h2>" + seq.title + "</h2>" +
+          "<table>" +
+            "<thead><tr><th>#</th><th>Freq Hz</th><th>On ms</th><th>Pause ms</th><th>Aktion</th></tr></thead>" +
+            "<tbody id='tb-" + seq.id + "'></tbody>" +
+          "</table>" +
+          "<div class='row'>" +
+            "<button onclick=\"playSeq('" + seq.id + "')\">Play am Display</button>" +
+            "<button onclick=\"sendPreset('" + seq.id + "')\">Preset-API</button>" +
+            "<button class='secondary' onclick=\"addNote('" + seq.id + "')\">Ton +</button>" +
+          "</div>" +
+          "<div class='hint' id='total-" + seq.id + "'></div>";
+
+        grid.appendChild(card);
+        renderRows(seq);
+      });
+    }
+
+    async function sendPreset(id) {
+      try {
+        await apiPost("/api/buzzer/play", { preset: id, volume: gVolume });
+        setStatus("Preset gesendet: " + id + " (" + gVolume + "%)");
+      } catch (e) {
+        setStatus("Preset Fehler: " + e.message, true);
+      }
+    }
+
+    render();
+    ping();
+  </script>
+</body>
+</html>

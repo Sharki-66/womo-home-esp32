@@ -1,0 +1,305 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Selbst bauen – WoMoHome" description="Schritt-für-Schritt: WoMoHome selbst aufbauen. Hardware-Liste mit Kauflinks, Firmware, Schaltplan und alle Ressourcen.">
+
+  <!-- NAV -->
+  <header class="fixed top-0 inset-x-0 z-50 backdrop-blur border-b" style="background:rgba(15,15,69,0.88);border-color:rgba(255,255,255,0.10)">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="/" class="flex items-center gap-1 text-gray-300 hover:text-amber-400 transition text-sm font-semibold border border-white/20 px-3 py-1.5 rounded-lg hover:border-amber-400">
+          ← Startseite
+        </a>
+        <a href="/" class="flex items-center gap-2">
+          <img src="/logo.png" alt="WoMoHome Logo" class="h-12 w-12 rounded-full" />
+          <span class="text-xl font-bold text-amber-400 tracking-tight">WoMoHome</span>
+        </a>
+      </div>
+      <nav class="hidden md:flex gap-6 text-sm text-gray-300">
+        <a href="/#features" class="hover:text-amber-400 transition">Features</a>
+        <a href="/schaltplan" class="hover:text-amber-400 transition">Schaltplan</a>
+        <a href="/#kaufen" class="hover:text-amber-400 transition">Kaufen</a>
+        <a href="/horizont" class="hover:text-amber-400 transition">✈️ Demo</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="pt-24 pb-20 px-4" style="background:#191970;min-height:100vh">
+    <div class="max-w-5xl mx-auto">
+
+      <!-- Überschrift -->
+      <div class="text-center mb-16">
+        <h1 class="text-3xl md:text-5xl font-extrabold mb-4">Selbst bauen</h1>
+        <p class="text-gray-400 max-w-2xl mx-auto">
+          Alle Quelldateien sind öffentlich verfügbar. Mit Grundkenntnissen in Elektronik und
+          ESP-IDF lässt sich WoMoHome vollständig selbst aufbauen.
+        </p>
+      </div>
+
+      <!-- VORAUSSETZUNGEN -->
+      <section class="mb-16">
+        <h2 class="text-2xl font-bold mb-6 text-amber-400">Voraussetzungen</h2>
+        <div class="grid sm:grid-cols-3 gap-4 text-sm">
+          {[
+            { icon: "🔧", title: "Elektronik-Grundkenntnisse", desc: "Löten, Spannungsteiler, I²C/UART-Verkabelung." },
+            { icon: "💻", title: "ESP-IDF 5.x", desc: "Firmware für Sensorboard und Display wird mit ESP-IDF kompiliert und geflasht." },
+            { icon: "🚐", title: "12V-Bordnetz", desc: "Entwickelt für Fahrzeuge mit Schaudt EBL/LT-Panel – grundsätzlich aber auf jedes 12V-System adaptierbar." },
+          ].map(({ icon, title, desc }) => (
+            <div class="bg-white/5 border border-white/10 rounded-xl p-5">
+              <div class="text-3xl mb-2">{icon}</div>
+              <div class="font-semibold mb-1">{title}</div>
+              <p class="text-gray-400">{desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <!-- HARDWARE-LISTE -->
+      <section class="mb-16">
+        <h2 class="text-2xl font-bold mb-2 text-amber-400">Hardware-Liste</h2>
+        <p class="text-gray-400 text-sm mb-8">Alle Komponenten mit Hinweisen zur Bezugsquelle.</p>
+
+        <div class="space-y-4">
+
+          <!-- Display -->
+          <div class="bg-white/5 border border-white/10 rounded-2xl p-6">
+            <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+              <div class="text-4xl">🖥️</div>
+              <div class="flex-1">
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                  <h3 class="font-bold text-lg">Display-Einheit</h3>
+                  <span class="text-xs text-amber-400 font-mono bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded">1× benötigt</span>
+                </div>
+                <p class="text-gray-300 font-semibold text-sm mb-1">Waveshare ESP32-S3-Touch-LCD-7</p>
+                <p class="text-gray-400 text-sm mb-3">
+                  7″ IPS-Panel, 800×480 px, kapazitiver Touch (GT911), ESP32-S3, integriertes WLAN.
+                  Wird über RS485 mit dem Sensorboard verbunden.
+                </p>
+                <a href="https://www.waveshare.com/esp32-s3-touch-lcd-7.htm" target="_blank" rel="noopener"
+                   class="inline-block text-amber-400 text-sm border border-amber-400/40 px-3 py-1 rounded-lg hover:bg-amber-400/10 transition">
+                  → Waveshare Shop
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sensorboard -->
+          <div class="bg-white/5 border border-white/10 rounded-2xl p-6">
+            <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+              <div class="text-4xl">🔧</div>
+              <div class="flex-1">
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                  <h3 class="font-bold text-lg">Sensorboard (eigene Platine)</h3>
+                  <span class="text-xs text-amber-400 font-mono bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded">1× benötigt</span>
+                </div>
+                <p class="text-gray-300 font-semibold text-sm mb-1">Heemol ESP32-S3-DevKitC-1 (N16R8) + KiCad-Platine</p>
+                <p class="text-gray-400 text-sm mb-2">
+                  Das Herzstück der Sensorik. Die eigene Platine (Schaltplan auf GitHub/KiCad)
+                  trägt den ESP32-S3 und verbindet alle Sensoren und Eingänge.
+                </p>
+                <ul class="text-gray-400 text-sm mb-3 space-y-1 pl-3 border-l-2 border-amber-400/30">
+                  <li>✅ <span class="text-gray-200">BNO055 IMU</span> – bereits auf der Platine (Pitch, Roll, Heading)</li>
+                  <li>✅ <span class="text-gray-200">PCF8523 RTC</span> – bereits auf der Platine (Echtzeituhr)</li>
+                  <li>✅ RS485-Transceiver für Verbindung zum Display</li>
+                  <li>✅ Batterie-ADC, Tank-ADC, EBL-I/O-Anschlüsse</li>
+                </ul>
+                <div class="flex flex-wrap gap-2">
+                  <a href="/schaltplan"
+                     class="inline-block text-amber-400 text-sm border border-amber-400/40 px-3 py-1 rounded-lg hover:bg-amber-400/10 transition">
+                    → Schaltplan ansehen
+                  </a>
+                  <a href="https://github.com/Sharki-66/womo-home-esp32/tree/main/hardware/schematics/Sensorboard" target="_blank" rel="noopener"
+                     class="inline-block text-amber-400 text-sm border border-amber-400/40 px-3 py-1 rounded-lg hover:bg-amber-400/10 transition">
+                    → KiCad-Dateien (GitHub)
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- BME680 -->
+          <div class="bg-white/5 border border-white/10 rounded-2xl p-6">
+            <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+              <div class="text-4xl">🌡️</div>
+              <div class="flex-1">
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                  <h3 class="font-bold text-lg">Klima-Sensoren BME680</h3>
+                  <span class="text-xs text-amber-400 font-mono bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded">2× benötigt</span>
+                </div>
+                <p class="text-gray-300 font-semibold text-sm mb-1">Bosch BME680 – Breakout-Board (I²C)</p>
+                <p class="text-gray-400 text-sm mb-2">
+                  Je ein Sensor für Innen und Außen. Der <strong class="text-gray-200">Innen-Sensor</strong> nutzt BSEC (Bosch Sensor Comfort Library)
+                  für IAQ, eCO₂ und bVOC. Der <strong class="text-gray-200">Außen-Sensor</strong> liefert nur Temperatur, Feuchte und Druck.
+                  I²C-Adresse der beiden Sensoren muss unterschiedlich sein (Lötbrücke auf dem Breakout).
+                </p>
+                <div class="flex flex-wrap gap-2">
+                  <a href="https://www.adafruit.com/product/3660" target="_blank" rel="noopener"
+                     class="inline-block text-amber-400 text-sm border border-amber-400/40 px-3 py-1 rounded-lg hover:bg-amber-400/10 transition">
+                    → Adafruit
+                  </a>
+                  <a href="https://shop.pimoroni.com/products/bme680-breakout" target="_blank" rel="noopener"
+                     class="inline-block text-amber-400 text-sm border border-amber-400/40 px-3 py-1 rounded-lg hover:bg-amber-400/10 transition">
+                    → Pimoroni
+                  </a>
+                  <span class="text-gray-500 text-sm self-center">oder „BME680 Breakout I2C" bei Amazon / AliExpress</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- HX711 + Wägezellen -->
+          <div class="bg-white/5 border border-white/10 rounded-2xl p-6">
+            <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+              <div class="text-4xl">🔥</div>
+              <div class="flex-1">
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                  <h3 class="font-bold text-lg">Gaswaage – HX711 + Wägezellen</h3>
+                  <span class="text-xs text-amber-400 font-mono bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded">2× Kit (je Flasche)</span>
+                </div>
+                <p class="text-gray-300 font-semibold text-sm mb-1">HX711 + Wägezellen als Kit – je ein Kit pro Gasflasche</p>
+                <p class="text-gray-400 text-sm mb-2">
+                  Pro Gasflasche ein komplettes Kit aus mehreren Wägezellen und einem HX711-ADC-Modul.
+                  Die Wägezellen werden unter der Gasflasche montiert und über den HX711 kombiniert ausgewertet.
+                  Das HX711-Modul wandelt das Signal digital um und liefert Füllstand 0–100 %, Verbrauchsrate und Restlaufzeit.
+                  Die Kapazität des Kits sollte auf das Leergewicht + Füllgewicht der Gasflasche abgestimmt sein.
+                </p>
+                <span class="text-gray-500 text-sm">Suchbegriff: „HX711 Wägezellen Kit" oder „Load Cell Kit HX711" bei Amazon / AliExpress</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Votronic Tanksensoren -->
+          <div class="bg-white/5 border border-white/10 rounded-2xl p-6">
+            <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+              <div class="text-4xl">💧</div>
+              <div class="flex-1">
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                  <h3 class="font-bold text-lg">Tanksensoren</h3>
+                  <span class="text-xs text-amber-400 font-mono bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded">2× benötigt</span>
+                </div>
+                <p class="text-gray-300 font-semibold text-sm mb-1">Votronic kapazitive Tanksensoren (Frisch- und Grauwasser)</p>
+                <p class="text-gray-400 text-sm mb-2">
+                  Kapazitive Messung, kein Schwimmer – funktioniert durch die Tankwand hindurch.
+                  Liefern ein analoges Spannungssignal (0–5 V) das der ADC des Sensorboards einliest.
+                  Kompatibel mit den üblichen Kunststofftanks im Wohnmobil.
+                </p>
+                <span class="text-gray-500 text-sm">„Votronic Tanksensor kapazitiv" bei Wohnmobil-Zubehörhändlern (z. B. Fritz Berger, Reimo)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- LTE-Router -->
+          <div class="bg-white/5 border border-white/10 rounded-2xl p-6">
+            <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+              <div class="text-4xl">📡</div>
+              <div class="flex-1">
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                  <h3 class="font-bold text-lg">LTE-Router (optional)</h3>
+                  <span class="text-xs text-gray-400 font-mono bg-gray-700/50 border border-gray-600 px-2 py-0.5 rounded">optional</span>
+                </div>
+                <p class="text-gray-300 font-semibold text-sm mb-1">Teltonika RUTX11 oder RUT50X (empfohlen)</p>
+                <p class="text-gray-400 text-sm mb-2">
+                  OpenWRT-basierter Router mit LTE, WLAN-AP, HotSpot und GNSS.
+                  Das Display pollt Router-Daten (GPS, LTE-Status, WLAN) direkt per HTTP/UCI-RPC.
+                  Erprobt mit dem <strong class="text-gray-200">RUTX11</strong> (Dual-LTE, Dual-WLAN, GNSS) und dem kompakteren
+                  <strong class="text-gray-200">RUT50X</strong> (Single-LTE, kompakte Bauform).
+                  Andere OpenWRT-kompatible Router sind grundsätzlich möglich, erfordern jedoch Anpassungen in der Display-Firmware.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                  <a href="https://teltonika-networks.com/de/products/routers/rutx11" target="_blank" rel="noopener"
+                     class="inline-block text-amber-400 text-sm border border-amber-400/40 px-3 py-1 rounded-lg hover:bg-amber-400/10 transition">
+                    → Teltonika RUTX11
+                  </a>
+                  <a href="https://teltonika-networks.com/de/products/routers/rut50x" target="_blank" rel="noopener"
+                     class="inline-block text-amber-400 text-sm border border-amber-400/40 px-3 py-1 rounded-lg hover:bg-amber-400/10 transition">
+                    → Teltonika RUT50X
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RS485 Verbindung -->
+          <div class="bg-white/5 border border-white/10 rounded-2xl p-6">
+            <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+              <div class="text-4xl">🔌</div>
+              <div class="flex-1">
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                  <h3 class="font-bold text-lg">RS485-Verbindung</h3>
+                  <span class="text-xs text-amber-400 font-mono bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded">Kabel + Stecker</span>
+                </div>
+                <p class="text-gray-300 font-semibold text-sm mb-1">Twisted-Pair-Kabel (A / B) zwischen Sensorboard und Display</p>
+                <p class="text-gray-400 text-sm">
+                  Kommunikation über UART2 mit RS485 Half-Duplex, 57600 Baud 8N1.
+                  Normales 2-adriges Twisted-Pair-Kabel (z. B. CAT5-Ader) reicht für typische Fahrzeuglängen.
+                  Sensorboard: TX=GPIO12, RX=GPIO11, DE/RTS=GPIO21.
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- FIRMWARE & SOFTWARE -->
+      <section class="mb-16">
+        <h2 class="text-2xl font-bold mb-6 text-amber-400">Firmware &amp; Software</h2>
+        <div class="grid sm:grid-cols-2 gap-6">
+          <div class="bg-gray-800 border border-gray-700 rounded-xl p-6">
+            <h3 class="font-bold mb-2">💻 Firmware (ESP-IDF 5.x)</h3>
+            <p class="text-gray-400 text-sm mb-4">
+              Vollständig in C entwickelt. Sensorboard und Display jeweils als eigenes ESP-IDF-Projekt.
+              BSEC-Bibliothek (Bosch) für IAQ-Berechnung auf dem Innen-BME680.
+            </p>
+            <a href="https://github.com/Sharki-66/womo-home-esp32" target="_blank" rel="noopener"
+               class="text-amber-400 text-sm hover:underline">→ GitHub: Sharki-66/womo-home-esp32</a>
+          </div>
+          <div class="bg-gray-800 border border-gray-700 rounded-xl p-6">
+            <h3 class="font-bold mb-2">🛠️ Hardware-Schaltplan</h3>
+            <p class="text-gray-400 text-sm mb-4">
+              KiCad 8, lizenziert unter CERN-OHL-P v2.
+              Enthält: 2× BME680, BNO055, HX711, PCF8523 RTC, RS485, Batterie-ADC, Tank-ADC.
+            </p>
+            <a href="/schaltplan" class="text-amber-400 text-sm hover:underline">→ Schaltplan ansehen</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- EINKAUFSLISTE KOMPAKT -->
+      <section>
+        <h2 class="text-2xl font-bold mb-6 text-amber-400">Kompakte Einkaufsliste</h2>
+        <div class="bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden text-sm">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-gray-700 text-left text-xs text-gray-500 uppercase tracking-wide">
+                <th class="px-5 py-3">Komponente</th>
+                <th class="px-5 py-3">Menge</th>
+                <th class="px-5 py-3">Hinweis</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { comp: "Waveshare ESP32-S3-Touch-LCD-7", qty: "1×", hint: "Display-Einheit" },
+                { comp: "Heemol ESP32-S3-DevKitC-1 N16R8", qty: "1×", hint: "Sensorboard (+ eigene Platine nach KiCad)" },
+                { comp: "BME680 Breakout (I²C)", qty: "2×", hint: "Innen (BSEC/IAQ) + Außen (T/H/P); unterschiedliche I²C-Adresse" },
+                { comp: "HX711 + Wägezellen Kit", qty: "2×", hint: "Je ein Kit pro Gasflasche (HX711 + mehrere Wägezellen)" },
+                { comp: "Votronic kapazitiver Tanksensor", qty: "2×", hint: "Frisch- und Grauwasser" },
+                { comp: "Twisted-Pair-Kabel (RS485 A/B)", qty: "1× Rolle", hint: "Verbindung Sensorboard ↔ Display" },
+                { comp: "Teltonika RUTX11 oder RUT50X", qty: "1×", hint: "optional – für LTE, WLAN-AP und GPS; andere OpenWRT-Router möglich" },
+              ].map(({ comp, qty, hint }, i) => (
+                <tr class={`border-b border-gray-800 ${i % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
+                  <td class="px-5 py-3 text-gray-200 font-medium">{comp}</td>
+                  <td class="px-5 py-3 text-amber-400 font-mono">{qty}</td>
+                  <td class="px-5 py-3 text-gray-400">{hint}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="text-gray-500 text-xs mt-3">* BNO055 IMU und PCF8523 RTC sind bereits auf der Platine vorgesehen – kein separater Kauf nötig.</p>
+      </section>
+
+    </div>
+  </main>
+
+</Layout>

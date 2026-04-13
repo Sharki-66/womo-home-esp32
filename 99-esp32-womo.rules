@@ -1,0 +1,20 @@
+# WoMoHome ESP32 – feste Symlinks für serielle Ports
+# Installieren:
+#   sudo cp 99-esp32-womo.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+# Prüfen:
+#   ls -la /dev/ttyESP_*
+
+# Sensorboard: Heemol ESP32-S3 DevKitC-1 (QinHeng CH343P)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", \
+  ATTRS{serial}=="5B42012672", SYMLINK+="ttyESP_SENSOR"
+
+# Display: ESP32-S3-Touch-LCD-7 (Espressif native USB JTAG)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", \
+  ATTRS{serial}=="50:78:7D:14:E3:CC", SYMLINK+="ttyESP_DISPLAY"
+
+# GasBee: ESP32-C3 (Espressif native USB JTAG)
+# SERIAL NOCH EINTRAGEN – einmal eingesteckt und auslesen:
+#   udevadm info -a -n /dev/ttyACM? | grep "ATTRS{serial}"
+# SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", \
+#   ATTRS{serial}=="XX:XX:XX:XX:XX:XX", SYMLINK+="ttyESP_GASBEE"

@@ -23,6 +23,18 @@ ESP-IDF v5.5.2 · LVGL v8.4 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 - **Konnektivität**: Modal mit AP-Status, WLAN-Scan/Connect, LTE Ein/Aus (Router UCI)
 - **Steuerung**: 12V Bordnetz + Multimedia per RS485-Kommandos ans Sensorboard
 - **Tag/Nacht**: Automatischer Themenwechsel, Backlight-Steuerung
+- **Optionales Buzzer-Studio (HTTP)**: Live-Tonvorschau am Display-Piezo via `/buzzer_studio.html` (per `#define` schaltbar, Seite ist im Firmware-Image eingebettet)
+
+## Buzzer-Studio (Optional)
+
+- Schalter: `WOMO_ENABLE_BUZZER_STUDIO_HTTP` in `main/display_config.h`
+- `1`: HTTP-Endpunkte + Studio-Seite aktiv
+- `0`: Feature komplett auskompiliert
+- Endpunkte:
+    - `GET /api/buzzer/ping`
+    - `POST /api/buzzer/play` (`preset` oder `notes[]`)
+    - `POST /api/buzzer/stop`
+- Studio-Seite: `http://<display-ip>/buzzer_studio.html`
 
 ## Externe Anbindungen
 
@@ -58,6 +70,7 @@ main/
 │   ├── womo_meteoalarm         Meteoalarm CAP-Feed
 │   ├── womo_router_uci         RUTX11 UCI JSON-RPC
 │   ├── womo_http_mutex         TLS-Session-Serialisierung
+│   ├── womo_buzzer_http        Optionales Buzzer-Studio HTTP-API + Seite
 │   └── isrg_root_x1_pem.h     Let's Encrypt Root-Zertifikat
 ├── rs485/
 │   └── womo_rs485_display      RS485-Empfang, JSON-Parsing, Merge-Snapshot
@@ -65,4 +78,7 @@ main/
 │   └── womo_sd                 SD-Karten-Zugriff (Hintergrundbilder)
 └── time/
     └── womo_time               SNTP + RTC-Sync
+
+spiffs/
+└── buzzer_studio.html          Quell-Datei der eingebetteten Web-UI fuer Live-Piezo-Test am Display
 ```

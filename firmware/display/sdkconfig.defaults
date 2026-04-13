@@ -6,6 +6,8 @@ CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+# Main-Task-Stack: groß genug für lodepng-Decode (12 KB intern) + gesamten Boot-Callstack
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 # Task-WDT: 10s Timeout – PNG-Pre-Decode (einmalig bei Theme-Änderung) kann ~500ms dauern
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
 CONFIG_TASK_WDT_TIMEOUT_S=10
@@ -15,7 +17,8 @@ CONFIG_SPIRAM_RODATA=y
 CONFIG_SPIRAM_SPEED_80M=y
 # WiFi/LwIP-Allokationen bevorzugen PSRAM, damit interner SRAM für DMA (LCD Bounce-Buffer) frei bleibt
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
-# PSRAM-Fallback für alle Malloc-Größen (0 = kein min. interner Threshold)
+# Alle Malloc-Allokationen gehen standardmäßig in PSRAM (0 = kein interner Threshold).
+# Große zusammenhängende PSRAM-Blöcke werden durch LV_DRAW_LAYER_MAX_MEMORY limitiert.
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=0
 # Interner DMA-Reserve-Pool: 32 KB
 CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
@@ -59,14 +62,17 @@ CONFIG_LV_USE_BACKWARD_COMPATIBILITY=y
 # PNG-Decoder: lodepng für LV_COLOR_FORMAT_RAW_ALPHA (Ducato, Wetter-Icons, Logo)
 CONFIG_LV_USE_LODEPNG=y
 # CLIB_MALLOC: LVGL nutzt direkt malloc/free/realloc (kein interner TLSF-Pool).
-# Mit SPIRAM_MALLOC_ALWAYSINTERNAL=0 gehen große Allokationen automatisch in PSRAM.
+# Kleine Widget-Allokationen gehen in internes SRAM, große Puffer in PSRAM.
 # CONFIG_LV_USE_BUILTIN_MALLOC is not set
 CONFIG_LV_USE_CLIB_MALLOC=y
-# LVGL Image-Cache: 2 MB in PSRAM.
-# Ducato-PNG (800×480×4=1.5MB) wird beim ERSTEN Render einmalig von lodepng dekodiert
-# und dann gecacht → jeder weitere Redraw = Cache-Hit, kein Decoder-Aufruf mehr.
-# WDT-Timeout 10s schützt den einmaligen Decode-Vorgang (~400ms).
-CONFIG_LV_CACHE_DEF_SIZE=2097152
+# LVGL Draw-Layer: max 512 KB pro Layer (erzwingt Tiled-Rendering statt
+# 1,5 MB+ Einzel-Allokation aus PSRAM die bei Fragmentierung scheitert).
+CONFIG_LV_DRAW_LAYER_MAX_MEMORY=524288
+# LVGL Image-Cache: 512 KB in PSRAM.
+# Ducato-PNG wird beim ersten Render von lodepng dekodiert und gecacht.
+# Bei Cache-Eviction (selten) wird einmalig neu dekodiert (~400ms).
+# Reduziert von 2MB auf 512KB um RAM für Screenshot-PNG-Puffer freizuhalten.
+CONFIG_LV_CACHE_DEF_SIZE=524288
 CONFIG_LV_IMAGE_HEADER_CACHE_DEF_CNT=8
 # LVGL Sysmon: CPU-Last + FPS-Anzeige (rechts unten)
 CONFIG_LV_USE_SYSMON=y
