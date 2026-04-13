@@ -1,10 +1,12 @@
 /**
- * HTTP-Server für Parkhilfe (Künstlicher Horizont).
+ * HTTP-Server für WoMoHome Sensorboard.
  *
  * - SPIFFS mounten (Partition "storage" → /spiffs)
- * - /api/imu  → JSON mit IMU-Snapshot
- * - /         → horizon.html
- * - /...       → statische Dateien aus SPIFFS
+ * - /             → womo_dashboard.html (800×480 Gesamt-Dashboard)
+ * - /horizon.html → Parkhilfe (Künstlicher Horizont)
+ * - /api/imu      → JSON mit IMU-Snapshot (BNO055)
+ * - /api/status   → JSON mit allen Sensordaten
+ * - /...          → statische Dateien aus SPIFFS
  */
 
 #include "network/wifi/sensor_http.h"
@@ -14,10 +16,16 @@
 #include "esp_spiffs.h"
 #include "sensor_config.h"
 #include "sensors/bno055_sensor.h"
+#include "sensors/bme680_sensor.h"
+#include "sensors/hx711_sensor.h"
+#include "sensors/analog_sensor.h"
+#include "cJSON.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #define TAG "sensor_http"
 
@@ -67,6 +75,17 @@ static const char *content_type_for(const char *path)
     return "application/octet-stream";
 }
 
+// ── Hilfsfunktionen ─────────────────────────────────────────────────────
+
+static void json_add_float_safe(cJSON *obj, const char *key, float val)
+{
+    if (isnan(val) || isinf(val)) {
+        cJSON_AddNullToObject(obj, key);
+    } else {
+        cJSON_AddNumberToObject(obj, key, (double)val);
+    }
+}
+
 // ── /api/imu Handler ────────────────────────────────────────────────────
 
 static esp_err_t imu_get_handler(httpd_req_t *req)
@@ -98,15 +117,139 @@ static esp_err_t imu_get_handler(httpd_req_t *req)
     return httpd_resp_send(req, buf, len);
 }
 
+// ── /api/status Handler ─────────────────────────────────────────────────
+
+static esp_err_t status_get_handler(httpd_req_t *req)
+{
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OOM");
+        return ESP_FAIL;
+    }
+
+    /* Zeitstempel */
+    time_t now_s = 0;
+    time(&now_s);
+    cJSON_AddNumberToObject(root, "ts", (double)now_s);
+
+    /* ── BNO055 IMU ──────────────────────────────────────────────────── */
+    bno055_imu_snapshot_t imu = {0};
+    bool imu_ok = bno055_imu_get_snapshot(&imu) && imu.valid;
+    cJSON *j_imu = cJSON_AddObjectToObject(root, "imu");
+    cJSON_AddBoolToObject(j_imu, "valid", imu_ok);
+    if (imu_ok) {
+        cJSON_AddNumberToObject(j_imu, "yaw_deg",   (double)imu.yaw_deg);
+        cJSON_AddNumberToObject(j_imu, "pitch_deg", (double)imu.pitch_deg);
+        cJSON_AddNumberToObject(j_imu, "roll_deg",  (double)imu.roll_deg);
+        cJSON_AddBoolToObject(j_imu, "calibrated",  imu.calibrated);
+        cJSON *cal = cJSON_AddObjectToObject(j_imu, "cal");
+        cJSON_AddNumberToObject(cal, "sys",  imu.cal_sys);
+        cJSON_AddNumberToObject(cal, "gyro", imu.cal_gyro);
+        cJSON_AddNumberToObject(cal, "acc",  imu.cal_accel);
+        cJSON_AddNumberToObject(cal, "mag",  imu.cal_mag);
+    }
+
+    /* ── BME680 ──────────────────────────────────────────────────────── */
+    bme680_snapshot_t bme = {0};
+    bool bme_ok = (bme680_app_get_snapshot(&bme) == ESP_OK);
+
+    /* indoor (0x76) */
+    cJSON *j_in = cJSON_AddObjectToObject(root, "bme_in");
+    cJSON_AddBoolToObject(j_in, "valid", bme_ok && bme.indoor.valid);
+    if (bme_ok && bme.indoor.valid) {
+        cJSON_AddNumberToObject(j_in, "temp_c",    (double)bme.indoor.temperature_c);
+        cJSON_AddNumberToObject(j_in, "rh_pct",    (double)bme.indoor.humidity_pct);
+        cJSON_AddNumberToObject(j_in, "press_hpa", (double)bme.indoor.pressure_hpa);
+        if (bme.indoor.iaq_valid) {
+            cJSON_AddNumberToObject(j_in, "iaq",      (double)bme.indoor.iaq);
+            cJSON_AddNumberToObject(j_in, "iaq_acc",  bme.indoor.iaq_accuracy);
+            json_add_float_safe(j_in, "eco2_ppm",     bme.indoor.eco2_ppm);
+            json_add_float_safe(j_in, "bvoc_ppm",     bme.indoor.bvoc_ppm);
+        }
+    }
+
+    /* outdoor (0x77) */
+    cJSON *j_out = cJSON_AddObjectToObject(root, "bme_out");
+    cJSON_AddBoolToObject(j_out, "valid", bme_ok && bme.outdoor.valid);
+    if (bme_ok && bme.outdoor.valid) {
+        cJSON_AddNumberToObject(j_out, "temp_c",    (double)bme.outdoor.temperature_c);
+        cJSON_AddNumberToObject(j_out, "rh_pct",    (double)bme.outdoor.humidity_pct);
+        cJSON_AddNumberToObject(j_out, "press_hpa", (double)bme.outdoor.pressure_hpa);
+        if (bme.outdoor.iaq_valid) {
+            cJSON_AddNumberToObject(j_out, "iaq",     (double)bme.outdoor.iaq);
+            cJSON_AddNumberToObject(j_out, "iaq_acc", bme.outdoor.iaq_accuracy);
+            json_add_float_safe(j_out, "eco2_ppm",    bme.outdoor.eco2_ppm);
+            json_add_float_safe(j_out, "bvoc_ppm",    bme.outdoor.bvoc_ppm);
+        }
+        /* Luftdrucktrend */
+        if (bme.outdoor.press_trend_1h_valid) {
+            cJSON_AddNumberToObject(j_out, "trend_1h_hpa_h", (double)bme.outdoor.press_trend_1h_hpa_h);
+            cJSON_AddNumberToObject(j_out, "trend_1h_state", (int)bme.outdoor.press_trend_1h_state);
+        }
+    }
+
+    /* ── HX711 Gaswaage ──────────────────────────────────────────────── */
+    hx711_snapshot_t hx = {0};
+    bool hx_ok = (hx711_app_get_snapshot(&hx) == ESP_OK);
+    cJSON *j_hx = cJSON_AddObjectToObject(root, "hx");
+    bool hx_nc = !hx_ok || (!hx.valid_a && !hx.valid_b);
+    cJSON_AddBoolToObject(j_hx, "valid", hx_ok && !hx_nc);
+    cJSON_AddBoolToObject(j_hx, "nc",    hx_nc);
+    if (hx_ok) {
+        if (hx.valid_a) cJSON_AddNumberToObject(j_hx, "a_kg", (double)hx.kg_a);
+        if (hx.valid_b) cJSON_AddNumberToObject(j_hx, "b_kg", (double)hx.kg_b);
+        if (hx.valid_a && hx.valid_b)
+            cJSON_AddNumberToObject(j_hx, "sum_kg", (double)(hx.kg_a + hx.kg_b));
+    }
+
+    /* ── Batterie (ADC) ──────────────────────────────────────────────── */
+    int mv = 0;
+    cJSON *j_bat = cJSON_AddObjectToObject(root, "bat");
+    bool b1_ok  = (analog_read_mv(SENSOR_BATT1_ADC_CHANNEL, &mv) == ESP_OK) && (mv > 1000);
+    cJSON_AddNumberToObject(j_bat, "b1_v", b1_ok ? mv / 1000.0 : 0.0);
+    cJSON_AddBoolToObject(j_bat, "nc1", !b1_ok);
+    bool b2_ok  = (analog_read_mv(SENSOR_BATT2_ADC_CHANNEL, &mv) == ESP_OK) && (mv > 1000);
+    cJSON_AddNumberToObject(j_bat, "b2_v", b2_ok ? mv / 1000.0 : 0.0);
+    cJSON_AddBoolToObject(j_bat, "nc2", !b2_ok);
+
+    /* ── Tanks (ADC) ─────────────────────────────────────────────────── */
+    cJSON *j_tank = cJSON_AddObjectToObject(root, "tank");
+    bool t1_ok = (analog_read_mv(SENSOR_TANK1_ADC_CHANNEL, &mv) == ESP_OK);
+    int t1_pct  = t1_ok ? ((mv < 0 ? 0 : mv > 1000 ? 1000 : mv) * 100 / 1000) : 0;
+    bool t2_ok  = (analog_read_mv(SENSOR_TANK2_ADC_CHANNEL, &mv) == ESP_OK);
+    int t2_pct  = t2_ok ? ((mv < 0 ? 0 : mv > 1000 ? 1000 : mv) * 100 / 1000) : 0;
+    cJSON_AddNumberToObject(j_tank, "t1_pct", t1_pct);
+    cJSON_AddNumberToObject(j_tank, "t2_pct", t2_pct);
+    cJSON_AddBoolToObject(j_tank, "nc1", !t1_ok);
+    cJSON_AddBoolToObject(j_tank, "nc2", !t2_ok);
+    cJSON_AddNumberToObject(j_tank, "t1_l", t1_ok ? (t1_pct / 100.0) * 100.0 : 0.0);
+    cJSON_AddNumberToObject(j_tank, "t2_l", t2_ok ? (t2_pct / 100.0) *  92.0 : 0.0);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (!json_str) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OOM");
+        return ESP_FAIL;
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    esp_err_t ret = httpd_resp_sendstr(req, json_str);
+    free(json_str);
+    return ret;
+}
+
 // ── Statische Datei Handler ─────────────────────────────────────────────
 
 static esp_err_t static_file_handler(httpd_req_t *req)
 {
     const char *uri = req->uri;
 
-    // "/" → "/horizon.html"
+    // "/" → "/womo_dashboard.html"
     if (strcmp(uri, "/") == 0) {
-        uri = "/horizon.html";
+        uri = "/womo_dashboard.html";
     }
 
     // Query-String abschneiden
@@ -166,10 +309,11 @@ esp_err_t sensor_http_start(void)
 
     // HTTP-Server konfigurieren
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.server_port      = SENSOR_HTTP_PORT;
-    config.uri_match_fn     = httpd_uri_match_wildcard;
-    config.max_open_sockets = 4;
-    config.lru_purge_enable = true;
+    config.server_port        = SENSOR_HTTP_PORT;
+    config.uri_match_fn       = httpd_uri_match_wildcard;
+    config.max_open_sockets   = 4;
+    config.lru_purge_enable   = true;
+    config.max_uri_handlers   = 4;  /* /api/imu, /api/status, /*, OPTIONS */
 
     err = httpd_start(&s_server, &config);
     if (err != ESP_OK) {
@@ -184,6 +328,13 @@ esp_err_t sensor_http_start(void)
         .handler  = imu_get_handler,
     };
     httpd_register_uri_handler(s_server, &uri_imu);
+
+    static const httpd_uri_t uri_status = {
+        .uri      = "/api/status",
+        .method   = HTTP_GET,
+        .handler  = status_get_handler,
+    };
+    httpd_register_uri_handler(s_server, &uri_status);
 
     static const httpd_uri_t uri_static = {
         .uri      = "/*",

@@ -197,11 +197,11 @@
 #define SENSOR_WIFI_RETRY_MAX       5           // Verbindungsversuche bevor Pause
 #define SENSOR_WIFI_RETRY_PAUSE_MS  30000       // 30s Pause nach fehlgeschlagenen Versuchen
 
-// HTTP Server (Parkhilfe / Horizont)
+// HTTP Server (Parkhilfe / Horizont / Dashboard)
 #define SENSOR_HTTP_PORT            80
 #define SENSOR_SPIFFS_BASE_PATH     "/spiffs"
 #define SENSOR_SPIFFS_PARTITION     "storage"
-#define SENSOR_SPIFFS_MAX_FILES     5
+#define SENSOR_SPIFFS_MAX_FILES     6
 
 // NTP Zeit-Synchronisation (setzt RTC nach WiFi-Verbindung)
 #define SENSOR_NTP_SERVER           "pool.ntp.org"

@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=800,initial-scale=1">
+  <title>WoMoHome – Sensorboard</title>
+  <style>
+    /* ── Reset & Basisstile ──────────────────────────────────────── */
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0d1113;--bg2:#111820;--bg3:#172030;
+      --border:rgba(100,160,220,0.12);
+      --txt:#d8e8f2;--txt2:#8aa4b8;--txt3:#4e6a80;
+      --ok:#00c96a;--warn:#f5a623;--crit:#e03030;--off:#3a4a58;
+      --blue:#4ab3f4;--blue2:#1a4a74;
+      --orange:#f5a623;
+      font-family:'Segoe UI',system-ui,Roboto,Arial,sans-serif;
+      color-scheme:dark;
+    }
+    html,body{width:800px;height:480px;overflow:hidden;background:var(--bg);color:var(--txt)}
+
+    /* ── Layout ──────────────────────────────────────────────────── */
+    #app{width:800px;height:480px;display:grid;
+         grid-template-rows:42px 1fr 36px;
+         grid-template-columns:1fr}
+
+    /* ── Kopfzeile ───────────────────────────────────────────────── */
+    #header{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:0 14px;
+      background:linear-gradient(90deg,#0a2240,#071830);
+      border-bottom:1px solid var(--border);
+    }
+    #header .title{font-size:17px;font-weight:700;letter-spacing:.04em;color:#e8f4ff}
+    #header .logo{font-size:13px;color:var(--blue);font-weight:600;letter-spacing:.06em}
+    #header .htime{font-size:14px;font-weight:600;color:var(--txt);font-variant-numeric:tabular-nums}
+
+    /* ── Hauptbereich ────────────────────────────────────────────── */
+    #main{display:grid;grid-template-columns:200px 1fr 192px;gap:0;overflow:hidden}
+
+    /* ── Fußzeile ────────────────────────────────────────────────── */
+    #footer{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:0 14px;
+      background:linear-gradient(90deg,#071020,#040c18);
+      border-top:1px solid var(--border);
+      font-size:11px;color:var(--txt3);
+    }
+    #footer .st{display:flex;gap:12px;align-items:center}
+    #footer .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+
+    /* ── Karten ──────────────────────────────────────────────────── */
+    .col{padding:8px;display:flex;flex-direction:column;gap:6px;border-right:1px solid var(--border)}
+    .col:last-child{border-right:none}
+    .card{background:var(--bg2);border-radius:8px;border:1px solid var(--border);padding:8px 10px;flex-shrink:0}
+    .card-title{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--txt3);margin-bottom:5px}
+
+    /* ── Zeilen / Werte ──────────────────────────────────────────── */
+    .row{display:flex;justify-content:space-between;align-items:baseline;margin:2px 0}
+    .lbl{font-size:11px;color:var(--txt2)}
+    .val{font-size:13px;font-weight:600;color:var(--txt);font-variant-numeric:tabular-nums}
+    .val.big{font-size:20px;font-weight:700}
+    .val.med{font-size:16px;font-weight:700}
+    .unit{font-size:10px;color:var(--txt3);margin-left:2px}
+
+    /* ── Farbzustände ────────────────────────────────────────────── */
+    .ok  {color:var(--ok)!important}
+    .warn{color:var(--warn)!important}
+    .crit{color:var(--crit)!important}
+    .off {color:var(--off)!important}
+
+    /* ── Fortschrittsbalken ──────────────────────────────────────── */
+    .bar-wrap{height:7px;border-radius:4px;background:rgba(255,255,255,0.07);margin:4px 0;overflow:hidden}
+    .bar-fill{height:100%;border-radius:4px;transition:width .4s;background:var(--ok)}
+    .bar-fill.warn{background:var(--warn)}
+    .bar-fill.crit{background:var(--crit)}
+
+    /* ── Horizont SVG ────────────────────────────────────────────── */
+    #horizon-svg{width:100%;aspect-ratio:1/1;max-height:130px;display:block;margin:0 auto}
+
+    /* ── IMU-Werte ───────────────────────────────────────────────── */
+    .imu-vals{display:flex;justify-content:space-around;margin-top:4px}
+    .imu-val{text-align:center}
+    .imu-val .vv{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+    .imu-val .kk{font-size:9px;color:var(--txt3);text-transform:uppercase;margin-top:1px}
+
+    /* ── Kalibrierung ────────────────────────────────────────────── */
+    .cal-dots{display:flex;gap:4px;margin-top:3px;justify-content:center}
+    .cal-dot{width:10px;height:10px;border-radius:50%;background:var(--off)}
+    .cal-dot.c1{background:var(--crit)}
+    .cal-dot.c2{background:var(--warn)}
+    .cal-dot.c3{background:#ffe156}
+    .cal-dot.c3f{background:var(--ok)}
+
+    /* ── Temperaturen ────────────────────────────────────────────── */
+    .temp-big{display:flex;align-items:baseline;gap:4px;margin:3px 0 1px}
+
+    /* ── Gasflasche ──────────────────────────────────────────────── */
+    .bottle{display:flex;gap:6px;align-items:stretch;margin:4px 0}
+    .bottle-bar{width:22px;border-radius:4px;background:rgba(255,255,255,0.05);border:1px solid var(--border);
+                position:relative;overflow:hidden;flex-shrink:0}
+    .bottle-bar-fill{position:absolute;bottom:0;width:100%;border-radius:3px;transition:height .4s;background:var(--ok)}
+    .bottle-info{flex:1;display:flex;flex-direction:column;justify-content:space-between}
+
+    /* ── Statusbuttons ───────────────────────────────────────────── */
+    .pwr-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+    .pwr-btn{border-radius:6px;padding:5px 6px;display:flex;flex-direction:column;align-items:center;
+             border:1px solid var(--border);background:var(--bg3);cursor:default}
+    .pwr-btn .pwr-icon{font-size:16px;margin-bottom:2px}
+    .pwr-btn .pwr-lbl{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em}
+    .pwr-btn.on{border-color:var(--ok);background:rgba(0,201,106,0.08)}
+    .pwr-btn.on .pwr-icon{color:var(--ok)}
+    .pwr-btn.on .pwr-lbl{color:var(--ok)}
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Kopfzeile ───────────────────────────────────────────────── -->
+  <div id="header">
+    <div class="logo">▲ WoMoHome</div>
+    <div class="title">Sensorboard Dashboard</div>
+    <div id="htime" class="htime">--:--:--</div>
+  </div>
+
+  <!-- ── Hauptbereich ────────────────────────────────────────────── -->
+  <div id="main">
+
+    <!-- ── Linke Spalte: IMU + Innenluft ──────────────────────────── -->
+    <div class="col">
+
+      <!-- Parkhilfe / Horizont -->
+      <div class="card">
+        <div class="card-title">Parkhilfe</div>
+        <svg id="horizon-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <clipPath id="hclip"><circle cx="100" cy="100" r="92"/></clipPath>
+          </defs>
+          <circle cx="100" cy="100" r="96" fill="#1a1f22"/>
+          <circle cx="100" cy="100" r="93" fill="#0f1416"/>
+          <g clip-path="url(#hclip)">
+            <g id="h-horizon" transform="rotate(0 100 100) translate(0,0)">
+              <rect x="-400" y="-400" width="1200" height="800" fill="#4ab3f4" opacity=".7"/>
+              <rect x="-400" y="100" width="1200" height="600" fill="#7a4a1a"/>
+            </g>
+            <g id="h-axis" transform="rotate(0 100 100)">
+              <line x1="14" x2="86" y1="100" y2="100" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".9"/>
+              <line x1="114" x2="186" y1="100" y2="100" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".9"/>
+              <circle cx="100" cy="100" r="2" fill="#fff" opacity=".8"/>
+            </g>
+          </g>
+          <circle cx="100" cy="100" r="92" fill="none" stroke="rgba(0,0,0,0.5)" stroke-width="6"/>
+        </svg>
+        <div class="imu-vals">
+          <div class="imu-val"><div class="vv ok" id="i-roll">--.-°</div><div class="kk">Roll</div></div>
+          <div class="imu-val"><div class="vv ok" id="i-pitch">--.-°</div><div class="kk">Pitch</div></div>
+          <div class="imu-val"><div class="vv" id="i-hdg">---°</div><div class="kk">Kurs</div></div>
+        </div>
+        <!-- Kalibrierungspunkte -->
+        <div class="cal-dots" id="cal-dots">
+          <div class="cal-dot" id="cd-sys" title="SYS"></div>
+          <div class="cal-dot" id="cd-gyro" title="Gyro"></div>
+          <div class="cal-dot" id="cd-acc" title="Acc"></div>
+          <div class="cal-dot" id="cd-mag" title="Mag"></div>
+        </div>
+      </div>
+
+      <!-- Innenluft -->
+      <div class="card" style="flex:1">
+        <div class="card-title">Innenluft (0x76)</div>
+        <div class="temp-big">
+          <span class="val big" id="in-temp">--.-</span><span class="unit">°C</span>
+        </div>
+        <div class="row"><span class="lbl">Feuchte</span><span class="val" id="in-rh">--.-%</span></div>
+        <div class="row"><span class="lbl">IAQ</span><span class="val" id="in-iaq">---</span></div>
+        <div class="row"><span class="lbl">eCO₂</span><span class="val" id="in-eco2">---- ppm</span></div>
+        <div class="row"><span class="lbl">bVOC</span><span class="val" id="in-bvoc">--.- ppm</span></div>
+      </div>
+
+    </div><!-- /col 1 -->
+
+    <!-- ── Mittlere Spalte: Außenluft + Tank + Batterie ──────────── -->
+    <div class="col">
+
+      <!-- Außenluft -->
+      <div class="card">
+        <div class="card-title">Außenluft (0x77)</div>
+        <div style="display:flex;align-items:flex-start;gap:14px">
+          <div>
+            <div class="temp-big">
+              <span class="val big" id="out-temp">--.-</span><span class="unit">°C</span>
+            </div>
+            <div class="row"><span class="lbl">Feuchte</span><span class="val" id="out-rh">--.-%</span></div>
+          </div>
+          <div style="flex:1">
+            <div class="row"><span class="lbl">Druck</span><span class="val" id="out-press">---- hPa</span></div>
+            <div class="row"><span class="lbl">Trend</span><span class="val" id="out-trend">--</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Frischwasser -->
+      <div class="card">
+        <div class="card-title">Frischwasser</div>
+        <div class="row">
+          <span class="lbl" id="t1-lbl">---</span>
+          <span class="val" id="t1-pct">--%</span>
+        </div>
+        <div class="bar-wrap"><div class="bar-fill" id="t1-bar" style="width:0%"></div></div>
+        <div class="row"><span class="lbl">Volumen</span><span class="val" id="t1-l">-- L</span></div>
+      </div>
+
+      <!-- Grauwasser -->
+      <div class="card">
+        <div class="card-title">Grauwasser</div>
+        <div class="row">
+          <span class="lbl" id="t2-lbl">---</span>
+          <span class="val" id="t2-pct">--%</span>
+        </div>
+        <div class="bar-wrap"><div class="bar-fill" id="t2-bar" style="width:0%"></div></div>
+        <div class="row"><span class="lbl">Volumen</span><span class="val" id="t2-l">-- L</span></div>
+      </div>
+
+      <!-- Batterie -->
+      <div class="card" style="flex:1">
+        <div class="card-title">Batterie</div>
+        <div class="row">
+          <span class="lbl">Kfz (B1)</span>
+          <span class="val med" id="b1-v">--.-- V</span>
+        </div>
+        <div class="bar-wrap"><div class="bar-fill" id="b1-bar" style="width:0%"></div></div>
+        <div class="row">
+          <span class="lbl">Board (B2)</span>
+          <span class="val med" id="b2-v">--.-- V</span>
+        </div>
+        <div class="bar-wrap"><div class="bar-fill" id="b2-bar" style="width:0%"></div></div>
+      </div>
+
+    </div><!-- /col 2 -->
+
+    <!-- ── Rechte Spalte: Gas + Gasflaschen ──────────────────────── -->
+    <div class="col">
+
+      <!-- Gas Flasche A -->
+      <div class="card">
+        <div class="card-title">Gas – Flasche A</div>
+        <div class="bottle">
+          <div class="bottle-bar" style="height:90px">
+            <div class="bottle-bar-fill" id="ga-bar" style="height:0%"></div>
+          </div>
+          <div class="bottle-info">
+            <div class="row"><span class="lbl">Füllstand</span><span class="val" id="ga-pct">-- %</span></div>
+            <div class="row"><span class="lbl">Gewicht</span><span class="val" id="ga-kg">-- kg</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gas Flasche B -->
+      <div class="card">
+        <div class="card-title">Gas – Flasche B</div>
+        <div class="bottle">
+          <div class="bottle-bar" style="height:90px">
+            <div class="bottle-bar-fill" id="gb-bar" style="height:0%"></div>
+          </div>
+          <div class="bottle-info">
+            <div class="row"><span class="lbl">Füllstand</span><span class="val" id="gb-pct">-- %</span></div>
+            <div class="row"><span class="lbl">Gewicht</span><span class="val" id="gb-kg">-- kg</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Parkhilfe-Link -->
+      <div class="card" style="flex:1;display:flex;flex-direction:column;justify-content:center">
+        <div class="card-title">Navigation</div>
+        <a href="/horizon.html" style="
+           display:block;margin-top:8px;padding:7px;text-align:center;
+           background:var(--blue2);border:1px solid var(--blue);border-radius:6px;
+           color:var(--blue);text-decoration:none;font-size:12px;font-weight:600">
+          ⬤ Parkhilfe / Horizont
+        </a>
+        <div id="update-info" style="text-align:center;font-size:10px;color:var(--txt3);margin-top:8px">Verbinde...</div>
+      </div>
+
+    </div><!-- /col 3 -->
+
+  </div><!-- /main -->
+
+  <!-- ── Fußzeile ────────────────────────────────────────────────── -->
+  <div id="footer">
+    <div class="st">
+      <span>womo-sensor.local</span>
+      <span id="f-age">—</span>
+    </div>
+    <div class="st">
+      <span>WiFi</span>
+    </div>
+    <div class="st">
+      <span id="f-ts">—</span>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+'use strict';
+
+/* ── Hilfsfunktionen ──────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const fmt1 = v => (typeof v === 'number' && !isNaN(v)) ? v.toFixed(1) : '--.-';
+const fmt2 = v => (typeof v === 'number' && !isNaN(v)) ? v.toFixed(2) : '--.-';
+const fmtI = v => (typeof v === 'number' && !isNaN(v)) ? Math.round(v).toString() : '--';
+
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+function volColor(v) {
+  if (v >= 13.0) return 'ok';
+  if (v >= 12.2) return 'warn';
+  return 'crit';
+}
+
+function pctColor(p) {
+  if (p >= 30) return 'ok';
+  if (p >= 15) return 'warn';
+  return 'crit';
+}
+
+function barClass(pct) {
+  if (pct >= 30) return '';
+  if (pct >= 15) return 'warn';
+  return 'crit';
+}
+
+/* Volumen (0–15V) → 0-100% für Balkendarstellung */
+function volToBar(v) { return clamp(((v - 10.5) / 4.5) * 100, 0, 100); }
+
+/* Kalibrierungspunkt-Klasse (0–3) */
+function calClass(v) {
+  if (v >= 3) return 'c3f';
+  if (v === 2) return 'c3';
+  if (v === 1) return 'c2';
+  return 'c1';
+}
+
+/* Luftdrucktrend-Pfeil */
+function trendArrow(state) {
+  const m = {'-2':'↓↓', '-1':'↓', '0':'→', '1':'↑', '2':'↑↑'};
+  return m[String(state)] || '—';
+}
+
+/* IAQ-Farbe (0–500) */
+function iaqColor(v) {
+  if (v <= 50)  return 'ok';
+  if (v <= 150) return 'warn';
+  return 'crit';
+}
+
+/* Gasfüllstand-Balken-Farbe */
+function gasColor(pct) {
+  if (pct >= 30) return 'var(--ok)';
+  if (pct >= 15) return 'var(--warn)';
+  return 'var(--crit)';
+}
+
+/* FILL Gasflasche: 0-100% der Flaschenkapazität = 0-100% Balken */
+const GAS_FILL_KG = 11.0;
+const GAS_TARE_KG = 10.5;
+function kgToPct(kg) {
+  const net = kg - GAS_TARE_KG;
+  const p = (net / GAS_FILL_KG) * 100;
+  return clamp(p, 0, 100);
+}
+
+/* ── Uhrzeit-Anzeige ─────────────────────────────────────────────── */
+function updateClock() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  const ss = String(now.getSeconds()).padStart(2,'0');
+  $('htime').textContent = `${hh}:${mm}:${ss}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+/* ── Horizont-SVG aktualisieren ──────────────────────────────────── */
+function updateHorizon(roll, pitch) {
+  const horizonEl = document.getElementById('h-horizon');
+  const axisEl    = document.getElementById('h-axis');
+  if (!horizonEl || !axisEl) return;
+
+  const pitchPx = clamp(pitch * 2.5, -80, 80);   /* Pixel pro Grad */
+  horizonEl.setAttribute('transform', `rotate(${roll} 100 100) translate(0,${pitchPx})`);
+  axisEl.setAttribute('transform', `rotate(${roll} 100 100)`);
+}
+
+/* ── Anzeige aktualisieren ───────────────────────────────────────── */
+function applyData(d) {
+
+  /* IMU */
+  const imu = d.imu || {};
+  if (imu.valid) {
+    const roll  = Number(imu.roll_deg  || 0);
+    const pitch = Number(imu.pitch_deg || 0);
+    const yaw   = Number(imu.yaw_deg   || 0);
+
+    $('i-roll').textContent  = (roll  >= 0 ? '+' : '') + fmt1(roll)  + '°';
+    $('i-pitch').textContent = (pitch >= 0 ? '+' : '') + fmt1(pitch) + '°';
+    $('i-hdg').textContent   = fmt1(yaw) + '°';
+
+    /* Roll/Pitch Farbgebung: > 1° warn, > 3° crit */
+    const tiltClass = c => Math.abs(c) > 3 ? 'crit' : Math.abs(c) > 1 ? 'warn' : 'ok';
+    $('i-roll').className  = 'vv ' + tiltClass(roll);
+    $('i-pitch').className = 'vv ' + tiltClass(pitch);
+
+    updateHorizon(roll, pitch);
+
+    /* Kalibrierungspunkte */
+    const cal = imu.cal || {};
+    ['sys','gyro','acc','mag'].forEach((k,i) => {
+      const id = ['cd-sys','cd-gyro','cd-acc','cd-mag'][i];
+      const el = $(id);
+      if (el) {
+        el.className = 'cal-dot ' + calClass(Number(cal[k] || 0));
+        el.title = k.toUpperCase() + ' = ' + (cal[k] || 0);
+      }
+    });
+  }
+
+  /* BME Innen */
+  const bi = d.bme_in || {};
+  if (bi.valid) {
+    $('in-temp').textContent = fmt1(bi.temp_c);
+    $('in-rh').textContent   = fmt1(bi.rh_pct) + ' %';
+    if (bi.iaq !== undefined) {
+      const iaqV = Number(bi.iaq);
+      $('in-iaq').textContent  = fmtI(iaqV);
+      $('in-iaq').className    = 'val ' + iaqColor(iaqV);
+    }
+    if (bi.eco2_ppm !== undefined)
+      $('in-eco2').textContent = fmtI(bi.eco2_ppm) + ' ppm';
+    if (bi.bvoc_ppm !== undefined)
+      $('in-bvoc').textContent = fmt2(bi.bvoc_ppm) + ' ppm';
+  }
+
+  /* BME Außen */
+  const bo = d.bme_out || {};
+  if (bo.valid) {
+    $('out-temp').textContent  = fmt1(bo.temp_c);
+    $('out-rh').textContent    = fmt1(bo.rh_pct) + ' %';
+    $('out-press').textContent = fmtI(bo.press_hpa) + ' hPa';
+    if (bo.trend_1h_state !== undefined) {
+      $('out-trend').textContent = trendArrow(bo.trend_1h_state);
+      const slope = Number(bo.trend_1h_hpa_h || 0);
+      $('out-trend').className = 'val ' + (slope > 0.5 ? 'ok' : slope < -0.5 ? 'crit' : '');
+    }
+  }
+
+  /* Tanks */
+  const t = d.tank || {};
+  if (!t.nc1) {
+    const p1 = Number(t.t1_pct || 0);
+    $('t1-pct').textContent = p1 + ' %';
+    $('t1-pct').className   = 'val ' + pctColor(p1);
+    $('t1-lbl').textContent = 'Frischwasser';
+    $('t1-l').textContent   = fmt1(t.t1_l) + ' L';
+    const b1f = $('t1-bar');
+    b1f.style.width = p1 + '%';
+    b1f.className   = 'bar-fill ' + barClass(p1);
+  }
+  if (!t.nc2) {
+    const p2 = Number(t.t2_pct || 0);
+    $('t2-pct').textContent = p2 + ' %';
+    $('t2-pct').className   = 'val ' + pctColor(100 - p2); /* Grau: weniger = besser */
+    $('t2-lbl').textContent = 'Grauwasser';
+    $('t2-l').textContent   = fmt1(t.t2_l) + ' L';
+    const b2f = $('t2-bar');
+    b2f.style.width = p2 + '%';
+    b2f.className   = 'bar-fill ' + barClass(100 - p2);
+  }
+
+  /* Batterie */
+  const bat = d.bat || {};
+  if (!bat.nc1) {
+    const v1 = Number(bat.b1_v || 0);
+    $('b1-v').textContent = fmt2(v1) + ' V';
+    $('b1-v').className   = 'val med ' + volColor(v1);
+    $('b1-bar').style.width = volToBar(v1) + '%';
+    $('b1-bar').className = 'bar-fill ' + barClass(volToBar(v1));
+  }
+  if (!bat.nc2) {
+    const v2 = Number(bat.b2_v || 0);
+    $('b2-v').textContent = fmt2(v2) + ' V';
+    $('b2-v').className   = 'val med ' + volColor(v2);
+    $('b2-bar').style.width = volToBar(v2) + '%';
+    $('b2-bar').className = 'bar-fill ' + barClass(volToBar(v2));
+  }
+
+  /* HX711 Gas */
+  const hx = d.hx || {};
+  if (!hx.nc && hx.valid) {
+    if (hx.a_kg !== undefined) {
+      const pa = kgToPct(Number(hx.a_kg));
+      $('ga-pct').textContent = Math.round(pa) + ' %';
+      $('ga-kg').textContent  = fmt2(hx.a_kg) + ' kg';
+      const gab = $('ga-bar');
+      gab.style.height = pa + '%';
+      gab.style.background = gasColor(pa);
+    }
+    if (hx.b_kg !== undefined) {
+      const pb = kgToPct(Number(hx.b_kg));
+      $('gb-pct').textContent = Math.round(pb) + ' %';
+      $('gb-kg').textContent  = fmt2(hx.b_kg) + ' kg';
+      const gbb = $('gb-bar');
+      gbb.style.height = pb + '%';
+      gbb.style.background = gasColor(pb);
+    }
+  } else if (hx.nc) {
+    $('ga-pct').textContent = 'n/a';
+    $('gb-pct').textContent = 'n/a';
+  }
+
+  /* Zeitstempel Fußzeile */
+  if (d.ts) {
+    const dt = new Date(Number(d.ts) * 1000);
+    const hh = String(dt.getHours()).padStart(2,'0');
+    const mm = String(dt.getMinutes()).padStart(2,'0');
+    const ss = String(dt.getSeconds()).padStart(2,'0');
+    $('f-ts').textContent = `Sensor: ${hh}:${mm}:${ss}`;
+  }
+}
+
+/* ── Polling ─────────────────────────────────────────────────────── */
+let errCount = 0;
+
+async function poll() {
+  try {
+    const resp = await fetch('/api/status', {cache:'no-store'});
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    applyData(data);
+    errCount = 0;
+    $('update-info').textContent = 'Aktualisiert: ' + new Date().toLocaleTimeString('de-DE');
+    $('f-age').textContent = '●';
+    $('f-age').style.color = 'var(--ok)';
+  } catch(e) {
+    errCount++;
+    $('update-info').textContent = 'Fehler: ' + e.message;
+    $('f-age').textContent = '✗ ' + e.message;
+    $('f-age').style.color = 'var(--crit)';
+  }
+}
+
+poll();
+setInterval(poll, 2000);
+</script>
+</body>
+</html>

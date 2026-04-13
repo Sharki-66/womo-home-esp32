@@ -1,7 +1,7 @@
 /**
- * HTTP-Server für Parkhilfe (Künstlicher Horizont).
+ * HTTP-Server für WoMoHome Sensorboard.
  *
- * Serviert horizon.html aus SPIFFS und stellt /api/imu als JSON-Endpunkt bereit.
+ * Serviert womo_dashboard.html aus SPIFFS und stellt JSON-Endpunkte bereit.
  * Wird beim Boot gestartet und läuft dauerhaft.
  */
 #pragma once
@@ -12,9 +12,11 @@
 /**
  * SPIFFS mounten und HTTP-Server auf SENSOR_HTTP_PORT starten.
  * Registrierte Routen:
- *   GET /           → horizon.html
- *   GET /api/imu    → JSON mit IMU-Daten
- *   GET /...        → statische Dateien aus SPIFFS
+ *   GET /             → womo_dashboard.html (800×480 Gesamt-Dashboard)
+ *   GET /horizon.html → Parkhilfe (Künstlicher Horizont, BNO055)
+ *   GET /api/imu      → JSON mit IMU-Daten (BNO055)
+ *   GET /api/status   → JSON mit allen Sensordaten (IMU, BME680, HX711, Bat, Tank)
+ *   GET /...          → statische Dateien aus SPIFFS
  */
 esp_err_t sensor_http_start(void);
 
