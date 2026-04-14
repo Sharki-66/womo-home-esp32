@@ -20,6 +20,9 @@
 #include "esp_spiffs.h"
 #include "sensor_config.h"
 #include "sensors/bno055_sensor.h"
+#include "network/rs485_modem.h"
+#include "network/wifi/sensor_wifi.h"
+#include "cJSON.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -73,6 +76,72 @@ static const char *content_type_for(const char *path)
     return "application/octet-stream";
 }
 
+// ── /api/cmd Handler ────────────────────────────────────────────────────
+
+static esp_err_t cmd_post_handler(httpd_req_t *req)
+{
+    char body[256] = {0};
+    int received = httpd_req_recv(req, body, sizeof(body) - 1);
+    if (received <= 0) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "No body");
+        return ESP_FAIL;
+    }
+    body[received] = '\0';
+
+    cJSON *root = cJSON_Parse(body);
+    if (!root) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    esp_err_t err = rs485_modem_execute_cmd_json(root);
+    const char *resp = (err == ESP_OK) ? "{\"ok\":true}" : "{\"ok\":false}";
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_send(req, resp, -1);
+    cJSON_Delete(root);
+    return ESP_OK;
+}
+
+// ── /api/status Handler ─────────────────────────────────────────────────
+
+static esp_err_t status_get_handler(httpd_req_t *req)
+{
+    char ssid[33] = {0};
+    int8_t rssi = 0;
+    bool connected = sensor_wifi_is_connected();
+    sensor_wifi_get_ap_info(ssid, sizeof(ssid), &rssi);
+    const char *ip = sensor_wifi_get_ip_str();
+
+    char buf[192];
+    int len = snprintf(buf, sizeof(buf),
+        "{\"connected\":%s,\"ssid\":\"%s\",\"ip\":\"%s\",\"rssi\":%d}",
+        connected ? "true" : "false",
+        ssid, ip ? ip : "", (int)rssi);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    return httpd_resp_send(req, buf, len);
+}
+
+// ── /api/data Handler ───────────────────────────────────────────────────
+
+static esp_err_t data_get_handler(httpd_req_t *req)
+{
+    char *json = NULL;
+    if (rs485_modem_get_snapshot(&json) != ESP_OK || !json) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Snapshot failed");
+        return ESP_FAIL;
+    }
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    esp_err_t err = httpd_resp_send(req, json, strlen(json));
+    free(json);
+    return err;
+}
+
 // ── /api/imu Handler ────────────────────────────────────────────────────
 
 static esp_err_t imu_get_handler(httpd_req_t *req)
@@ -110,12 +179,12 @@ static esp_err_t static_file_handler(httpd_req_t *req)
 {
     const char *uri = req->uri;
 
-    // "/" → "/horizon.html"
+    // "/" → "/dashboard.html"
     if (strcmp(uri, "/") == 0) {
-        uri = "/horizon.html";
+        uri = "/dashboard.html";
     }
 
-    // Query-String abschneiden
+    // "/horizon" oder "/horizon.html" → für Parkhilfe weiterhin nutzbar
     char clean_uri[128];
     strlcpy(clean_uri, uri, sizeof(clean_uri));
     char *q = strchr(clean_uri, '?');
@@ -184,6 +253,27 @@ esp_err_t sensor_http_start(void)
     }
 
     // Routen registrieren (spezifisch zuerst)
+    static const httpd_uri_t uri_cmd = {
+        .uri     = "/api/cmd",
+        .method  = HTTP_POST,
+        .handler = cmd_post_handler,
+    };
+    httpd_register_uri_handler(s_server, &uri_cmd);
+
+    static const httpd_uri_t uri_status = {
+        .uri     = "/api/status",
+        .method  = HTTP_GET,
+        .handler = status_get_handler,
+    };
+    httpd_register_uri_handler(s_server, &uri_status);
+
+    static const httpd_uri_t uri_data = {
+        .uri     = "/api/data",
+        .method  = HTTP_GET,
+        .handler = data_get_handler,
+    };
+    httpd_register_uri_handler(s_server, &uri_data);
+
     static const httpd_uri_t uri_imu = {
         .uri      = "/api/imu",
         .method   = HTTP_GET,

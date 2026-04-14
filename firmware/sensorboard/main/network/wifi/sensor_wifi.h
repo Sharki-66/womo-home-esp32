@@ -8,6 +8,7 @@
 
 #include "esp_err.h"
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +46,11 @@ void sensor_wifi_set_auth_fail_cb(sensor_wifi_auth_fail_cb_t cb);
 /// Liefert die aktuelle IP-Adresse als String (z.B. "192.168.1.120").
 /// Gibt leeren String zurück wenn nicht verbunden.
 const char *sensor_wifi_get_ip_str(void);
+
+/// Liefert SSID und RSSI des verbundenen APs.
+/// ssid_out: Buffer min. 33 Byte. rssi_out: RSSI-Wert (negativ). 
+/// Gibt true zurück wenn verbunden, sonst false (Puffer werden auf 0/"" gesetzt).
+bool sensor_wifi_get_ap_info(char *ssid_out, size_t ssid_len, int8_t *rssi_out);
 
 #ifdef __cplusplus
 }

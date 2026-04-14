@@ -1402,3 +1402,224 @@ esp_err_t rs485_modem_init(void)
     ESP_LOGI(TAG, "RS485 sensor link ready (UART%d)", (int)SENSOR_RS485_UART_PORT);
     return ESP_OK;
 }
+
+// ── Web-Snapshot: alle Sensordaten als JSON-String ──────────────────────
+
+esp_err_t rs485_modem_get_snapshot(char **json_out)
+{
+    if (!json_out) return ESP_ERR_INVALID_ARG;
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+
+    cJSON_AddNumberToObject(root, "ts", (double)rs485_epoch_ms());
+
+    // ctrl ──────────────────────────────────────────────────────────────
+    {
+        cJSON *j = cJSON_AddObjectToObject(root, "ctrl");
+        cJSON_AddBoolToObject(j, "pwr_on",    s_pwr_on_state);
+        cJSON_AddBoolToObject(j, "radio_on",  s_radio_on);
+        cJSON_AddBoolToObject(j, "ac_present", rs485_ac_present());
+    }
+
+    // imu ───────────────────────────────────────────────────────────────
+    {
+        bno055_imu_snapshot_t imu = {0};
+        bool ok = bno055_imu_get_snapshot(&imu) && imu.valid;
+        cJSON *j = cJSON_AddObjectToObject(root, "imu");
+        cJSON_AddBoolToObject(j, "valid", ok);
+        if (ok) {
+            cJSON_AddNumberToObject(j, "yaw",   round2(imu.yaw_deg));
+            cJSON_AddNumberToObject(j, "pitch", round2(imu.pitch_deg));
+            cJSON_AddNumberToObject(j, "roll",  round2(imu.roll_deg));
+            cJSON_AddStringToObject(j, "hdg",   heading_to_compass(imu.yaw_deg));
+            cJSON *cal = cJSON_AddObjectToObject(j, "cal");
+            cJSON_AddNumberToObject(cal, "sys",  imu.cal_sys);
+            cJSON_AddNumberToObject(cal, "gyro", imu.cal_gyro);
+            cJSON_AddNumberToObject(cal, "acc",  imu.cal_accel);
+            cJSON_AddNumberToObject(cal, "mag",  imu.cal_mag);
+            cJSON_AddBoolToObject(j, "calibrated", imu.calibrated);
+        }
+    }
+
+    // bme ───────────────────────────────────────────────────────────────
+    {
+        bme680_snapshot_t bme = {0};
+        bme680_app_get_snapshot(&bme);
+        cJSON *j = cJSON_AddObjectToObject(root, "bme");
+
+        cJSON *out = cJSON_AddObjectToObject(j, "out");
+        cJSON_AddBoolToObject(out, "valid", bme.outdoor.valid);
+        if (bme.outdoor.valid) {
+            cJSON_AddNumberToObject(out, "temp",  round2(bme.outdoor.temperature_c));
+            cJSON_AddNumberToObject(out, "rh",    round2(bme.outdoor.humidity_pct));
+            cJSON_AddNumberToObject(out, "press", round2(bme.outdoor.pressure_hpa));
+            if (bme.outdoor.gas_valid)
+                cJSON_AddNumberToObject(out, "gas", round2(bme.outdoor.gas_kohm));
+            if (bme.outdoor.iaq_valid) {
+                cJSON_AddNumberToObject(out, "iaq",     round2(bme.outdoor.iaq));
+                cJSON_AddNumberToObject(out, "iaq_acc", bme.outdoor.iaq_accuracy);
+            }
+            const char *trend = "steady";
+            if (bme.outdoor.press_trend_1h_valid) {
+                switch (bme.outdoor.press_trend_1h_state) {
+                    case BME680_TREND_FALLING_FAST: trend = "falling_fast"; break;
+                    case BME680_TREND_FALLING:       trend = "falling";      break;
+                    case BME680_TREND_RISING:        trend = "rising";       break;
+                    case BME680_TREND_RISING_FAST:   trend = "rising_fast";  break;
+                    default:                         trend = "steady";       break;
+                }
+            }
+            cJSON_AddStringToObject(out, "trend", trend);
+        }
+
+        cJSON *in = cJSON_AddObjectToObject(j, "in");
+        cJSON_AddBoolToObject(in, "valid", bme.indoor.valid);
+        if (bme.indoor.valid) {
+            cJSON_AddNumberToObject(in, "temp", round2(bme.indoor.temperature_c));
+            cJSON_AddNumberToObject(in, "rh",   round2(bme.indoor.humidity_pct));
+            if (bme.indoor.gas_valid)
+                cJSON_AddNumberToObject(in, "gas", round2(bme.indoor.gas_kohm));
+            if (bme.indoor.iaq_valid) {
+                cJSON_AddNumberToObject(in, "iaq",     round2(bme.indoor.iaq));
+                cJSON_AddNumberToObject(in, "iaq_acc", bme.indoor.iaq_accuracy);
+                cJSON_AddNumberToObject(in, "eco2",    round2(bme.indoor.eco2_ppm));
+                cJSON_AddNumberToObject(in, "bvoc",    round2(bme.indoor.bvoc_ppm));
+            }
+        }
+    }
+
+    // bat ───────────────────────────────────────────────────────────────
+    {
+        int mv = 0;
+        cJSON *j = cJSON_AddObjectToObject(root, "bat");
+        bool b1_ok = (analog_read_mv_avg(SENSOR_BATT1_ADC_CHANNEL, &mv, 3) == ESP_OK) && (mv > 1000);
+        cJSON_AddNumberToObject(j, "b1",  b1_ok ? round2(mv / 1000.0) : 0.0);
+        cJSON_AddBoolToObject(j,   "nc1", !b1_ok);
+        bool b2_ok = (analog_read_mv_avg(SENSOR_BATT2_ADC_CHANNEL, &mv, 3) == ESP_OK) && (mv > 1000);
+        cJSON_AddNumberToObject(j, "b2",  b2_ok ? round2(mv / 1000.0) : 0.0);
+        cJSON_AddBoolToObject(j,   "nc2", !b2_ok);
+    }
+
+    // tank ──────────────────────────────────────────────────────────────
+    {
+        int mv = 0;
+        cJSON *j = cJSON_AddObjectToObject(root, "tank");
+        bool t1_ok = (analog_read_mv_avg(SENSOR_TANK1_ADC_CHANNEL, &mv, 3) == ESP_OK);
+        int  t1_pct = t1_ok ? adc_mv_to_percent_cal(mv, SENSOR_TANK1_EMPTY_MV, SENSOR_TANK1_FULL_MV) : 0;
+        cJSON_AddNumberToObject(j, "t1",       t1_pct);
+        cJSON_AddBoolToObject(j,   "nc1",      !t1_ok);
+        double t1_l = t1_ok ? (t1_pct / 100.0) * 100.0 : 0.0;
+        cJSON_AddNumberToObject(j, "t1_l",     round2(t1_l));
+        cJSON_AddNumberToObject(j, "t1_rate2h", round2(s_tank1_state.rate2h));
+        double t1_rest = (s_tank1_state.rate2h < -0.1 && t1_l > 0.0)
+                         ? t1_l / (-s_tank1_state.rate2h) : 0.0;
+        cJSON_AddNumberToObject(j, "t1_rest_h", round2(t1_rest));
+
+        bool t2_ok = (analog_read_mv_avg(SENSOR_TANK2_ADC_CHANNEL, &mv, 3) == ESP_OK);
+        int  t2_pct = t2_ok ? adc_mv_to_percent_cal(mv, SENSOR_TANK2_EMPTY_MV, SENSOR_TANK2_FULL_MV) : 0;
+        cJSON_AddNumberToObject(j, "t2",       t2_pct);
+        cJSON_AddBoolToObject(j,   "nc2",      !t2_ok);
+        double t2_l = t2_ok ? (t2_pct / 100.0) * 92.0 : 0.0;
+        cJSON_AddNumberToObject(j, "t2_l",     round2(t2_l));
+        cJSON_AddNumberToObject(j, "t2_rate2h", round2(s_tank2_state.rate2h));
+        double t2_rest = (s_tank2_state.rate2h > 0.1)
+                         ? (92.0 - t2_l) / s_tank2_state.rate2h : 0.0;
+        cJSON_AddNumberToObject(j, "t2_rest_h", round2(t2_rest));
+    }
+
+    // hx + gas ──────────────────────────────────────────────────────────
+    {
+        hx711_snapshot_t hx = {0};
+        hx711_app_get_snapshot(&hx);
+        bool nc = !(hx.valid_a || hx.valid_b);
+
+        cJSON *jh = cJSON_AddObjectToObject(root, "hx");
+        cJSON_AddBoolToObject(jh, "nc", nc);
+        if (hx.valid_a) cJSON_AddNumberToObject(jh, "a", round2(hx.kg_a));
+        if (hx.valid_b) cJSON_AddNumberToObject(jh, "b", round2(hx.kg_b));
+
+        cJSON *jg = cJSON_AddObjectToObject(root, "gas");
+        cJSON_AddBoolToObject(jg, "nc", nc);
+        if (!nc) {
+            const double fill_kg = SENSOR_GAS_FILL_KG;
+            const double tare_kg = SENSOR_GAS_TARE_KG;
+            double net_a = hx.valid_a ? hx.kg_a : 0.0;
+            double net_b = hx.valid_b ? hx.kg_b : 0.0;
+            int active = (s_gas_active_override >= 0)
+                         ? s_gas_active_override : SENSOR_GAS_ACTIVE_DEFAULT;
+            if (active < 0) {
+                if (hx.valid_a) active = 0;
+                else if (hx.valid_b) active = 1;
+            }
+            double net = (active == 0) ? net_a : (active == 1) ? net_b : 0.0;
+            double pct = 0.0, pct_a = 0.0, pct_b = 0.0;
+            if (fill_kg > 0.0) {
+                pct_a = ((net_a - tare_kg) / fill_kg) * 100.0;
+                pct_b = ((net_b - tare_kg) / fill_kg) * 100.0;
+                pct   = (active == 0) ? pct_a : (active == 1) ? pct_b : 0.0;
+            }
+            if (pct_a < 0.0) { pct_a = 0.0; } else if (pct_a > 100.0) { pct_a = 100.0; }
+            if (pct_b < 0.0) { pct_b = 0.0; } else if (pct_b > 100.0) { pct_b = 100.0; }
+            if (pct   < 0.0) { pct   = 0.0; } else if (pct   > 100.0) { pct   = 100.0; }
+            double rest_h = (s_gas_state.rate2h > 0.05 && net > tare_kg)
+                            ? (net - tare_kg) / s_gas_state.rate2h : 0.0;
+            cJSON_AddNumberToObject(jg, "active", active);
+            cJSON_AddNumberToObject(jg, "net",    round2(net));
+            cJSON_AddNumberToObject(jg, "pct",    round2(pct));
+            cJSON_AddNumberToObject(jg, "pct_a",  round2(pct_a));
+            cJSON_AddNumberToObject(jg, "pct_b",  round2(pct_b));
+            cJSON_AddNumberToObject(jg, "rate1h", round2(s_gas_state.rate1h));
+            cJSON_AddNumberToObject(jg, "rate2h", round2(s_gas_state.rate2h));
+            cJSON_AddNumberToObject(jg, "rest_h", round2(rest_h));
+        }
+    }
+
+    *json_out = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    return (*json_out) ? ESP_OK : ESP_ERR_NO_MEM;
+}
+
+// ── Web-Command API ─────────────────────────────────────────────────────
+
+static void shutdown_timer_cb(void *arg)
+{
+    (void)arg;
+    deep_sleep_enter(); // kehrt nicht zurück
+}
+
+static esp_err_t execute_cmd_with_root(const cJSON *root, const char *cmd)
+{
+    esp_err_t err = ESP_OK;
+    bool handled  = rs485_execute_command(root, cmd, &err);
+    if (!handled)  return ESP_ERR_NOT_FOUND;
+    if (err != ESP_OK) return err;
+
+    if (s_shutdown_pending) {
+        s_shutdown_pending = false;
+        esp_timer_handle_t t;
+        const esp_timer_create_args_t targs = {
+            .callback = shutdown_timer_cb,
+            .name     = "web_shutdown",
+        };
+        if (esp_timer_create(&targs, &t) == ESP_OK) {
+            esp_timer_start_once(t, 500000); // 500 ms
+        }
+    }
+    return ESP_OK;
+}
+
+esp_err_t rs485_modem_execute_cmd(const char *cmd)
+{
+    if (!cmd || cmd[0] == '\0') return ESP_ERR_INVALID_ARG;
+    return execute_cmd_with_root(NULL, cmd);
+}
+
+esp_err_t rs485_modem_execute_cmd_json(const cJSON *root)
+{
+    if (!root) return ESP_ERR_INVALID_ARG;
+    const cJSON *cmd_item = cJSON_GetObjectItemCaseSensitive(root, "cmd");
+    const char *cmd = cJSON_GetStringValue(cmd_item);
+    if (!cmd || cmd[0] == '\0') return ESP_ERR_INVALID_ARG;
+    return execute_cmd_with_root(root, cmd);
+}

@@ -277,6 +277,20 @@ const char *sensor_wifi_get_ip_str(void)
     return s_ip_str;
 }
 
+bool sensor_wifi_get_ap_info(char *ssid_out, size_t ssid_len, int8_t *rssi_out)
+{
+    if (ssid_out && ssid_len > 0) ssid_out[0] = '\0';
+    if (rssi_out) *rssi_out = 0;
+    if (!sensor_wifi_is_connected()) return false;
+    wifi_ap_record_t ap;
+    if (esp_wifi_sta_get_ap_info(&ap) != ESP_OK) return false;
+    if (ssid_out && ssid_len > 0) {
+        strlcpy(ssid_out, (const char *)ap.ssid, ssid_len);
+    }
+    if (rssi_out) *rssi_out = ap.rssi;
+    return true;
+}
+
 void sensor_wifi_set_auth_fail_cb(sensor_wifi_auth_fail_cb_t cb)
 {
     s_auth_fail_cb = cb;
