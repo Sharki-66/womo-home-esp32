@@ -171,10 +171,12 @@ static esp_err_t rs485_write_and_wait(const char *payload)
     memcpy(tx_buf, preamble, sizeof(preamble));
     memcpy(tx_buf + sizeof(preamble), payload, len);
 
+    s_tx_active = true;
     int written = uart_write_bytes(RS485_UART_NUM, tx_buf, total);
     free(tx_buf);
 
     if (written <= 0) {
+        s_tx_active = false;
         return ESP_FAIL;
     }
 
@@ -184,6 +186,7 @@ static esp_err_t rs485_write_and_wait(const char *payload)
     esp_err_t wait_err = uart_wait_tx_done(RS485_UART_NUM, pdMS_TO_TICKS(WOMO_RS485_TX_WAIT_TIMEOUT_MS));
     if (wait_err != ESP_OK) {
         ESP_LOGW(TAG, "uart_wait_tx_done failed: %s", esp_err_to_name(wait_err));
+        s_tx_active = false;
         return wait_err;
     }
 
@@ -191,6 +194,7 @@ static esp_err_t rs485_write_and_wait(const char *payload)
     // Half-Duplex: Sensor wartet 150 ms nach RX vor eigenem TX,
     // daher sind direkt nach unserem TX keine Sensor-Bytes im Buffer.
     uart_flush_input(RS485_UART_NUM);
+    s_tx_active = false;
 
     return ESP_OK;
 }

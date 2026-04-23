@@ -9,20 +9,18 @@
 body{background:#111;display:flex;align-items:center;justify-content:center;
      min-height:100vh;font-family:'Segoe UI',Helvetica,Arial,sans-serif}
 #screen{width:800px;height:480px;position:relative;overflow:hidden;
-        background:#191970;color:#fff;transition:background 0.8s,color 0.3s}
-#screen.day{background:#87CEEB;color:#000}
+        background:#191970;color:#fff;transition:background 60s,color 2s}
+#screen.day{color:#000}
 .abs{position:absolute}
-.cir{border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.pill{border-radius:22px;border:none;display:flex;align-items:center;justify-content:center}
+.cir{border-radius:50%;border:none;outline:none;-webkit-tap-highlight-color:transparent;user-select:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.pill{border-radius:22px;border:none;outline:none;display:flex;align-items:center;justify-content:center}
 .sz48{width:48px;height:48px}
 .sz36{width:36px;height:36px}
-.bg-grey{background:#C0C0C0}
-.f10{font-size:10px}.f12{font-size:12px}.f14{font-size:14px}
+.bg-grey{background:#9E9E9E;box-shadow:inset 0 0 0 6px #1A1A1A,inset 0 0 0 4px #C8C8C8}
+.f10{font-size:10px}.f11{font-size:11px}.f12{font-size:12px}.f13{font-size:13px}.f14{font-size:14px}
 .f16{font-size:16px}.f18{font-size:18px}.f20{font-size:20px;font-weight:bold}
 .right{text-align:right}.center{text-align:center}
-#air-in-box{position:absolute;left:435px;top:155px;width:178px;height:88px;
-            background:rgba(8,10,50,0.72);border-radius:8px;border:1px solid #3B82F6;pointer-events:none}
-#screen.day #air-in-box{background:rgba(200,220,255,0.75);border-color:#1565C0}
+
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);
                z-index:100;align-items:center;justify-content:center}
 .modal-overlay.open{display:flex}
@@ -60,10 +58,10 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
 <div id="dim-overlay" title="Tippen zum Einschalten"></div>
 
 <!-- Power -->
-<div class="abs cir sz48" id="btn-pwr" style="left:10px;top:10px;background:#1B5E20">
+<div class="abs cir sz48 bg-grey" id="btn-pwr" style="left:10px;top:10px">
   <svg width="28" height="28" viewBox="0 0 28 28">
-    <path d="M8 6 A9 9 0 1 0 20 6" fill="none" stroke="#4CAF50" stroke-width="2.5" stroke-linecap="round"/>
-    <line x1="14" y1="2" x2="14" y2="14" stroke="#4CAF50" stroke-width="2.5" stroke-linecap="round"/>
+    <path id="pwr-arc" d="M8 6 A9 9 0 1 0 20 6" fill="none" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round"/>
+    <line id="pwr-line" x1="14" y1="2" x2="14" y2="14" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round"/>
   </svg>
 </div>
 
@@ -82,75 +80,79 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
 
 <!-- Settings Dots -->
 <div class="abs pill bg-grey"
-     style="left:240px;top:22px;width:32px;height:44px;flex-direction:column;
-            display:flex;align-items:center;justify-content:center;gap:7px;
+     style="left:204px;top:24px;width:44px;height:32px;flex-direction:row;
+            display:flex;align-items:center;justify-content:center;gap:5px;
             border-radius:22px;cursor:pointer" id="btn-settings" title="Einstellungen">
   <div style="width:6px;height:6px;border-radius:50%;background:#444"></div>
   <div style="width:6px;height:6px;border-radius:50%;background:#444"></div>
   <div style="width:6px;height:6px;border-radius:50%;background:#444"></div>
 </div>
 
-<div class="abs f20 center" style="left:0;top:8px;width:800px">WoMo Home Control</div>
-<div class="abs f16 center" style="left:0;top:35px;width:800px" id="disp-time">--:--:--</div>
+<div class="abs f20 center" style="left:0;top:8px;width:800px;pointer-events:none">WoMo Home Control</div>
+<div class="abs f16 center" style="left:0;top:35px;width:800px;pointer-events:none" id="disp-time">--:--:--</div>
 
 <!-- Outdoor Air -->
 <div class="abs f14 right" style="right:10px;top:23px">Luftwerte aussen</div>
 <div class="abs f16 right" style="right:10px;top:45px" id="press-out">---- hPa</div>
 <div class="abs f14 right" style="right:10px;top:67px" id="rh-out">--.-- %</div>
 <div class="abs f14 right" style="right:10px;top:87px" id="temp-out">--.- °C</div>
-<svg class="abs" style="right:72px;top:68px;width:64px;height:64px" viewBox="0 0 64 64">
-  <ellipse cx="32" cy="44" rx="24" ry="14" fill="#9E9E9E"/>
-  <circle cx="20" cy="38" r="13" fill="#BDBDBD"/>
-  <circle cx="38" cy="33" r="15" fill="#BDBDBD"/>
-</svg>
+<!-- Wetter-Widget (Open-Meteo + Meteocons) -->
+<div id="weather-icon" class="abs" style="right:156px;top:12px;width:56px;height:56px;pointer-events:none"></div>
+<div class="abs f11 center" style="right:152px;top:70px;width:64px;pointer-events:none;opacity:0.9" id="weather-temp"></div>
 
-<!-- Indoor Air -->
-<div id="air-in-box"></div>
-<div class="abs f16 right" style="left:442px;top:162px;width:160px">Luftwerte innen</div>
-<div class="abs f14 right" style="left:453px;top:187px;width:75px" id="rh-in">--.-- %</div>
-<div class="abs f14 right" style="left:527px;top:187px;width:75px" id="temp-in">--.- °C</div>
-<div class="abs f12 right" style="left:442px;top:207px;width:160px" id="bvoc-in">bVOC --.- ppm</div>
-<div class="abs f12"       style="left:442px;top:222px;width:75px" id="co2-in">CO2 ---- ppm</div>
-<div class="abs f12 right" style="left:515px;top:222px;width:87px" id="iaq-in">IAQ --</div>
 
-<!-- IMU (long-press area) -->
-<div id="imu-area">
-  <div class="abs f14" style="left:365px;top:275px" id="imu-pitch">Pitch: --.-°</div>
-  <div class="abs f14" style="left:365px;top:293px" id="imu-roll">Roll : --.-°</div>
-  <div class="abs f14" style="left:365px;top:311px" id="imu-hdg">-- (---°)</div>
+<!-- Indoor Air Panel (Windschutzscheibe Ducato) -->
+<div class="abs" style="left:470px;top:95px;width:220px;background:rgba(0,0,60,0.55);border-radius:10px;padding:7px 10px;pointer-events:none">
+  <div style="font-size:13px;font-weight:bold;margin-bottom:4px;letter-spacing:0.3px">Luftwerte innen</div>
+  <div style="display:flex;gap:8px;margin-bottom:2px">
+    <span class="f14" style="font-weight:bold" id="rh-in">--.-- %</span>
+    <span class="f14" style="font-weight:bold" id="temp-in">--.- °C</span>
+  </div>
+  <div class="f12" style="color:#F97316" id="bvoc-in">bVOC --.- ppm</div>
+  <div style="display:flex;gap:8px">
+    <span class="f12" id="co2-in">CO2 ---- ppm</span>
+    <span class="f12" id="iaq-in">IAQ --</span>
+  </div>
 </div>
+
+<!-- IMU Labels (screen-absolut, außerhalb des Klick-Overlays) -->
+<div class="abs f14" style="left:365px;top:275px" id="imu-pitch">Pitch: --.-°</div>
+<div class="abs f14" style="left:365px;top:293px" id="imu-roll">Roll : --.-°</div>
+<div class="abs f14" style="left:365px;top:311px" id="imu-hdg">-- (---°)</div>
+<!-- IMU Klickfläche (transparentes Overlay über den Labels) -->
+<div id="imu-area"></div>
 
 <!-- Tank info -->
 <div class="abs f12 right" style="left:10px;top:120px;width:110px;line-height:16px" id="tank-info">--</div>
 
 <!-- Fresh Water Tank -->
-<div class="abs" style="left:125px;top:110px">
-  <svg width="72" height="130" viewBox="0 0 72 130">
+<div class="abs" style="left:125px;top:110px;width:72px">
+  <svg width="72" height="100" viewBox="0 0 72 100" style="display:block">
     <rect x="20" y="3" width="16" height="10" rx="3" fill="#6C737F"/>
-    <rect x="5" y="13" width="52" height="84" rx="4" fill="#D9DDE3" stroke="#8A929E" stroke-width="2"/>
-    <clipPath id="clip-t1"><rect x="5" y="13" width="52" height="84" rx="4"/></clipPath>
-    <rect id="t1-fill" x="5" y="97" width="52" height="0" fill="#6AA9FF" clip-path="url(#clip-t1)"/>
-    <line x1="57" y1="27" x2="63" y2="27" stroke="#666" stroke-width="1"/>
-    <line x1="57" y1="55" x2="63" y2="55" stroke="#666" stroke-width="1"/>
-    <line x1="57" y1="83" x2="63" y2="83" stroke="#666" stroke-width="1"/>
-    <text id="t1-pct" x="31" y="60" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff">--%</text>
+    <rect x="10" y="13" width="46" height="84" rx="10" fill="#D9DDE3" stroke="#8A929E" stroke-width="2"/>
+    <clipPath id="clip-t1"><rect x="10" y="13" width="46" height="84" rx="10"/></clipPath>
+    <rect id="t1-fill" x="10" y="97" width="46" height="0" fill="#6AA9FF" clip-path="url(#clip-t1)"/>
+    <line x1="6" y1="27" x2="12" y2="27" stroke="#888" stroke-width="1.5"/>
+    <line x1="6" y1="55" x2="12" y2="55" stroke="#888" stroke-width="1.5"/>
+    <line x1="6" y1="83" x2="12" y2="83" stroke="#888" stroke-width="1.5"/>
+    <text id="t1-pct" x="33" y="62" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff" style="text-shadow:0 1px 2px rgba(0,0,0,0.7)">--%</text>
   </svg>
-  <div class="f12 center" style="margin-top:2px">Frisch</div>
+  <div class="f12 center" style="margin-top:2px;text-shadow:0 0 4px rgba(0,0,0,0.8)">Frisch</div>
 </div>
 
 <!-- Grey Water Tank -->
-<div class="abs" style="left:195px;top:110px">
-  <svg width="72" height="130" viewBox="0 0 72 130">
+<div class="abs" style="left:195px;top:110px;width:72px">
+  <svg width="72" height="100" viewBox="0 0 72 100" style="display:block">
     <rect x="20" y="3" width="16" height="10" rx="3" fill="#6C737F"/>
-    <rect x="5" y="13" width="52" height="84" rx="4" fill="#D9DDE3" stroke="#8A929E" stroke-width="2"/>
-    <clipPath id="clip-t2"><rect x="5" y="13" width="52" height="84" rx="4"/></clipPath>
-    <rect id="t2-fill" x="5" y="97" width="52" height="0" fill="#70849B" clip-path="url(#clip-t2)"/>
-    <line x1="57" y1="27" x2="63" y2="27" stroke="#666" stroke-width="1"/>
-    <line x1="57" y1="55" x2="63" y2="55" stroke="#666" stroke-width="1"/>
-    <line x1="57" y1="83" x2="63" y2="83" stroke="#666" stroke-width="1"/>
-    <text id="t2-pct" x="31" y="60" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff">--%</text>
+    <rect x="10" y="13" width="46" height="84" rx="10" fill="#D9DDE3" stroke="#8A929E" stroke-width="2"/>
+    <clipPath id="clip-t2"><rect x="10" y="13" width="46" height="84" rx="10"/></clipPath>
+    <rect id="t2-fill" x="10" y="97" width="46" height="0" fill="#70849B" clip-path="url(#clip-t2)"/>
+    <line x1="6" y1="27" x2="12" y2="27" stroke="#888" stroke-width="1.5"/>
+    <line x1="6" y1="55" x2="12" y2="55" stroke="#888" stroke-width="1.5"/>
+    <line x1="6" y1="83" x2="12" y2="83" stroke="#888" stroke-width="1.5"/>
+    <text id="t2-pct" x="33" y="62" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff" style="text-shadow:0 1px 2px rgba(0,0,0,0.7)">--%</text>
   </svg>
-  <div class="f12 center" style="margin-top:2px">Grau</div>
+  <div class="f12 center" style="margin-top:2px;text-shadow:0 0 4px rgba(0,0,0,0.8)">Grau</div>
 </div>
 
 <!-- Shore Power -->
@@ -166,8 +168,8 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
 <div class="abs f12 right" style="left:10px;top:255px;width:114px;line-height:16px" id="gas-info">--</div>
 
 <!-- Gas Bottle A -->
-<div class="abs" style="left:130px;top:230px;cursor:pointer" id="gas-a-wrap">
-  <svg width="76" height="142" viewBox="0 0 76 142">
+<div class="abs" style="left:130px;top:230px;width:76px;cursor:pointer" id="gas-a-wrap">
+  <svg width="76" height="120" viewBox="0 0 76 120" style="display:block">
     <rect x="22" y="2" width="18" height="20" rx="6" fill="#E32636"/>
     <rect x="9" y="20" width="52" height="81" rx="18" fill="#D3D3D3" stroke="#A9A9A9" stroke-width="1"/>
     <rect x="4" y="101" width="62" height="18" rx="6" fill="#A0A0A0"/>
@@ -178,12 +180,12 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
     <line x1="61" y1="84" x2="66" y2="84" stroke="#666" stroke-width="1"/>
     <text id="ga-pct" x="35" y="114" text-anchor="middle" font-size="11" font-weight="bold" fill="#333">--%</text>
   </svg>
-  <div class="f12 center" style="margin-top:2px" id="gas-a-lbl">Vorne</div>
+  <div class="f12 center" style="margin-top:2px;text-shadow:0 0 4px rgba(0,0,0,0.8)" id="gas-a-lbl">Vorne</div>
 </div>
 
 <!-- Gas Bottle B -->
-<div class="abs" style="left:207px;top:230px;cursor:pointer" id="gas-b-wrap">
-  <svg width="76" height="142" viewBox="0 0 76 142">
+<div class="abs" style="left:207px;top:230px;width:76px;cursor:pointer" id="gas-b-wrap">
+  <svg width="76" height="120" viewBox="0 0 76 120" style="display:block">
     <rect x="22" y="2" width="18" height="20" rx="6" fill="#E32636"/>
     <rect x="9" y="20" width="52" height="81" rx="18" fill="#D3D3D3" stroke="#A9A9A9" stroke-width="1"/>
     <rect x="4" y="101" width="62" height="18" rx="6" fill="#A0A0A0"/>
@@ -194,57 +196,45 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
     <line x1="61" y1="84" x2="66" y2="84" stroke="#666" stroke-width="1"/>
     <text id="gb-pct" x="35" y="114" text-anchor="middle" font-size="11" font-weight="bold" fill="#333">--%</text>
   </svg>
-  <div class="f12 center" style="margin-top:2px">Hinten</div>
+  <div class="f12 center" style="margin-top:2px;text-shadow:0 0 4px rgba(0,0,0,0.8)">Hinten</div>
 </div>
 
 <div class="abs f14" id="malibu-logo"
      style="left:490px;top:318px;font-style:italic;font-weight:bold;letter-spacing:1px;opacity:0.4">malibu</div>
 
 <!-- Board Battery -->
-<div class="abs" style="left:422px;top:345px">
-  <svg width="56" height="56" viewBox="0 0 56 56">
-    <rect x="7"  y="0" width="8" height="6" rx="1" fill="#708090"/>
-    <rect x="41" y="0" width="8" height="6" rx="1" fill="#708090"/>
-    <rect x="0" y="6" width="56" height="8" rx="2" fill="#708090"/>
-    <rect x="4" y="16" width="48" height="32" rx="3" id="bat-board-body" fill="#D3D3D3" stroke="#A9A9A9" stroke-width="1"/>
-    <text id="bat-board-v" x="28" y="37" text-anchor="middle" font-size="12" font-weight="bold" fill="#000">--.-V</text>
-  </svg>
+<div class="abs" style="left:415px;top:355px;width:72px;height:38px;border-radius:8px;border:2px solid #aaa;background:#D3D3D3;display:flex;align-items:center;justify-content:center" id="bat-board-box">
+  <span style="font-size:13px;font-weight:bold;color:#000" id="bat-board-v">--.-V</span>
 </div>
-<div class="abs f12 center" style="left:422px;top:403px;width:56px">Board</div>
+<div class="abs f12 center" style="left:415px;top:397px;width:72px">Board</div>
 
 <!-- KFZ Battery -->
-<div class="abs" style="left:634px;top:345px">
-  <svg width="56" height="56" viewBox="0 0 56 56">
-    <rect x="7"  y="0" width="8" height="6" rx="1" fill="#708090"/>
-    <rect x="41" y="0" width="8" height="6" rx="1" fill="#708090"/>
-    <rect x="0" y="6" width="56" height="8" rx="2" fill="#708090"/>
-    <rect x="4" y="16" width="48" height="32" rx="3" id="bat-kfz-body" fill="#D3D3D3" stroke="#A9A9A9" stroke-width="1"/>
-    <text id="bat-kfz-v" x="28" y="37" text-anchor="middle" font-size="12" font-weight="bold" fill="#000">--.-V</text>
-  </svg>
+<div class="abs" style="left:628px;top:355px;width:72px;height:38px;border-radius:8px;border:2px solid #aaa;background:#D3D3D3;display:flex;align-items:center;justify-content:center" id="bat-kfz-box">
+  <span style="font-size:13px;font-weight:bold;color:#000" id="bat-kfz-v">--.-V</span>
 </div>
-<div class="abs f12 center" style="left:634px;top:403px;width:56px">Kfz</div>
+<div class="abs f12 center" style="left:628px;top:397px;width:72px">Kfz</div>
 <div class="abs f10 center" style="left:620px;top:333px;width:84px;opacity:0.8" id="link-info"></div>
 
 <!-- Bottom Bar -->
 <div class="abs cir sz48 bg-grey" style="left:10px;top:422px" id="btn-radio">
   <svg width="28" height="28" viewBox="0 0 28 28">
-    <circle cx="14" cy="14" r="11" fill="none" stroke="#777" stroke-width="2"/>
-    <circle id="radio-dot" cx="14" cy="14" r="5" fill="#777"/>
+    <path id="radio-arc2" d="M3 15 A11 11 0 0 1 25 15" fill="none" stroke="#333" stroke-width="2.2" stroke-linecap="round"/>
+    <path id="radio-arc1" d="M7 18 A7 7 0 0 1 21 18"   fill="none" stroke="#333" stroke-width="2.2" stroke-linecap="round"/>
+    <circle id="radio-dot" cx="14" cy="20" r="2.5" fill="#333"/>
   </svg>
 </div>
 <div class="abs cir sz36 bg-grey" style="left:80px;top:431px" title="GPS (nicht verfuegbar vom Sensor)">
   <svg width="22" height="22" viewBox="0 0 22 22">
-    <circle cx="11" cy="8" r="5" fill="none" stroke="#555" stroke-width="2"/>
-    <line x1="11" y1="13" x2="11" y2="22" stroke="#555" stroke-width="2"/>
-    <path d="M5 15 Q11 22 17 15" fill="none" stroke="#555" stroke-width="1.5"/>
+    <path d="M11 2 C7.4 2 4.5 4.9 4.5 8.5 C4.5 13.5 11 20 11 20 C11 20 17.5 13.5 17.5 8.5 C17.5 4.9 14.6 2 11 2Z"
+          fill="none" stroke="#333" stroke-width="1.8"/>
+    <circle cx="11" cy="8.5" r="2.5" fill="#333"/>
   </svg>
 </div>
 <div class="abs f12" style="left:125px;top:447px;width:175px;white-space:nowrap;overflow:hidden" id="location">Standort n/v</div>
 <div class="abs f14" style="left:310px;top:449px" id="disp-date">--.--.----</div>
-<div class="abs pill" id="btn-status"
-     style="left:539px;top:426px;width:110px;height:44px;border-radius:22px;
-            background:#1B5E20;border:2px solid #2E7D32;cursor:pointer">
-  <span class="f14" id="status-txt" style="color:#fff;font-weight:bold">Status: OK</span>
+<div class="abs pill bg-grey" id="btn-status"
+     style="left:539px;top:426px;width:110px;height:44px;border-radius:22px;cursor:pointer">
+  <span class="f14" id="status-txt" style="color:#22C55E;font-weight:bold">Status: OK</span>
 </div>
 <div class="abs cir sz48 bg-grey" style="left:742px;top:422px" id="btn-backlight" title="Helligkeit">
   <svg width="26" height="26" viewBox="0 0 26 26">
@@ -345,7 +335,8 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
 const POLL_MS=5000, STATUS_MS=15000;
 const BAT_MIN=10.5, BAT_MAX=14.4;
 let s_pwr_on=false, s_radio_on=false, s_dim_level=0;
-let s_errors=[], s_ack_idx=0;
+let s_wake_until=0;
+let s_errors=[], s_ack_idx=0, s_snooze_until=0;
 
 const THR_DEF={gas_warn:20,gas_crit:10,fresh_warn:25,fresh_crit:10,grey_warn:75,grey_crit:90,bat_warn:120,bat_crit:115,iaq_warn:100,iaq_crit:150};
 let THR={};
@@ -393,17 +384,16 @@ function computeErrors(d){
 function updateStatusBtn(errors){
   const pill=$('btn-status'),txt=$('status-txt');
   if(!pill||!txt)return;
-  const idx=s_ack_idx%Math.max(1,errors.length);
-  if(!errors.length){
-    pill.style.background='#1B5E20';pill.style.borderColor='#2E7D32';
-    txt.textContent='Status: OK';txt.style.color='#fff';pill.title='';
+  const snoozed=Date.now()<s_snooze_until;
+  if(!errors.length||snoozed){
+    txt.textContent=errors.length&&snoozed?'OK ('+errors.length+')':'Status: OK';
+    txt.style.color='#22C55E';
   } else {
-    const er=errors[idx],ic=er.level==='crit';
-    pill.style.background=ic?'#B71C1C':'#E65100';
-    pill.style.borderColor=ic?'#C62828':'#F57F17';
-    txt.textContent=er.src+(errors.length>1?' ('+(idx+1)+'/'+errors.length+')':'');
-    txt.style.color='#fff';pill.title=er.msg;
+    const ic=errors.some(e=>e.level==='crit');
+    txt.textContent=errors.length>1?errors[0].src+' +'+(errors.length-1):errors[0].src;
+    txt.style.color=ic?'#DC2626':'#F97316';
   }
+  pill.title=errors.map(e=>e.msg).join('\n');
   s_errors=errors;
 }
 
@@ -429,6 +419,7 @@ function updateTank(fi,pi,pct,isFresh){
   const mH=84,bB=97,fe=$(fi),pe=$(pi);if(!fe)return;
   const h=pct>=0?Math.round(mH*Math.max(0,Math.min(100,pct))/100):0;
   fe.setAttribute('y',bB-h);fe.setAttribute('height',h);
+  fe.setAttribute('width','46');fe.setAttribute('x','10');
   fe.setAttribute('fill',isFresh?(pct<10?'#DC2626':pct<20?'#F97316':'#6AA9FF'):(pct>90?'#DC2626':pct>75?'#F97316':'#70849B'));
   if(pe)pe.textContent=pct>=0?Math.round(pct)+'%':'--%';
 }
@@ -439,19 +430,64 @@ function updateGas(fi,pi,pct){
   fe.setAttribute('fill',pct<5?'#DC2626':pct<20?'#F97316':'#FFD700');
   if(pe)pe.textContent=pct>=0?Math.round(pct)+'%':'--%';
 }
-function updateBattery(bi,ti,v,nc){
-  const b=$(bi),t=$(ti),c=batColor(v,nc);
-  if(b)b.setAttribute('fill',c);
-  const dk=['#DC2626','#F97316'].includes(c);
-  if(t){t.setAttribute('fill',dk?'#fff':'#000');t.textContent=nc?'nc':(v>0?v.toFixed(1)+'V':'--.-V');}
+function updateBattery(boxId,txtId,v,nc){
+  const box=$(boxId),txt=$(txtId);
+  const c=batColor(v,nc);
+  if(box){box.style.background=c;box.style.borderColor=c==='#D3D3D3'?'#aaa':'#fff';}
+  const dk=['#DC2626','#F97316','#1B5E20'].includes(c)||(c==='#22C55E');
+  if(txt){txt.style.color=dk?'#fff':'#000';txt.textContent=nc?'nc':(v>0?v.toFixed(1)+'V':'--.-V');}
+}
+
+/* ── Theme: exakte Farbwerte + Twilight-Logik aus womo_theme.c ── */
+/* Night→Day Farbtabelle (24 Schritte, 1 min/Schritt) – identisch zu womo_theme.c */
+const TWILIGHT_COLORS=[
+  '#191970','#1E1E7A','#232384','#28288E','#2D2D98','#3232A2',
+  '#3737AC','#3C3CB6','#4141C0','#4646CA','#4B4BD4','#5050DE',
+  '#5555E8','#5A5AED','#5F5FEF','#6464F1','#6969F3','#6E6EF5',
+  '#7373F7','#7878F9','#7D7DFB','#8282E9','#8585EA','#87CEEB'
+];
+const COLOR_DAY   = '#87CEEB'; /* WOMO_COLOR_DAY_NORMAL */
+const COLOR_NIGHT = '#191970'; /* WOMO_COLOR_NIGHT_NORMAL */
+const COLOR_SUNSET= '#FF8C00'; /* WOMO_COLOR_SUNSET */
+const COLOR_SUNRISE='#FF6347'; /* WOMO_COLOR_SUNRISE */
+/* Sonnenzeiten – werden durch Open-Meteo (wenn erreichbar) aktualisiert */
+let s_sunrise={h:6,m:30}, s_sunset={h:20,m:15};
+const TWILIGHT_MIN=24; /* WOMO_CIVIL_TWILIGHT_MINUTES */
+
+function minuteOfDay(h,m){return h*60+m;}
+function getThemeColor(){
+  const now=new Date(),h=now.getHours(),m=now.getMinutes();
+  const cur=minuteOfDay(h,m);
+  const rise=minuteOfDay(s_sunrise.h,s_sunrise.m);
+  const set =minuteOfDay(s_sunset.h, s_sunset.m);
+  /* Morgen-Dämmerung */
+  if(cur>=rise-TWILIGHT_MIN&&cur<rise){
+    return TWILIGHT_COLORS[cur-(rise-TWILIGHT_MIN)];
+  }
+  /* Tag */
+  if(cur>=rise&&cur<set-TWILIGHT_MIN){return COLOR_DAY;}
+  /* Abend-Dämmerung */
+  if(cur>=set-TWILIGHT_MIN&&cur<set){
+    const idx=(TWILIGHT_MIN-1)-(cur-(set-TWILIGHT_MIN));
+    return TWILIGHT_COLORS[Math.max(0,idx)];
+  }
+  /* Nacht */
+  return COLOR_NIGHT;
+}
+function isDay(){
+  const now=new Date(),cur=minuteOfDay(now.getHours(),now.getMinutes());
+  return cur>=minuteOfDay(s_sunrise.h,s_sunrise.m)&&cur<minuteOfDay(s_sunset.h,s_sunset.m);
 }
 
 function applyTheme(tsMs){
-  const h=(tsMs?new Date(tsMs):new Date()).getHours(),isDay=h>=7&&h<20;
-  const scr=document.getElementById('screen');
-  scr.classList.toggle('day',isDay);
-  $('ducato-img').src=isDay?'/Ducato-weiss.png':'/Ducato-grau.png';
-  $('malibu-logo').style.color=isDay?'#333':'#fff';
+  const scr=$('screen');
+  const day=isDay();
+  const bg=getThemeColor();
+  scr.style.background=bg;
+  scr.style.color=day?'#000':'#fff';
+  scr.classList.toggle('day',day);
+  $('ducato-img').src=day?'/Ducato-weiss.png':'/Ducato-grau.png';
+  $('malibu-logo').style.color=day?'#333':'#fff';
 }
 
 function updateClock(){
@@ -459,8 +495,12 @@ function updateClock(){
   $('disp-time').textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0');
   const days=['So','Mo','Di','Mi','Do','Fr','Sa'];
   $('disp-date').textContent=days[n.getDay()]+' '+String(n.getDate()).padStart(2,'0')+'.'+String(n.getMonth()+1).padStart(2,'0')+'.'+n.getFullYear();
+  /* Hintergrundfarbe jede Minute aktualisieren */
+  if(n.getSeconds()===0)applyTheme(null);
   const hh=n.getHours(),mm=n.getMinutes(),quiet=(hh>=22)||(hh<7)||(hh===7&&mm<30);
-  if(quiet&&s_dim_level===0)applyDim(2);
+  const woken=Date.now()<s_wake_until;
+  if(quiet&&!woken&&s_dim_level===0)applyDim(2);
+  else if(quiet&&woken&&s_dim_level===2)applyDim(0);
   else if(!quiet&&s_dim_level===2)applyDim(0);
 }
 
@@ -500,10 +540,13 @@ function updateAll(d){
   applyTheme(d.ts);
   const c=d.ctrl||{};
   s_pwr_on=!!c.pwr_on;s_radio_on=!!c.radio_on;
-  $('btn-pwr').style.background=c.pwr_on?'#1B5E20':'#8B0000';
+  const pwrClr=c.pwr_on?'#22C55E':'#DC2626';
+  ['pwr-arc','pwr-line'].forEach(id=>{const e=$(id);if(e){e.setAttribute('stroke',pwrClr);}});
   $('shore-btn').style.background=c.ac_present?'#E65100':'#555';
   $('shore-cap').textContent=c.ac_present?'220 V':'220 V';
-  const rd=$('radio-dot');if(rd)rd.setAttribute('fill',c.radio_on?'#4CAF50':'#777');
+  const clr=c.radio_on?'#4CAF50':'#333';
+  ['radio-arc1','radio-arc2'].forEach(id=>{const e=$(id);if(e)e.setAttribute('stroke',clr);});
+  const rd=$('radio-dot');if(rd)rd.setAttribute('fill',clr);
 
   const imu=d.imu||{};
   if(imu.valid){
@@ -523,14 +566,14 @@ function updateAll(d){
   const bi=(d.bme||{}).in||{};
   if(bi.valid){
     $('rh-in').textContent=(bi.rh||0).toFixed(1)+' %';$('temp-in').textContent=(bi.temp||0).toFixed(1)+' °C';
-    if(bi.bvoc!=null){const bv=$('bvoc-in');bv.textContent='bVOC '+bi.bvoc.toFixed(2)+' ppm';bv.style.color=bi.bvoc>1.5?'#F97316':'inherit';}
+    if(bi.bvoc!=null){const bv=$('bvoc-in');bv.textContent='bVOC '+bi.bvoc.toFixed(2)+' ppm';bv.style.color=bi.bvoc>1.5?'#F97316':'#F97316';}
     if(bi.eco2!=null)$('co2-in').textContent='CO2 '+Math.round(bi.eco2)+' ppm';
     if(bi.iaq!=null){const iq=$('iaq-in');iq.textContent='IAQ '+Math.round(bi.iaq);iq.style.color=iaqColor(bi.iaq);}
   }
 
   const bat=d.bat||{};
-  updateBattery('bat-board-body','bat-board-v',bat.b2||0,!!bat.nc2);
-  updateBattery('bat-kfz-body','bat-kfz-v',bat.b1||0,!!bat.nc1);
+  updateBattery('bat-board-box','bat-board-v',bat.b2||0,!!bat.nc2);
+  updateBattery('bat-kfz-box','bat-kfz-v',bat.b1||0,!!bat.nc1);
 
   const tk=d.tank||{};
   updateTank('t1-fill','t1-pct',tk.nc1?-1:(tk.t1!=null?tk.t1:-1),true);
@@ -563,7 +606,7 @@ async function poll(){
     updateAll(await r.json());
     $('link-info').textContent='';
   } catch(e){
-    $('status-txt').textContent='Netz-Fehler';$('btn-status').style.background='#B71C1C';
+    $('status-txt').textContent='Netz-Fehler';$('status-txt').style.color='#DC2626';
     $('link-info').textContent='ERR '+e.message;$('link-info').style.color='#F97316';
   }
   setTimeout(poll,POLL_MS);
@@ -597,14 +640,21 @@ makeLongPress($('btn-pwr'),800,
 /* Radio */
 $('btn-radio').addEventListener('click',async()=>{await sendCmd(s_radio_on?'radio_off':'radio_on');setTimeout(poll,400);});
 
-/* Status: acknowledge */
+/* Status: Klick = alle Fehler 30 min quittieren */
 $('btn-status').addEventListener('click',()=>{
-  if(s_errors.length>0){s_ack_idx=(s_ack_idx+1)%s_errors.length;updateStatusBtn(s_errors);}
+  s_snooze_until=Date.now()+30*60*1000;
+  updateStatusBtn(s_errors);
 });
 
 /* Backlight */
-$('btn-backlight').addEventListener('click',()=>applyDim((s_dim_level+1)%3));
-$('dim-overlay').addEventListener('click',()=>applyDim(0));
+$('btn-backlight').addEventListener('click',()=>{
+  s_wake_until=Date.now()+5*60*1000;
+  applyDim((s_dim_level+1)%3);
+});
+$('dim-overlay').addEventListener('click',()=>{
+  s_wake_until=Date.now()+5*60*1000;
+  applyDim(0);
+});
 
 /* Gas long-press */
 function attachGasLongPress(el){
@@ -657,11 +707,85 @@ $('settings-save').addEventListener('click',async()=>{
   closeModal('modal-settings');
 });
 
+/* Weather: Open-Meteo + Meteocons Icons (Bas Milius) via jsDelivr */
+const ICON_CDN='https://cdn.jsdelivr.net/gh/basmilius/weather-icons/production/fill/svg/';
+const WMO_MAP={
+  0:['clear-day','clear-night'],1:['clear-day','clear-night'],
+  2:['partly-cloudy-day','partly-cloudy-night'],3:['cloudy','cloudy'],
+  45:['fog','fog'],48:['fog','fog'],
+  51:['drizzle','drizzle'],53:['drizzle','drizzle'],55:['drizzle','drizzle'],
+  56:['sleet','sleet'],57:['sleet','sleet'],
+  61:['rain','rain'],63:['rain','rain'],65:['rain','rain'],
+  66:['sleet','sleet'],67:['sleet','sleet'],
+  71:['snow','snow'],73:['snow','snow'],75:['snow','snow'],77:['snow','snow'],
+  80:['rain','rain'],81:['rain','rain'],82:['rain','rain'],
+  85:['snow','snow'],86:['snow','snow'],
+  95:['thunderstorms','thunderstorms'],
+  96:['thunderstorms-rain','thunderstorms-rain'],99:['thunderstorms-rain','thunderstorms-rain']
+};
+function wmoIconName(code,isDay){const p=WMO_MAP[code]||['cloudy','cloudy'];return p[isDay?0:1];}
+/* Minimale Inline-SVG-Fallbacks für häufige Wetter-Zustände */
+const ICON_SVG_FALLBACK={
+  'clear-day':'<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="13" fill="#FFD700"/><g stroke="#FFD700" stroke-width="3" stroke-linecap="round"><line x1="32" y1="4" x2="32" y2="14"/><line x1="32" y1="50" x2="32" y2="60"/><line x1="4" y1="32" x2="14" y2="32"/><line x1="50" y1="32" x2="60" y2="32"/><line x1="12" y1="12" x2="19" y2="19"/><line x1="45" y1="45" x2="52" y2="52"/><line x1="52" y1="12" x2="45" y2="19"/><line x1="19" y1="45" x2="12" y2="52"/></g></svg>',
+  'clear-night':'<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><path d="M38 10 A22 22 0 1 0 54 38 A14 14 0 0 1 38 10Z" fill="#BDD7EE"/></svg>',
+  'cloudy':'<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><ellipse cx="32" cy="40" rx="22" ry="13" fill="none" stroke="#fff" stroke-width="3"/><circle cx="20" cy="34" r="11" fill="none" stroke="#fff" stroke-width="3"/><circle cx="36" cy="29" r="13" fill="none" stroke="#fff" stroke-width="3"/></svg>',
+  'rain':'<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><ellipse cx="32" cy="34" rx="20" ry="11" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="20" cy="28" r="10" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="36" cy="24" r="12" fill="none" stroke="#fff" stroke-width="2.5"/><g stroke="#82B1FF" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="48" x2="20" y2="56"/><line x1="32" y1="48" x2="30" y2="56"/><line x1="42" y1="48" x2="40" y2="56"/></g></svg>',
+  'snow':'<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><ellipse cx="32" cy="30" rx="20" ry="11" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="20" cy="24" r="10" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="36" cy="20" r="12" fill="none" stroke="#fff" stroke-width="2.5"/><g stroke="#BDD7EE" stroke-width="2" stroke-linecap="round"><line x1="22" y1="46" x2="22" y2="56"/><line x1="32" y1="46" x2="32" y2="56"/><line x1="42" y1="46" x2="42" y2="56"/><line x1="19" y1="51" x2="25" y2="51"/><line x1="29" y1="51" x2="35" y2="51"/><line x1="39" y1="51" x2="45" y2="51"/></g></svg>',
+  'thunderstorms':'<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><ellipse cx="32" cy="30" rx="20" ry="11" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="20" cy="24" r="10" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="36" cy="20" r="12" fill="none" stroke="#fff" stroke-width="2.5"/><polyline points="34,44 28,54 33,54 27,64" fill="none" stroke="#FFD700" stroke-width="2.5" stroke-linejoin="round"/></svg>'
+};
+function getIconSvg(name){
+  if(ICON_SVG_FALLBACK[name])return ICON_SVG_FALLBACK[name];
+  if(name.startsWith('partly-cloudy'))return ICON_SVG_FALLBACK['cloudy'];
+  if(name.includes('rain'))return ICON_SVG_FALLBACK['rain'];
+  if(name.includes('snow')||name.includes('sleet'))return ICON_SVG_FALLBACK['snow'];
+  if(name.includes('thunder'))return ICON_SVG_FALLBACK['thunderstorms'];
+  if(name.includes('fog'))return ICON_SVG_FALLBACK['cloudy'];
+  return ICON_SVG_FALLBACK['cloudy'];
+}
+async function fetchWeather(lat,lon){
+  /* CDN deaktiviert – nur lokale Inline-SVGs */
+  try{
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weather_code,temperature_2m,is_day&daily=sunrise,sunset&timezone=auto&forecast_days=1`;
+    const r=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(6000)});if(!r.ok)throw new Error(r.status);
+    const d=await r.json();const c=d.current;
+    /* Sonnenzeiten parsen und in s_sunrise/s_sunset speichern */
+    if(d.daily&&d.daily.sunrise&&d.daily.sunrise[0]){
+      const sr=new Date(d.daily.sunrise[0]);
+      s_sunrise={h:sr.getHours(),m:sr.getMinutes()};
+    }
+    if(d.daily&&d.daily.sunset&&d.daily.sunset[0]){
+      const ss=new Date(d.daily.sunset[0]);
+      s_sunset={h:ss.getHours(),m:ss.getMinutes()};
+    }
+    applyTheme(null);
+    const nm=wmoIconName(c.weather_code,c.is_day===1);
+    const box=$('weather-icon');if(box)box.innerHTML=getIconSvg(nm);
+    const tw=$('weather-temp');if(tw)tw.textContent=c.temperature_2m.toFixed(1)+'°C';
+  }catch(e){console.warn('weather',e);}
+}
+async function pollWeather(){
+  try{
+    let lat=parseFloat(localStorage.getItem('womo_lat')||'0');
+    let lon=parseFloat(localStorage.getItem('womo_lon')||'0');
+    if(!lat&&!lon){
+      await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(p=>{
+        lat=p.coords.latitude;lon=p.coords.longitude;
+        localStorage.setItem('womo_lat',lat);localStorage.setItem('womo_lon',lon);res();
+      },rej,{timeout:8000}));
+    }
+    await fetchWeather(lat,lon);
+  }catch(e){console.warn('weather',e);}
+  setTimeout(pollWeather,10*60*1000);
+}
+
 applyTheme(null);
 updateClock();
 setInterval(updateClock,1000);
+/* Wetter-Platzhalter sofort setzen (Tag/Nacht) */
+(()=>{const h=new Date().getHours(),b=$('weather-icon');if(b)b.innerHTML=getIconSvg(h>=7&&h<20?'clear-day':'clear-night');})();
 poll();
 pollStatus();
+pollWeather();
 </script>
 </body>
 </html>

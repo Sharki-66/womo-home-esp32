@@ -16,6 +16,7 @@ idf_component_register(
         "gui/womo_thresholds.c"
         "gui/womo_fonts_german.c"
         "gui/fonts/lv_font_material_16.c"
+        "gui/fonts/lv_font_material_24.c"
         "gui/fonts/lv_font_montserrat_12_german.c"
         "gui/fonts/lv_font_montserrat_14_german.c"
         "gui/fonts/lv_font_montserrat_16_german.c"
@@ -53,7 +54,7 @@ idf_component_register(
         driver
         esp_timer
     EMBED_TXTFILES
-        "../spiffs/buzzer_studio.html"
+        "../tools/buzzer_studio.html"
 )
 
 # Warnungs-Unterdrückung für LVGL (Managed Component: lvgl__lvgl)

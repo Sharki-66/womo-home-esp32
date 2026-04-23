@@ -72,6 +72,22 @@
 #define WOMO_ENABLE_BUZZER_STUDIO_HTTP 1
 
 // ====================================================================================
+// Material Symbols Icons – UTF-8-kodierte Codepoints für runde Buttons
+// Font: lv_font_material_16.c (MaterialSymbolsOutlined.ttf, 16 px)
+// ====================================================================================
+#define ICON_BOLT                "\xEE\x90\xB0"   // U+E430 bolt
+#define ICON_MUSIC_NOTE          "\xEE\x90\x85"   // U+E405 music_note          → Multimedia-Button
+#define ICON_LIGHTBULB           "\xEE\xBF\xB8"   // U+EFF8 lightbulb_circle
+#define ICON_SETTINGS            "\xEE\xA2\xB8"   // U+E8B8 settings            → Einstellungen-Button
+#define ICON_GPS_FIXED           "\xEE\xA2\x8E"   // U+E88E gps_fixed
+#define ICON_NEAR_ME             "\xEE\x95\xA9"   // U+E569 near_me
+#define ICON_MY_LOCATION         "\xEE\x95\x9C"   // U+E55C my_location         → GPS-Button
+#define ICON_POWER_SETTINGS_NEW  "\xEE\xA2\xAC"   // U+E8AC power_settings_new  → 12V-Button
+#define ICON_LIGHT_OFF           "\xEE\xA6\xB8"   // U+E9B8 light_off           → Backlight-Button
+#define ICON_ELECTRIC_BOLT       "\xEE\xA8\x8B"   // U+EA0B electric_bolt       → Landstrom-Anzeige
+#define ICON_CHARGER             "\xEE\x8A\xAE"   // U+E2AE charger             → Landstrom-Lader
+
+// ====================================================================================
 // Screenshot
 // Long-Press anywhere auf dem Display speichert PNG auf SD-Card
 // Pfad:    /sdcard/screenshots/screen_HHMMSS.png

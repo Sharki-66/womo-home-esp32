@@ -209,6 +209,11 @@ static esp_err_t static_file_handler(httpd_req_t *req)
     }
 
     httpd_resp_set_type(req, content_type_for(clean_uri));
+    /* HTML nie cachen – Bilder/Assets dürfen gecacht bleiben */
+    if (strstr(clean_uri, ".html") != NULL) {
+        httpd_resp_set_hdr(req, "Cache-Control", "no-store, no-cache, must-revalidate");
+        httpd_resp_set_hdr(req, "Pragma", "no-cache");
+    }
 
     char chunk[512];
     size_t n;

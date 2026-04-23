@@ -91,29 +91,16 @@ static lv_image_dsc_t wifi_icon_dscs[6]  = {0};
 static uint8_t       *lte_icon_bufs[6]   = {0};  // signal_1..signal_6
 static lv_image_dsc_t lte_icon_dscs[6]   = {0};
 static lv_obj_t *backlight_btn = NULL;
-static lv_obj_t *settings_btn  = NULL;  // Drei-Punkte-Taste → Einstellungs-Modal
-static lv_obj_t *settings_inner_border = NULL;
-static lv_obj_t *backlight_img = NULL;
-static lv_obj_t *backlight_strike = NULL;  // schwarzer Strich durch das Icon
-static uint8_t  *backlight_icon_buf = NULL;
-static lv_image_dsc_t backlight_icon_dsc = {0};
+static lv_obj_t *backlight_icon_label = NULL;  // Material-Font-Icon für Helligkeit
+static lv_obj_t *settings_btn  = NULL;  // Zahnrad-Taste → Einstellungs-Modal
+static lv_obj_t *settings_icon_label = NULL;  // Material-Font-Icon für Einstellungen
 static lv_obj_t *classic_btn = NULL;
-static lv_obj_t *classic_label = NULL;
-static lv_obj_t *classic_img = NULL;
-static uint8_t  *classic_icon_buf = NULL;
-static lv_image_dsc_t classic_icon_dsc = {0};
+static lv_obj_t *classic_label = NULL;  // Material-Font-Icon für 12V
 static lv_obj_t *radio_btn = NULL;
-static lv_obj_t *radio_label = NULL;
-static lv_obj_t *radio_img = NULL;
-static uint8_t  *radio_icon_checked_buf = NULL;
-static lv_image_dsc_t radio_icon_checked_dsc = {0};
-static uint8_t  *radio_icon_unchecked_buf = NULL;
-static lv_image_dsc_t radio_icon_unchecked_dsc = {0};
+static lv_obj_t *radio_label = NULL;    // Material-Font-Icon für Multimedia
 static lv_obj_t *shore_label = NULL;
 static lv_obj_t *shore_caption_label = NULL;
-static lv_obj_t *shore_img = NULL;
-static uint8_t  *shore_icon_buf = NULL;
-static lv_image_dsc_t shore_icon_dsc = {0};
+static lv_obj_t *shore_icon_label = NULL;  // Bolt-Icon auf Landstrom-Anzeige
 static lv_obj_t *battery_board_label = NULL;
 static lv_obj_t *battery_kfz_label = NULL;
 static lv_obj_t *fresh_water_caption_label = NULL;
@@ -138,9 +125,7 @@ static lv_obj_t *imu_roll_label = NULL;
 static lv_obj_t *imu_heading_label = NULL;
 static lv_obj_t *gps_button = NULL;  // Runder Icon-Button für GPS-Details
 static lv_obj_t *gps_label = NULL;    // GPS position (Alias auf gps_button)
-static lv_obj_t *gps_img = NULL;
-static uint8_t  *gps_icon_buf = NULL;
-static lv_image_dsc_t gps_icon_dsc = {0};
+static lv_obj_t *gps_icon_label = NULL;  // Material-Font-Icon für GPS
 static char last_gps_text[256] = ""; // Zuletzt berechneter GPS-Text (Detailansicht)
 static bool gps_details_visible = false;
 static lv_timer_t *gps_hide_timer = NULL;
@@ -310,9 +295,11 @@ static void radio_button_event_cb(lv_event_t *event);
 static void geocode_result_cb(const womo_geocode_result_t *result, void *user_data);
 static void geocode_trigger_if_needed(const womo_sensor_data_t *snapshot);
 static void backlight_update_label(void);
-static void simple_toggle_button_update(lv_obj_t *btn, lv_obj_t *label, bool active, const char *text, lv_color_t active_color);
-static lv_obj_t *load_icon_png(lv_obj_t *parent, const char *path, uint8_t **buf_ptr, lv_image_dsc_t *dsc, lv_obj_t *img_obj);
-static void preload_icons(void);
+static lv_obj_t *create_round_button(lv_obj_t *parent, int size, lv_color_t bg_color,
+                                     lv_event_cb_t cb, lv_event_code_t code);
+static lv_obj_t *round_button_add_icon(lv_obj_t *btn, const char *icon_utf8);
+static void update_round_button_state(lv_obj_t *btn, lv_obj_t *icon_label, bool active,
+                                      lv_color_t active_color);
 static void update_classic_icon(lv_color_t color, bool active);
 static void update_radio_icon(lv_color_t color, bool active);
 static void update_shore_icon(lv_color_t color, bool active);
@@ -475,12 +462,10 @@ static void apply_text_theme_colors(void)
     if (grey_water_caption_label) lv_obj_set_style_text_color(grey_water_caption_label, lv_color_black(), 0);
     if (gas_label_front) lv_obj_set_style_text_color(gas_label_front, lv_color_black(), 0);
     if (gas_label_rear) lv_obj_set_style_text_color(gas_label_rear, lv_color_black(), 0);
-    if (classic_btn && classic_label) {
-        simple_toggle_button_update(classic_btn, classic_label, classic_on, "", classic_color);
+    if (classic_btn) {
         update_classic_icon(classic_color, classic_on);
     }
-    if (radio_btn && radio_label) {
-        simple_toggle_button_update(radio_btn, radio_label, radio_on, "MM", radio_color);
+    if (radio_btn) {
         update_radio_icon(radio_color, radio_on);
     }
     if (shore_label) {
@@ -1089,14 +1074,16 @@ extern unsigned lodepng_decode32(unsigned char **out, unsigned *w, unsigned *h,
 // Das PNG wird sofort vollständig dekodiert (ARGB8888 im PSRAM), damit LVGL beim
 // Rendern keinen lodepng-Decoder mehr aufruft – verhindert lv_realloc-Fehler
 // bei fragmentiertem PSRAM nach langer Laufzeit.
+// load_background_image():
+//   SD-Lesen und PNG-Decode laufen OHNE LVGL-Lock (dauern 15–60 s auf ESP32-S3).
+//   Nur die LVGL-Widget-Manipulation (lv_img_create / lv_img_set_src) wird mit
+//   einem kurzen Lock geschützt.  Der Caller darf – aber muss – das Lock NICHT halten.
 static bool load_background_image(lv_obj_t *screen, bool is_day)
 {
     if (!womo_sd_is_mounted()) {
         ESP_LOGW(TAG, "SD card not mounted, skipping background image");
         return false;
     }
-
-    womo_ch422g_assert_sd_cs();
 
     lv_draw_buf_t **p_draw_buf = is_day ? &bg_draw_buf_day : &bg_draw_buf_night;
 
@@ -1114,13 +1101,17 @@ static bool load_background_image(lv_obj_t *screen, bool is_day)
             return true;
         }
         // Widget anzeigen: schneller Swap, kein erneuter Decode
-        lv_img_set_src(bg_img, *p_draw_buf);
-        bg_last_day_state = is_day ? 1 : 0;
-        lv_obj_move_to_index(bg_img, 0);
+        if (lvgl_port_lock(500)) {
+            lv_img_set_src(bg_img, *p_draw_buf);
+            bg_last_day_state = is_day ? 1 : 0;
+            lv_obj_move_to_index(bg_img, 0);
+            lvgl_port_unlock();
+        }
         ESP_LOGI(TAG, "Background switched to preloaded %s image", is_day ? "day" : "night");
         return true;
     }
 
+    // ── SD-Lesen (kein LVGL-Lock nötig) ─────────────────────────────
     const char *img_path = is_day ? "/sdcard/images/Ducato-weiss.png"
                                   : "/sdcard/images/Ducato-grau.png";
     struct stat st;
@@ -1150,7 +1141,6 @@ static bool load_background_image(lv_obj_t *screen, bool is_day)
         return false;
     }
 
-    // Komprimiertes PNG in temporären Puffer lesen
     uint8_t *png_data = heap_caps_malloc(file_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!png_data) {
         ESP_LOGE(TAG, "Failed to allocate %ld bytes for PNG", file_size);
@@ -1167,16 +1157,15 @@ static bool load_background_image(lv_obj_t *screen, bool is_day)
         return false;
     }
 
+    // ── PNG-Decode (kein LVGL-Lock nötig) ───────────────────────────
     ESP_LOGI(TAG, "PNG file loaded: %ld bytes – decoding...", file_size);
 
-    // PNG dekodieren.
-    // LVGL v9 lodepng_decode32 gibt einen lv_draw_buf_t* zurück (als unsigned char*
-    // gecastet). Der eigentliche Pixel-Puffer liegt in draw_buf->data.
+    // lodepng_decode32 gibt einen lv_draw_buf_t* zurück (gecastet als unsigned char*).
     unsigned img_w = 0, img_h = 0;
     lv_draw_buf_t *draw_buf = NULL;
     unsigned decode_err = lodepng_decode32((unsigned char **)&draw_buf, &img_w, &img_h,
                                            png_data, (size_t)file_size);
-    heap_caps_free(png_data);  // komprimiertes PNG sofort freigeben
+    heap_caps_free(png_data);
     png_data = NULL;
 
     if (decode_err || !draw_buf) {
@@ -1186,7 +1175,6 @@ static bool load_background_image(lv_obj_t *screen, bool is_day)
     }
 
     // lodepng liefert RGBA; LVGL ARGB8888 = BGRA auf LE-ESP32 → R↔B tauschen.
-    // (identisch mit convert_color_depth() in lv_lodepng.c)
     {
         uint32_t px = img_w * img_h;
         lv_color32_t *p = (lv_color32_t *)draw_buf->data;
@@ -1201,20 +1189,23 @@ static bool load_background_image(lv_obj_t *screen, bool is_day)
              img_w, img_h, (unsigned long)draw_buf->data_size,
              esp_ptr_external_ram(draw_buf->data) ? "PSRAM" : "iRAM");
 
-    // Alten draw_buf freigeben falls vorhanden
+    // Alten draw_buf freigeben (ebenfalls kein Lock nötig – nur Puffer-Pointer)
     if (*p_draw_buf) {
         lv_draw_buf_destroy(*p_draw_buf);
     }
     *p_draw_buf = draw_buf;
 
-    // screen == NULL → reiner Preload-Aufruf (z. B. zweite Variante beim Boot)
-    // Puffer ist ab hier bereit; Widget wird erst beim nächsten nicht-NULL-Aufruf erzeugt.
+    // screen == NULL → reiner Preload-Aufruf
     if (!screen) {
         ESP_LOGI(TAG, "Background %s preloaded (not displayed)", is_day ? "day" : "night");
         return true;
     }
 
-    // Widget erstellen falls noch nicht vorhanden
+    // ── LVGL-Widget-Manipulation (kurzer Lock) ───────────────────────
+    if (!lvgl_port_lock(500)) {
+        ESP_LOGW(TAG, "LVGL lock timeout – background not applied");
+        return false;
+    }
     if (!bg_img) {
         bg_img = lv_img_create(screen);
         lv_obj_move_background(bg_img);
@@ -1222,11 +1213,11 @@ static bool load_background_image(lv_obj_t *screen, bool is_day)
         lv_obj_set_size(bg_img, 800, 480);
         lv_obj_align(bg_img, LV_ALIGN_CENTER, 0, 0);
     }
-
     lv_img_set_src(bg_img, draw_buf);
     bg_last_day_state = is_day ? 1 : 0;
     lv_obj_set_style_img_opa(bg_img, LV_OPA_COVER, 0);
     lv_obj_move_to_index(bg_img, 0);
+    lvgl_port_unlock();
 
     ESP_LOGI(TAG, "Background image applied to screen");
     return true;
@@ -1289,6 +1280,11 @@ static void load_logo_image(lv_obj_t *screen)
     logo_dsc.data         = logo_png_data;
     logo_dsc.data_size    = (uint32_t)st.st_size;
 
+    // ── LVGL-Widget-Manipulation (kurzer Lock) ───────────────────────
+    if (!lvgl_port_lock(500)) {
+        ESP_LOGW(TAG, "Malibu-Logo: LVGL lock timeout");
+        return;
+    }
     if (!logo_img) {
         logo_img = lv_img_create(screen);
         lv_obj_clear_flag(logo_img, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
@@ -1304,6 +1300,7 @@ static void load_logo_image(lv_obj_t *screen)
     lv_obj_align(logo_img, LV_ALIGN_TOP_LEFT, LOGO_X, LOGO_Y);
     // Logo über Ducato-Hintergrund, aber unter allen Widgets
     lv_obj_move_to_index(logo_img, 1);
+    lvgl_port_unlock();
     ESP_LOGI(TAG, "Malibu-Logo geladen und positioniert (x=%d, y=%d)", LOGO_X, LOGO_Y);
 }
 
@@ -2197,19 +2194,13 @@ gas_done:
 
         if (pwr_changed) {
             classic_on = snapshot.power.pwr_12v_on;
-            if (classic_btn && classic_label) {
-                lv_color_t c = lv_color_hex(0x2E7D32);
-                simple_toggle_button_update(classic_btn, classic_label, classic_on, "", c);
-                update_classic_icon(c, classic_on);
-            }
+            lv_color_t c = lv_color_hex(0x2E7D32);
+            update_classic_icon(c, classic_on);
         }
         if (radio_changed) {
             radio_on = snapshot.power.radio_on;
-            if (radio_btn && radio_label) {
-                lv_color_t c = lv_color_hex(0x1565C0);
-                simple_toggle_button_update(radio_btn, radio_label, radio_on, "MM", c);
-                update_radio_icon(c, radio_on);
-            }
+            lv_color_t c = lv_color_hex(0x1565C0);
+            update_radio_icon(c, radio_on);
         }
         if (shore_changed) {
             shore_power_present = snapshot.power.ac_present;
@@ -3713,48 +3704,6 @@ static lv_obj_t *load_icon_png(lv_obj_t *parent, const char *path,
 
 static void preload_icons(void)
 {
-    backlight_img = load_icon_png(backlight_btn,
-                                  "/sdcard/images/icons-48(32)/lightbulb_circle.png",
-                                  &backlight_icon_buf, &backlight_icon_dsc,
-                                  backlight_img);
-    if (backlight_btn && !backlight_strike) {
-        static lv_point_precise_t s_strike_pts[2] = {{11, 11}, {37, 37}};
-        backlight_strike = lv_line_create(backlight_btn);
-        lv_line_set_points(backlight_strike, s_strike_pts, 2);
-        lv_obj_set_style_line_width(backlight_strike, 2, 0);
-        lv_obj_set_style_line_color(backlight_strike, lv_color_hex(0x000000), 0);
-        lv_obj_set_style_line_rounded(backlight_strike, true, 0);
-        lv_obj_set_style_bg_opa(backlight_strike, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_width(backlight_strike, 0, 0);
-        lv_obj_clear_flag(backlight_strike, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    }
-    classic_img = load_icon_png(classic_btn,
-                                "/sdcard/images/icons-48(32)/power_settings_new.png",
-                                &classic_icon_buf, &classic_icon_dsc,
-                                classic_img);
-    // Radio: beide Zustands-Icons in separate Puffer vorladen (kein Widget hier)
-    load_icon_png(NULL,
-                  "/sdcard/images/icons-48(32)/radio_button_checked.png",
-                  &radio_icon_checked_buf, &radio_icon_checked_dsc,
-                  NULL);
-    load_icon_png(NULL,
-                  "/sdcard/images/icons-48(32)/radio_button_unchecked.png",
-                  &radio_icon_unchecked_buf, &radio_icon_unchecked_dsc,
-                  NULL);
-    // Radio-Widget auf radio_btn erstellen und initiales Icon setzen
-    if (radio_btn && !radio_img) {
-        radio_img = lv_img_create(radio_btn);
-        lv_obj_clear_flag(radio_img, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_center(radio_img);
-    }
-    if (radio_img) {
-        lv_image_dsc_t *dsc = radio_on ? &radio_icon_checked_dsc : &radio_icon_unchecked_dsc;
-        if (dsc->data) lv_img_set_src(radio_img, dsc);
-    }
-    shore_img = load_icon_png(shore_label,
-                              "/sdcard/images/icons-48(32)/charger.png",
-                              &shore_icon_buf, &shore_icon_dsc,
-                              shore_img);
     // WiFi + LTE Signalstärken-Icons vorladen (32×32px, Ordner icons-48(32))
     static const char * const wifi_paths[6] = {
         "/sdcard/images/icons-48(32)/wifi_1.png",
@@ -3780,56 +3729,77 @@ static void preload_icons(void)
 
 static void backlight_update_label(void)
 {
-    if (!backlight_btn) {
-        return;
-    }
-    lv_obj_set_style_bg_color(backlight_btn, lv_color_hex(0xC0C0C0), 0);
+    if (!backlight_btn) return;
+    lv_color_t bg = backlight_on ? lv_color_hex(0xF9A825) : lv_color_hex(0xC0C0C0);
+    lv_obj_set_style_bg_color(backlight_btn, bg, 0);
     lv_obj_set_style_bg_opa(backlight_btn, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(backlight_btn, 0, 0);
 }
 
-static void simple_toggle_button_update(lv_obj_t *btn, lv_obj_t *label, bool active, const char *text, lv_color_t active_color)
-{
-    if (!btn || !label) {
-        return;
-    }
+/* ─── Einheitliche Hilfsfunktionen für runde Icon-Buttons ─────────────────── */
 
-    lv_color_t off_bg = lv_color_hex(0xC0C0C0);
-    lv_color_t bg = active ? active_color : off_bg;
-    lv_obj_set_style_bg_color(btn, bg, 0);
+static lv_obj_t *create_round_button(lv_obj_t *parent, int size, lv_color_t bg_color,
+                                     lv_event_cb_t cb, lv_event_code_t code)
+{
+    lv_obj_t *btn = lv_btn_create(parent);
+    lv_obj_set_size(btn, size, size);
+    lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(btn, bg_color, 0);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(btn, 0, 0);
-    lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_shadow_width(btn, 0, 0);
     lv_obj_set_style_pad_all(btn, 0, 0);
+    lv_obj_add_flag(btn, LV_OBJ_FLAG_CLICKABLE);
+    if (cb) {
+        lv_obj_add_event_cb(btn, cb, code, NULL);
+    }
+    // Innenliegender schwarzer Rand: 4 px eingerückt, 2 px breit
+    lv_obj_t *inner = lv_obj_create(btn);
+    lv_obj_set_size(inner, size - 8, size - 8);
+    lv_obj_set_style_radius(inner, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(inner, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(inner, 2, 0);
+    lv_obj_set_style_border_color(inner, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_border_opa(inner, LV_OPA_COVER, 0);
+    lv_obj_set_style_pad_all(inner, 0, 0);
+    lv_obj_center(inner);
+    lv_obj_clear_flag(inner, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    return btn;
+}
 
-    lv_label_set_text(label, "");
-    lv_obj_center(label);
+static lv_obj_t *round_button_add_icon(lv_obj_t *btn, const char *icon_utf8)
+{
+    lv_obj_t *lbl = lv_label_create(btn);
+    lv_label_set_text(lbl, icon_utf8);
+    lv_obj_set_style_text_font(lbl, WOMO_FONT_ICONS_LARGE, 0);
+    lv_obj_set_style_text_color(lbl, lv_color_black(), 0);
+    lv_obj_clear_flag(lbl, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(lbl);
+    return lbl;
+}
+
+static void update_round_button_state(lv_obj_t *btn, lv_obj_t *icon_label, bool active,
+                                      lv_color_t active_color)
+{
+    if (!btn) return;
+    lv_color_t bg = active ? active_color : lv_color_hex(0xC0C0C0);
+    lv_obj_set_style_bg_color(btn, bg, 0);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+    if (icon_label) lv_obj_center(icon_label);
 }
 
 static void update_classic_icon(lv_color_t color, bool active)
 {
-    if (!classic_btn) return;
-    lv_color_t bg = active ? lv_color_hex(0x2E7D32) : lv_color_hex(0xC0C0C0);
-    lv_obj_set_style_bg_color(classic_btn, bg, 0);
-    lv_obj_set_style_bg_opa(classic_btn, LV_OPA_COVER, 0);
-    // Icon bereits geladen – keine SD-Zugriff
+    update_round_button_state(classic_btn, classic_label, active, lv_color_hex(0x2E7D32));
 }
 
 static void update_radio_icon(lv_color_t color, bool active)
 {
-    if (!radio_btn || !radio_img) return;
-    lv_obj_set_style_bg_color(radio_btn, lv_color_hex(0xC0C0C0), 0);
-    lv_obj_set_style_bg_opa(radio_btn, LV_OPA_COVER, 0);
-    // Zwischen vorgeladenen Deskriptoren wechseln – kein SD-Zugriff
-    lv_image_dsc_t *dsc = active ? &radio_icon_checked_dsc : &radio_icon_unchecked_dsc;
-    if (dsc->data) {
-        lv_img_set_src(radio_img, dsc);
-    }
+    update_round_button_state(radio_btn, radio_label, active, lv_color_hex(0x1565C0));
 }
 
 static void update_shore_icon(lv_color_t color, bool active)
 {
-    (void)color; (void)active; // Icon bereits geladen – kein SD-Zugriff
+    (void)color; (void)active; // Icon per PNG von SD geladen
 }
 
 // Timer-Callbacks für asynchronen RS485-Send (blockiert nicht den LVGL-Thread)
@@ -3875,15 +3845,11 @@ static void classic_button_event_cb(lv_event_t *event)
     }
     // Optimistisches UI: sofort umschalten
     classic_on = !classic_on;
-    lv_color_t color = lv_color_hex(0x2E7D32);
-    simple_toggle_button_update(classic_btn, classic_label, classic_on, "", color);
-    update_classic_icon(color, classic_on);
+    update_classic_icon(lv_color_hex(0x2E7D32), classic_on);
     // Radio geht aus wenn 12V aus
     if (!classic_on && radio_on) {
         radio_on = false;
-        lv_color_t rc = lv_color_hex(0x1565C0);
-        simple_toggle_button_update(radio_btn, radio_label, radio_on, "MM", rc);
-        update_radio_icon(rc, radio_on);
+        update_radio_icon(lv_color_hex(0x1565C0), radio_on);
         // Radio-Aus: alten Timer canceln falls vorhanden, neuen starten
         if (s_radio_send_timer) {
             lv_timer_del(s_radio_send_timer);
@@ -3915,9 +3881,7 @@ static void radio_button_event_cb(lv_event_t *event)
     }
     // Optimistisches UI: sofort umschalten
     radio_on = new_state;
-    lv_color_t color = lv_color_hex(0x1565C0);
-    simple_toggle_button_update(radio_btn, radio_label, radio_on, "MM", color);
-    update_radio_icon(color, radio_on);
+    update_radio_icon(lv_color_hex(0x1565C0), radio_on);
     // RS485-Befehl asynchron senden
     s_radio_send_timer = lv_timer_create(radio_send_timer_cb, 10, (void *)(uintptr_t)radio_on);
     if (s_radio_send_timer) lv_timer_set_repeat_count(s_radio_send_timer, 1);
@@ -3932,7 +3896,6 @@ static void shore_power_update_label(void)
     lv_color_t bg = shore_power_present ? lv_color_hex(0xF9A825) : lv_color_hex(0xC0C0C0);
     lv_obj_set_style_bg_color(shore_label, bg, 0);
     lv_obj_set_style_bg_opa(shore_label, LV_OPA_COVER, 0);
-    lv_label_set_text(shore_label, "");
 }
 
 static void backlight_set(bool on)
@@ -4043,12 +4006,6 @@ void app_main()
     // Initialize display (uses I2C for touch controller)
     waveshare_esp32_s3_rgb_lcd_init();
 
-    // ── LVGL sofort sperren ──────────────────────────────────────────
-    // Nach lvgl_port_init() läuft der LVGL-Task bereits und würde den
-    // Default-Screen (weiß) rendern.  Mutex sofort nehmen, damit kein
-    // Frame gerendert wird, bevor Theme + Hintergrundbild stehen.
-    // SD- und RS485-Init passieren innerhalb des Locks – sie nutzen
-    // kein LVGL und blockieren daher niemanden.
     ESP_LOGI(TAG, "Display WoMo Home Control with Dynamic Theme");
 
     // ── SD + RS485 initialisieren (kein LVGL nötig → kein Lock) ──────
@@ -4168,42 +4125,59 @@ void app_main()
         update_connectivity_label();
 
         // Zusätzliche Schalter links (klassisch, Radio) und Netzstrom-Anzeige
-        classic_btn = lv_btn_create(screen);
-        lv_obj_set_size(classic_btn, 48, 48);
+        // Einheitliches System: create_round_button() + round_button_add_icon()
+        // 12V-Button (oben links, Long-Press) – bolt-Icon
+        classic_btn = create_round_button(screen, 48,
+                                          classic_on ? lv_color_hex(0x2E7D32) : lv_color_hex(0xC0C0C0),
+                                          classic_button_event_cb, LV_EVENT_LONG_PRESSED);
         lv_obj_align(classic_btn, LV_ALIGN_TOP_LEFT, 10, 10);
-        lv_obj_set_style_radius(classic_btn, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_opa(classic_btn, LV_OPA_COVER, 0);
-        lv_obj_set_style_border_width(classic_btn, 0, 0);
-        lv_obj_set_style_border_color(classic_btn, lv_color_hex(0x7A7A7A), 0);
-        lv_obj_add_flag(classic_btn, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(classic_btn, classic_button_event_cb, LV_EVENT_LONG_PRESSED, NULL);
-        classic_label = lv_label_create(classic_btn);
-        simple_toggle_button_update(classic_btn, classic_label, classic_on, "", lv_color_hex(0x2E7D32));
-        update_classic_icon(lv_color_hex(0x2E7D32), classic_on);
+        classic_label = round_button_add_icon(classic_btn, ICON_POWER_SETTINGS_NEW);
 
-        radio_btn = lv_btn_create(screen);
-        lv_obj_set_size(radio_btn, 48, 48);
+        // Multimedia-Button (unten links, Click) – music_note-Icon
+        radio_btn = create_round_button(screen, 48,
+                                        radio_on ? lv_color_hex(0x1565C0) : lv_color_hex(0xC0C0C0),
+                                        radio_button_event_cb, LV_EVENT_CLICKED);
         lv_obj_align(radio_btn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
-        lv_obj_set_style_radius(radio_btn, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_opa(radio_btn, LV_OPA_COVER, 0);
-        lv_obj_set_style_border_width(radio_btn, 0, 0);
-        lv_obj_set_style_border_color(radio_btn, lv_color_hex(0x7A7A7A), 0);
-        lv_obj_add_flag(radio_btn, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(radio_btn, radio_button_event_cb, LV_EVENT_CLICKED, NULL);
-        radio_label = lv_label_create(radio_btn);
-        simple_toggle_button_update(radio_btn, radio_label, radio_on, "MM", lv_color_hex(0x1565C0));
-        update_radio_icon(lv_color_hex(0x1565C0), radio_on);
+        radio_label = round_button_add_icon(radio_btn, ICON_MUSIC_NOTE);
 
-        shore_label = lv_label_create(screen);
+        // Einstellungen-Button (über Multimedia-Button) – settings-Icon
+        settings_btn = create_round_button(screen, 40,
+                                           lv_color_hex(0xC0C0C0),
+                                           settings_button_event_cb, LV_EVENT_CLICKED);
+        lv_obj_align(settings_btn, LV_ALIGN_BOTTOM_LEFT, 10, -80);  // bündig links wie Radio-Button
+        settings_icon_label = round_button_add_icon(settings_btn, ICON_SETTINGS);
+
+        // Landstrom-Anzeige (Mitte unten, kein Click) – lv_obj als Container (nicht lv_label,
+        // da Kind-lv_obj auf lv_label Touch-Events blockiert)
+        shore_label = lv_obj_create(screen);
         lv_obj_set_size(shore_label, 48, 48);
         lv_obj_align(shore_label, LV_ALIGN_BOTTOM_MID, 0, -10);
         lv_obj_set_style_radius(shore_label, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_border_width(shore_label, 0, 0);
+        lv_obj_set_style_shadow_width(shore_label, 0, 0);
         lv_obj_set_style_pad_all(shore_label, 0, 0);
         lv_obj_set_style_bg_opa(shore_label, LV_OPA_COVER, 0);
-        lv_label_set_text(shore_label, "");
+        lv_obj_clear_flag(shore_label, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
         shore_power_update_label();
         update_shore_icon(lv_color_hex(0xF9A825), shore_power_present);
+        // Bolt-Icon als Kind-Label (wird von lv_label_set_text auf shore_label nicht beeinflusst)
+        shore_icon_label = lv_label_create(shore_label);
+        lv_label_set_text(shore_icon_label, ICON_CHARGER);
+        lv_obj_set_style_text_font(shore_icon_label, WOMO_FONT_ICONS_LARGE, 0);
+        lv_obj_set_style_text_color(shore_icon_label, lv_color_black(), 0);
+        lv_obj_clear_flag(shore_icon_label, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_center(shore_icon_label);
+        // Innerer schwarzer Rand (identisch zu create_round_button)
+        lv_obj_t *shore_inner = lv_obj_create(shore_label);
+        lv_obj_set_size(shore_inner, 48 - 8, 48 - 8);
+        lv_obj_set_style_radius(shore_inner, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_opa(shore_inner, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(shore_inner, 2, 0);
+        lv_obj_set_style_border_color(shore_inner, lv_color_hex(0x000000), 0);
+        lv_obj_set_style_border_opa(shore_inner, LV_OPA_COVER, 0);
+        lv_obj_set_style_pad_all(shore_inner, 0, 0);
+        lv_obj_center(shore_inner);
+        lv_obj_clear_flag(shore_inner, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
         shore_caption_label = lv_label_create(screen);
         lv_label_set_text(shore_caption_label, "220 V");
@@ -4212,56 +4186,15 @@ void app_main()
         lv_obj_set_style_text_color(shore_caption_label, lv_color_black(), 0);
         lv_obj_align_to(shore_caption_label, shore_label, LV_ALIGN_OUT_BOTTOM_MID, 0, -24);
 
-            // Backlight Toggle (Lampe) unten mittig
-            backlight_btn = lv_btn_create(screen);
-            lv_obj_set_size(backlight_btn, 48, 48);
-            lv_obj_align(backlight_btn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
-            lv_obj_set_style_radius(backlight_btn, LV_RADIUS_CIRCLE, 0);
-            lv_obj_set_style_bg_opa(backlight_btn, LV_OPA_COVER, 0);
-            lv_obj_set_style_border_width(backlight_btn, 0, 0);
-            lv_obj_set_style_pad_all(backlight_btn, 0, 0); // content area = volle 48×48
-            lv_obj_set_style_border_color(backlight_btn, lv_color_hex(0x7A7A7A), 0);
-            lv_obj_add_flag(backlight_btn, LV_OBJ_FLAG_CLICKABLE);
-            lv_obj_add_event_cb(backlight_btn, backlight_button_event_cb, LV_EVENT_CLICKED, NULL);
-            lv_obj_add_event_cb(backlight_btn, backlight_button_event_cb, LV_EVENT_LONG_PRESSED, NULL);
-
-            backlight_update_label(); // setzt Button-Farbe
-            preload_icons();           // alle Icons einmalig von SD laden
-
-            // Drei-Punkte-Button (⋮) → öffnet Einstellungs-Modal, rechts neben WiFi-Button
-            settings_btn = lv_btn_create(screen);
-            lv_obj_set_size(settings_btn, 32, 44);
-            lv_obj_align(settings_btn, LV_ALIGN_TOP_LEFT, 240, 22);
-            lv_obj_set_style_transform_rotation(settings_btn, 900, 0); // 90°
-            lv_obj_set_style_radius(settings_btn, LV_RADIUS_CIRCLE, 0);
-            lv_obj_set_style_bg_color(settings_btn, lv_color_hex(0xC0C0C0), 0);
-            lv_obj_set_style_bg_opa(settings_btn, LV_OPA_COVER, 0);
-            lv_obj_set_style_border_width(settings_btn, 0, 0);
-            lv_obj_set_style_shadow_width(settings_btn, 0, 0);
-            lv_obj_set_style_pad_all(settings_btn, 0, 0);
-            lv_obj_add_flag(settings_btn, LV_OBJ_FLAG_CLICKABLE);
-            lv_obj_add_event_cb(settings_btn, settings_button_event_cb, LV_EVENT_CLICKED, NULL);
-            settings_inner_border = lv_obj_create(settings_btn);
-            lv_obj_set_size(settings_inner_border, 26, 38);
-            lv_obj_set_style_radius(settings_inner_border, LV_RADIUS_CIRCLE, 0);
-            lv_obj_set_style_bg_opa(settings_inner_border, LV_OPA_TRANSP, 0);
-            lv_obj_set_style_border_width(settings_inner_border, 2, 0);
-            lv_obj_set_style_border_color(settings_inner_border, lv_color_hex(0x000000), 0);
-            lv_obj_set_style_pad_all(settings_inner_border, 0, 0);
-            lv_obj_center(settings_inner_border);
-            lv_obj_clear_flag(settings_inner_border, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-            // Drei vertikale Punkte (⋮)
-            for (int i = 0; i < 3; i++) {
-                lv_obj_t *dot = lv_obj_create(settings_btn);
-                lv_obj_set_size(dot, 6, 6);
-                lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-                lv_obj_set_style_bg_color(dot, lv_color_hex(0x444444), 0);
-                lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
-                lv_obj_set_style_border_width(dot, 0, 0);
-                lv_obj_set_style_pad_all(dot, 0, 0);
-                lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-                lv_obj_align(dot, LV_ALIGN_CENTER, 0, (i - 1) * 11); // vertikal: -11, 0, +11
-            }
+        // Helligkeit-Button (unten rechts, Click + Long-Press) – lightbulb_circle-Icon
+        backlight_btn = create_round_button(screen, 40,
+                                            lv_color_hex(0xC0C0C0),
+                                            backlight_button_event_cb, LV_EVENT_CLICKED);
+        lv_obj_add_event_cb(backlight_btn, backlight_button_event_cb, LV_EVENT_LONG_PRESSED, NULL);
+        lv_obj_align(backlight_btn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
+        backlight_icon_label = round_button_add_icon(backlight_btn, ICON_LIGHT_OFF);
+        backlight_update_label();
+        preload_icons();  // WiFi/LTE-Bar-Icons von SD laden
         
         // Weather data (top right) - Gas first, all one font size larger
     char init_buf[40];
@@ -4435,22 +4368,11 @@ void app_main()
     if (gps_offset_x < 0) {
         gps_offset_x = 0;
     }
-    gps_button = lv_btn_create(screen);
-    lv_obj_set_size(gps_button, 36, 36);
-    lv_obj_align(gps_button, LV_ALIGN_BOTTOM_LEFT, 80, -13);
-    lv_obj_set_style_radius(gps_button, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(gps_button, lv_color_hex(0xC0C0C0), 0);
-    lv_obj_set_style_bg_opa(gps_button, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(gps_button, 0, 0);
-    lv_obj_set_style_pad_all(gps_button, 0, 0);
-    lv_obj_add_flag(gps_button, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(gps_button, gps_label_event_cb, LV_EVENT_CLICKED, NULL);
+    gps_button = create_round_button(screen, 40, lv_color_hex(0xC0C0C0),
+                                      gps_label_event_cb, LV_EVENT_CLICKED);
+    lv_obj_align(gps_button, LV_ALIGN_BOTTOM_LEFT, 80, -10);
+    gps_icon_label = round_button_add_icon(gps_button, ICON_MY_LOCATION);
     gps_label = gps_button; // Alias für bestehende Referenzen
-    // GPS-Icon direkt hier laden – gps_button existiert jetzt
-    gps_img = load_icon_png(gps_button,
-                            "/sdcard/images/icons-48(32)/location_32.png",
-                            &gps_icon_buf, &gps_icon_dsc,
-                            gps_img);
 
     /* GPS-Detail-Popup-Panel: erscheint rechts neben dem GPS-Button beim Klick.
      * Position: BOTTOM_LEFT, x=65 (GPS-Button ~55px breit + 10px Margin), y=-10.
@@ -4820,26 +4742,38 @@ void app_main()
     }
 
     // ── Theme + Ducato mit korrekter Uhrzeit laden ─────────────────────
-    // Zeit ist jetzt gültig (NTP oder RS485) oder Fallback auf DAY.
-    // Beide Ducato-Bilder werden sequenziell vorab dekodiert (je 1,5 MB ARGB8888
-    // in PSRAM), damit beim späteren Theme-Wechsel (Tag↔Nacht nach Stunden) nur
-    // ein Widget-Swap nötig ist – kein erneuter lodepng-Decode mehr.
-    // WICHTIG: Sequenziell! Jeder Decode freigt seinen tmp-PNG-Puffer vor dem
-    // nächsten, sodass nie zwei 1,5-MB-Decode-Puffer gleichzeitig belegt sind.
-    if (lvgl_port_lock(0)) {
+    // PNG-Decode läuft OHNE LVGL-Lock (15–60 s auf ESP32-S3).
+    // Nur Theme-Berechnung + apply_text_theme_colors brauchen ein kurzes Lock.
+    {
         womo_theme_mode_t boot_mode = womo_theme_update(WOMO_STATUS_OK);
         bool boot_is_day = theme_mode_is_daylike(boot_mode);
         const char *mode_names[] = {"DAY", "NIGHT", "SUNRISE", "SUNSET"};
         ESP_LOGI(TAG, "Boot theme: %s (mode=%d, ducato=%s)",
                  mode_names[boot_mode], boot_mode, boot_is_day ? "weiss" : "grau");
 
-        // Zuerst die Boot-Variante laden und anzeigen
+        // Theme-Farben + Screen-Hintergrundfarbe setzen (schnell: nur Stil-Ops)
+        if (lvgl_port_lock(500)) {
+            apply_text_theme_colors();
+            womo_theme_apply_to_screen(NULL);
+            lvgl_port_unlock();
+        }
+
+        // Backlight ist hardwareseitig seit dem frühen wavesahre_rgb_lcd_bl_on()-Aufruf
+        // bereits an. Hier backlight_set(true) aufrufen damit backlight_on-Flag gesetzt
+        // und backlight_update_label() (Label existiert jetzt) korrekt ist.
+        // 150 ms warten damit LVGL beide Direct-Mode-Framebuffer gefüllt hat.
+        ESP_LOGI(TAG, "Waiting for LVGL to render initial screen...");
+        vTaskDelay(pdMS_TO_TICKS(150));
+        ESP_LOGI(TAG, "Enabling backlight (state sync)");
+        if (lvgl_port_lock(500)) {
+            backlight_set(true);
+            lvgl_port_unlock();
+        }
+
+        // Hintergrundbild + Logo laden: SD-Lesen + PNG-Decode ohne Lock.
+        // load_background_image() und load_logo_image() verwalten ihren LVGL-Lock intern.
         load_background_image(lv_scr_act(), boot_is_day);
         load_logo_image(lv_scr_act());
-        apply_text_theme_colors();
-        womo_theme_apply_to_screen(NULL);
-
-        lvgl_port_unlock();
     }
 
 #if WOMO_ENABLE_SCREENSHOT
@@ -4874,16 +4808,8 @@ void app_main()
         }
     }
 
-    // Kurz warten damit LVGL den finalen Frame in beide Framebuffer
-    // (Direct Mode) gerendert hat, dann Backlight einschalten.
-    // Bei Tear-Avoidance Mode 3 müssen beide Buffer gefüllt sein (2-3 Frames).
-    ESP_LOGI(TAG, "Waiting for LVGL to render initial screen...");
-    vTaskDelay(pdMS_TO_TICKS(150));  // 2 Frames @60fps genügen (Direct-Mode beide Buffer gefüllt)
-    ESP_LOGI(TAG, "Enabling backlight");
-    if (lvgl_port_lock(0)) {
-        backlight_set(true);
-        lvgl_port_unlock();
-    }
+    // Backlight wurde bereits nach dem ersten LVGL-Theme-Apply eingeschaltet (nach PNG-Decode).
+    // backlight_set(true) ist idempotent – kein erneuter Aufruf nötig.
 
     if (wifi_autoretry_handle == NULL) {
         BaseType_t created = xTaskCreateWithCaps(wifi_autoretry_task,

@@ -19,10 +19,12 @@
 #include "hal/sensor_i2c_bus.h"
 #include "bsec_interface.h"
 #include "bsec_datatypes.h"
+#include "sensors/bsec_config_33v_3s_4d.h"
+#include "sensor_config.h"
 
 #define BME680_LOG_INTERVAL_MS 5000
 #define BME680_USE_BSEC 1
-#define BSEC_STATE_SAVE_INTERVAL_US (30 * 60 * 1000000LL)  // 30 Minuten
+#define BSEC_STATE_SAVE_INTERVAL_US (10 * 60 * 1000000LL)  // 10 Minuten (Fallback)
 #define BSEC_NVS_NAMESPACE "bsec"
 #define BSEC_NVS_KEY_INDOOR "state_in"
 
@@ -82,6 +84,7 @@ typedef struct {
     bool is_indoor;
     uint8_t fail_count;   // I2C-Fehlerzähler; bei >= 5 wird hw_disabled gesetzt
     bool hw_disabled;     // Sensor dauerhaft deaktiviert (defekter/Fake-Chip)
+    int last_saved_accuracy; // Zuletzt gespeicherter IAQ-Accuracy-Level (-1 = nie gespeichert)
 } bsec_ctx_t;
 
 static bsec_ctx_t s_bsec_lo = { 
@@ -89,14 +92,16 @@ static bsec_ctx_t s_bsec_lo = {
     .handle = NULL, 
     .state_len = 0,
     .plausibility = &s_plausibility_indoor,
-    .is_indoor = true
+    .is_indoor = true,
+    .last_saved_accuracy = -1
 };
 static bsec_ctx_t s_bsec_hi = { 
     .label = "BME Außen (0x77)", 
     .handle = NULL, 
     .state_len = 0,
     .plausibility = &s_plausibility_outdoor,
-    .is_indoor = false
+    .is_indoor = false,
+    .last_saved_accuracy = -1
 };
 
 typedef struct {
@@ -570,7 +575,7 @@ static void process_bme680(bsec_ctx_t *ctx)
     }
 
     int64_t ts_ns = now_ns;
-    bsec_input_t inputs[4] = {0};
+    bsec_input_t inputs[5] = {0};  // T + H + P + Gas + HeatSource
     uint8_t n_inputs = 0;
 
     inputs[n_inputs++] = (bsec_input_t){
@@ -595,6 +600,13 @@ static void process_bme680(bsec_ctx_t *ctx)
             .time_stamp = ts_ns,
         };
     }
+    // Platinen-Eigenerwärmung mitteilen: BSEC korrigiert Temperatur und Feuchte
+    // für IAQ-Berechnung. Wert aus sensor_config.h (SENSOR_BME680_TEMP_OFFSET_C).
+    inputs[n_inputs++] = (bsec_input_t){
+        .sensor_id = BSEC_INPUT_HEATSOURCE,
+        .signal = SENSOR_BME680_TEMP_OFFSET_C,
+        .time_stamp = ts_ns,
+    };
 
     bsec_output_t outputs[BSEC_NUMBER_OUTPUTS] = {0};
     uint8_t n_outputs = BSEC_NUMBER_OUTPUTS;
@@ -605,7 +617,17 @@ static void process_bme680(bsec_ctx_t *ctx)
         ESP_LOGW(TAG, "%s: BSEC Fehler (%d)", ctx->label, status);
     }
 
-    // Periodisches Speichern des BSEC State (alle 30 min)
+    // Sofort speichern wenn Accuracy sich verbessert hat (Bosch-Empfehlung)
+    int cur_acc = s_bsec_out_indoor.iaq_accuracy;
+    if (cur_acc >= 1 && cur_acc != ctx->last_saved_accuracy) {
+        ESP_LOGI(TAG, "%s: IAQ accuracy %d→%d – speichere BSEC State sofort",
+                 ctx->label, ctx->last_saved_accuracy, cur_acc);
+        bsec_save_state(ctx);
+        ctx->last_saved_accuracy = cur_acc;
+        s_last_bsec_state_save_us = now_ns / 1000LL;  // Fallback-Timer zurücksetzen
+    }
+
+    // Periodischer Fallback-Save (alle 10 min)
     int64_t now_us = now_ns / 1000LL;
     if (now_us - s_last_bsec_state_save_us >= BSEC_STATE_SAVE_INTERVAL_US) {
         s_last_bsec_state_save_us = now_us;
@@ -931,6 +953,18 @@ esp_err_t bme680_app_start(void)
         bsec_ctx_t *indoor_ctx = s_indoor_is_lo ? &s_bsec_lo : &s_bsec_hi;
         bsec_library_return_t bsec_status = bsec_init();
         if (bsec_status == BSEC_OK) {
+            // 3.3V Betriebsspannung: Pflicht-Config für korrekte Heater-Selbsterwärmungskompensation.
+            // Standard-BSEC nutzt 1.8V – ohne dieses Config-File sind IAQ-Werte dauerhaft falsch!
+            bsec_status = bsec_set_configuration(bsec_config_33v_3s_4d,
+                                                  BSEC_CONFIG_33V_3S_4D_SIZE,
+                                                  s_bsec_work_buffer,
+                                                  sizeof(s_bsec_work_buffer));
+            if (bsec_status != BSEC_OK) {
+                ESP_LOGW(TAG, "BSEC set_configuration fehlgeschlagen (%d) – 1.8V Default aktiv!", bsec_status);
+            } else {
+                ESP_LOGI(TAG, "BSEC 3.3V Config geladen (%u Bytes)", BSEC_CONFIG_33V_3S_4D_SIZE);
+            }
+            bsec_status = BSEC_OK;  // Weiter auch wenn Config-Load fehlschlägt
             bsec_sensor_configuration_t requested[7] = {
                 { .sensor_id = BSEC_OUTPUT_IAQ, .sample_rate = BSEC_SAMPLE_RATE_LP },
                 { .sensor_id = BSEC_OUTPUT_CO2_EQUIVALENT, .sample_rate = BSEC_SAMPLE_RATE_LP },

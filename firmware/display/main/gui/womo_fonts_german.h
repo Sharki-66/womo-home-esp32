@@ -29,7 +29,8 @@ extern const lv_font_t lv_font_montserrat_16_german;
 extern const lv_font_t lv_font_montserrat_20_german;
 extern const lv_font_t lv_font_montserrat_24_german;
 // Material-Symbole (Rounded) als Icon-Font
-extern const lv_font_t Material;
+extern const lv_font_t Material;   // 16 px
+extern const lv_font_t Material24; // 24 px
 
 // Font-Aliases für einfache Verwendung
 #define WOMO_FONT_TINY          &lv_font_montserrat_12_german   // 12px - Debug/Status
@@ -45,8 +46,9 @@ extern const lv_font_t Material;
 #define WOMO_FONT_SENSOR        WOMO_FONT_SMALL     // Sensor-Werte
 #define WOMO_FONT_STATUS        WOMO_FONT_SMALL     // Status-Texte
 #define WOMO_FONT_DEBUG         WOMO_FONT_TINY      // Debug/RS485
-// Icon-Font für Material Symbols Rounded (16px)
+// Icon-Font für Material Symbols (16 px und 24 px)
 #define WOMO_FONT_ICONS         (&Material)
+#define WOMO_FONT_ICONS_LARGE   (&Material24)
 
 /**
  * Test-String mit deutschen Umlauten und Sonderzeichen

@@ -131,12 +131,11 @@
 #define SENSOR_TANK1_ADC_CHANNEL 0     // GPIO1 (Frischwasser)
 #define SENSOR_TANK2_ADC_CHANNEL 1     // GPIO2 (Grauwasser)
 
-// Batterie-Kalibrierung (U_kalibriert = U_gemessen * SCALE + OFFSET_mV)
-// Batt1: 2026-03-31 gegen Multimeter abgeglichen (11.6V -> 12.3V).
+// Batterie-Kalibrierung (U_kalibriert = U_gemessen * SCALE + OFFSET_mV
 #define SENSOR_BATT1_CAL_SCALE 1.00f
-#define SENSOR_BATT1_CAL_OFFSET_MV 0
+#define SENSOR_BATT1_CAL_OFFSET_MV 200
 #define SENSOR_BATT2_CAL_SCALE 1.00f
-#define SENSOR_BATT2_CAL_OFFSET_MV 0
+#define SENSOR_BATT2_CAL_OFFSET_MV 200
 
 // Tank-Kalibrierung (U_kalibriert = U_gemessen * SCALE + OFFSET_mV)
 // Hinweis: 0-1V Sensoren liegen direkt am ADC (kein Spannungsteiler).
@@ -213,6 +212,17 @@
 #define SENSOR_WAKEUP_TOUCH_THRESHOLD_PCT 10    // Empfindlichkeit: 10% über Baseline = Touch erkannt
 
 // ====================================================================================
+
+// ====================================================================================
+// BME680 / BSEC Konfiguration
+// ====================================================================================
+// Platinen-Eigenerwärmung: Der ESP32-S3 erwärmt das Board um typisch 3-6 °C.
+// BSEC zieht diesen Offset von der gemessenen Temperatur ab, bevor es IAQ,
+// CO2eq und VOCeq berechnet. Zu klein → IAQ bleibt zu hoch (wie ohne Offset).
+// Zu groß → BSEC überkompensiert und IAQ wird künstlich niedrig.
+// Kalibrierung: Sensortemperatur mit Referenz-Thermometer vergleichen und die
+// Differenz hier eintragen (Ref = Sensor − Offset).
+#define SENSOR_BME680_TEMP_OFFSET_C  4.0f   // Typisch 3-6 °C für ESP32-S3 DevKitC
 
 // =============================================================================
 // Gas Consumption Calculation (EMA-based rate tracking)

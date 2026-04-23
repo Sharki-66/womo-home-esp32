@@ -23,7 +23,8 @@
     "idf.enableUpdateSuggestions": true,
     "idf.enableStatusBar": true,
     "idf.enableCcache": false,
-    "chat.agent.maxRequests": 50
+    "chat.agent.maxRequests": 50,
+    "cloude-code-toolbox.intelligence.autoScanMcpSkillsOnWorkspaceOpen": true
   },
   "tasks": {
     "version": "2.0.0",
