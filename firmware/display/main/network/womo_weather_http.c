@@ -46,6 +46,7 @@ static bool   s_nvs_loaded = false;
 #define WEATHER_HTTP_BUFFER_SIZE 8192
 #define WEATHER_HTTP_TASK_STACK 4096
 #define WEATHER_HTTP_TASK_PRIO   4
+#define WEATHER_HTTP_INITIAL_DELAY_MS 3000
 
 typedef struct {
     char buffer[WEATHER_HTTP_BUFFER_SIZE];
@@ -75,6 +76,7 @@ static const char* weather_http_get_longitude(void);
 static uint32_t weather_http_get_interval_minutes(void);
 static void weather_nvs_load(void);
 static void weather_nvs_save(double lat, double lon);
+static void weather_http_log_heap(const char *phase);
 
 static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
@@ -178,6 +180,14 @@ static void weather_http_task(void *arg)
         delay_ticks = pdMS_TO_TICKS(60000U);
     }
 
+    /* Nach WiFi-Reconnect kurz Luft holen lassen: DHCP/TLS/WiFi interner Heap
+     * beruhigt sich meist innerhalb weniger Sekunden. */
+    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(WEATHER_HTTP_INITIAL_DELAY_MS)) > 0) {
+        s_ctx.task_handle = NULL;
+        s_ctx.stop_requested = false;
+        vTaskDelete(NULL);
+    }
+
     while (!s_ctx.stop_requested) {
         /* Auf GPS-Position warten (Live oder NVS) */
         const char *lat = weather_http_get_latitude();
@@ -276,8 +286,11 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
         .cert_pem = isrg_root_x1_pem,   // direkt PEM statt crt_bundle (umgeht 0x4290)
     };
 
+    weather_http_log_heap("before_http_init");
+
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
+        weather_http_log_heap("http_init_failed");
         ESP_LOGE(TAG, "Failed to init HTTP client");
         return ESP_ERR_NO_MEM;
     }
@@ -292,12 +305,14 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
         esp_http_client_cleanup(client);
         return ESP_ERR_TIMEOUT;
     }
+    weather_http_log_heap("before_http_perform");
     err = esp_http_client_perform(client);
     int status = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
     womo_http_mutex_release();
 
     if (err != ESP_OK) {
+        weather_http_log_heap("http_perform_failed");
         ESP_LOGE(TAG, "HTTP request failed: %s", esp_err_to_name(err));
         return err;
     }
@@ -319,6 +334,18 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
     }
 
     return ESP_OK;
+}
+
+static void weather_http_log_heap(const char *phase)
+{
+    ESP_LOGI(TAG,
+             "Heap %s: internal_free=%u internal_largest=%u dma_free=%u dma_largest=%u total_free=%u",
+             phase,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA),
+             (unsigned)esp_get_free_heap_size());
 }
 
 /* ── NVS-Helfer ─────────────────────────────────────────── */
@@ -425,8 +452,13 @@ void womo_weather_http_set_location(double lat, double lon)
     memcpy(s_gps_lon, lon_buf, sizeof(s_gps_lon));
     taskEXIT_CRITICAL(&s_gps_lock);
 
-    /* Ins NVS persistieren (nur bei signifikanter Änderung) */
-    weather_nvs_save(lat, lon);
+    /* Kein NVS-Schreiben hier:
+     * Diese Funktion wird aus router_poll_task aufgerufen, dessen Stack in
+     * PSRAM liegt. NVS/Flash-Zugriffe können Cache-Disable auslösen und sind
+     * aus diesem Kontext nicht sicher. */
+    s_nvs_lat = lat;
+    s_nvs_lon = lon;
+    s_nvs_loaded = true;
 }
 
 static uint32_t weather_http_get_interval_minutes(void)

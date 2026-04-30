@@ -16,6 +16,7 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "bme680.h"
+#include "bme280.h"
 #include "hal/sensor_i2c_bus.h"
 #include "bsec_interface.h"
 #include "bsec_datatypes.h"
@@ -26,7 +27,7 @@
 #define BME680_USE_BSEC 1
 #define BSEC_STATE_SAVE_INTERVAL_US (10 * 60 * 1000000LL)  // 10 Minuten (Fallback)
 #define BSEC_NVS_NAMESPACE "bsec"
-#define BSEC_NVS_KEY_INDOOR "state_in"
+#define BSEC_NVS_KEY_INDOOR_LEGACY "state_in"
 
 // Luftdruck-Trend
 #define PRESS_HISTORY_SIZE 96            // 24h @ 15min Intervall
@@ -49,6 +50,7 @@
 #define BME680_HUM_MAX_PCT 100.0f
 #define BME680_PRESS_MIN_HPA 300.0f
 #define BME680_PRESS_MAX_HPA 1100.0f
+#define BME680_MAX_FAIL_COUNT 5
 
 static const char *TAG = "bme680_app";
 
@@ -65,9 +67,11 @@ typedef struct {
 
 static bme680_handle_t s_bme_lo = NULL;
 static bme680_handle_t s_bme_hi = NULL;
+static bme280_handle_t s_bme280_lo = NULL;
+static bme280_handle_t s_bme280_hi = NULL;
 static bme_chip_type_t s_chip_lo = BME_CHIP_NONE;
 static bme_chip_type_t s_chip_hi = BME_CHIP_NONE;
-static bool s_indoor_is_lo = true;  // Default: 0x76=Indoor; false wenn BME680 auf 0x77
+static bool s_indoor_is_lo = true;  // true: slot A ist innen, false: slot B ist innen
 static TaskHandle_t s_task = NULL;
 static bool s_bsec_ready = false;
 static uint8_t s_bsec_work_buffer[BSEC_MAX_WORKBUFFER_SIZE] = {0};
@@ -82,13 +86,14 @@ typedef struct {
     uint32_t state_len;
     bme680_plausibility_t *plausibility;
     bool is_indoor;
+    char state_key[16];    // Adressspezifisch, damit alter Baseline-State nicht auf neue Sensoren angewandt wird
     uint8_t fail_count;   // I2C-Fehlerzähler; bei >= 5 wird hw_disabled gesetzt
     bool hw_disabled;     // Sensor dauerhaft deaktiviert (defekter/Fake-Chip)
     int last_saved_accuracy; // Zuletzt gespeicherter IAQ-Accuracy-Level (-1 = nie gespeichert)
 } bsec_ctx_t;
 
 static bsec_ctx_t s_bsec_lo = { 
-    .label = "BME Innen (0x76)", 
+    .label = "BME slot A",
     .handle = NULL, 
     .state_len = 0,
     .plausibility = &s_plausibility_indoor,
@@ -96,7 +101,7 @@ static bsec_ctx_t s_bsec_lo = {
     .last_saved_accuracy = -1
 };
 static bsec_ctx_t s_bsec_hi = { 
-    .label = "BME Außen (0x77)", 
+    .label = "BME slot B",
     .handle = NULL, 
     .state_len = 0,
     .plausibility = &s_plausibility_outdoor,
@@ -116,6 +121,12 @@ typedef struct {
 } bsec_output_snapshot_t;
 
 static bsec_output_snapshot_t s_bsec_out_indoor = {0};
+static char s_label_bme_addr[2][24] = {{0}};
+
+static inline bool bsec_status_is_error(bsec_library_return_t status)
+{
+    return status < BSEC_OK;
+}
 
 // Luftdruck-Historie für Trend-Berechnung (nur outdoor)
 typedef struct {
@@ -303,7 +314,7 @@ static bool bme680_apply_plausibility(bsec_ctx_t *ctx, const bme680_data_t *data
 
 static bool bsec_load_state(bsec_ctx_t *ctx)
 {
-    if (!ctx) {
+    if (!ctx || ctx->state_key[0] == '\0') {
         return false;
     }
 
@@ -314,7 +325,7 @@ static bool bsec_load_state(bsec_ctx_t *ctx)
     }
 
     size_t blob_size = BSEC_MAX_STATE_BLOB_SIZE;
-    err = nvs_get_blob(handle, BSEC_NVS_KEY_INDOOR, ctx->state, &blob_size);
+    err = nvs_get_blob(handle, ctx->state_key, ctx->state, &blob_size);
     nvs_close(handle);
 
     if (err == ESP_OK && blob_size > 0 && blob_size <= BSEC_MAX_STATE_BLOB_SIZE) {
@@ -322,8 +333,12 @@ static bool bsec_load_state(bsec_ctx_t *ctx)
         bsec_library_return_t bsec_status = bsec_set_state(ctx->state, ctx->state_len,
                                                             s_bsec_work_buffer,
                                                             sizeof(s_bsec_work_buffer));
-        if (bsec_status == BSEC_OK) {
-            ESP_LOGI(TAG, "%s: BSEC state restored from NVS (%u bytes)", ctx->label, ctx->state_len);
+        if (!bsec_status_is_error(bsec_status)) {
+            if (bsec_status != BSEC_OK) {
+                ESP_LOGW(TAG, "%s: BSEC set_state Warnung: %d", ctx->label, bsec_status);
+            }
+            ESP_LOGI(TAG, "%s: BSEC state restored from NVS key '%s' (%u bytes)",
+                     ctx->label, ctx->state_key, ctx->state_len);
             return true;
         } else {
             ESP_LOGW(TAG, "%s: BSEC set_state failed: %d", ctx->label, bsec_status);
@@ -334,7 +349,7 @@ static bool bsec_load_state(bsec_ctx_t *ctx)
 
 static void bsec_save_state(bsec_ctx_t *ctx)
 {
-    if (!ctx || !s_bsec_ready) {
+    if (!ctx || !s_bsec_ready || ctx->state_key[0] == '\0') {
         return;
     }
 
@@ -356,17 +371,34 @@ static void bsec_save_state(bsec_ctx_t *ctx)
         return;
     }
 
-    err = nvs_set_blob(handle, BSEC_NVS_KEY_INDOOR, ctx->state, ctx->state_len);
+    err = nvs_set_blob(handle, ctx->state_key, ctx->state, ctx->state_len);
     if (err == ESP_OK) {
         err = nvs_commit(handle);
     }
     nvs_close(handle);
 
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "%s: BSEC state saved to NVS (%u bytes)", ctx->label, ctx->state_len);
+        ESP_LOGI(TAG, "%s: BSEC state saved to NVS key '%s' (%u bytes)",
+                 ctx->label, ctx->state_key, ctx->state_len);
     } else {
         ESP_LOGW(TAG, "%s: BSEC state save failed: %s", ctx->label, esp_err_to_name(err));
     }
+}
+
+static void bsec_delete_legacy_state(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(BSEC_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        return;
+    }
+
+    err = nvs_erase_key(handle, BSEC_NVS_KEY_INDOOR_LEGACY);
+    if (err == ESP_OK) {
+        nvs_commit(handle);
+        ESP_LOGI(TAG, "Alter BSEC NVS-Key '%s' entfernt", BSEC_NVS_KEY_INDOOR_LEGACY);
+    }
+    nvs_close(handle);
 }
 
 static void log_bsec_outputs(const char *label, const bsec_output_t *outputs, uint8_t n_outputs, const bme680_data_t *data)
@@ -433,8 +465,8 @@ static void log_bsec_outputs(const char *label, const bsec_output_t *outputs, ui
 }
 
 static int64_t s_bsec_next_call_ns = 0;
-static int64_t s_next_read_lo_us = 0;  // Intervall-Timer für Slot lo (0x76)
-static int64_t s_next_read_hi_us = 0;  // Intervall-Timer für Slot hi (0x77)
+static int64_t s_next_read_lo_us = 0;  // Intervall-Timer für SENSOR_BME280_I2C_ADDR
+static int64_t s_next_read_hi_us = 0;  // Intervall-Timer für SENSOR_BME680_I2C_ADDR
 
 static esp_err_t bsec_configure_sensor(bme680_handle_t handle, const bsec_bme_settings_t *settings)
 {
@@ -442,20 +474,24 @@ static esp_err_t bsec_configure_sensor(bme680_handle_t handle, const bsec_bme_se
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_RETURN_ON_ERROR(bme680_set_temperature_oversampling(handle, (bme680_temperature_oversampling_t)settings->temperature_oversampling),
-                        TAG, "set temp os failed");
-    ESP_RETURN_ON_ERROR(bme680_set_humidity_oversampling(handle, (bme680_humidity_oversampling_t)settings->humidity_oversampling),
-                        TAG, "set hum os failed");
-    ESP_RETURN_ON_ERROR(bme680_set_pressure_oversampling(handle, (bme680_pressure_oversampling_t)settings->pressure_oversampling),
-                        TAG, "set press os failed");
-    ESP_RETURN_ON_ERROR(bme680_set_gas_heater(handle, settings->heater_temperature, settings->heating_duration, settings->run_gas),
-                        TAG, "set heater failed");
-    ESP_RETURN_ON_ERROR(bme680_set_power_mode(handle, BME680_POWER_MODE_FORCED), TAG, "set power mode failed");
+    i2c_bus_lock();
+    esp_err_t err = bme680_set_temperature_oversampling(handle, (bme680_temperature_oversampling_t)settings->temperature_oversampling);
+    if (err == ESP_OK) {
+        err = bme680_set_humidity_oversampling(handle, (bme680_humidity_oversampling_t)settings->humidity_oversampling);
+    }
+    if (err == ESP_OK) {
+        err = bme680_set_pressure_oversampling(handle, (bme680_pressure_oversampling_t)settings->pressure_oversampling);
+    }
+    if (err == ESP_OK) {
+        err = bme680_set_gas_heater(handle, settings->heater_temperature, settings->heating_duration, settings->run_gas);
+    }
+    if (err == ESP_OK) {
+        err = bme680_set_power_mode(handle, BME680_POWER_MODE_FORCED);
+    }
+    i2c_bus_unlock();
 
-    return ESP_OK;
+    return err;
 }
-
-#define BME680_MAX_FAIL_COUNT 5
 
 static void process_bme680(bsec_ctx_t *ctx)
 {
@@ -480,11 +516,14 @@ static void process_bme680(bsec_ctx_t *ctx)
         
         bsec_bme_settings_t settings = {0};
         bsec_library_return_t sc = bsec_sensor_control(call_time_ns, &settings);
-        if (sc != BSEC_OK) {
+        if (bsec_status_is_error(sc)) {
             ESP_LOGW(TAG, "%s: BSEC sensor_control Fehler (%d) at call_time=%lld now=%lld", 
                      ctx->label, sc, call_time_ns, now_ns);
             s_bsec_next_call_ns = now_ns + 3000000000LL;  // 3s retry
             return;
+        }
+        if (sc != BSEC_OK) {
+            ESP_LOGW(TAG, "%s: BSEC sensor_control Warnung (%d), fahre fort", ctx->label, sc);
         }
         s_bsec_next_call_ns = settings.next_call;
 
@@ -611,7 +650,10 @@ static void process_bme680(bsec_ctx_t *ctx)
     bsec_output_t outputs[BSEC_NUMBER_OUTPUTS] = {0};
     uint8_t n_outputs = BSEC_NUMBER_OUTPUTS;
     bsec_library_return_t status = bsec_do_steps(inputs, n_inputs, outputs, &n_outputs);
-    if (status == BSEC_OK) {
+    if (!bsec_status_is_error(status)) {
+        if (status != BSEC_OK) {
+            ESP_LOGW(TAG, "%s: BSEC do_steps Warnung (%d), outputs=%u", ctx->label, status, n_outputs);
+        }
         log_bsec_outputs(ctx->label, outputs, n_outputs, &data);
     } else {
         ESP_LOGW(TAG, "%s: BSEC Fehler (%d)", ctx->label, status);
@@ -638,14 +680,23 @@ static void process_bme680(bsec_ctx_t *ctx)
 // ── Chip-ID Erkennung ───────────────────────────────────────────────────
 
 #define BME_CHIP_ID_REG   0xD0
+#define BME280_CHIP_ID_VAL 0x60
 #define BME680_CHIP_ID_VAL 0x61
+#define BME260_CHIP_ID_VAL 0x62
 
 static const char *chip_type_name(bme_chip_type_t t)
 {
     switch (t) {
+        case BME_CHIP_BME280: return "BME280";
         case BME_CHIP_BME680: return "BME680";
+        case BME_CHIP_BME260: return "BME260";
         default: return "unbekannt";
     }
+}
+
+static bool chip_is_outdoor_bme(bme_chip_type_t chip)
+{
+    return chip == BME_CHIP_BME280 || chip == BME_CHIP_BME260;
 }
 
 static bme_chip_type_t detect_chip_id(uint8_t addr)
@@ -669,7 +720,9 @@ static bme_chip_type_t detect_chip_id(uint8_t addr)
     ESP_LOGI(TAG, "0x%02X: Chip-ID = 0x%02X", addr, chip_id);
 
     switch (chip_id) {
+        case BME280_CHIP_ID_VAL: return BME_CHIP_BME280;
         case BME680_CHIP_ID_VAL: return BME_CHIP_BME680;
+        case BME260_CHIP_ID_VAL: return BME_CHIP_BME260;
         default:
             ESP_LOGW(TAG, "0x%02X: Unbekannte Chip-ID 0x%02X", addr, chip_id);
             return BME_CHIP_NONE;
@@ -683,7 +736,65 @@ static inline bool slot_is_bsec(bme_chip_type_t chip, bool is_indoor)
     return BME680_USE_BSEC && s_bsec_ready && chip == BME_CHIP_BME680 && is_indoor;
 }
 
+static void process_bme280(bsec_ctx_t *ctx, bme280_handle_t dev)
+{
+    if (!ctx || !ctx->plausibility || !dev) {
+        return;
+    }
+    if (ctx->hw_disabled) {
+        return;
+    }
+
+    float temp_c = 0.0f;
+    float press_hpa = 0.0f;
+    float hum_pct = 0.0f;
+
+    i2c_bus_lock();
+    esp_err_t err = bme280_read_temperature(dev, &temp_c);
+    if (err == ESP_OK) {
+        err = bme280_read_pressure(dev, &press_hpa);
+    }
+    if (err == ESP_OK) {
+        err = bme280_read_humidity(dev, &hum_pct);
+    }
+    i2c_bus_unlock();
+    if (err != ESP_OK) {
+        ctx->fail_count++;
+        if (ctx->fail_count >= BME680_MAX_FAIL_COUNT) {
+            ctx->hw_disabled = true;
+            ESP_LOGE(TAG, "%s: %d I2C-Fehler in Folge – Sensor deaktiviert",
+                     ctx->label, ctx->fail_count);
+        } else {
+            ESP_LOGW(TAG, "%s: BME280 Lesen fehlgeschlagen (%s) [%d/%d]",
+                     ctx->label, esp_err_to_name(err), ctx->fail_count, BME680_MAX_FAIL_COUNT);
+        }
+        return;
+    }
+    ctx->fail_count = 0;
+
+    int64_t now_us = esp_timer_get_time();
+    bool plausible = bme680_check_plausibility(temp_c, hum_pct, press_hpa, ctx->label);
+    if (plausible) {
+        ctx->plausibility->temperature_c = temp_c;
+        ctx->plausibility->humidity_pct = hum_pct;
+        ctx->plausibility->pressure_hpa = press_hpa;
+        ctx->plausibility->gas_res_kohm = 0.0f;
+        ctx->plausibility->gas_valid = false;
+        ctx->plausibility->heater_stable = false;
+        ctx->plausibility->timestamp_us = now_us;
+        ctx->plausibility->have_value = true;
+    } else if (ctx->plausibility->have_value) {
+        temp_c = ctx->plausibility->temperature_c;
+        hum_pct = ctx->plausibility->humidity_pct;
+        press_hpa = ctx->plausibility->pressure_hpa;
+    }
+
+    ESP_LOGI(TAG, "%s: T=%.2f °C, rH=%.2f %%, p=%.2f hPa%s",
+             ctx->label, temp_c, hum_pct, press_hpa, plausible ? "" : " (fallback)");
+}
+
 static void process_slot(bme_chip_type_t chip, bme680_handle_t h680,
+                         bme280_handle_t bme280,
                          bsec_ctx_t *ctx,
                          int64_t *next_us, int64_t now_us, int64_t now_ns)
 {
@@ -698,6 +809,8 @@ static void process_slot(bme_chip_type_t chip, bme680_handle_t h680,
         if (*next_us != 0 && now_us < *next_us) return;
         if (chip == BME_CHIP_BME680 && h680) {
             process_bme680(ctx);
+        } else if ((chip == BME_CHIP_BME280 || chip == BME_CHIP_BME260) && bme280) {
+            process_bme280(ctx, bme280);
         }
         *next_us = esp_timer_get_time() + (BME680_LOG_INTERVAL_MS * 1000LL);
     }
@@ -709,15 +822,15 @@ static void bme680_task(void *arg)
         int64_t now_us = esp_timer_get_time();
         int64_t now_ns = now_us * 1000LL;
 
-        // Slot lo (0x76)
-        process_slot(s_chip_lo, s_bme_lo, &s_bsec_lo,
+        // Slot SENSOR_BME280_I2C_ADDR
+        process_slot(s_chip_lo, s_bme_lo, s_bme280_lo, &s_bsec_lo,
                      &s_next_read_lo_us, now_us, now_ns);
 
         now_us = esp_timer_get_time();
         now_ns = now_us * 1000LL;
 
-        // Slot hi (0x77)
-        process_slot(s_chip_hi, s_bme_hi, &s_bsec_hi,
+        // Slot SENSOR_BME680_I2C_ADDR
+        process_slot(s_chip_hi, s_bme_hi, s_bme280_hi, &s_bsec_hi,
                      &s_next_read_hi_us, now_us, now_ns);
 
         // ── Delay ──
@@ -773,6 +886,35 @@ static esp_err_t init_one(uint8_t addr, bme680_handle_t *out_handle)
     return ESP_OK;
 }
 
+static esp_err_t init_one_bme280(uint8_t addr, bme280_handle_t *out_handle)
+{
+    if (!out_handle) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    i2c_bus_handle_t bus = i2c_bus_get();
+    ESP_RETURN_ON_FALSE(bus != NULL, ESP_FAIL, TAG, "I2C bus fehlt");
+
+    bme280_handle_t handle = bme280_create(bus, addr);
+    if (!handle) {
+        ESP_LOGW(TAG, "BME280 0x%02X handle create fehlgeschlagen", addr);
+        return ESP_FAIL;
+    }
+
+    i2c_bus_lock();
+    esp_err_t err = bme280_default_init(handle);
+    i2c_bus_unlock();
+    if (err != ESP_OK) {
+        bme280_delete(&handle);
+        ESP_LOGW(TAG, "BME280 0x%02X init fehlgeschlagen (%s)", addr, esp_err_to_name(err));
+        return err;
+    }
+
+    *out_handle = handle;
+    ESP_LOGI(TAG, "BME280 0x%02X bereit", addr);
+    return ESP_OK;
+}
+
 esp_err_t bme680_app_get_snapshot(bme680_snapshot_t *out)
 {
     if (!out) {
@@ -782,8 +924,8 @@ esp_err_t bme680_app_get_snapshot(bme680_snapshot_t *out)
     memset(out, 0, sizeof(*out));
 
     // Adress-Zuordnung
-    out->indoor_addr  = s_indoor_is_lo ? I2C_BME680_DEV_ADDR_LO : I2C_BME680_DEV_ADDR_HI;
-    out->outdoor_addr = s_indoor_is_lo ? I2C_BME680_DEV_ADDR_HI : I2C_BME680_DEV_ADDR_LO;
+    out->indoor_addr  = s_indoor_is_lo ? SENSOR_BME280_I2C_ADDR : SENSOR_BME680_I2C_ADDR;
+    out->outdoor_addr = s_indoor_is_lo ? SENSOR_BME680_I2C_ADDR : SENSOR_BME280_I2C_ADDR;
     bme_chip_type_t in_chip  = s_indoor_is_lo ? s_chip_lo : s_chip_hi;
     bme_chip_type_t out_chip = s_indoor_is_lo ? s_chip_hi : s_chip_lo;
 
@@ -878,9 +1020,9 @@ esp_err_t bme680_app_start(void)
     bool seen_lo = false;
     bool seen_hi = false;
     for (int i = 0; i < count; i++) {
-        if (found[i] == I2C_BME680_DEV_ADDR_LO) {
+        if (found[i] == SENSOR_BME280_I2C_ADDR) {
             seen_lo = true;
-        } else if (found[i] == I2C_BME680_DEV_ADDR_HI) {
+        } else if (found[i] == SENSOR_BME680_I2C_ADDR) {
             seen_hi = true;
         }
     }
@@ -888,60 +1030,81 @@ esp_err_t bme680_app_start(void)
     // ── Chip-ID Erkennung ──────────────────────────────────────────────
     if (seen_lo) {
         i2c_bus_lock();
-        s_chip_lo = detect_chip_id(I2C_BME680_DEV_ADDR_LO);
+        s_chip_lo = detect_chip_id(SENSOR_BME280_I2C_ADDR);
         i2c_bus_unlock();
-        ESP_LOGI(TAG, "0x76: %s", chip_type_name(s_chip_lo));
+        ESP_LOGI(TAG, "0x%02X: %s", SENSOR_BME280_I2C_ADDR, chip_type_name(s_chip_lo));
     } else {
-        ESP_LOGW(TAG, "0x76: kein Sensor erkannt");
+        ESP_LOGW(TAG, "0x%02X: kein Sensor erkannt", SENSOR_BME280_I2C_ADDR);
     }
 
     if (seen_hi) {
         i2c_bus_lock();
-        s_chip_hi = detect_chip_id(I2C_BME680_DEV_ADDR_HI);
+        s_chip_hi = detect_chip_id(SENSOR_BME680_I2C_ADDR);
         i2c_bus_unlock();
-        ESP_LOGI(TAG, "0x77: %s", chip_type_name(s_chip_hi));
+        ESP_LOGI(TAG, "0x%02X: %s", SENSOR_BME680_I2C_ADDR, chip_type_name(s_chip_hi));
     } else {
-        ESP_LOGW(TAG, "0x77: kein Sensor erkannt");
+        ESP_LOGW(TAG, "0x%02X: kein Sensor erkannt", SENSOR_BME680_I2C_ADDR);
     }
 
     // ── Indoor/Outdoor Zuordnung ───────────────────────────────────────
-    // Default: lo=Indoor, hi=Outdoor
-    s_indoor_is_lo = true;
+    // Rollen kommen vom Chip-Typ: BME680 ist innen, BME280/BME260 ist außen.
+    // Bei unklarer Bestueckung bleibt die bisherige Default-Zuordnung erhalten.
+    if (s_chip_lo == BME_CHIP_BME680 && chip_is_outdoor_bme(s_chip_hi)) {
+        s_indoor_is_lo = true;
+    } else if (s_chip_hi == BME_CHIP_BME680 && chip_is_outdoor_bme(s_chip_lo)) {
+        s_indoor_is_lo = false;
+    } else if (s_chip_lo == BME_CHIP_BME680 && s_chip_hi != BME_CHIP_BME680) {
+        s_indoor_is_lo = true;
+    } else if (s_chip_hi == BME_CHIP_BME680 && s_chip_lo != BME_CHIP_BME680) {
+        s_indoor_is_lo = false;
+    }
 
     // Labels + Plausibility-Pointer nach Zuordnung setzen
     if (s_indoor_is_lo) {
-        s_bsec_lo.label = "BME Innen (0x76)";
+        snprintf(s_label_bme_addr[0], sizeof(s_label_bme_addr[0]), "BME Innen (0x%02X)", SENSOR_BME280_I2C_ADDR);
+        s_bsec_lo.label = s_label_bme_addr[0];
         s_bsec_lo.plausibility = &s_plausibility_indoor;
         s_bsec_lo.is_indoor = true;
-        s_bsec_hi.label = "BME Außen (0x77)";
+        snprintf(s_label_bme_addr[1], sizeof(s_label_bme_addr[1]), "BME Außen (0x%02X)", SENSOR_BME680_I2C_ADDR);
+        s_bsec_hi.label = s_label_bme_addr[1];
         s_bsec_hi.plausibility = &s_plausibility_outdoor;
         s_bsec_hi.is_indoor = false;
     } else {
-        s_bsec_lo.label = "BME Außen (0x76)";
+        snprintf(s_label_bme_addr[0], sizeof(s_label_bme_addr[0]), "BME Außen (0x%02X)", SENSOR_BME280_I2C_ADDR);
+        s_bsec_lo.label = s_label_bme_addr[0];
         s_bsec_lo.plausibility = &s_plausibility_outdoor;
         s_bsec_lo.is_indoor = false;
-        s_bsec_hi.label = "BME Innen (0x77)";
+        snprintf(s_label_bme_addr[1], sizeof(s_label_bme_addr[1]), "BME Innen (0x%02X)", SENSOR_BME680_I2C_ADDR);
+        s_bsec_hi.label = s_label_bme_addr[1];
         s_bsec_hi.plausibility = &s_plausibility_indoor;
         s_bsec_hi.is_indoor = true;
     }
     ESP_LOGI(TAG, "Zuordnung: Indoor=0x%02X (%s), Outdoor=0x%02X (%s)",
-             s_indoor_is_lo ? I2C_BME680_DEV_ADDR_LO : I2C_BME680_DEV_ADDR_HI,
+             s_indoor_is_lo ? SENSOR_BME280_I2C_ADDR : SENSOR_BME680_I2C_ADDR,
              chip_type_name(s_indoor_is_lo ? s_chip_lo : s_chip_hi),
-             s_indoor_is_lo ? I2C_BME680_DEV_ADDR_HI : I2C_BME680_DEV_ADDR_LO,
+             s_indoor_is_lo ? SENSOR_BME680_I2C_ADDR : SENSOR_BME280_I2C_ADDR,
              chip_type_name(s_indoor_is_lo ? s_chip_hi : s_chip_lo));
 
     // ── Sensor-Initialisierung ─────────────────────────────────────────
     if (s_chip_lo == BME_CHIP_BME680) {
-        init_one(I2C_BME680_DEV_ADDR_LO, &s_bme_lo);
+        init_one(SENSOR_BME280_I2C_ADDR, &s_bme_lo);
         s_bsec_lo.handle = s_bme_lo;
+        snprintf(s_bsec_lo.state_key, sizeof(s_bsec_lo.state_key),
+                 "state_in_%02x", SENSOR_BME280_I2C_ADDR);
+    } else if (s_chip_lo == BME_CHIP_BME280 || s_chip_lo == BME_CHIP_BME260) {
+        init_one_bme280(SENSOR_BME280_I2C_ADDR, &s_bme280_lo);
     }
 
     if (s_chip_hi == BME_CHIP_BME680) {
-        init_one(I2C_BME680_DEV_ADDR_HI, &s_bme_hi);
+        init_one(SENSOR_BME680_I2C_ADDR, &s_bme_hi);
         s_bsec_hi.handle = s_bme_hi;
+        snprintf(s_bsec_hi.state_key, sizeof(s_bsec_hi.state_key),
+                 "state_in_%02x", SENSOR_BME680_I2C_ADDR);
+    } else if (s_chip_hi == BME_CHIP_BME280 || s_chip_hi == BME_CHIP_BME260) {
+        init_one_bme280(SENSOR_BME680_I2C_ADDR, &s_bme280_hi);
     }
 
-    bool any_sensor = s_bme_lo || s_bme_hi;
+    bool any_sensor = s_bme_lo || s_bme_hi || s_bme280_lo || s_bme280_hi;
     if (!any_sensor) {
         ESP_LOGW(TAG, "Kein BME-Sensor aktiv");
         return ESP_ERR_NOT_FOUND;
@@ -951,6 +1114,7 @@ esp_err_t bme680_app_start(void)
     bme_chip_type_t indoor_chip = s_indoor_is_lo ? s_chip_lo : s_chip_hi;
     if (BME680_USE_BSEC && indoor_chip == BME_CHIP_BME680) {
         bsec_ctx_t *indoor_ctx = s_indoor_is_lo ? &s_bsec_lo : &s_bsec_hi;
+        bsec_delete_legacy_state();
         bsec_library_return_t bsec_status = bsec_init();
         if (bsec_status == BSEC_OK) {
             // 3.3V Betriebsspannung: Pflicht-Config für korrekte Heater-Selbsterwärmungskompensation.
@@ -959,9 +1123,12 @@ esp_err_t bme680_app_start(void)
                                                   BSEC_CONFIG_33V_3S_4D_SIZE,
                                                   s_bsec_work_buffer,
                                                   sizeof(s_bsec_work_buffer));
-            if (bsec_status != BSEC_OK) {
+            if (bsec_status_is_error(bsec_status)) {
                 ESP_LOGW(TAG, "BSEC set_configuration fehlgeschlagen (%d) – 1.8V Default aktiv!", bsec_status);
             } else {
+                if (bsec_status != BSEC_OK) {
+                    ESP_LOGW(TAG, "BSEC set_configuration Warnung: %d", bsec_status);
+                }
                 ESP_LOGI(TAG, "BSEC 3.3V Config geladen (%u Bytes)", BSEC_CONFIG_33V_3S_4D_SIZE);
             }
             bsec_status = BSEC_OK;  // Weiter auch wenn Config-Load fehlschlägt
@@ -977,7 +1144,10 @@ esp_err_t bme680_app_start(void)
             bsec_sensor_configuration_t required[BSEC_MAX_PHYSICAL_SENSOR] = {0};
             uint8_t n_required = BSEC_MAX_PHYSICAL_SENSOR;
             bsec_status = bsec_update_subscription(requested, 7, required, &n_required);
-            if (bsec_status == BSEC_OK) {
+            if (!bsec_status_is_error(bsec_status)) {
+                if (bsec_status != BSEC_OK) {
+                    ESP_LOGW(TAG, "BSEC subscription Warnung: %d", bsec_status);
+                }
                 // State NACH update_subscription laden (Bosch-Vorgabe: init → subscribe → set_state)
                 bool state_restored = bsec_load_state(indoor_ctx);
                 if (state_restored) {

@@ -684,16 +684,19 @@ static void rs485_publish_bme(void)
     if (!root) return;
     cJSON_AddStringToObject(root, "type", "bme");
 
-    // Dynamische Adress-Keys basierend auf tatsächlicher Zuordnung
-    char key_in[5], key_out[5];
-    snprintf(key_in,  sizeof(key_in),  "0x%02x", bme.indoor_addr);
-    snprintf(key_out, sizeof(key_out), "0x%02x", bme.outdoor_addr);
+    // Legacy-Display erwartet semantische Slots: 0x76=Indoor, 0x77=Outdoor.
+    // Die echte physische Adresse liefern wir zusätzlich im Objekt mit.
+    const char *key_in = "0x76";
+    const char *key_out = "0x77";
 
     // Indoor – ohne Trend-State (nicht benötigt)
     cJSON *in = cJSON_CreateObject();
     if (bme.indoor.valid) {
-        cJSON_AddStringToObject(in, "chip",
-            bme.indoor.chip == BME_CHIP_BME680 ? "bme680" : "bme280");
+        const char *in_chip = bme.indoor.chip == BME_CHIP_BME680 ? "bme680" :
+                              bme.indoor.chip == BME_CHIP_BME280 ? "bme280" :
+                              bme.indoor.chip == BME_CHIP_BME260 ? "bme260" : "unknown";
+        cJSON_AddStringToObject(in, "chip", in_chip);
+        cJSON_AddNumberToObject(in, "addr", bme.indoor_addr);
         cJSON_AddNumberToObject(in, "temp_c", round2(bme.indoor.temperature_c));
         cJSON_AddNumberToObject(in, "rh_pct", round2(bme.indoor.humidity_pct));
         cJSON_AddNumberToObject(in, "press_hpa", round2(bme.indoor.pressure_hpa));
@@ -716,8 +719,11 @@ static void rs485_publish_bme(void)
     // Outdoor – mit 5-stufigem Trend
     cJSON *out = cJSON_CreateObject();
     if (bme.outdoor.valid) {
-        cJSON_AddStringToObject(out, "chip",
-            bme.outdoor.chip == BME_CHIP_BME680 ? "bme680" : "bme280");
+        const char *out_chip = bme.outdoor.chip == BME_CHIP_BME680 ? "bme680" :
+                               bme.outdoor.chip == BME_CHIP_BME280 ? "bme280" :
+                               bme.outdoor.chip == BME_CHIP_BME260 ? "bme260" : "unknown";
+        cJSON_AddStringToObject(out, "chip", out_chip);
+        cJSON_AddNumberToObject(out, "addr", bme.outdoor_addr);
         cJSON_AddNumberToObject(out, "temp_c", round2(bme.outdoor.temperature_c));
         cJSON_AddNumberToObject(out, "rh_pct", round2(bme.outdoor.humidity_pct));
         cJSON_AddNumberToObject(out, "press_hpa", round2(bme.outdoor.pressure_hpa));

@@ -34,6 +34,7 @@ idf_component_register(
         esp_app_format
         esp_adc
         bme680
+        bme280
         hx711
         i2c_bus
         json

@@ -16,7 +16,9 @@ extern "C" {
 
 typedef enum {
 	BME_CHIP_NONE = 0,
+	BME_CHIP_BME280,
 	BME_CHIP_BME680,
+	BME_CHIP_BME260,
 } bme_chip_type_t;
 
 typedef enum {
@@ -29,7 +31,7 @@ typedef enum {
 
 typedef struct {
 	bool valid;
-	bme_chip_type_t chip;      // BME_CHIP_BME280 oder BME_CHIP_BME680
+	bme_chip_type_t chip;
 	float temperature_c;
 	float humidity_pct;
 	float pressure_hpa;

@@ -5,7 +5,7 @@ CONFIG_IDF_TARGET="esp32s3"
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
-CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 # Task-WDT: 10s Timeout – PNG-Pre-Decode (einmalig bei Theme-Änderung) kann ~500ms dauern
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
 CONFIG_TASK_WDT_TIMEOUT_S=10
@@ -15,10 +15,21 @@ CONFIG_SPIRAM_RODATA=y
 CONFIG_SPIRAM_SPEED_80M=y
 # WiFi/LwIP-Allokationen bevorzugen PSRAM, damit interner SRAM für DMA (LCD Bounce-Buffer) frei bleibt
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
-# PSRAM-Fallback für alle Malloc-Größen (0 = kein min. interner Threshold)
+# PSRAM-Fallback für alle Malloc-Größen (0 = kein Threshold).
+# SD-SPI-DMA-Fix erfolgt direkt in womo_sd.c (max_transfer_sz + MALLOC_CAP_DMA-Bus)
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=0
-# Interner DMA-Reserve-Pool: 32 KB
-CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
+# Interner DMA-Reserve-Pool: 80 KB
+# Berechnung: LCD Bounce-Buffer 12.8 KB + SD SPI-DMA 4 KB + WiFi-IRAM 8 KB +
+#              FreeRTOS/IPC 6 KB + TCP-Puffer 4 KB + mbedTLS-Burst bis 10 KB
+#              + 35 KB Sicherheitspuffer gegen Heap-Fragmentierung = ~80 KB
+# Ohne ausreichenden Reserve: sdmmc_read_sectors schlägt mit err=0x101 (NO_MEM) fehl,
+# da kein zusammenhängender DMA-Block für den 4 KB Sektor-Bounce-Buffer verfügbar.
+CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=81920
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=10
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_STATIC_TX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_CACHE_TX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_MGMT_SBUF_NUM=16
 # Bounce-Buffer: 4 Linien à 800 px × 2 Byte × 2 Buffer = ~12.8 KB DMA-SRAM (passt sicher)
 CONFIG_EXAMPLE_LCD_RGB_BOUNCE_BUFFER_HEIGHT=4
 # LVGL-Task: 16 KB in PSRAM (lodepng-PNG-Decoder braucht ~12 KB Stack-Tiefe)
@@ -50,6 +61,16 @@ CONFIG_I2CDEV_USE_LEGACY_DRIVER=n
 
 # mbedTLS muss PSRAM nutzen – internes SRAM reicht nicht (~39 KB frei)
 CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+CONFIG_MBEDTLS_ASYMMETRIC_CONTENT_LEN=y
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=4096
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH=y
+# AES-Hardwarepfad nutzt auf ESP32-S3 interne DMA-/GDMA-Ressourcen und faellt
+# hier mit "esp-aes: Failed to allocate memory" auf. Fuer kleine HTTPS-JSON-
+# Requests ist Software-AES langsamer, aber deutlich robuster.
+# CONFIG_MBEDTLS_HARDWARE_AES is not set
+# CONFIG_MBEDTLS_AES_USE_INTERRUPT is not set
 CONFIG_EXAMPLE_LVGL_PORT_TASK_MAX_DELAY_MS=12
 CONFIG_EXAMPLE_LVGL_PORT_TASK_MIN_DELAY_MS=4
 CONFIG_EXAMPLE_LVGL_PORT_TASK_PRIORITY=4

@@ -1288,24 +1288,26 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         need_ack = cJSON_IsTrue(need_ack_obj);
     }
 
+    const cJSON *cmd_obj = cJSON_GetObjectItem(root, "cmd");
     cJSON *type_obj = cJSON_GetObjectItem(root, "type");
     const char *type = (cJSON_IsString(type_obj) && type_obj->valuestring)
                            ? type_obj->valuestring
                            : NULL;
-    const cJSON *cmd_obj = cJSON_GetObjectItem(root, "cmd");
-    const char *fallback_label = (cJSON_IsString(cmd_obj) && cmd_obj->valuestring)
-                                     ? cmd_obj->valuestring
-                                     : "frame";
+    const char *cmd = (cJSON_IsString(cmd_obj) && cmd_obj->valuestring)
+                          ? cmd_obj->valuestring
+                          : NULL;
+    const char *frame_kind = type ? type : cmd;
+    const char *fallback_label = frame_kind ? frame_kind : "frame";
 
     bool ack_needed = have_seq && need_ack;
     bool ack_success = false;
     char ack_error_buf[96] = "";
     const char *ack_error = NULL;
-    const char *ack_label = type ? type : fallback_label;
+    const char *ack_label = fallback_label;
 
-    if (!type) {
-        ESP_LOGW(TAG, "No type field");
-        ack_error = "missing type";
+    if (!frame_kind) {
+        ESP_LOGW(TAG, "No type/cmd field");
+        ack_error = "missing type/cmd";
         if (ack_needed) {
             rs485_send_ack(seq_value, false, ack_label, ack_error);
         }
@@ -1314,22 +1316,22 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         return;
     }
 
-    ESP_LOGI(TAG, "Type: %s", type);
+    ESP_LOGI(TAG, "Frame: %s", frame_kind);
 
-    if (strcmp(type, "ack") == 0 || strcmp(type, "cmd_ack") == 0) {
+    if (strcmp(frame_kind, "ack") == 0 || strcmp(frame_kind, "cmd_ack") == 0) {
         rs485_handle_ack_packet(root);
         cJSON_Delete(root);
         return;
     }
 
-    if (strcmp(type, "hb") == 0) {
+    if (strcmp(frame_kind, "hb") == 0) {
         s_last_heartbeat_rx_us = esp_timer_get_time();
         rs485_emit_event(WOMO_RS485_EVENT_HEARTBEAT);
         cJSON_Delete(root);
         return;
     }
 
-    if (strcmp(type, "hello") == 0) {
+    if (strcmp(frame_kind, "hello") == 0) {
         ack_needed = false;  // handshake handled via display_ready
         const cJSON *fw = cJSON_GetObjectItem(root, "fw");
         const cJSON *uptime = cJSON_GetObjectItem(root, "uptime");
@@ -1346,7 +1348,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
     }
 
     // ── WiFi Passwort-Anfrage vom Sensor ──────────────────────────────
-    if (strcmp(type, "wifi_pass_request") == 0) {
+    if (strcmp(frame_kind, "wifi_pass_request") == 0) {
         ESP_LOGI(TAG, "Sensor fragt nach WiFi-Passwort");
         // Aktuell verbundene SSID holen
         char ssid[33] = "";
@@ -1381,7 +1383,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
     bool topic_handled = false;
     womo_sensor_data_t notify_snapshot = {0};
 
-    if (strcmp(type, "ctrl") == 0) {
+    if (strcmp(frame_kind, "ctrl") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             s_latest_data.power.valid = true;
             cJSON *pwr_on    = cJSON_GetObjectItem(root, "pwr_on");
@@ -1410,7 +1412,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             ack_success = true;
         }
     }
-    else if (strcmp(type, "imu") == 0) {
+    else if (strcmp(frame_kind, "imu") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             cJSON *yaw = cJSON_GetObjectItem(root, "yaw_deg");
             cJSON *pitch = cJSON_GetObjectItem(root, "pitch_deg");
@@ -1441,7 +1443,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             ack_success = true;
         }
     }
-    else if (strcmp(type, "bme") == 0) {
+    else if (strcmp(frame_kind, "bme") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             // 0x76 = indoor, 0x77 = outdoor
             for (cJSON *sensor = root->child; sensor != NULL; sensor = sensor->next) {
@@ -1506,7 +1508,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             ack_success = true;
         }
     }
-    else if (strcmp(type, "bat") == 0) {
+    else if (strcmp(frame_kind, "bat") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             s_latest_data.battery.valid = true;
             cJSON *b1 = cJSON_GetObjectItem(root, "b1");
@@ -1524,7 +1526,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             ack_success = true;
         }
     }
-    else if (strcmp(type, "hx") == 0) {
+    else if (strcmp(frame_kind, "hx") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             s_latest_data.hx711.valid = true;
             cJSON *a = cJSON_GetObjectItem(root, "a");
@@ -1541,7 +1543,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             ack_success = true;
         }
     }
-    else if (strcmp(type, "gas") == 0) {
+    else if (strcmp(frame_kind, "gas") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             s_latest_data.gas.valid = true;
             cJSON *active = cJSON_GetObjectItem(root, "active");
@@ -1588,7 +1590,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             ack_success = true;
         }
     }
-    else if (strcmp(type, "tank") == 0) {
+    else if (strcmp(frame_kind, "tank") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             s_latest_data.tank.valid = true;
             cJSON *t1 = cJSON_GetObjectItem(root, "t1");
@@ -1624,9 +1626,9 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         }
     }
     else {
-        ESP_LOGW(TAG, "Unrecognized RS485 packet type: %s", type);
+        ESP_LOGW(TAG, "Unrecognized RS485 frame: %s", frame_kind);
         rs485_emit_event(WOMO_RS485_EVENT_INVALID_JSON);
-        snprintf(ack_error_buf, sizeof(ack_error_buf), "type %s not supported", type);
+        snprintf(ack_error_buf, sizeof(ack_error_buf), "frame %s not supported", frame_kind);
         ack_error = ack_error_buf;
     }
 

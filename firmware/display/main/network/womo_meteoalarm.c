@@ -53,12 +53,15 @@ static const char *TAG = "meteoalarm";
 /* ── Konfiguration ───────────────────────────────────────────── */
 #define MA_FETCH_INTERVAL_S   (30 * 60)   // 30 Minuten Normalintervall
 #define MA_RETRY_INTERVAL_S   (5 * 60)    // 5 Minuten bei Fehler
+#define MA_START_DELAY_S      (3 * 60)    // Erststart deutlich nach Boot/TLS-Peaks
 #define MA_LOCATION_DELTA_DEG (0.045)     // ~5 km – löst Re-Fetch aus
 #define MA_HTTP_TIMEOUT_MS    10000
 #define MA_BUF_SIZE           8192        // JSON-Buffer
 #define MA_URL_LEN            128
 #define MA_TASK_STACK         6144
 #define MA_TASK_PRIO          3
+#define MA_MIN_INTERNAL_FREE      16384U
+#define MA_MIN_INTERNAL_LARGEST   12288U
 
 /* ── Interner Kontext ────────────────────────────────────────── */
 typedef struct {
@@ -88,6 +91,31 @@ static struct {
 };
 
 /* ── Hilfsfunktionen ─────────────────────────────────────────── */
+
+static void ma_log_heap(const char *stage)
+{
+    size_t free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    size_t largest_internal = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    size_t free_total = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    size_t largest_total = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+
+    ESP_LOGW(TAG,
+             "Heap %s: internal_free=%u internal_largest=%u total_free=%u total_largest=%u",
+             stage ? stage : "?",
+             (unsigned)free_internal,
+             (unsigned)largest_internal,
+             (unsigned)free_total,
+             (unsigned)largest_total);
+}
+
+static bool ma_has_enough_internal_heap(void)
+{
+    size_t free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    size_t largest_internal = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+
+    return free_internal >= MA_MIN_INTERNAL_FREE &&
+           largest_internal >= MA_MIN_INTERNAL_LARGEST;
+}
 
 static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
@@ -203,6 +231,7 @@ static esp_err_t ma_fetch(double lat, double lon, womo_meteoalarm_result_t *out)
              "https://feeds.meteoalarm.org/api/v1/warnings/for-coordinates/%.5f/%.5f",
              lat, lon);
     ESP_LOGI(TAG, "Fetch: %s", url);
+    ma_log_heap("before_http_init");
 
     esp_http_client_config_t cfg = {
         .url              = url,
@@ -215,6 +244,7 @@ static esp_err_t ma_fetch(double lat, double lon, womo_meteoalarm_result_t *out)
 
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (!client) {
+        ma_log_heap("http_init_failed");
         free(resp);
         return ESP_ERR_NO_MEM;
     }
@@ -230,6 +260,7 @@ static esp_err_t ma_fetch(double lat, double lon, womo_meteoalarm_result_t *out)
         free(resp);
         return ESP_ERR_TIMEOUT;
     }
+    ma_log_heap("before_http_perform");
     esp_err_t err = esp_http_client_perform(client);
     int status    = 0;
     if (err == ESP_OK) {
@@ -240,6 +271,7 @@ static esp_err_t ma_fetch(double lat, double lon, womo_meteoalarm_result_t *out)
 
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "HTTP request failed: %s", esp_err_to_name(err));
+        ma_log_heap("http_perform_failed");
         free(resp);
         return err;
     }
@@ -454,6 +486,14 @@ static void ma_task(void *arg)
             continue;
         }
 
+        if (!ma_has_enough_internal_heap()) {
+            ESP_LOGW(TAG,
+                     "Zu wenig interner Heap fuer Meteoalarm-TLS, verschiebe Fetch");
+            ma_log_heap("heap_guard_skip");
+            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(120000));
+            continue;
+        }
+
         womo_meteoalarm_result_t result = {0};
         esp_err_t err = ma_fetch(lat, lon, &result);
 
@@ -501,10 +541,10 @@ esp_err_t womo_meteoalarm_start(womo_meteoalarm_cb_t callback, void *user_data)
     s_ctx.callback           = callback;
     s_ctx.user_data          = user_data;
     s_ctx.stop_requested     = false;
-    /* 60 s warten: Weather-HTTP braucht bei Erstfehler (10 s Retry) ca. 15-25 s,
-     * Geocode startet ~10 s. 60 s stellt sicher dass beide fertig sind bevor
-     * Meteoalarm TLS-Speicher anfordert (verhindert -0x7F00 SSL_ALLOC_FAILED). */
-    s_ctx.earliest_fetch_tick = xTaskGetTickCount() + pdMS_TO_TICKS(60000);
+    /* Meteoalarm deutlich spaeter starten als Wetter/Geocode/Boot-Nachlauf,
+     * damit der interne Heap sich beruhigen kann bevor ein weiterer TLS-Client
+     * anlaeuft. */
+    s_ctx.earliest_fetch_tick = xTaskGetTickCount() + pdMS_TO_TICKS(MA_START_DELAY_S * 1000U);
 
     BaseType_t created = xTaskCreateWithCaps(
         ma_task,

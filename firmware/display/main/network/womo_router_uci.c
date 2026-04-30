@@ -29,6 +29,7 @@
 #include "freertos/semphr.h"
 
 #include <string.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -902,6 +903,35 @@ static uint8_t lte_rssi_to_percent(int rssi)
     return (uint8_t)((rssi + 113) * 100 / 62);
 }
 
+static bool contains_case_insensitive(const char *haystack, const char *needle)
+{
+    if (!haystack || !needle || !needle[0]) return false;
+
+    for (const char *h = haystack; *h; ++h) {
+        const char *hp = h;
+        const char *np = needle;
+        while (*hp && *np &&
+               tolower((unsigned char)*hp) == tolower((unsigned char)*np)) {
+            ++hp;
+            ++np;
+        }
+        if (*np == '\0') return true;
+    }
+
+    return false;
+}
+
+static bool lte_output_is_error_text(const char *text)
+{
+    if (!text || !text[0]) return false;
+
+    return contains_case_insensitive(text, "error") ||
+           contains_case_insensitive(text, "couldn't retrive") ||
+           contains_case_insensitive(text, "couldn't retrieve") ||
+           contains_case_insensitive(text, "not available") ||
+           contains_case_insensitive(text, "no data");
+}
+
 /** Hilfsfunktion: Sucht in mehrzeiliger gsmctl -q Ausgabe nach "RSSI: <wert>" */
 static int parse_gsmctl_rssi(const char *buf)
 {
@@ -942,8 +972,12 @@ esp_err_t womo_router_get_lte_status(womo_router_lte_status_t *out)
     if (router_sh("gsmctl -o", buf, sizeof(buf)) == ESP_OK && buf[0]) {
         char *nl = strchr(buf, '\n');
         if (nl) *nl = '\0';
-        strncpy(out->operator_name, buf, sizeof(out->operator_name) - 1);
-        ESP_LOGD(TAG, "gsmctl -o: '%s'", out->operator_name);
+        if (lte_output_is_error_text(buf)) {
+            ESP_LOGW(TAG, "gsmctl -o returned error text: '%s'", buf);
+        } else {
+            strncpy(out->operator_name, buf, sizeof(out->operator_name) - 1);
+            ESP_LOGD(TAG, "gsmctl -o: '%s'", out->operator_name);
+        }
     }
 
     /* Signalstärke – gsmctl -q liefert mehrzeilig: RSSI: -54\nRSRP: -87\n... */
@@ -969,6 +1003,11 @@ esp_err_t womo_router_get_lte_status(womo_router_lte_status_t *out)
      * NICHT SIM-Status.  Feld wird vorerst leer gelassen. */
 
     out->registered = (out->operator_name[0] != '\0' && out->signal_percent > 0);
+
+    if (!out->registered) {
+        out->signal_percent = 0;
+        out->rssi_dbm = 0;
+    }
 
     /* ── UCI disabled-Flag prüfen ─────────────────────────────
      * Wenn das Interface per UCI deaktiviert wurde (disabled=1), gilt

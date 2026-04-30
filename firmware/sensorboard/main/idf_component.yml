@@ -5,3 +5,4 @@ dependencies:
   espressif/i2c_bus: '*'
   espressif/mdns: '*'
   espressif/led_strip: '*'
+  espressif/bme280: '^0.1.1'

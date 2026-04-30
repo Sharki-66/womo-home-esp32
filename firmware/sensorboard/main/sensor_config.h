@@ -124,6 +124,12 @@
 #define SENSOR_BNO055_AXIS_Z  POSITIVE_X
 
 // ====================================================================================
+// BME Sensor I2C Adressen (für einfache Änderung ohne Bibliotheks-Modifikation)
+// ====================================================================================
+#define SENSOR_BME280_I2C_ADDR      0x77    // BME280/BME260 Adresse
+#define SENSOR_BME680_I2C_ADDR      0x76    // BME680 Adresse
+
+// ====================================================================================
 // Analog ADC (Battery & Tank Sensors)
 // ====================================================================================
 #define SENSOR_BATT1_ADC_CHANNEL 3     // GPIO4 (Batt1 Kfz)
@@ -250,7 +256,7 @@
 #define SENSOR_WIFI_NVS_NAMESPACE   "wifi_cfg"
 #define SENSOR_WIFI_NVS_KEY_SSID    "ssid"
 #define SENSOR_WIFI_NVS_KEY_PASS    "pass"
-#define SENSOR_WIFI_HOSTNAME        "womo-sensor"
+#define SENSOR_WIFI_HOSTNAME        "Womo-Sensor"
 #define SENSOR_WIFI_MDNS_INSTANCE   "WoMoHome Sensor Board"
 #define SENSOR_WIFI_RETRY_MAX       5           // Verbindungsversuche bevor Pause
 #define SENSOR_WIFI_RETRY_PAUSE_MS  30000       // 30s Pause nach fehlgeschlagenen Versuchen
@@ -269,11 +275,12 @@
 // Hier zentral je Modul einstellen, ohne Code zu ändern.
 // ====================================================================================
 #define LOG_LEVEL_SENSOR_MAIN    ESP_LOG_INFO
-#define LOG_LEVEL_DEEP_SLEEP     ESP_LOG_INFO
+#define LOG_LEVEL_DEEP_SLEEP     ESP_LOG_WARN
 #define LOG_LEVEL_RS485          ESP_LOG_WARN
-#define LOG_LEVEL_ANALOG         ESP_LOG_INFO
-#define LOG_LEVEL_BNO055         ESP_LOG_INFO    // bno055_app + BNO055-Komponente
-#define LOG_LEVEL_BME680         ESP_LOG_INFO    // bme680_app + bme680-Komponente
+#define LOG_LEVEL_ANALOG         ESP_LOG_WARN
+#define LOG_LEVEL_BNO055         ESP_LOG_WARN    // bno055_app + BNO055-Komponente
+#define LOG_LEVEL_BME680         ESP_LOG_WARN    // bme680_app + bme680-Komponente
+#define LOG_LEVEL_BME260         ESP_LOG_WARN    // bme260_app (falls separate Implementierung)
 #define LOG_LEVEL_HX711          ESP_LOG_WARN
 #define LOG_LEVEL_GASBEE_BLE     ESP_LOG_WARN
 #define LOG_LEVEL_I2C_BUS        ESP_LOG_INFO    // temporär INFO für I2C-Scan Diagnose

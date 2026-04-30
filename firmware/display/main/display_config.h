@@ -96,6 +96,17 @@
 //          Kein lv_snapshot, kein zusätzlicher Pixel-Puffer → ~400 KB Peak (PNG-Output).
 // 1 = aktiv, 0 = vollständig auskompiliert
 // ====================================================================================
+// ====================================================================================
+// Hintergrundbild
+// Das Ducato-Bild ist als kompaktes A8-Asset in die Firmware eingebettet.
+// Tag/Nacht wird nur per Recolor umgeschaltet, kein SD-Zugriff und kein
+// zweiter dekodierter Framebuffer in PSRAM.
+// Logo: transparentes PNG auf SD-Karte, wird optional über das Bild gelegt.
+// ====================================================================================
+#define WOMO_BG_IMAGE_DAY_COLOR    0xFFFFFF
+#define WOMO_BG_IMAGE_NIGHT_COLOR  0x9CA3AF
+#define WOMO_LOGO_IMAGE      "/sdcard/images/Malibu-Logo.png"
+
 #define WOMO_ENABLE_SCREENSHOT         0
 #define WOMO_SCREENSHOT_DIR            "/sdcard/screenshots"
 #define WOMO_SCREENSHOT_STACK_SIZE     (32768)

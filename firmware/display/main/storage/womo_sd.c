@@ -14,6 +14,7 @@
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
 #include "driver/sdmmc_host.h"
+#include "driver/sdspi_host.h"
 #include <sys/stat.h>
 #include <string.h>
 
@@ -37,7 +38,7 @@ static spi_host_device_t spi_host = SPI2_HOST;  // Store SPI host for cleanup
 #define PIN_MISO  13
 #define PIN_MOSI  11
 #define PIN_CLK   12
-#define PIN_CS    -1  // CS controlled via I2C GPIO expander
+#define PIN_CS    SDSPI_SLOT_NO_CS  // CS controlled via I2C GPIO expander
 
 esp_err_t womo_sd_init(void)
 {
@@ -65,8 +66,9 @@ esp_err_t womo_sd_init(void)
     
     // Use SPI mode (reduce clock to improve signal stability)
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
-    host.max_freq_khz = 5000;  // extra margin for signal integrity
-    spi_host = host.slot;  // Store for cleanup in deinit
+    host.max_freq_khz = 5000;      // extra margin for signal integrity
+    host.command_timeout_ms = 1000; // pro Kommando max 1 s → Worst-Case-Mount ~5 s statt 30 s
+    spi_host = host.slot;          // Store for cleanup in deinit
     
     spi_bus_config_t bus_cfg = {
         .mosi_io_num = PIN_MOSI,
@@ -74,9 +76,16 @@ esp_err_t womo_sd_init(void)
         .sclk_io_num = PIN_CLK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = 4000,
+        /* Ohne DMA darf das Host-Limit nicht zu klein sein, sonst scheitern schon
+         * die fruehen Mount-Transfers mit "txdata transfer > host maximum".
+         * 16 KiB ist fuer FAT-Mount/Directory-Zugriffe klein genug und deutlich
+         * robuster als 4096. */
+        .max_transfer_sz = 16 * 1024,
     };
-    
+
+    /* SD ist hier nur fuer Icons, Logo, Wetterbilder und Screenshots da.
+     * Der SD-SPI-Treiber benötigt DMA, damit große Mount-/Filesystem-Transfers
+     * nicht mit "txdata transfer > host maximum" abbrechen. */
     ret = spi_bus_initialize(host.slot, &bus_cfg, SDSPI_DEFAULT_DMA);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize SPI bus: %s", esp_err_to_name(ret));
@@ -85,7 +94,7 @@ esp_err_t womo_sd_init(void)
     
     // Attach the SD card to the SPI bus
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
-    slot_config.gpio_cs = PIN_CS;  // -1 (controlled via I2C)
+    slot_config.gpio_cs = PIN_CS;  // SDSPI_SLOT_NO_CS: CS controlled via I2C expander
     slot_config.host_id = host.slot;
     
     ret = esp_vfs_fat_sdspi_mount(WOMO_SD_MOUNT_POINT, &host, &slot_config, &mount_config, &sd_card);

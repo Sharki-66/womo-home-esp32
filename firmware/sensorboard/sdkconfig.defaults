@@ -50,4 +50,7 @@ CONFIG_SPI_FLASH_ROM_IMPL=y
 #
 CONFIG_LOG_DEFAULT_LEVEL_WARN=y
 CONFIG_LOG_DEFAULT_LEVEL=2
-
+# INFO darf kompiliert werden; das globale Default-Level bleibt WARN.
+# Einzelne Module werden in sensor_config.h/app_main.c gezielt auf INFO gesetzt.
+CONFIG_LOG_MAXIMUM_LEVEL_INFO=y
+CONFIG_LOG_MAXIMUM_LEVEL=3

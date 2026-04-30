@@ -32,6 +32,7 @@
 #include "hardware/buzzer.h"
 #include "nvs.h"
 #include "sdkconfig.h"
+#include <inttypes.h>
 #include <stdio.h>
 #include <errno.h>
 #include <sys/stat.h>
@@ -134,11 +135,11 @@ static lv_obj_t *gps_popup_text_label = NULL; // Text-Label im GPS-Popup-Panel
 static lv_timer_t *backlight_quiet_timer = NULL;
 static bool quiet_hours_active = false;
 static lv_obj_t *bg_img = NULL;       // Background image widget
-static lv_draw_buf_t *bg_draw_buf_day   = NULL;  // Dekodierter Tag-Puffer (Ducato-weiss)
-static lv_draw_buf_t *bg_draw_buf_night = NULL;  // Dekodierter Nacht-Puffer (Ducato-grau)
 static int bg_last_day_state = -1;   // -1 unknown, 0 night, 1 day (aktuell angezeigt)
-static lv_obj_t *logo_img = NULL;    // Malibu-Logo über Ducato
+static lv_obj_t *logo_img = NULL;    // Fahrzeug-Logo über Hintergrundbild
 static uint8_t *logo_png_data = NULL; // Geladener Logo-PNG-Puffer
+static TaskHandle_t sd_init_task_handle = NULL;
+static TaskHandle_t rs485_init_task_handle = NULL;
 static lv_obj_t *rs485_debug_label = NULL; // RS485 debug status
 static lv_obj_t *imu_zero_modal = NULL;     // IMU calibration modal
 static womo_weather_t *weather_widget = NULL; // Weather widget
@@ -304,6 +305,7 @@ static void update_classic_icon(lv_color_t color, bool active);
 static void update_radio_icon(lv_color_t color, bool active);
 static void update_shore_icon(lv_color_t color, bool active);
 static void shore_power_update_label(void);
+static void log_runtime_heap_stats(void);
 static void backlight_start_quiet_timer(void);
 static void backlight_stop_quiet_timer(void);
 static void wifi_autoretry_task(void *arg);
@@ -318,6 +320,8 @@ static void backlight_set(bool on);
 static bool theme_mode_is_daylike(womo_theme_mode_t mode);
 static void full_theme_refresh(void);
 static void load_logo_image(lv_obj_t *screen);
+static void sd_init_task(void *arg);
+static void rs485_init_task(void *arg);
 static void connectivity_snapshot_fill(womo_connectivity_snapshot_t *snapshot);
 static void rs485_event_handler(womo_rs485_event_t event, void *user_data);
 static void gas_replace_show_modal(uint8_t slot);
@@ -408,8 +412,8 @@ static void imu_labels_update(bool has_data,
 
 static void apply_text_theme_colors(void)
 {
-    /* theme_mode_is_daylike(): DAY + SUNRISE → true (weißer Ducato, dunkle Texte)
-     *                          NIGHT + SUNSET → false (grauer Ducato, helle Texte)
+    /* theme_mode_is_daylike(): DAY + SUNRISE → true (helles Hintergrundbild, dunkle Texte)
+     *                          NIGHT + SUNSET → false (dunkles Hintergrundbild, helle Texte)
      * SUNRISE = Morgen, heller Himmel → schwarzer Text gut lesbar.
      * SUNSET  = Abend, dunkler Hintergrund → weißer Text nötig. */
     womo_theme_mode_t mode = womo_theme_get_mode();
@@ -967,8 +971,8 @@ static void system_status_apply(bool force_label_update)
 
     womo_theme_set_status(resolved);
     if (level_changed) {
-        /* WARNING ändert Hintergrund/Ducato nicht (siehe womo_theme_get_background_color).
-         * full_theme_refresh (inkl. Ducato-Reload) nur bei Übergängen, die tatsächlich
+        /* WARNING ändert Hintergrund nicht (siehe womo_theme_get_background_color).
+         * full_theme_refresh (inkl. Hintergrundbild-Reload) nur bei Übergängen, die tatsächlich
          * die Hintergrundfarbe betreffen: alles was ERROR/CRITICAL ein- oder ausschaltet.
          * Bei OK↔WARNING reicht apply_text_theme_colors(). */
         bool was_critical = (prev_level  == WOMO_STATUS_ERROR || prev_level  == WOMO_STATUS_CRITICAL);
@@ -1063,141 +1067,27 @@ static void rs485_event_handler(womo_rs485_event_t event, void *user_data)
 }
 
 
-// lodepng_decode32 ist in managed_components/lvgl__lvgl (lodepng.c) definiert.
-// ACHTUNG LVGL v9: Rückgabe ist ein lv_draw_buf_t* (gecastet zu unsigned char*),
-// KEIN roher Pixel-Pointer! Pixel liegen in draw_buf->data.
-extern unsigned lodepng_decode32(unsigned char **out, unsigned *w, unsigned *h,
-                                  const unsigned char *in, size_t insize);
+LV_IMAGE_DECLARE(ducato);
 
-// Load background image from SD card
-// `is_day` steuert, ob die helle (day) oder graue (night) Ducato-Variante geladen wird.
-// Das PNG wird sofort vollständig dekodiert (ARGB8888 im PSRAM), damit LVGL beim
-// Rendern keinen lodepng-Decoder mehr aufruft – verhindert lv_realloc-Fehler
-// bei fragmentiertem PSRAM nach langer Laufzeit.
+// Load embedded background image
+// `is_day` steuert nur die Recolor-Farbe des eingebetteten A8-Ducato-Assets.
 // load_background_image():
-//   SD-Lesen und PNG-Decode laufen OHNE LVGL-Lock (dauern 15–60 s auf ESP32-S3).
-//   Nur die LVGL-Widget-Manipulation (lv_img_create / lv_img_set_src) wird mit
-//   einem kurzen Lock geschützt.  Der Caller darf – aber muss – das Lock NICHT halten.
+//   Kein SD-Lesen, kein PNG-Decode, kein zweiter Framebuffer.
+//   Nur die LVGL-Widget-Manipulation wird mit einem kurzen Lock geschützt.
 static bool load_background_image(lv_obj_t *screen, bool is_day)
 {
-    if (!womo_sd_is_mounted()) {
-        ESP_LOGW(TAG, "SD card not mounted, skipping background image");
-        return false;
-    }
-
-    lv_draw_buf_t **p_draw_buf = is_day ? &bg_draw_buf_day : &bg_draw_buf_night;
+    lv_color_t recolor = lv_color_hex(is_day ? WOMO_BG_IMAGE_DAY_COLOR
+                                             : WOMO_BG_IMAGE_NIGHT_COLOR);
 
     // Passendes Bild bereits angezeigt – nichts tun
-    if (bg_last_day_state == (is_day ? 1 : 0) && bg_img != NULL && *p_draw_buf != NULL) {
+    if (bg_last_day_state == (is_day ? 1 : 0) && bg_img != NULL) {
         ESP_LOGD(TAG, "Background already shown (%s)", is_day ? "day" : "night");
         return true;
     }
 
-    // Puffer dieser Variante schon dekodiert?
-    if (*p_draw_buf != NULL) {
-        // screen == NULL → reiner Preload-Aufruf, Widget bereits live → nicht anfassen
-        if (!screen || !bg_img) {
-            ESP_LOGD(TAG, "Background %s already preloaded", is_day ? "day" : "night");
-            return true;
-        }
-        // Widget anzeigen: schneller Swap, kein erneuter Decode
-        if (lvgl_port_lock(500)) {
-            lv_img_set_src(bg_img, *p_draw_buf);
-            bg_last_day_state = is_day ? 1 : 0;
-            lv_obj_move_to_index(bg_img, 0);
-            lvgl_port_unlock();
-        }
-        ESP_LOGI(TAG, "Background switched to preloaded %s image", is_day ? "day" : "night");
-        return true;
-    }
-
-    // ── SD-Lesen (kein LVGL-Lock nötig) ─────────────────────────────
-    const char *img_path = is_day ? "/sdcard/images/Ducato-weiss.png"
-                                  : "/sdcard/images/Ducato-grau.png";
-    struct stat st;
-
-    ESP_LOGI(TAG, "Loading background image (%s): %s", is_day ? "day" : "night", img_path);
-
-    womo_ch422g_assert_sd_cs();
-    if (stat(img_path, &st) != 0) {
-        ESP_LOGW(TAG, "Background image not found: %s", img_path);
-        return false;
-    }
-
-    womo_ch422g_assert_sd_cs();
-    FILE *fp = fopen(img_path, "rb");
-    if (!fp) {
-        ESP_LOGE(TAG, "Failed to open image file: %s", img_path);
-        return false;
-    }
-
-    fseek(fp, 0, SEEK_END);
-    long file_size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-
-    if (file_size <= 0 || file_size > 5 * 1024 * 1024) {
-        ESP_LOGE(TAG, "Invalid file size: %ld bytes", file_size);
-        fclose(fp);
-        return false;
-    }
-
-    uint8_t *png_data = heap_caps_malloc(file_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!png_data) {
-        ESP_LOGE(TAG, "Failed to allocate %ld bytes for PNG", file_size);
-        fclose(fp);
-        return false;
-    }
-
-    size_t bytes_read = fread(png_data, 1, file_size, fp);
-    fclose(fp);
-
-    if (bytes_read != (size_t)file_size) {
-        ESP_LOGE(TAG, "Read only %u of %ld bytes", bytes_read, file_size);
-        heap_caps_free(png_data);
-        return false;
-    }
-
-    // ── PNG-Decode (kein LVGL-Lock nötig) ───────────────────────────
-    ESP_LOGI(TAG, "PNG file loaded: %ld bytes – decoding...", file_size);
-
-    // lodepng_decode32 gibt einen lv_draw_buf_t* zurück (gecastet als unsigned char*).
-    unsigned img_w = 0, img_h = 0;
-    lv_draw_buf_t *draw_buf = NULL;
-    unsigned decode_err = lodepng_decode32((unsigned char **)&draw_buf, &img_w, &img_h,
-                                           png_data, (size_t)file_size);
-    heap_caps_free(png_data);
-    png_data = NULL;
-
-    if (decode_err || !draw_buf) {
-        ESP_LOGE(TAG, "lodepng_decode32 failed (err=%u) – no background", decode_err);
-        if (draw_buf) lv_draw_buf_destroy(draw_buf);
-        return false;
-    }
-
-    // lodepng liefert RGBA; LVGL ARGB8888 = BGRA auf LE-ESP32 → R↔B tauschen.
-    {
-        uint32_t px = img_w * img_h;
-        lv_color32_t *p = (lv_color32_t *)draw_buf->data;
-        for (uint32_t i = 0; i < px; i++) {
-            uint8_t blue = p[i].blue;
-            p[i].blue = p[i].red;
-            p[i].red = blue;
-        }
-    }
-
-    ESP_LOGI(TAG, "PNG decoded: %ux%u → %lu bytes ARGB8888 (%s)",
-             img_w, img_h, (unsigned long)draw_buf->data_size,
-             esp_ptr_external_ram(draw_buf->data) ? "PSRAM" : "iRAM");
-
-    // Alten draw_buf freigeben (ebenfalls kein Lock nötig – nur Puffer-Pointer)
-    if (*p_draw_buf) {
-        lv_draw_buf_destroy(*p_draw_buf);
-    }
-    *p_draw_buf = draw_buf;
-
-    // screen == NULL → reiner Preload-Aufruf
-    if (!screen) {
-        ESP_LOGI(TAG, "Background %s preloaded (not displayed)", is_day ? "day" : "night");
+    // screen == NULL → historischer Preload-Aufruf, jetzt nur noch No-op
+    if (!screen && !bg_img) {
+        ESP_LOGD(TAG, "Background preload skipped (embedded asset)");
         return true;
     }
 
@@ -1213,18 +1103,22 @@ static bool load_background_image(lv_obj_t *screen, bool is_day)
         lv_obj_set_size(bg_img, 800, 480);
         lv_obj_align(bg_img, LV_ALIGN_CENTER, 0, 0);
     }
-    lv_img_set_src(bg_img, draw_buf);
+    lv_img_set_src(bg_img, &ducato);
     bg_last_day_state = is_day ? 1 : 0;
     lv_obj_set_style_img_opa(bg_img, LV_OPA_COVER, 0);
+    lv_obj_set_style_img_recolor(bg_img, recolor, 0);
+    lv_obj_set_style_img_recolor_opa(bg_img, LV_OPA_COVER, 0);
     lv_obj_move_to_index(bg_img, 0);
     lvgl_port_unlock();
 
-    ESP_LOGI(TAG, "Background image applied to screen");
+    ESP_LOGI(TAG, "Embedded background applied (%s, recolor=%06" PRIx32 ")",
+             is_day ? "day" : "night",
+             (uint32_t)lv_color_to_u32(recolor));
     return true;
 }
 
-// Malibu-Logo von SD-Karte laden und auf dem Ducato positionieren.
-// Datei: /sdcard/images/Malibu-Logo.png (transparenter Hintergrund empfohlen).
+// Fahrzeug-Logo von SD-Karte laden und über das Hintergrundbild legen.
+// Datei: WOMO_LOGO_IMAGE (siehe display_config.h), transparenter Hintergrund empfohlen.
 // Position und Skalierung per Defines anpassen:
 #define LOGO_X         565   // X-Position linke obere Ecke (Pixel vom linken Rand)
 #define LOGO_Y         275   // Y-Position linke obere Ecke (Pixel vom oberen Rand)
@@ -1234,31 +1128,31 @@ static void load_logo_image(lv_obj_t *screen)
     if (!womo_sd_is_mounted()) {
         return;
     }
-    const char *path = "/sdcard/images/Malibu-Logo.png";
+    const char *path = WOMO_LOGO_IMAGE;
     struct stat st;
     womo_ch422g_assert_sd_cs();
     if (stat(path, &st) != 0) {
-        ESP_LOGW(TAG, "Malibu-Logo nicht gefunden: %s", path);
+        ESP_LOGW(TAG, "Logo nicht gefunden: %s", path);
         return;
     }
     if (st.st_size <= 0 || st.st_size > 1024 * 1024) {
-        ESP_LOGW(TAG, "Malibu-Logo: unplausible Dateigröße %ld", (long)st.st_size);
+        ESP_LOGW(TAG, "Logo: unplausible Dateigröße %ld", (long)st.st_size);
         return;
     }
     womo_ch422g_assert_sd_cs();
     FILE *fp = fopen(path, "rb");
     if (!fp) {
-        ESP_LOGE(TAG, "Malibu-Logo: fopen fehlgeschlagen");
+        ESP_LOGE(TAG, "Logo: fopen fehlgeschlagen");
         return;
     }
     uint8_t *buf = heap_caps_malloc(st.st_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buf) {
-        ESP_LOGE(TAG, "Malibu-Logo: kein Speicher (%ld bytes)", (long)st.st_size);
+        ESP_LOGE(TAG, "Logo: kein Speicher (%ld bytes)", (long)st.st_size);
         fclose(fp);
         return;
     }
     if (fread(buf, 1, st.st_size, fp) != (size_t)st.st_size) {
-        ESP_LOGE(TAG, "Malibu-Logo: Lesefehler");
+        ESP_LOGE(TAG, "Logo: Lesefehler");
         fclose(fp);
         heap_caps_free(buf);
         return;
@@ -1282,7 +1176,7 @@ static void load_logo_image(lv_obj_t *screen)
 
     // ── LVGL-Widget-Manipulation (kurzer Lock) ───────────────────────
     if (!lvgl_port_lock(500)) {
-        ESP_LOGW(TAG, "Malibu-Logo: LVGL lock timeout");
+        ESP_LOGW(TAG, "Logo: LVGL lock timeout");
         return;
     }
     if (!logo_img) {
@@ -1295,13 +1189,13 @@ static void load_logo_image(lv_obj_t *screen)
     // Skalierung: LOGO_SCALE_PCT % → LVGL-Zoom-Wert (256 = 100%)
     uint16_t zoom = (uint16_t)((LOGO_SCALE_PCT * 256) / 100);
     lv_img_set_zoom(logo_img, zoom);
-    ESP_LOGI(TAG, "Malibu-Logo: zoom=%u (%d%%)", zoom, LOGO_SCALE_PCT);
+    ESP_LOGI(TAG, "Logo: zoom=%u (%d%%)", zoom, LOGO_SCALE_PCT);
 
     lv_obj_align(logo_img, LV_ALIGN_TOP_LEFT, LOGO_X, LOGO_Y);
-    // Logo über Ducato-Hintergrund, aber unter allen Widgets
+    // Logo über Hintergrundbild, aber unter allen Widgets
     lv_obj_move_to_index(logo_img, 1);
     lvgl_port_unlock();
-    ESP_LOGI(TAG, "Malibu-Logo geladen und positioniert (x=%d, y=%d)", LOGO_X, LOGO_Y);
+    ESP_LOGI(TAG, "Logo geladen und positioniert (x=%d, y=%d)", LOGO_X, LOGO_Y);
 }
 
 // GPS-Detailanzeige nach Timeout wieder einklappen
@@ -2408,12 +2302,12 @@ gas_done:
 }
 
 // Timer callback for updating time display
-// Nur bei vollem Tageslicht (DAY) wird der weiße Ducato geladen.
-// Bei Dämmerung (SUNRISE/SUNSET) und Nacht → grauer Ducato.
+// Nur bei vollem Tageslicht (DAY) wird das helle Hintergrundbild geladen.
+// Bei Dämmerung (SUNRISE/SUNSET) und Nacht → dunkles Hintergrundbild.
 static bool theme_mode_is_daylike(womo_theme_mode_t mode)
 {
-    // SUNRISE = Morgen―sieht wie Tag aus: weißer Ducato, dunkle Texte
-    // SUNSET  = Abend―sieht wie Nacht aus: grauer Ducato, helle Texte
+    // SUNRISE = Morgen―sieht wie Tag aus: helles Bild, dunkle Texte
+    // SUNSET  = Abend―sieht wie Nacht aus: dunkles Bild, helle Texte
     return (mode == WOMO_THEME_DAY || mode == WOMO_THEME_SUNRISE);
 }
 
@@ -2444,7 +2338,7 @@ static void on_thresholds_changed(void)
     /* intentionally empty – ui_update_timer_cb liest womo_thresholds_get() */
 }
 
-// Vollständiges Theme-Update: Mode neu berechnen, Ducato + Textfarben + BG-Farbe aktualisieren.
+// Vollständiges Theme-Update: Mode neu berechnen, Hintergrundbild + Textfarben + BG-Farbe aktualisieren.
 // Guard in load_background_image() prüft bg_last_day_state intern → kein unnötiger SD-Zugriff.
 static void full_theme_refresh(void)
 {
@@ -2554,7 +2448,7 @@ static void time_update_timer_cb(lv_timer_t *timer)
 
     // ── Theme-Mode jede Sekunde prüfen ──────────────────────────────────
     // womo_theme_update() ist billig (nur Zeit-Vergleich). Bei Mode-Wechsel
-    // (z.B. DAY→SUNSET, NIGHT→SUNRISE, SUNSET→NIGHT) sofort Ducato +
+    // (z.B. DAY→SUNSET, NIGHT→SUNRISE, SUNSET→NIGHT) sofort Hintergrundbild +
     // Textfarben + BG-Farbe aktualisieren. Reagiert innerhalb 1 s auf
     // NTP-Korrektur oder Dämmerungsübergang – statt bisher 60 s.
     if (womo_theme_is_auto_mode() && time_valid_now) {
@@ -2928,6 +2822,7 @@ static void router_poll_task(void *arg)
     (void)arg;
     const TickType_t interval = pdMS_TO_TICKS(ROUTER_POLL_INTERVAL_MS);
     static int poll_count = 0;
+    static int heap_log_countdown = 2;
     static bool was_connected = false;
 
     /* Erste Poll-Abfrage sofort wenn WiFi connected */
@@ -2958,9 +2853,14 @@ static void router_poll_task(void *arg)
         if (!was_connected) {
             was_connected = true;
             poll_count = 0;  /* Ersten Poll nach Reconnect sofort und mit dichten Intervallen */
+            heap_log_countdown = 1;  /* Nach Reconnect frueh einmal den Heap sehen */
         }
 
         poll_count++;
+        if (--heap_log_countdown <= 0) {
+            log_runtime_heap_stats();
+            heap_log_countdown = 2;  /* Bei 30s Pollintervall etwa jede Minute */
+        }
         womo_router_wifi_status_t wifi_tmp = {0};
         womo_router_lte_status_t  lte_tmp  = {0};
 
@@ -2999,7 +2899,11 @@ static void router_poll_task(void *arg)
         if (s_router_mutex) {
             xSemaphoreTake(s_router_mutex, portMAX_DELAY);
             if (w_err == ESP_OK) s_router_wifi = wifi_tmp;
-            if (l_err == ESP_OK) s_router_lte  = lte_tmp;
+            if (l_err == ESP_OK) {
+                s_router_lte = lte_tmp;
+            } else {
+                memset(&s_router_lte, 0, sizeof(s_router_lte));
+            }
             if (a_err == ESP_OK) s_router_ap   = ap_tmp;
             xSemaphoreGive(s_router_mutex);
         }
@@ -3624,6 +3528,7 @@ static void perf_monitor_toggle_event_cb(lv_event_t *e)
 
     perf_monitor_visible = !perf_monitor_visible;
 
+#if LV_USE_PERF_MONITOR
     /* LVGL v9: lv_sysmon API statt Label-Suche im sys_layer */
     lv_display_t *disp = lv_display_get_default();
     if (disp) {
@@ -3632,8 +3537,9 @@ static void perf_monitor_toggle_event_cb(lv_event_t *e)
         } else {
             lv_sysmon_hide_performance(disp);
         }
-        ESP_LOGI(TAG, "Performance Monitor %s", perf_monitor_visible ? "eingeblendet" : "ausgeblendet");
     }
+#endif /* LV_USE_PERF_MONITOR */
+    ESP_LOGI(TAG, "Performance Monitor %s", perf_monitor_visible ? "eingeblendet" : "ausgeblendet");
 
     // RS485 Debug Label mittogglen
     if (rs485_debug_label) {
@@ -3655,6 +3561,10 @@ static lv_obj_t *load_icon_png(lv_obj_t *parent, const char *path,
                                 lv_obj_t *img_obj)
 {
     if (!path || !buf_ptr || !dsc) return img_obj;
+
+    if (womo_sd_is_mounted()) {
+        womo_ch422g_assert_sd_cs();
+    }
 
     FILE *fp = fopen(path, "rb");
     if (!fp) {
@@ -3704,6 +3614,11 @@ static lv_obj_t *load_icon_png(lv_obj_t *parent, const char *path,
 
 static void preload_icons(void)
 {
+    if (!womo_sd_is_mounted()) {
+        ESP_LOGI(TAG, "SD card not mounted, skipping icon preload");
+        return;
+    }
+
     // WiFi + LTE Signalstärken-Icons vorladen (32×32px, Ordner icons-48(32))
     static const char * const wifi_paths[6] = {
         "/sdcard/images/icons-48(32)/wifi_1.png",
@@ -3725,6 +3640,90 @@ static void preload_icons(void)
         load_icon_png(NULL, wifi_paths[i], &wifi_icon_bufs[i], &wifi_icon_dscs[i], NULL);
     for (int i = 0; i < 6; i++)
         load_icon_png(NULL, lte_paths[i],  &lte_icon_bufs[i],  &lte_icon_dscs[i],  NULL);
+}
+
+static void sd_init_task(void *arg)
+{
+    (void)arg;
+
+    int64_t start_us = esp_timer_get_time();
+    ESP_LOGI(TAG, "Async SD init started");
+    esp_err_t err = ESP_FAIL;
+    int32_t elapsed_ms = 0;
+
+    /* SD ist fuer Boot nicht kritisch. Nach WiFi/LCD-Start kurz warten und bei
+     * internem Heap-Druck (ESP_ERR_NO_MEM) mit Backoff erneut probieren. */
+    vTaskDelay(pdMS_TO_TICKS(1500));
+
+    for (int attempt = 1; attempt <= 3; attempt++) {
+        err = womo_sd_init();
+        elapsed_ms = (int32_t)((esp_timer_get_time() - start_us) / 1000);
+
+        if (err == ESP_OK) {
+            break;
+        }
+
+        if (err != ESP_ERR_NO_MEM || attempt == 3) {
+            break;
+        }
+
+        int retry_delay_ms = attempt * 1500;
+        ESP_LOGW(TAG,
+                 "Async SD init attempt %d/3 failed after %d ms: %s - retry in %d ms",
+                 attempt,
+                 elapsed_ms,
+                 esp_err_to_name(err),
+                 retry_delay_ms);
+        vTaskDelay(pdMS_TO_TICKS(retry_delay_ms));
+    }
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Async SD init finished after %d ms", elapsed_ms);
+        preload_icons();
+        load_logo_image(lv_scr_act());
+
+        if (weather_widget && lvgl_port_lock(500)) {
+            womo_weather_set_condition(weather_widget,
+                                       weather_widget->condition,
+                                       weather_widget->is_night);
+            lvgl_port_unlock();
+        }
+    } else {
+        ESP_LOGW(TAG, "Async SD init failed after %d ms: %s",
+                 elapsed_ms,
+                 esp_err_to_name(err));
+    }
+
+    sd_init_task_handle = NULL;
+    vTaskDelete(NULL);
+}
+
+static void rs485_init_task(void *arg)
+{
+    (void)arg;
+
+    int64_t start_us = esp_timer_get_time();
+    ESP_LOGI(TAG, "Async RS485 init started");
+
+    esp_err_t rs485_err = womo_rs485_display_init();
+    int32_t elapsed_ms = (int32_t)((esp_timer_get_time() - start_us) / 1000);
+
+    if (rs485_err == ESP_OK) {
+        ESP_LOGI(TAG, "Async RS485 init finished after %d ms", elapsed_ms);
+        ESP_LOGI(TAG, "RS485 initialized - receiving data from Sensorboard");
+        womo_rs485_set_data_callback(rs485_data_received, NULL);
+        womo_rs485_set_event_callback(rs485_event_handler, NULL);
+        rs485_waiting_for_handshake = true;
+        vTaskDelay(pdMS_TO_TICKS(100));  // Kurz warten damit UART bereit
+        womo_rs485_send_display_ready();
+        ESP_LOGI(TAG, "Sent display_ready to trigger sensor data");
+    } else {
+        ESP_LOGW(TAG, "Async RS485 init failed after %d ms: %s",
+                 elapsed_ms, esp_err_to_name(rs485_err));
+    }
+
+    rs485_init_task_handle = NULL;
+    vTaskDelete(NULL);
 }
 
 static void backlight_update_label(void)
@@ -3800,6 +3799,29 @@ static void update_radio_icon(lv_color_t color, bool active)
 static void update_shore_icon(lv_color_t color, bool active)
 {
     (void)color; (void)active; // Icon per PNG von SD geladen
+}
+
+static void log_runtime_heap_stats(void)
+{
+    size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    size_t dma_free = heap_caps_get_free_size(MALLOC_CAP_DMA);
+    size_t dma_largest = heap_caps_get_largest_free_block(MALLOC_CAP_DMA);
+    size_t total_free = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    size_t total_largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    size_t spiram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    size_t spiram_largest = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+
+    ESP_LOGI(TAG,
+             "Heap: internal_free=%u internal_largest=%u dma_free=%u dma_largest=%u psram_free=%u psram_largest=%u total_free=%u total_largest=%u",
+             (unsigned)internal_free,
+             (unsigned)internal_largest,
+             (unsigned)dma_free,
+             (unsigned)dma_largest,
+             (unsigned)spiram_free,
+             (unsigned)spiram_largest,
+             (unsigned)total_free,
+             (unsigned)total_largest);
 }
 
 // Timer-Callbacks für asynchronen RS485-Send (blockiert nicht den LVGL-Thread)
@@ -3964,7 +3986,7 @@ void app_main()
 
     // Backlight sofort AUS – CH422G könnte nach Reset in undefiniertem
     // Zustand sein.  Das Backlight wird erst nach vollständiger UI-
-    // Initialisierung + Theme + Ducato explizit eingeschaltet.
+    // Initialisierung + Theme + Hintergrundbild explizit eingeschaltet.
     wavesahre_rgb_lcd_bl_off();
 
     // Buzzer so früh wie möglich – braucht nur LEDC + GPIO, kein Display/WiFi
@@ -4004,42 +4026,36 @@ void app_main()
     womo_theme_set_sun_times(6, 30, 20, 0);
     
     // Initialize display (uses I2C for touch controller)
-    waveshare_esp32_s3_rgb_lcd_init();
+    {
+        int64_t t0 = esp_timer_get_time();
+        waveshare_esp32_s3_rgb_lcd_init();
+        ESP_LOGI(TAG, "Display init finished after %d ms",
+                 (int)((esp_timer_get_time() - t0) / 1000));
+    }
+
+    /* Sichtbarer Sofort-Start: das RGB-Init hat die Framebuffer bereits mit
+     * der Theme-Hintergrundfarbe vorgefüllt. Backlight hier schon einschalten,
+     * damit lange Folge-Init-Schritte nicht wie ein totes Display wirken. */
+    if (wavesahre_rgb_lcd_bl_on() == ESP_OK) {
+        backlight_on = true;
+        ESP_LOGI(TAG, "Backlight enabled early after display init");
+    } else {
+        ESP_LOGW(TAG, "Early backlight enable failed");
+    }
 
     ESP_LOGI(TAG, "Display WoMo Home Control with Dynamic Theme");
-
-    // ── SD + RS485 initialisieren (kein LVGL nötig → kein Lock) ──────
-    ESP_LOGI(TAG, "Initializing SD card...");
-    if (womo_sd_init() == ESP_OK) {
-        ESP_LOGI(TAG, "SD card mounted successfully");
-    } else {
-        ESP_LOGW(TAG, "SD card mount failed - continuing without SD");
-    }
-
-    ESP_LOGI(TAG, "Initializing RS485 display receiver...");
-    if (womo_rs485_display_init() == ESP_OK) {
-        ESP_LOGI(TAG, "RS485 initialized - receiving data from Sensorboard");
-        womo_rs485_set_data_callback(rs485_data_received, NULL);
-        womo_rs485_set_event_callback(rs485_event_handler, NULL);
-        rs485_waiting_for_handshake = true;
-        vTaskDelay(pdMS_TO_TICKS(100));  // Kurz warten damit UART bereit
-        womo_rs485_send_display_ready();
-        ESP_LOGI(TAG, "Sent display_ready to trigger sensor data");
-    } else {
-        ESP_LOGW(TAG, "RS485 init failed - continuing without external sensors");
-    }
 
     // ── LVGL sperren → UI aufbauen ──────────────────────────────────
     // Nach lvgl_port_init() läuft der LVGL-Task bereits.  Mutex nehmen,
     // damit kein Frame gerendert wird, bevor Theme + Widgets stehen.
     
-    // Cache zurücksetzen beim Boot, damit Theme+Ducato korrekt geladen werden
+    // Cache zurücksetzen beim Boot, damit Theme+Hintergrundbild korrekt geladen werden
     bg_last_day_state  = -1;
     bg_img             = NULL;
-    bg_draw_buf_day    = NULL;
-    bg_draw_buf_night  = NULL;
     
-    if (lvgl_port_lock(0)) {
+    ESP_LOGI(TAG, "Waiting for LVGL lock to build UI...");
+    if (lvgl_port_lock(5000)) {
+        ESP_LOGI(TAG, "LVGL lock acquired, building UI");
         lv_obj_t *screen = lv_scr_act();
         lv_obj_add_flag(screen, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
@@ -4048,7 +4064,7 @@ void app_main()
 
         // Initiales Theme: Dunkelblau (Nacht) als Fallback.
         // Besser zu dunkel als zu hell – blendet nicht und ist nachts korrekt.
-        // Das echte Theme+Ducato wird nach Zeitvalidierung geladen.
+        // Das echte Theme+Hintergrundbild wird nach Zeitvalidierung geladen.
         lv_obj_set_style_bg_color(screen, WOMO_COLOR_NIGHT_NORMAL, 0);
         lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
         
@@ -4126,18 +4142,18 @@ void app_main()
 
         // Zusätzliche Schalter links (klassisch, Radio) und Netzstrom-Anzeige
         // Einheitliches System: create_round_button() + round_button_add_icon()
-        // 12V-Button (oben links, Long-Press) – bolt-Icon
+        // 12V-Button (unten links, Long-Press) – bolt-Icon
         classic_btn = create_round_button(screen, 48,
                                           classic_on ? lv_color_hex(0x2E7D32) : lv_color_hex(0xC0C0C0),
                                           classic_button_event_cb, LV_EVENT_LONG_PRESSED);
-        lv_obj_align(classic_btn, LV_ALIGN_TOP_LEFT, 10, 10);
+        lv_obj_align(classic_btn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
         classic_label = round_button_add_icon(classic_btn, ICON_POWER_SETTINGS_NEW);
 
-        // Multimedia-Button (unten links, Click) – music_note-Icon
+        // Multimedia-Button (oben links, Click) – music_note-Icon
         radio_btn = create_round_button(screen, 48,
                                         radio_on ? lv_color_hex(0x1565C0) : lv_color_hex(0xC0C0C0),
                                         radio_button_event_cb, LV_EVENT_CLICKED);
-        lv_obj_align(radio_btn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
+        lv_obj_align(radio_btn, LV_ALIGN_TOP_LEFT, 10, 10);
         radio_label = round_button_add_icon(radio_btn, ICON_MUSIC_NOTE);
 
         // Einstellungen-Button (über Multimedia-Button) – settings-Icon
@@ -4194,7 +4210,8 @@ void app_main()
         lv_obj_align(backlight_btn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
         backlight_icon_label = round_button_add_icon(backlight_btn, ICON_LIGHT_OFF);
         backlight_update_label();
-        preload_icons();  // WiFi/LTE-Bar-Icons von SD laden
+        // HINWEIS: preload_icons() wird NACH lvgl_port_unlock() aufgerufen,
+        // da SD-Karten-DMA internen RAM benötigt der unter dem LVGL-Lock nicht frei ist.
         
         // Weather data (top right) - Gas first, all one font size larger
     char init_buf[40];
@@ -4673,7 +4690,11 @@ void app_main()
 #endif /* WOMO_ENABLE_SCREENSHOT */
 
         lvgl_port_unlock();
+        ESP_LOGI(TAG, "UI build completed");
     }  // Ende LVGL-Lock
+    else {
+        ESP_LOGE(TAG, "LVGL lock timeout during UI build - keeping fallback screen");
+    }
 
     // ── HTTPS-Mutex initialisieren (vor allen HTTP-Tasks) ─────────────
     womo_http_mutex_init();
@@ -4741,7 +4762,7 @@ void app_main()
         }
     }
 
-    // ── Theme + Ducato mit korrekter Uhrzeit laden ─────────────────────
+    // ── Theme + Hintergrundbild mit korrekter Uhrzeit laden ───────────────
     // PNG-Decode läuft OHNE LVGL-Lock (15–60 s auf ESP32-S3).
     // Nur Theme-Berechnung + apply_text_theme_colors brauchen ein kurzes Lock.
     {
@@ -4770,23 +4791,38 @@ void app_main()
             lvgl_port_unlock();
         }
 
-        // Hintergrundbild + Logo laden: SD-Lesen + PNG-Decode ohne Lock.
-        // load_background_image() und load_logo_image() verwalten ihren LVGL-Lock intern.
+        // Hintergrundbild + Logo laden.
+        // Das Hintergrundbild kommt eingebettet aus der Firmware, das Logo optional später von SD.
         load_background_image(lv_scr_act(), boot_is_day);
-        load_logo_image(lv_scr_act());
     }
 
-#if WOMO_ENABLE_SCREENSHOT
-    // Zweite Ducato-Variante (die aktuell NICHT gezeigte) nachladen –
-    // außerhalb des LVGL-Locks, da nur PNG geladen/dekodiert wird (kein Widget-Zugriff).
-    // Nach diesem Preload stehen beide Puffer bereit: Theme-Wechsel = schneller Swap.
-    // Nur wenn Screenshot aktiv: kostet ~1,5 MB PSRAM, wird für lv_snapshot_take benötigt.
-    {
-        womo_theme_mode_t cur_mode = womo_theme_update(WOMO_STATUS_OK);
-        bool cur_is_day = theme_mode_is_daylike(cur_mode);
-        load_background_image(NULL, !cur_is_day);  // NULL = kein Widget erstellen beim Preload
+    if (!womo_sd_is_mounted() && sd_init_task_handle == NULL) {
+        BaseType_t sd_created = xTaskCreateWithCaps(sd_init_task,
+                                                    "sd_init",
+                                                    4096,
+                                                    NULL,
+                                                    3,
+                                                    &sd_init_task_handle,
+                                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (sd_created != pdPASS) {
+            sd_init_task_handle = NULL;
+            ESP_LOGW(TAG, "Async SD init task could not be started");
+        }
     }
-#endif /* WOMO_ENABLE_SCREENSHOT */
+
+    if (rs485_init_task_handle == NULL) {
+        BaseType_t rs485_created = xTaskCreateWithCaps(rs485_init_task,
+                                                       "rs485_init",
+                                                       4096,
+                                                       NULL,
+                                                       4,
+                                                       &rs485_init_task_handle,
+                                                       MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (rs485_created != pdPASS) {
+            rs485_init_task_handle = NULL;
+            ESP_LOGW(TAG, "Async RS485 init task could not be started");
+        }
+    }
 
     // Router UCI Client initialisieren + Poll-Task VOR Backlight starten
     // damit Connectivity-Modal schneller Daten hat
@@ -4890,4 +4926,3 @@ static void rs485_data_received(const womo_sensor_data_t *data, void *user_data)
     latest_data_valid = true;
     taskEXIT_CRITICAL(&display_data_spinlock);
 }
-

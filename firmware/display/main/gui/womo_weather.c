@@ -134,7 +134,7 @@ static void load_weather_icon(womo_weather_t *weather, const char *filename, boo
 
     snprintf(weather->icon_path, sizeof(weather->icon_path), "%s/%s", chosen_dir, filename);
     ESP_LOGI(TAG, "Loading weather icon: %s", weather->icon_path);
-
+    
     womo_ch422g_assert_sd_cs();
     FILE *test_file = fopen(weather->icon_path, "r");
     if (!test_file && errno == EIO) {
