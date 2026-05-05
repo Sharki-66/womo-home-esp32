@@ -15,6 +15,7 @@ import Layout from '../layouts/Layout.astro';
         <a href="#selbstbau" class="hover:text-amber-400 transition">Selbst bauen</a>
         <a href="#kaufen" class="hover:text-amber-400 transition">Kaufen</a>
         <a href="#faq" class="hover:text-amber-400 transition">FAQ</a>
+        <a href="#kontakt" class="hover:text-amber-400 transition">Kontakt</a>
       </nav>
     </div>
   </header>
@@ -107,13 +108,13 @@ import Layout from '../layouts/Layout.astro';
             icon: "🖥️",
             title: "Display-Einheit",
             chip: "ESP32-S3 · 7\" Touch",
-            desc: "Visualisiert alle Sensor- und Statusdaten in Echtzeit. Steuert Bordnetz und Multimedia per Touch. LVGL-basierte Benutzeroberfläche."
+            desc: "Visualisiert alle Sensor- und Statusdaten in Echtzeit. Bedienbar per Touch – Steuerbefehle werden per RS485 an das Sensorboard weitergeleitet. On-Board-Buzzer für akustische Alarme. LVGL-basierte Benutzeroberfläche."
           },
           {
             icon: "🔧",
             title: "Sensorboard",
             chip: "ESP32-S3 · RS485",
-            desc: "Erfasst Batterien, Tanks, Gas, Temperatur/Luftdruck/IAQ (2× BME680), Inklination (BNO055) und Wägezellen (HX711). Kommuniziert per RS485."
+            desc: "Erfasst Batterien, Tanks, Gas, Temperatur/Luftdruck/IAQ (2× BME680), Inklination (BNO055) und Wägezellen (HX711). Schaltet Bordnetz und Multimedia direkt. Kommuniziert per RS485 mit dem Display-Board."
           },
           {
             icon: "📡",
@@ -132,6 +133,11 @@ import Layout from '../layouts/Layout.astro';
           </div>
         ))}
       </div>
+      <!-- Systemübersicht -->
+      <div class="mt-16">
+        <h3 class="text-center text-lg font-semibold text-gray-400 mb-6">Systemübersicht</h3>
+        <img src="/system-overview.svg" alt="WoMoHome Systemübersicht" class="w-full max-w-4xl mx-auto block rounded-2xl" />
+      </div>
     </div>
   </section>
 
@@ -139,14 +145,14 @@ import Layout from '../layouts/Layout.astro';
   <section id="features" class="py-24 px-4 bg-gray-950">
     <div class="max-w-6xl mx-auto">
       <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">Alle Features</h2>
-      <p class="text-center text-gray-400 max-w-xl mx-auto mb-16">Alles was ein Wohnmobil-Fahrer braucht – in einem System.</p>
+      <p class="text-center text-gray-400 max-w-xl mx-auto mb-16">Alles was ein Reisemobilist(in) braucht – in einem System.</p>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {[
-          { icon: "🔥", title: "Gasverbrauch",          desc: "Zwei Gasflaschen per Wägezelle. Füllstand 0–100 %, Verbrauchsrate, Restlaufzeit, automatische Umschaltung.",                                                                                   link: null },
-          { icon: "💧", title: "Tank-Überwachung",     desc: "Frisch- und Grauwasser kapazitiv per Votronic-Sensor, Anzeige 0–100 %.",                                                                                                           link: null },
-          { icon: "🔋", title: "Batteriemonitor",      desc: "Bordnetz- und Aufbaubatterie in Volt – kontinuierlich überwacht.",                                                                                                                    link: null },
+          { icon: "🔥", title: "Gasverbrauch",          desc: "Zwei Gasflaschen per Wägezelle. Füllstand 0–100 %, Verbrauchsrate, Restlaufzeit. Das Display wechselt die Anzeige automatisch auf die aktive Flasche. Einstellbare Alarmschwellen.",                                                link: null },
+          { icon: "💧", title: "Tank-Überwachung",     desc: "Frisch- und Grauwasser kapazitiv per Votronic-Sensor, Anzeige 0–100 %. Einstellbare Alarmschwellen.",                                                                              link: null },
+          { icon: "🔋", title: "Batteriemonitor",      desc: "Bordnetz- und Aufbaubatterie in Volt – kontinuierlich überwacht. Alarmschwellen fest vorgegeben.",                                                                                   link: null },
           { icon: "✈️", title: "Künstlicher Horizont", desc: "Der Sensorboard-Webserver stellt die Anzeige als Webseite bereit – abrufbar von jedem Handy, Tablet oder Autoradio im WLAN.",          link: "/horizont" },
-          { icon: "🌡️", title: "Klima & Luftqualität", desc: "Innen + Außen: Temperatur, Luftfeuchte, Druck. Innen zusätzlich Luftqualität (IAQ, eCO₂, bVOC).",                                                                                      link: null },
+          { icon: "🌡️", title: "Klima & Luftqualität", desc: "Innen + Außen: Temperatur, Luftfeuchte, Druck. Innen zusätzlich Luftqualität (IAQ, eCO₂, bVOC). Einstellbare Alarmschwellen.",                                                    link: null },
           { icon: "📡", title: "LTE & GPS",             desc: "Echtzeit-Signalstärke, Provider, GPS-Position – direkt vom RUTX11 Router.",                                                                                                          link: null },
           { icon: "🖥️", title: "7\" Touch-Display",    desc: "800×480 px IPS-Panel mit GT911 kapazitivem Touch – vollständig per Finger bedienbar.",                                                                                               link: null },
           { icon: "🌐", title: "WLAN-Management",       desc: "Hotspot, gespeicherte Netzwerke, SSID-Scan, Passwort-Eingabe per QWERTZ-Tastatur. WLAN und LTE per Touch abschaltbar.",                                                          link: null },
@@ -184,12 +190,15 @@ import Layout from '../layouts/Layout.astro';
           <ul class="space-y-3 text-sm">
             {[
               { comp: "Display",      desc: "Waveshare ESP32-S3-Touch-LCD-7 (7\", 800×480)", indent: false },
+              { comp: "└ Buzzer",    desc: "Akustische Alarme (On-Board)",                  indent: true  },
               { comp: "Sensorboard",  desc: "Heemol ESP32-S3-DevKitC-1 (N16R8)",            indent: false },
               { comp: "├ Horizont",   desc: "BNO055 (I²C, Pitch/Roll/Heading)",              indent: true  },
               { comp: "├ Klima inn.", desc: "BME680 (Temperatur / Feuchte / IAQ / BSEC)",     indent: true  },
-              { comp: "├ Klima auß.", desc: "BME680 (Temperatur / Feuchte / Druck)",           indent: true  },
+              { comp: "├ Klima auß.", desc: "BME280 (Temperatur / Feuchte / Druck)",           indent: true  },
               { comp: "├ Gas",        desc: "2× Wägezelle + HX711 ADC",                      indent: true  },
               { comp: "├ Tanks",      desc: "2× Votronic kapazitive Sensoren",               indent: true  },
+              { comp: "├ Schaltausg.",desc: "2× 12V-Ausgang (Bordnetz, Multimedia), per Display steuerbar", indent: true  },
+              { comp: "├ Display-Strom", desc: "MOSFET schaltet Display-Versorgung ein/aus",           indent: true  },
               { comp: "└ Zeit",       desc: "RTC (Echtzeituhr, I²C)",                         indent: true  },
               { comp: "Router",       desc: "Teltonika RUTX11 (LTE / WLAN / GNSS)",          indent: false },
               { comp: "└ Relais",     desc: "2× Kfz-Relais mit Freilaufdiode",               indent: true  },
@@ -213,18 +222,153 @@ import Layout from '../layouts/Layout.astro';
             <p class="text-gray-400 text-sm mb-4">Sensorboard in KiCad, lizenziert unter CERN-OHL-P v2.</p>
             <a href="/schaltplan" class="text-amber-400 text-sm hover:underline">→ Schaltplan ansehen →</a>
           </div>
+          <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-amber-400/60 transition">
+            <h3 class="font-bold mb-2">⚡ Firmware flashen (ohne IDE)</h3>
+            <p class="text-gray-400 text-sm mb-4">
+              Fertige BIN-Dateien lassen sich direkt im Browser flashen – kein ESP-IDF, kein Python, keine Installation nötig.
+              Nur USB-Kabel und Chrome oder Edge erforderlich.
+            </p>
+            <a href="https://espressif.github.io/esptool-js/" target="_blank" rel="noopener" class="text-amber-400 text-sm hover:underline">→ ESP Web Flasher öffnen</a>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- KAUFEN / KONTAKT -->
+  <!-- KAUFEN -->
   <section id="kaufen" class="py-24 px-4 bg-gray-950">
+    <div class="max-w-5xl mx-auto">
+      <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">Kaufen</h2>
+      <p class="text-center text-gray-400 max-w-2xl mx-auto mb-16">
+        Fremdprodukte direkt beim Hersteller bestellen. Eigenentwicklungen auf Anfrage.
+      </p>
+
+      <!-- Fremdprodukte -->
+      <h3 class="text-lg font-semibold text-amber-400 mb-4">Fremdprodukte</h3>
+      <div class="grid sm:grid-cols-3 gap-6 mb-14">
+        {[
+          {
+            title: "Teltonika RUTX11",
+            desc: "LTE-Router mit WLAN-AP, GNSS und OpenWRT. Liefert Konnektivität und GPS-Daten für das Gesamtsystem.",
+            price: "ca. 250–300 €",
+            href: "https://www.teltonika-networks.com/de/products/routers/rutx11"
+          },
+          {
+            title: "Waveshare DisplayBoard",
+            desc: "ESP32-S3-Touch-LCD-7 – 7\" IPS-Panel, 800×480, kapazitiver Touch. Basis für die Anzeige-Einheit.",
+            price: "ca. 50 €",
+            href: "https://www.waveshare.com/esp32-s3-touch-lcd-7.htm"
+          },
+          {
+            title: "Votronic Tanksensoren",
+            desc: "Kapazitive Tankgeber für Frisch- und Grauwasser, kompatibel mit dem Sensorboard-Eingang.",
+            price: "ca. 80 €",
+            href: "https://www.votronic.de/tankgeber/"
+          }
+        ].map(p => (
+          <div class="rounded-2xl p-6 flex flex-col gap-3" style="background:#132742;border:1px solid rgba(255,255,255,0.08)">
+            <div>
+              <h4 class="font-bold text-lg mb-1">{p.title}</h4>
+              <span class="text-amber-400 font-semibold text-sm">{p.price}</span>
+            </div>
+            <p class="text-gray-400 text-sm leading-relaxed flex-1">{p.desc}</p>
+            <a href={p.href} target="_blank" rel="noopener"
+               class="mt-2 text-center bg-amber-400/10 border border-amber-400/30 text-amber-400 text-sm font-semibold py-2 rounded-lg hover:bg-amber-400/20 transition">
+              → Zum Hersteller
+            </a>
+          </div>
+        ))}
+      </div>
+
+      <!-- Eigenprodukte -->
+      <h3 class="text-lg font-semibold text-amber-400 mb-4">Eigenentwicklungen</h3>
+      <div class="grid sm:grid-cols-3 gap-6">
+        {[
+          { title: "Sensorboard",    price: "50 €",  desc: "Fertig aufgebaut und getestet. Inkl. Firmware.",                      available: true  },
+          { title: "SensorBee",      price: "25 €",  desc: "BLE-Gaswaage für bestehende Wägezellen-Setups.",                      available: false },
+          { title: "Waageplattform", price: "70 €",  desc: "Komplette Wägeplattform für zwei Gasflaschen inkl. Wägezellen.",      available: false },
+        ].map(p => (
+          <div class="rounded-2xl p-6 flex flex-col gap-3" style={`background:#132742;border:1px solid ${p.available ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)'};opacity:${p.available ? '1' : '0.7'}`}>
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <h4 class="font-bold text-lg mb-1">{p.title}</h4>
+                <span class="text-amber-400 font-semibold text-sm">{p.price}</span>
+              </div>
+              {!p.available && (
+                <span class="text-xs bg-gray-700 text-gray-400 border border-gray-600 px-2 py-1 rounded-full shrink-0">demnächst</span>
+              )}
+            </div>
+            <p class="text-gray-400 text-sm leading-relaxed flex-1">{p.desc}</p>
+            {p.available ? (
+              <a href="#kontakt"
+                 class="mt-2 text-center bg-amber-400 text-gray-950 text-sm font-bold py-2 rounded-lg hover:bg-amber-300 transition">
+                Anfrage
+              </a>
+            ) : (
+              <span class="mt-2 text-center bg-gray-700/50 text-gray-500 text-sm font-semibold py-2 rounded-lg cursor-not-allowed">
+                Noch nicht verfügbar
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="py-24 px-4 bg-gray-900">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-3xl md:text-4xl font-bold text-center mb-16">Häufige Fragen</h2>
+      <div class="space-y-6">
+        {[
+          {
+            q: "Welche Wohnmobile sind kompatibel?",
+            a: "Entwickelt und erprobt auf einem Malibu Kastenwagen mit Schaudt EBL262-3 (Steuergerät) und LT 45X (Bedienpanel). Grundsätzlich geeignet für alle Fahrzeuge mit 12V-Bordnetz und Schaudt-kompatiblem EBL/Panel – mit ggf. kleinen Anpassungen.",
+            link: { href: "/LT_45x.pdf", label: "📎 Bedienungsanleitung Schaudt LT 45X (PDF)" }
+          },
+          {
+            q: "Brauche ich Programmierkenntnisse zum Selbstbau?",
+            a: "Für den reinen Aufbau nach Schaltplan nein. Für Anpassungen an eigene Sensorik sind ESP-IDF-Grundkenntnisse hilfreich."
+          },
+          {
+            q: "Funktioniert das System ohne Internetverbindung?",
+            a: "Ja. Sensorboard und Display kommunizieren per RS485 vollständig offline. LTE und GPS sind optional."
+          },
+          {
+            q: "Was kostet das Komplettsystem fertig aufgebaut?",
+            a: "Preis auf Anfrage – abhängig von Komponenten und Einbau. Einfach das Kontaktformular nutzen."
+          },
+          {
+            q: "Kann ich die Firmware ohne Programmierkenntnisse flashen?",
+            a: "Ja. Fertige BIN-Dateien lassen sich per ESP Web Flasher direkt im Browser aufspielen – kein ESP-IDF, kein Python, keine Installation. Nur USB-Kabel sowie Chrome oder Edge erforderlich.",
+            link: { href: "https://espressif.github.io/esptool-js/", label: "→ ESP Web Flasher öffnen" }
+          },
+          {
+            q: "Wird das Projekt weiterentwickelt?",
+            a: "Ja. Aktuell laufende Projekte: LVGL v9 Migration, verbesserte Gaslogik, Web-Konfiguration über den Router."
+          }
+        ].map(item => (
+          <details class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden group">
+            <summary class="px-6 py-4 font-semibold cursor-pointer list-none flex justify-between items-center hover:text-amber-400 transition">
+              {item.q}
+              <span class="text-gray-500 group-open:rotate-180 transition-transform">▾</span>
+            </summary>
+            <p class="px-6 pb-5 text-gray-400 text-sm leading-relaxed">
+              {item.a}
+              {item.link && <a href={item.link.href} target="_blank" rel="noopener" class="block mt-2 text-amber-400 hover:underline">{item.link.label}</a>}
+            </p>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- KONTAKT -->
+  <section id="kontakt" class="py-24 px-4 bg-gray-950">
     <div class="max-w-2xl mx-auto text-center">
-      <h2 class="text-3xl md:text-4xl font-bold mb-4">Fertig kaufen</h2>
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">Kontakt & Anfrage</h2>
       <p class="text-gray-400 mb-12">
-        Du möchtest das System fertig aufgebaut und getestet? Schreib mir – ich kläre Verfügbarkeit, 
-        Lieferumfang und Preis individuell.
+        Interesse an einem Eigenprodukt oder allgemeine Fragen? Schreib mir – ich melde mich persönlich.
       </p>
       <form
         action="mailto:info@womohome.de"
@@ -244,10 +388,10 @@ import Layout from '../layouts/Layout.astro';
         <div>
           <label class="block text-sm font-semibold mb-2">Interesse</label>
           <select name="interest" class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-gray-100 focus:outline-none focus:border-amber-400 transition">
-            <option value="komplett">Komplettsystem (Display + Sensorboard + Router)</option>
-            <option value="display">Nur Display-Einheit</option>
-            <option value="sensor">Nur Sensorboard</option>
-            <option value="bausatz">Bausatz / Teilkomponenten</option>
+            <option value="sensorboard">Sensorboard (50 €)</option>
+            <option value="sensorbee">SensorBee (demnächst)</option>
+            <option value="waage">Waageplattform (demnächst)</option>
+            <option value="komplett">Komplettsystem</option>
             <option value="frage">Allgemeine Frage</option>
           </select>
         </div>
@@ -261,49 +405,6 @@ import Layout from '../layouts/Layout.astro';
           Anfrage senden
         </button>
       </form>
-    </div>
-  </section>
-
-  <!-- FAQ -->
-  <section id="faq" class="py-24 px-4 bg-gray-900">
-    <div class="max-w-3xl mx-auto">
-      <h2 class="text-3xl md:text-4xl font-bold text-center mb-16">Häufige Fragen</h2>
-      <div class="space-y-6">
-        {[
-          {
-            q: "Welche Wohnmobile sind kompatibel?",
-            a: "Entwickelt und erprobt auf einem Malibu Kastenwagen mit Schaudt LT 45X Steuergerät (EBL/Panel). Grundsätzlich geeignet für alle Fahrzeuge mit 12V-Bordnetz und Schaudt-kompatiblem Anzeige-/Kontrollpanel – mit ggf. kleinen Anpassungen.",
-            link: { href: "/LT_45x.pdf", label: "📎 Bedienungsanleitung Schaudt LT 45X (PDF)" }
-          },
-          {
-            q: "Brauche ich Programmierkenntnisse zum Selbstbau?",
-            a: "Für den reinen Aufbau nach Schaltplan nein. Für Anpassungen an eigene Sensorik sind ESP-IDF-Grundkenntnisse hilfreich."
-          },
-          {
-            q: "Funktioniert das System ohne Internetverbindung?",
-            a: "Ja. Sensorboard und Display kommunizieren per RS485 vollständig offline. LTE und GPS sind optional."
-          },
-          {
-            q: "Was kostet das Komplettsystem fertig aufgebaut?",
-            a: "Preis auf Anfrage – abhängig von Komponenten und Einbau. Einfach das Kontaktformular nutzen."
-          },
-          {
-            q: "Wird das Projekt weiterentwickelt?",
-            a: "Ja. Aktuell laufende Projekte: LVGL v9 Migration, verbesserte Gaslogik, Web-Konfiguration über den Router."
-          }
-        ].map(item => (
-          <details class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden group">
-            <summary class="px-6 py-4 font-semibold cursor-pointer list-none flex justify-between items-center hover:text-amber-400 transition">
-              {item.q}
-              <span class="text-gray-500 group-open:rotate-180 transition-transform">▾</span>
-            </summary>
-            <p class="px-6 pb-5 text-gray-400 text-sm leading-relaxed">
-              {item.a}
-              {item.link && <a href={item.link.href} target="_blank" rel="noopener" class="block mt-2 text-amber-400 hover:underline">{item.link.label}</a>}
-            </p>
-          </details>
-        ))}
-      </div>
     </div>
   </section>
 
