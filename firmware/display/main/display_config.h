@@ -34,7 +34,7 @@
 #define LOG_LEVEL_GEOCODE        ESP_LOG_WARN   // network/womo_geocode.c
 #define LOG_LEVEL_ROUTER_UCI     ESP_LOG_WARN   // network/womo_router_uci.c
 #define LOG_LEVEL_HTTP_MUTEX     ESP_LOG_WARN   // network/womo_http_mutex.c
-#define LOG_LEVEL_BUZZER_HTTP    ESP_LOG_INFO   // network/womo_buzzer_http.c
+#define LOG_LEVEL_BUZZER_HTTP    ESP_LOG_WARN   // network/womo_buzzer_http.c
 
 // ── Speicher ─────────────────────────────────────────────────────────────────────────
 #define LOG_LEVEL_SD             ESP_LOG_WARN   // storage/womo_sd.c
@@ -69,7 +69,7 @@
 
 // Optionales Live-Sound-Studio via HTTP API + SPIFFS-Seite
 // 1 = aktiv, 0 = vollständig auskompiliert
-#define WOMO_ENABLE_BUZZER_STUDIO_HTTP 1
+#define WOMO_ENABLE_BUZZER_STUDIO_HTTP 0
 
 // ====================================================================================
 // Material Symbols Icons – UTF-8-kodierte Codepoints für runde Buttons

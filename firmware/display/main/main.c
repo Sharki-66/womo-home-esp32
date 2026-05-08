@@ -104,6 +104,9 @@ static lv_obj_t *shore_caption_label = NULL;
 static lv_obj_t *shore_icon_label = NULL;  // Bolt-Icon auf Landstrom-Anzeige
 static lv_obj_t *battery_board_label = NULL;
 static lv_obj_t *battery_kfz_label = NULL;
+static lv_obj_t *elec_title_label = NULL;   // "Strom"
+static lv_obj_t *elec_vi_label    = NULL;   // "12.4V  8.3A"
+static lv_obj_t *elec_power_label = NULL;   // "102W"
 static lv_obj_t *fresh_water_caption_label = NULL;
 static lv_obj_t *grey_water_caption_label = NULL;
 static lv_obj_t *location_label = NULL;
@@ -466,6 +469,9 @@ static void apply_text_theme_colors(void)
     if (grey_water_caption_label) lv_obj_set_style_text_color(grey_water_caption_label, lv_color_black(), 0);
     if (gas_label_front) lv_obj_set_style_text_color(gas_label_front, lv_color_black(), 0);
     if (gas_label_rear) lv_obj_set_style_text_color(gas_label_rear, lv_color_black(), 0);
+    if (elec_title_label) lv_obj_set_style_text_color(elec_title_label, text_color, 0);
+    if (elec_vi_label)    lv_obj_set_style_text_color(elec_vi_label,    text_color, 0);
+    if (elec_power_label) lv_obj_set_style_text_color(elec_power_label, text_color, 0);
     if (classic_btn) {
         update_classic_icon(classic_color, classic_on);
     }
@@ -2018,6 +2024,44 @@ gas_done:
             battery_has_data = false;
             last_battery1 = NAN;
             last_battery2 = NAN;
+        }
+    }
+
+    // Elec widget (INA226)
+    if (elec_vi_label && elec_power_label) {
+        static float last_v = NAN, last_i = NAN, last_p = NAN;
+        static bool  last_nc = false, elec_has_data = false;
+
+        if (snapshot.elec.valid) {
+            bool changed = !elec_has_data
+                        || (snapshot.elec.nc != last_nc)
+                        || (!snapshot.elec.nc && (
+                               fabsf(snapshot.elec.v_bus_v - last_v) > 0.05f ||
+                               fabsf(snapshot.elec.i_a     - last_i) > 0.05f ||
+                               fabsf(snapshot.elec.p_w     - last_p) > 0.5f));
+            if (changed) {
+                if (snapshot.elec.nc) {
+                    lv_label_set_text(elec_vi_label,    "---");
+                    lv_label_set_text(elec_power_label, "---");
+                } else {
+                    char buf_vi[24], buf_p[12];
+                    snprintf(buf_vi, sizeof(buf_vi), "%.1fV  %.1fA",
+                             snapshot.elec.v_bus_v, snapshot.elec.i_a);
+                    snprintf(buf_p, sizeof(buf_p), "%.0fW", snapshot.elec.p_w);
+                    lv_label_set_text(elec_vi_label,    buf_vi);
+                    lv_label_set_text(elec_power_label, buf_p);
+                }
+                last_v = snapshot.elec.v_bus_v;
+                last_i = snapshot.elec.i_a;
+                last_p = snapshot.elec.p_w;
+                last_nc = snapshot.elec.nc;
+                elec_has_data = true;
+            }
+        } else if (elec_has_data) {
+            lv_label_set_text(elec_vi_label,    "---");
+            lv_label_set_text(elec_power_label, "---");
+            last_v = last_i = last_p = NAN;
+            elec_has_data = false;
         }
     }
 
@@ -3803,25 +3847,19 @@ static void update_shore_icon(lv_color_t color, bool active)
 
 static void log_runtime_heap_stats(void)
 {
-    size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    /* Nur internen SRAM abfragen – PSRAM-Traversierung (MALLOC_CAP_SPIRAM/8BIT)
+     * blockiert den QSPI-Bus und stört den RGB-Bounce-Buffer-DMA → Display-Flackern. */
+    size_t internal_free    = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    size_t dma_free = heap_caps_get_free_size(MALLOC_CAP_DMA);
-    size_t dma_largest = heap_caps_get_largest_free_block(MALLOC_CAP_DMA);
-    size_t total_free = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-    size_t total_largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-    size_t spiram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    size_t spiram_largest = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    size_t dma_free         = heap_caps_get_free_size(MALLOC_CAP_DMA);
+    size_t dma_largest      = heap_caps_get_largest_free_block(MALLOC_CAP_DMA);
 
     ESP_LOGI(TAG,
-             "Heap: internal_free=%u internal_largest=%u dma_free=%u dma_largest=%u psram_free=%u psram_largest=%u total_free=%u total_largest=%u",
+             "Heap: internal_free=%u internal_largest=%u dma_free=%u dma_largest=%u",
              (unsigned)internal_free,
              (unsigned)internal_largest,
              (unsigned)dma_free,
-             (unsigned)dma_largest,
-             (unsigned)spiram_free,
-             (unsigned)spiram_largest,
-             (unsigned)total_free,
-             (unsigned)total_largest);
+             (unsigned)dma_largest);
 }
 
 // Timer-Callbacks für asynchronen RS485-Send (blockiert nicht den LVGL-Thread)
@@ -4166,7 +4204,7 @@ void app_main()
         // Landstrom-Anzeige (Mitte unten, kein Click) – lv_obj als Container (nicht lv_label,
         // da Kind-lv_obj auf lv_label Touch-Events blockiert)
         shore_label = lv_obj_create(screen);
-        lv_obj_set_size(shore_label, 48, 48);
+        lv_obj_set_size(shore_label, 44, 44);
         lv_obj_align(shore_label, LV_ALIGN_BOTTOM_MID, 0, -10);
         lv_obj_set_style_radius(shore_label, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_border_width(shore_label, 0, 0);
@@ -4185,7 +4223,7 @@ void app_main()
         lv_obj_center(shore_icon_label);
         // Innerer schwarzer Rand (identisch zu create_round_button)
         lv_obj_t *shore_inner = lv_obj_create(shore_label);
-        lv_obj_set_size(shore_inner, 48 - 8, 48 - 8);
+        lv_obj_set_size(shore_inner, 44 - 8, 44 - 8);
         lv_obj_set_style_radius(shore_inner, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(shore_inner, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(shore_inner, 2, 0);
@@ -4611,7 +4649,39 @@ void app_main()
     } else {
         ESP_LOGW(TAG, "Failed to create battery 2 widget");
     }
-    
+
+    // Elec-Labels (INA226) zwischen den beiden Batterien
+    if (!elec_title_label && main_battery && secondary_battery) {
+        // Mitte zwischen rechtem Rand der Board-Batterie und linkem Rand der KFZ-Batterie
+        lv_coord_t board_right = lv_obj_get_x(secondary_battery->container)
+                               + lv_obj_get_width(secondary_battery->container);
+        lv_coord_t kfz_left   = lv_obj_get_x(main_battery->container);
+        lv_coord_t mid_x      = (board_right + kfz_left) / 2;
+        lv_coord_t bat_y      = lv_obj_get_y(main_battery->container);
+        lv_coord_t bat_h      = lv_obj_get_height(main_battery->container);
+
+        elec_title_label = lv_label_create(screen);
+        lv_label_set_text(elec_title_label, "Strom");
+        lv_obj_set_style_text_font(elec_title_label, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(elec_title_label, lv_color_black(), 0);
+        lv_obj_set_style_text_align(elec_title_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_pos(elec_title_label, mid_x - 20, bat_y);
+
+        elec_vi_label = lv_label_create(screen);
+        lv_label_set_text(elec_vi_label, "---");
+        lv_obj_set_style_text_font(elec_vi_label, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(elec_vi_label, lv_color_black(), 0);
+        lv_obj_set_style_text_align(elec_vi_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_pos(elec_vi_label, mid_x - 30, bat_y + 16);
+
+        elec_power_label = lv_label_create(screen);
+        lv_label_set_text(elec_power_label, "---");
+        lv_obj_set_style_text_font(elec_power_label, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(elec_power_label, lv_color_black(), 0);
+        lv_obj_set_style_text_align(elec_power_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_pos(elec_power_label, mid_x - 20, bat_y + bat_h / 2);
+    }
+
     // RS485 Debug label (über KFZ-Batterie, fallback unten links)
 #if CONFIG_LOG_DEFAULT_LEVEL >= ESP_LOG_INFO
     rs485_debug_label = lv_label_create(screen);
@@ -4854,7 +4924,7 @@ void app_main()
                                          NULL,
                                          4,
                                          &wifi_autoretry_handle,
-                                         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+                                         MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
         if (created != pdPASS) {
             wifi_autoretry_handle = NULL;
             ESP_LOGW(TAG, "Failed to start WiFi auto-rescan task");

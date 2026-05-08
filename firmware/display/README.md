@@ -1,6 +1,6 @@
 # WoMoHome Display Firmware
 
-ESP-IDF v5.5.2 · LVGL v8.4 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
+ESP-IDF v5.5.2 · LVGL v9.5 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 
 ## Hardware
 
@@ -10,7 +10,7 @@ ESP-IDF v5.5.2 · LVGL v8.4 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 | **MCU** | ESP32-S3-WROOM-1, 16 MB Flash, 8 MB PSRAM (Octal) |
 | **Display** | 7" IPS, ST7701 RGB-Interface, Double-Buffer + Direct-Mode |
 | **Touch** | GT911 (I2C), CH422G GPIO-Expander für Backlight/Reset |
-| **RS485** | RX vom Sensorboard (JSON, 115200 8N1) |
+| **RS485** | RX/TX Sensorboard (JSON, 57600 8N1, Half-Duplex) |
 | **SD-Karte** | Hintergrundbilder, optional |
 
 ## Funktionen
@@ -20,17 +20,22 @@ ESP-IDF v5.5.2 · LVGL v8.4 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 - **Tanks**: Frischwasser + Grauwasser mit Füllstand, Verbrauchsrate, Restdauer
 - **Gas**: 2× Flaschengewicht, aktiver Verbrauch, Restdauer
 - **Wetter**: Aktuelles WMO-Symbol + Temperatur (Open-Meteo), Tipp auf Icon → 5-Tage-Vorhersage-Modal; Auto-Popup bei Unwetterwarnungen (Meteoalarm)
+- **Sonnenauf-/-untergang**: Berechnung aus GPS-Position (womo_sun_calc), Anzeige im Hauptscreen
 - **Konnektivität**: Modal mit AP-Status, WLAN-Scan/Connect, LTE Ein/Aus (Router UCI)
+- **Router-LEDs**: Separate Statusanzeige für WLAN/LTE/GPS-Empfang des Routers
 - **Steuerung**: 12V Bordnetz + Multimedia per RS485-Kommandos ans Sensorboard
-- **Tag/Nacht**: Automatischer Themenwechsel, Backlight-Steuerung
+- **Fehler-Management**: Fehler-Stack mit Latching, Quittierung per Touch, Buzzer-Alarm (Warn/Alarm-Ton bei neuen unquittier­ten Fehlern)
+- **Einstellungs-Modal**: Schwellwerte für Tank/Batterie/Gas konfigurierbar, Speicherung in NVS
+- **Screenshot**: Long-Press unten links → PNG auf SD-Karte
+- **Tag/Nacht**: Automatischer Themenwechsel (Sonnenauf-/-untergang), Backlight-Steuerung
 
 ## Externe Anbindungen
 
 | Dienst | Zweck | TLS |
 |---|---|---|
-| Open-Meteo | Aktuelles Wetter | ISRG Root X1 (PEM) |
-| Nominatim | Reverse Geocoding | ISRG Root X1 (PEM) |
-| Meteoalarm | Unwetterwarnungen | ESP TLS Bundle (HARICA) |
+| Open-Meteo | Aktuelles Wetter + 5-Tage-Vorhersage | ISRG Root X1 (PEM, eingebettet) |
+| Nominatim | Reverse Geocoding | ISRG Root X1 (PEM, eingebettet) |
+| Meteoalarm | Unwetterwarnungen | GEANT TLS RSA 1 (PEM, eingebettet) |
 | Teltonika RUTX11 | WLAN/LTE/GPS-Steuerung | HTTP (LAN) |
 
 ## Projektstruktur
@@ -47,22 +52,29 @@ main/
 │   ├── womo_gas_bottle         Gas-Flaschen-Widget
 │   ├── womo_weather            Wetter-Icon-Mapping (WMO → LVGL)
 │   ├── womo_forecast_modal     5-Tage-Vorhersage Modal (Open-Meteo daily)
-│   └── womo_connectivity_modal WLAN/LTE/AP-Steuerung
+│   ├── womo_connectivity_modal WLAN/LTE/AP-Steuerung
+│   ├── womo_router_leds_modal  Router-LED-Statusanzeige
+│   ├── womo_settings_modal     Einstellungs-Modal (Schwellwerte, NVS)
+│   └── womo_thresholds         Schwellwert-Verwaltung (NVS-Persistenz)
 ├── hardware/
 │   ├── waveshare_rgb_lcd_port  LCD + Touch + CH422G Init
-│   └── lvgl_port               LVGL Flush, Buffer, Task, Indev
+│   ├── lvgl_port               LVGL Flush, Buffer, Task, Indev
+│   └── buzzer                  Piezo-Buzzer (Warn/Alarm-Töne)
 ├── network/
-│   ├── womo_wifi               STA-Verbindung (RUTX11)
+│   ├── womo_wifi               STA-Verbindung + NVS-Passwort-Speicher (RUTX11)
 │   ├── womo_weather_http       Open-Meteo API (aktuell + 5-Tage daily)
 │   ├── womo_geocode            Nominatim Reverse Geocoding
 │   ├── womo_meteoalarm         Meteoalarm CAP-Feed
 │   ├── womo_router_uci         RUTX11 UCI JSON-RPC
+│   ├── womo_buzzer_http        HTTP-Endpunkt für externen Buzzer-Trigger
 │   ├── womo_http_mutex         TLS-Session-Serialisierung
-│   └── isrg_root_x1_pem.h     Let's Encrypt Root-Zertifikat
+│   ├── isrg_root_x1_pem.h     Let's Encrypt Root-Zertifikat
+│   └── harica_root_pem.h       GEANT TLS RSA 1 (Meteoalarm)
 ├── rs485/
-│   └── womo_rs485_display      RS485-Empfang, JSON-Parsing, Merge-Snapshot
+│   └── womo_rs485_display      RS485-Empfang/Senden, JSON-Parsing, Merge-Snapshot
 ├── storage/
-│   └── womo_sd                 SD-Karten-Zugriff (Hintergrundbilder)
+│   └── womo_sd                 SD-Karten-Zugriff (Hintergrundbilder, Screenshots)
 └── time/
-    └── womo_time               SNTP + RTC-Sync
+    ├── womo_time               SNTP + RTC-Sync
+    └── womo_sun_calc           Sonnenauf-/-untergang aus GPS-Koordinaten
 ```

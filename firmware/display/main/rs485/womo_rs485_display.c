@@ -1526,6 +1526,29 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             ack_success = true;
         }
     }
+    else if (strcmp(frame_kind, "elec") == 0) {
+        if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            cJSON *nc = cJSON_GetObjectItem(root, "nc");
+            if (cJSON_IsBool(nc) && cJSON_IsTrue(nc)) {
+                s_latest_data.elec.valid = true;
+                s_latest_data.elec.nc    = true;
+            } else {
+                cJSON *v_bus  = cJSON_GetObjectItem(root, "v_bus");
+                cJSON *i_a    = cJSON_GetObjectItem(root, "i_a");
+                cJSON *p_w    = cJSON_GetObjectItem(root, "p_w");
+                s_latest_data.elec.valid = true;
+                s_latest_data.elec.nc    = false;
+                if (v_bus) s_latest_data.elec.v_bus_v = (float)v_bus->valuedouble;
+                if (i_a)   s_latest_data.elec.i_a     = (float)i_a->valuedouble;
+                if (p_w)   s_latest_data.elec.p_w     = (float)p_w->valuedouble;
+            }
+            s_latest_data.elec_topic_rx_us = esp_timer_get_time();
+            notify_snapshot = s_latest_data;
+            xSemaphoreGive(s_data_mutex);
+            topic_handled = true;
+            ack_success   = true;
+        }
+    }
     else if (strcmp(frame_kind, "hx") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             s_latest_data.hx711.valid = true;

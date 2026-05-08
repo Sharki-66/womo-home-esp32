@@ -1,13 +1,9 @@
 # Claude Code — project context
 
-# Copilot Instructions (WoMoHome Sensor)
+# Instructions (WoMoHome Display)
 
-## Kommunikationsregeln
-- Antworten immer auf Deutsch, inkl. Code-Reviews und Commit-Beschreibungen.
-- Hardwarezugriffe ausschließlich über die vorhandenen komponentenspezifischen Bibliotheken (z. B. LVGL, esp_lcd). Keine Eigenimplementierungen solange eine Bibliothek die Funktion bereits anbietet.
-- Build, Flash und Monitor werden vom Nutzer gestartet (siehe VS Code Tasks "Build/Flash/Monitor Display Firmware"). Nur erklären, keine Befehle ausführen.
-Bei Änderungen am Code die aktuelle README.md (*.md) prüfen / gegebenenfalls bearbeiten.
-Git regelmäsig updaten -> Nutzer fragen.
+## Build & Flash
+- Build, Flash und Monitor werden vom Nutzer gestartet (siehe VS Code Tasks „Build/Flash/Monitor Display Firmware"). Nur erklären, keine Befehle ausführen.
 
 ## Projektüberblick
 - Ziel: Anzeige und Steuerung von Wohnmobil-Daten. Router liefert WLAN/LTE/GNSS; Display visualisiert; Sensorboard sammelt analoge/digitale Messwerte. Kommunikation zwischen Display und Sensorboard per RS485.
@@ -16,7 +12,7 @@ Git regelmäsig updaten -> Nutzer fragen.
 - Router: Teltonika RUTX11 (OpenWRT-basiert) für WLAN/Netz/Hotspot/LTE/GNSS. Anschluss ans Wohnmobil über 2 Relais mit Freilaufdiode und Nachlaufzeit gemäß RUTX11-Doku. Dachantenne (Teltonika) mit 2× WLAN, 2× LTE, 1× GNSS.
 - Display: ESP32-S3-Touch-LCD-7, übernimmt Visualisierung aller Sensor- und Statusdaten im Wohnmobil.
 - Sensorboard: Heemol ESP32 S3 N16R8 DevKitC-1 (ESP32-S3-DevKitC-1), erfasst analoge/digitale Sensoren und bedient E/A Richtung EBL/Anzeigepanel.
-- Sensorik: BNO055, 2× BME680 (außen/innen), HX711 (Gasfüllstände), 2× Batterien (Board/Kfz), 2× Tanksensoren Votronic (Frisch/Grau, kapazitiv), Steuerung Ein-/Ausgänge EBL/Panel.
+- Sensorik: BNO055, BME680 (innen), BME280 (außen), HX711 (Gasfüllstände), 2× Batterien (Board/Kfz), 2× Tanksensoren Votronic (Frisch/Grau, kapazitiv), Steuerung Ein-/Ausgänge EBL/Panel.
 
 ## RS485-Schnittstelle (Sensorboard → Display) – Protokoll v2 (Topic-basiert)
 - Physik: UART2 RS485 Half-Duplex, **57600** 8N1, DE/RTS automatisch (115200 verursacht Framing-Fehler durch DE-Toggle). Leitungsende per CRLF-terminierter ASCII-JSON-Zeilen (kein Binary, nur 0x20–0x7E).
@@ -34,7 +30,8 @@ Git regelmäsig updaten -> Nutzer fragen.
 - `tank` (10 s): `{ type:"tank", t1, t2, nc1, nc2 }` – Tanksensoren (Prozent)
 - `hx` (10 s): `{ type:"hx", a, b, sum, nc }` – HX711 Wägezellen (kg)
 - `gas` (10 s): `{ type:"gas", active, net, rate1h, rate2h, rest_h, net_a, net_b, cap_kg, pct, pct_a, pct_b }` – Gaslogik
-- `bme` (15 s): `{ type:"bme", "0x76":{temp_c,rh_pct,press_hpa,gas_kohm?,iaq?,iaq_acc?,eco2_ppm?,bvoc_ppm?}, "0x77":{…} }` – 0x76=indoor, 0x77=outdoor
+- `bme` (15 s): `{ type:"bme", "0x76":{chip,addr,temp_c,rh_pct,press_hpa,gas_kohm?,iaq?,iaq_acc?,eco2_ppm?,bvoc_ppm?,ts}, "0x77":{chip,addr,temp_c,rh_pct,press_hpa,press_trend_state?,press_trend_hpa_h?,ts} }` – 0x76=BME680 innen (IAQ optional), 0x77=BME280 außen (kein IAQ, mit Drucktrend)
+- `elec` (5 s): `{ type:"elec", nc:bool, v_bus, i_a, p_w, v_shunt_mv }` – INA226 Strom-/Leistungsmessung Hauptleitung. `nc:true` wenn Sensor nicht eingebaut. Display zeigt Titel "Strom" + Spannung/Strom + Leistung zwischen den beiden Batterie-Widgets.
 - Sofort-Ctrl: Nach Ausführung von `pwr_12v_on/off` oder `radio_on/off` wird `ctrl`-Topic sofort gesendet (`s_ctrl_immediate`-Flag), damit Display den neuen Zustand schnell anzeigt.
 - GPS/LTE: Werden **nicht** über RS485 übertragen. Display pollt den Router direkt (HTTP/SSH).
 - Display → Sensorboard (Kommandos): `cmd` Feld mit JSON-Objekt. Unterstützt: `display_ready`, `level_start|level_stop`, `tare_a|tare_b`, `gas_bottle_replace` (optional `slot`, `channel`), `pwr_12v_on|pwr_12v_off` (12V Bordnetz), `radio_on|radio_off` (Multimedia, nur wenn 12V aktiv). Sensorboard quittiert per ACK.
@@ -52,64 +49,63 @@ Git regelmäsig updaten -> Nutzer fragen.
 - Router-WiFi-Zugangsdaten werden im NVS gespeichert (Namespace `rtr_wifi`, max. 20 Einträge, MRU-Reihenfolge). Bei Netzwerkauswahl aus Dropdown wird gespeichertes Passwort vorausgefüllt.
 - Router-Poll-Task (`router_poll_task` in main.c) aktualisiert AP/WiFi/LTE/GPS alle 15 s und füllt `womo_connectivity_snapshot_t` mit AP-Feldern (ap_enabled, ap_ssid, ap_clients, ap_client_list).
 
-## Geplante Migration: LVGL v8 → v9
+## Display-Stack (LVGL)
 
-> Details, Phasen, betroffene Dateien und Risiken: siehe [.github/lvgl-v8-to-v9-migration.md](lvgl-v8-to-v9-migration.md)
+- LVGL **v9.2.0** als Managed Component (`lvgl/lvgl: ^9.2.0`, `espressif/esp_lvgl_port: ^2`)
+- RGB-Interface 800×480, 16 MHz PCLK, 2 Framebuffer in PSRAM (Direct Mode + Avoid-Tearing)
+- Bounce-Buffer: 4 Zeilen × 800 px × 2 Byte × 2 Buffer = 12,8 KB DMA-SRAM
+- LVGL-Task auf Core 1, Stack 16 KB in PSRAM, Priorität 4
+- Touch: GT911 via `esp_lcd_touch_gt911`, eigener Read-Callback in `lvgl_port.c`
 
-- Branch: `feature/lvgl9-migration`
-- Aktueller LVGL-Stand: **8.4.0** (lokale Kopie in `components/lvgl__lvgl/`)
-- Migrationsziel: LVGL **v9** + `espressif/esp_lvgl_port ^2` als Managed Component
-- Startpunkt: Phase 1 – `lvgl_port.c` Rewrite + `idf_component.yml` umstellen
+# Plan / Act Arbeitsablauf (Cursor-Stil)
 
-# Plan / Act workflow (Cursor-style)
+Sofern der Nutzer nicht explizit darauf verzichtet (z. B. **„Plan überspringen, direkt umsetzen"** oder **„einfach fixen"** ohne Mehrdeutigkeit), werden **zwei Modi** verwendet. Dies entspricht dem Cursor-Workflow: PLAN → freigeben → ACT.
 
-Unless the user clearly opts out (e.g. **"skip plan, implement now"** or **"just fix it"** with no ambiguity), use **two modes**. This matches Cursor’s PLAN → approve → ACT flow.
+## Plan-Modus (Standard)
 
-## Plan mode (default)
+- **Erste Zeile jeder Plan-Modus-Antwort muss exakt lauten:** `# Mode: PLAN`
+- **Das Repository darf in keiner Weise verändert werden**, einschließlich:
+  - Keine Dateien anlegen, bearbeiten oder löschen (Quellcode, Konfiguration, Docs, **einschließlich `./memory-bank/**`-Dateien**).
+  - Keine Multi-Datei-Edits, Schnellkorrekturen oder Patch-Änderungen.
+  - Keine Terminal-Befehle, die den Workspace verändern (Installationen, Builds mit zu übernehmenden Ausgaben, `git`-Schreibbefehle usw.).
+- **Erlaubt im Plan-Modus:** Dateien lesen/durchsuchen, Fragen beantworten, Schritte auflisten, Risiken benennen und einen **schriftlichen Plan** (Markdown) erstellen.
+- **Plan-Modus-Antworten enden** mit einem Hinweis zum weiteren Vorgehen, z. B. **`ACT` eingeben, wenn der Plan freigegeben wird** (oder den Plan zuerst verfeinern).
 
-- **First line of every Plan-mode response MUST be exactly:** `# Mode: PLAN`
-- **Do not modify the repository in any way**, including:
-  - No creating, editing, or deleting files (source, config, docs, **including `./memory-bank/**` memory-bank files**).
-  - No applying multi-file edits, quick fixes, or patch-style changes.
-  - No terminal commands that change the workspace (installs, builds that write outputs you were asked to apply, `git` writes, etc.).
-- **Allowed in Plan mode:** Read/search files to understand the codebase, answer questions, list steps, identify risks, and produce a **written plan** (markdown).
-- **End Plan-mode responses** by telling the user how to proceed, e.g. **Type `ACT` when you approve this plan** (or ask them to refine the plan first).
+## Act-Modus
 
-## Act mode
+- **Nur betreten**, wenn die Nutzernachricht die Umsetzung **klar freigibt**, z. B. **`ACT`**, **`act`** oder Formulierungen wie **„mach das"**, **„Plan umsetzen"**, **„freigegeben"** direkt nach einem Plan – oder wenn explizit auf die Planungsphase verzichtet wurde.
+- **Erste Zeile jeder Act-Modus-Antwort muss exakt lauten:** `# Mode: ACT`
+- **Danach** dürfen Dateien bearbeitet, Befehle ausgeführt und **`./memory-bank/`** bei Bedarf aktualisiert werden.
+- Nach dem Ende eines Act-Modus-Durchgangs wird die nächste Nutzernachricht wieder im **Plan-Modus** behandelt, es sei denn, der Nutzer gibt erneut mit **`ACT`** (oder gleichwertig) frei.
 
-- Enter **only** when the user’s message **clearly approves implementation**, e.g. they send **`ACT`**, **`act`**, or phrases like **"go ahead"**, **"implement the plan"**, **"approved"** right after a plan—or they explicitly told you to skip planning and implement.
-- **First line of every Act-mode response MUST be exactly:** `# Mode: ACT`
-- **Then** you may edit files, run commands, and update **`./memory-bank/`** when appropriate.
-- After you finish an Act-mode turn, assume the next user message starts in **Plan mode** again unless they again approve with **`ACT`** (or equivalent) for further edits.
+## Wenn der Nutzer Code-Änderungen im Plan-Modus anfordert
 
-## If the user asks for code changes while you are in Plan mode
-
-- **Do not implement.** Respond with `# Mode: PLAN`, briefly restate or adjust the plan, and ask them to type **`ACT`** when they want you to apply changes.
+- **Nicht umsetzen.** Mit `# Mode: PLAN` antworten, den Plan kurz wiederholen oder anpassen und den Nutzer bitten, **`ACT`** einzugeben, wenn die Änderungen angewendet werden sollen.
 
 ---
 
-# Memory bank (persistent context)
+# Memory Bank (persistenter Kontext)
 
-This repository uses a **memory bank** under `./memory-bank/` — structured markdown that survives sessions, similar to Cursor-style workflows.
+Dieses Repository nutzt eine **Memory Bank** unter `./memory-bank/` – strukturiertes Markdown, das Sessions überlebt, ähnlich dem Cursor-Workflow.
 
-Context layers (read deeper files after foundations): **projectbrief** → **productContext** / **systemPatterns** / **techContext** → **activeContext** → **progress**.
+Kontextebenen (tiefere Dateien nach den Grundlagen lesen): **projectbrief** → **productContext** / **systemPatterns** / **techContext** → **activeContext** → **progress**.
 
-## What Claude should do
+## Was Claude tun soll
 
-1. **Before substantive work**, read **all** of the following under `./memory-bank/` when the task depends on project state (not optional for non-trivial work). In **Plan mode**, reading for the plan is allowed; **do not edit** these files until **Act mode** unless the user only asked for a documentation/memory update with no code change.
-   - `projectbrief.md` — scope and goals
-   - `productContext.md` — product intent and UX
-   - `systemPatterns.md` — architecture and conventions
-   - `techContext.md` — stack and constraints
-   - `progress.md` — done / pending / known issues
-   - `activeContext.md` — current task and decisions
+1. **Vor substanzieller Arbeit** alle folgenden Dateien unter `./memory-bank/` lesen, wenn die Aufgabe vom Projektstand abhängt (bei nicht-trivialer Arbeit keine Option). Im **Plan-Modus** ist Lesen für die Planung erlaubt; **Dateien erst im Act-Modus bearbeiten**, es sei denn, der Nutzer bat ausdrücklich nur um ein Dokumentations-/Memory-Update ohne Code-Änderung.
+   - `projectbrief.md` – Umfang und Ziele
+   - `productContext.md` – Produktabsicht und UX
+   - `systemPatterns.md` – Architektur und Konventionen
+   - `techContext.md` – Stack und Einschränkungen
+   - `progress.md` – Erledigt / Ausstehend / Bekannte Probleme
+   - `activeContext.md` – Aktuelle Aufgabe und Entscheidungen
 
-2. **During Act-mode work**, keep `activeContext.md` aligned with the current task (update when focus shifts).
+2. **Während der Act-Modus-Arbeit** `activeContext.md` mit der aktuellen Aufgabe synchron halten (aktualisieren, wenn sich der Fokus verschiebt).
 
-3. **After meaningful milestones** (in Act mode), update `progress.md` and any affected docs in `./memory-bank/`.
+3. **Nach bedeutenden Meilensteinen** (im Act-Modus) `progress.md` und betroffene Docs in `./memory-bank/` aktualisieren.
 
-4. When the user asks to **update memory bank** (or similar), **open and review every** file in `./memory-bank/`, then update what changed — especially `activeContext.md` and `progress.md`, even if other files are unchanged. Prefer doing heavy memory-bank writes in **Act mode** unless the user asked for documentation-only updates.
+4. Wenn der Nutzer die **Memory Bank aktualisieren** (oder ähnliches) möchte, **jede** Datei in `./memory-bank/` öffnen und prüfen, dann das Geänderte aktualisieren – insbesondere `activeContext.md` und `progress.md`, auch wenn andere Dateien unverändert bleiben. Umfangreiche Memory-Bank-Schreibvorgänge bevorzugt im **Act-Modus** durchführen, es sei denn, der Nutzer bat nur um ein Dokumentations-Update.
 
-5. Prefer **short, factual updates** over long prose. Reference files, symbols, and tickets instead of duplicating code.
+5. **Kurze, sachliche Updates** gegenüber langen Texten bevorzugen. Dateien, Symbole und Tickets referenzieren statt Code zu duplizieren.
 
-Do not delete these files; evolve them as the project changes.
+Diese Dateien nicht löschen; sie mit dem Projekt weiterentwickeln.

@@ -153,11 +153,21 @@ typedef struct {
         bool touch_click_on;   // Touch-Klick-Ton aktiv
     } power;
 
+    // INA226 Strom-/Leistungsmessung Hauptleitung
+    struct {
+        bool valid;
+        bool nc;           // INA226 nicht eingebaut
+        float v_bus_v;     // Busspannung (V)
+        float i_a;         // Strom (A, positiv = Verbrauch)
+        float p_w;         // Leistung (W)
+    } elec;
+
     // Per-Topic Empfangszeitstempel (esp_timer_get_time(), 0 = noch nie empfangen)
     int64_t bat_topic_rx_us;
     int64_t tank_topic_rx_us;
     int64_t gas_topic_rx_us;
     int64_t bme_topic_rx_us;
+    int64_t elec_topic_rx_us;
 } womo_sensor_data_t;
 
 // Callback for received sensor data

@@ -41,8 +41,8 @@
 
 #include "esp_log.h"
 #include "esp_http_client.h"
-#include "esp_crt_bundle.h"
 #include "esp_heap_caps.h"
+#include "harica_root_pem.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "womo_http_mutex.h"
@@ -61,7 +61,7 @@ static const char *TAG = "meteoalarm";
 #define MA_TASK_STACK         6144
 #define MA_TASK_PRIO          3
 #define MA_MIN_INTERNAL_FREE      16384U
-#define MA_MIN_INTERNAL_LARGEST   12288U
+#define MA_MIN_INTERNAL_LARGEST   13312U   // RSA-3072 (GEANT cert) braucht ~13 KB contiguous internal RAM
 
 /* ── Interner Kontext ────────────────────────────────────────── */
 typedef struct {
@@ -94,18 +94,15 @@ static struct {
 
 static void ma_log_heap(const char *stage)
 {
-    size_t free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    /* Nur internen SRAM – PSRAM-Traversierung (MALLOC_CAP_8BIT) blockiert QSPI-Bus. */
+    size_t free_internal    = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     size_t largest_internal = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    size_t free_total = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-    size_t largest_total = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
 
     ESP_LOGW(TAG,
-             "Heap %s: internal_free=%u internal_largest=%u total_free=%u total_largest=%u",
+             "Heap %s: internal_free=%u internal_largest=%u",
              stage ? stage : "?",
              (unsigned)free_internal,
-             (unsigned)largest_internal,
-             (unsigned)free_total,
-             (unsigned)largest_total);
+             (unsigned)largest_internal);
 }
 
 static bool ma_has_enough_internal_heap(void)
@@ -234,12 +231,12 @@ static esp_err_t ma_fetch(double lat, double lon, womo_meteoalarm_result_t *out)
     ma_log_heap("before_http_init");
 
     esp_http_client_config_t cfg = {
-        .url              = url,
-        .method           = HTTP_METHOD_GET,
-        .timeout_ms       = MA_HTTP_TIMEOUT_MS,
-        .event_handler    = http_event_handler,
-        .user_data        = resp,
-        .crt_bundle_attach = esp_crt_bundle_attach,
+        .url           = url,
+        .method        = HTTP_METHOD_GET,
+        .timeout_ms    = MA_HTTP_TIMEOUT_MS,
+        .event_handler = http_event_handler,
+        .user_data     = resp,
+        .cert_pem      = harica_root_pem,  // GEANT TLS RSA 1 direkt; HARICA fehlt im ESP-IDF-Bundle
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&cfg);

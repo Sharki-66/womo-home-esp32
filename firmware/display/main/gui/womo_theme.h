@@ -7,10 +7,10 @@
 /*
  * WoMo Theme Manager
  * 
- * Manages background colors and themes based on:
- * - Time of day (day/night)
- * - System status (normal/warning/critical)
- * - Resource levels (water, gas, battery)
+ * Verwaltet Hintergrundfarben und Themes basierend auf:
+ * - Tageszeit (Tag/Nacht)
+ * - Systemstatus (normal/warnung/kritisch)
+ * - Ressourcenlevel (Wasser, Gas, Batterie)
  */
 
 #ifndef WOMO_THEME_H
@@ -22,18 +22,18 @@
 
 // Theme modes
 typedef enum {
-    WOMO_THEME_DAY,           // Daytime (after sunrise)
-    WOMO_THEME_NIGHT,         // Nighttime (after sunset)
-    WOMO_THEME_SUNRISE,       // Sunrise transition
-    WOMO_THEME_SUNSET         // Sunset transition
+    WOMO_THEME_DAY,           // Tagsüber (nach Sonnenaufgang)
+    WOMO_THEME_NIGHT,         // Nachts (nach Sonnenuntergang)
+    WOMO_THEME_SUNRISE,       // Sonnenaufgangsübergang
+    WOMO_THEME_SUNSET         // Sonnenuntergangsübergang
 } womo_theme_mode_t;
 
 // System status levels
 typedef enum {
-    WOMO_STATUS_OK,           // All systems normal (blue/green)
-    WOMO_STATUS_WARNING,      // Low resources (orange/yellow)
-    WOMO_STATUS_CRITICAL,     // Critical level (red)
-    WOMO_STATUS_ERROR         // System error (dark red)
+    WOMO_STATUS_OK,           // Alle Systeme normal (blau/grün)
+    WOMO_STATUS_WARNING,      // Niedrige Ressourcen (orange/gelb)
+    WOMO_STATUS_CRITICAL,     // Kritisches Niveau (rot)
+    WOMO_STATUS_ERROR         // Systemfehler (dunkelrot)
 } womo_status_level_t;
 
 // Color definitions for different states
@@ -42,13 +42,13 @@ typedef enum {
 #define WOMO_COLOR_SUNRISE          lv_color_hex(0xFF6347)  // Tomato (orange-red)
 #define WOMO_COLOR_SUNSET           lv_color_hex(0xFF8C00)  // Dark Orange
 
-// Civil twilight duration (minutes before/after sun times for smooth transitions)
-#define WOMO_CIVIL_TWILIGHT_MINUTES 24  // Civil twilight: 24 minutes
+// Dauer der bürgerlichen Dämmerung (Minuten vor/nach Sonnenzeiten für sanfte Übergänge)
+#define WOMO_CIVIL_TWILIGHT_MINUTES 45  // Dämmerungsfenster: 45 min vor/nach Sonnenauf-/-untergang
 
 #define WOMO_COLOR_ERROR            lv_color_hex(0xFF0000)  // Red (helles Rot)
 #define WOMO_COLOR_CRITICAL         lv_color_hex(0x8B0000)  // Dark Red (dunkles Rot)
 
-// Sunrise/Sunset times (will be calculated based on location/date)
+// Sonnenauf-/-untergangszeiten (werden basierend auf Standort/Datum berechnet)
 typedef struct {
     uint8_t sunrise_hour;
     uint8_t sunrise_minute;
@@ -57,142 +57,142 @@ typedef struct {
 } womo_sun_times_t;
 
 /**
- * @brief Initialize theme manager
+ * @brief Theme-Manager initialisieren
  * 
- * @param latitude Location latitude for sun calculations
- * @param longitude Location longitude for sun calculations
- * @return ESP_OK on success
+ * @param latitude Breitengrad des Standorts für Sonnenberechnungen
+ * @param longitude Längengrad des Standorts für Sonnenberechnungen
+ * @return ESP_OK bei Erfolg
  */
 esp_err_t womo_theme_init(float latitude, float longitude);
 
 /**
- * @brief Update theme based on current time and system status
+ * @brief Theme basierend auf aktueller Zeit und Systemstatus aktualisieren
  * 
- * Automatically determines theme mode based on time of day
+ * Bestimmt automatisch den Theme-Modus basierend auf der Tageszeit
  * 
- * @param status Current system status level
- * @return Current theme mode
+ * @param status Aktueller Systemstatus-Level
+ * @return Aktueller Theme-Modus
  */
 womo_theme_mode_t womo_theme_update(womo_status_level_t status);
 
 /**
- * @brief Get current background color
+ * @brief Aktuelle Hintergrundfarbe abrufen
  * 
- * Returns color based on theme mode and system status
+ * Gibt Farbe basierend auf Theme-Modus und Systemstatus zurück
  * 
- * @return LVGL color for background
+ * @return LVGL-Farbe für Hintergrund
  */
 lv_color_t womo_theme_get_background_color(void);
 
 /**
- * @brief Get smooth transition color during civil twilight
+ * @brief Sanfte Übergangsfarbe während der bürgerlichen Dämmerung abrufen
  * 
- * Interpolates between day (hellblau) and night (dunkelblau) colors
- * during the civil twilight phases (24 minutes before/after sunrise/sunset)
+ * Interpoliert zwischen Tag (hellblau) und Nacht (dunkelblau) Farben
+ * während der Phasen der bürgerlichen Dämmerung (24 Minuten vor/nach Sonnenauf-/-untergang)
  * 
- * @return LVGL color interpolated based on current time within twilight period
+ * @return LVGL-Farbe interpoliert basierend auf aktueller Zeit innerhalb der Dämmerungsperiode
  */
 lv_color_t womo_theme_get_twilight_color(void);
 
 /**
- * @brief Get current theme mode
+ * @brief Aktuellen Theme-Modus abrufen
  * 
- * @return Current theme mode (day/night/sunrise/sunset)
+ * @return Aktueller Theme-Modus (Tag/Nacht/Sonnenaufgang/Sonnenuntergang)
  */
 womo_theme_mode_t womo_theme_get_mode(void);
 
 /**
- * @brief Set system status level
+ * @brief Systemstatus-Level setzen
  * 
- * Changes background color to indicate warnings/errors
+ * Ändert Hintergrundfarbe, um Warnungen/Fehler anzuzeigen
  * 
- * @param status New status level
+ * @param status Neuer Status-Level
  */
 void womo_theme_set_status(womo_status_level_t status);
 
 /**
- * @brief Get current system status
+ * @brief Aktuellen Systemstatus abrufen
  * 
- * @return Current status level
+ * @return Aktueller Status-Level
  */
 womo_status_level_t womo_theme_get_status(void);
 
 /**
- * @brief Manually set sunrise/sunset times
+ * @brief Sonnenauf-/-untergangszeiten manuell setzen
  * 
- * Use if GPS location not available
+ * Verwenden, wenn GPS-Standort nicht verfügbar
  * 
- * @param sunrise_hour Hour of sunrise (0-23)
- * @param sunrise_min Minute of sunrise (0-59)
- * @param sunset_hour Hour of sunset (0-23)
- * @param sunset_min Minute of sunset (0-59)
+ * @param sunrise_hour Stunde des Sonnenaufgangs (0-23)
+ * @param sunrise_min Minute des Sonnenaufgangs (0-59)
+ * @param sunset_hour Stunde des Sonnenuntergangs (0-23)
+ * @param sunset_min Minute des Sonnenuntergangs (0-59)
  */
 void womo_theme_set_sun_times(uint8_t sunrise_hour, uint8_t sunrise_min,
                                uint8_t sunset_hour, uint8_t sunset_min);
 
 /**
- * @brief Get current sunrise/sunset times
+ * @brief Aktuelle Sonnenauf-/-untergangszeiten abrufen
  * 
- * @return Pointer to sun times structure
+ * @return Zeiger auf Sonnenzeiten-Struktur
  */
 const womo_sun_times_t* womo_theme_get_sun_times(void);
 
 /**
- * @brief Check if currently daytime
+ * @brief Prüfen, ob aktuell Tagsüber
  * 
- * @return true if between sunrise and sunset
+ * @return true, wenn zwischen Sonnenaufgang und -untergang
  */
 bool womo_theme_is_daytime(void);
 
 /**
- * @brief Apply theme to LVGL screen
+ * @brief Theme auf LVGL-Bildschirm anwenden
  * 
- * Sets background color of main screen
+ * Setzt Hintergrundfarbe des Hauptbildschirms
  * 
- * @param screen LVGL screen object (or NULL for default screen)
+ * @param screen LVGL-Bildschirmobjekt (oder NULL für Standardbildschirm)
  */
 void womo_theme_apply_to_screen(lv_obj_t *screen);
 
 /**
- * @brief Reset theme state to defaults (call at boot/power-on)
+ * @brief Theme-Zustand auf Standard zurücksetzen (bei Boot/Einschalten aufrufen)
  * 
- * Resets cached colors, theme mode, and forces re-evaluation.
- * Necessary because static variables survive soft-resets.
+ * Setzt gecachte Farben, Theme-Modus zurück und erzwingt Neubewertung.
+ * Notwendig, da statische Variablen Soft-Resets überleben.
  */
 void womo_theme_reset(void);
 
 /**
- * @brief Cycle to next theme mode (for touch control)
+ * @brief Zum nächsten Theme-Modus wechseln (für Touch-Steuerung)
  * 
- * Cycles through: DAY -> SUNSET -> NIGHT -> SUNRISE -> DAY
+ * Wechselt durch: TAG -> SONNENUNTERGANG -> NACHT -> SONNENAUFgang -> TAG
  */
 void womo_theme_cycle_mode(void);
 
 /**
- * @brief Cycle to next status level (for touch control)
+ * @brief Zum nächsten Status-Level wechseln (für Touch-Steuerung)
  * 
- * Cycles through: OK -> WARNING -> ERROR -> CRITICAL -> OK
+ * Wechselt durch: OK -> WARNUNG -> FEHLER -> KRITISCH -> OK
  */
 void womo_theme_cycle_status(void);
 
 /**
- * @brief Set theme mode manually (disables automatic time-based switching)
+ * @brief Theme-Modus manuell setzen (deaktiviert automatische zeitbasierte Umschaltung)
  * 
- * @param mode Desired theme mode
+ * @param mode Gewünschter Theme-Modus
  */
 void womo_theme_set_mode(womo_theme_mode_t mode);
 
 /**
- * @brief Enable/disable automatic time-based theme switching
+ * @brief Automatische zeitbasierte Theme-Umschaltung aktivieren/deaktivieren
  * 
- * @param enable true = automatic, false = manual control
+ * @param enable true = automatisch, false = manuelle Steuerung
  */
 void womo_theme_set_auto_mode(bool enable);
 
 /**
- * @brief Check if automatic mode is enabled
+ * @brief Prüfen, ob automatischer Modus aktiviert ist
  * 
- * @return true if automatic, false if manual
+ * @return true bei automatisch, false bei manuell
  */
 bool womo_theme_is_auto_mode(void);
 
