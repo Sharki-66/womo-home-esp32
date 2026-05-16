@@ -86,6 +86,7 @@ static lv_obj_t *wifi_label = NULL;
 static lv_obj_t *wifi_inner_border = NULL;
 static lv_obj_t *wifi_icon_img = NULL;
 static lv_obj_t *lte_icon_img = NULL;
+static lv_obj_t *wifi_ap_section = NULL;  // Grüner AP-Bereich in der Mitte des WiFi/LTE-Pills
 // wifi_0_bar..wifi_4_bar + cellular_0_bar..cellular_4_bar
 static uint8_t       *wifi_icon_bufs[6]  = {0};  // wifi_1..wifi_6
 static lv_image_dsc_t wifi_icon_dscs[6]  = {0};
@@ -185,6 +186,7 @@ static womo_router_wifi_status_t  s_router_wifi = {0};
 static womo_router_lte_status_t   s_router_lte  = {0};
 static womo_router_ap_status_t    s_router_ap   = {0};
 static SemaphoreHandle_t          s_router_mutex = NULL;
+static bool                       s_router_reachable = false;
 static TaskHandle_t              s_router_poll_handle = NULL;
 #define ROUTER_POLL_INTERVAL_MS  15000
 
@@ -770,6 +772,15 @@ static void update_connectivity_icons(unsigned int wifi_pct, bool wifi_connected
     }
 }
 
+static void update_router_btn_overlay(bool router_reachable, bool esp_wifi_connected)
+{
+    (void)router_reachable;
+    if (!wifi_ap_section) return;
+    lv_obj_set_style_bg_color(wifi_ap_section,
+        esp_wifi_connected ? lv_palette_main(LV_PALETTE_GREEN)
+                           : lv_color_hex(0xC0C0C0), 0);
+}
+
 static void update_connectivity_label(void)
 {
     if (!wifi_label) {
@@ -799,25 +810,31 @@ static void connectivity_snapshot_fill(womo_connectivity_snapshot_t *snapshot)
 
     memset(snapshot, 0, sizeof(*snapshot));
 
+    /* ESP32 eigenes WiFi (für Hotspot-Spalte) */
+    snapshot->esp_wifi_connected = womo_wifi_is_connected();
+    if (snapshot->esp_wifi_connected) {
+        womo_wifi_get_ssid(snapshot->esp_wifi_ssid, sizeof(snapshot->esp_wifi_ssid));
+        snapshot->esp_wifi_rssi = womo_wifi_get_rssi();
+        /* RSSI in Prozent umrechnen: -100 dBm = 0%, -50 dBm = 100% */
+        int8_t rssi = snapshot->esp_wifi_rssi;
+        if (rssi <= -100) {
+            snapshot->esp_wifi_signal_percent = 0;
+        } else if (rssi >= -50) {
+            snapshot->esp_wifi_signal_percent = 100;
+        } else {
+            snapshot->esp_wifi_signal_percent = (uint8_t)(2 * (rssi + 100));
+        }
+    }
+
     /* Router-Daten unter Mutex kopieren */
     womo_router_wifi_status_t rw = {0};
     womo_router_lte_status_t  rl = {0};
-    womo_router_ap_status_t   ra = {0};
+    snapshot->router_reachable = s_router_reachable;
     if (s_router_mutex) {
         xSemaphoreTake(s_router_mutex, portMAX_DELAY);
         rw = s_router_wifi;
         rl = s_router_lte;
-        ra = s_router_ap;
         xSemaphoreGive(s_router_mutex);
-    }
-
-    /* AP / HotSpot */
-    snapshot->ap_enabled = ra.enabled;
-    snapshot->ap_clients = ra.clients;
-    memcpy(snapshot->ap_client_list, ra.client_list, sizeof(snapshot->ap_client_list));
-    if (ra.ssid[0]) {
-        strncpy(snapshot->ap_ssid, ra.ssid, sizeof(snapshot->ap_ssid) - 1);
-        snapshot->ap_ssid[sizeof(snapshot->ap_ssid) - 1] = '\0';
     }
 
     /* WiFi = Router WAN Client */
@@ -1420,12 +1437,10 @@ static void ui_update_timer_cb(lv_timer_t *timer)
         /* Router-Daten unter Mutex kopieren */
         womo_router_wifi_status_t rw = {0};
         womo_router_lte_status_t  rl = {0};
-        womo_router_ap_status_t   ra = {0};
         if (s_router_mutex) {
             xSemaphoreTake(s_router_mutex, portMAX_DELAY);
             rw = s_router_wifi;
             rl = s_router_lte;
-            ra = s_router_ap;
             xSemaphoreGive(s_router_mutex);
         }
 
@@ -1456,6 +1471,7 @@ static void ui_update_timer_cb(lv_timer_t *timer)
         bool lte_ok  = rl.registered;
         update_connectivity_icons(rw.signal_percent, wifi_ok,
                                   rl.signal_percent,  lte_ok);
+        update_router_btn_overlay(s_router_reachable, womo_wifi_is_connected());
 
         if (modal_open) {
             womo_connectivity_snapshot_t modal_snapshot;
@@ -1471,8 +1487,8 @@ static void ui_update_timer_cb(lv_timer_t *timer)
         if (womo_router_leds_modal_is_open()) {
             womo_router_leds_snapshot_t leds_snapshot = {0};
             leds_snapshot.router_online = wifi_connected_now;
-            leds_snapshot.router_ap_24ghz = ra.band_2_4ghz_active;
-            leds_snapshot.router_ap_5ghz = ra.band_5ghz_active;
+            leds_snapshot.router_ap_24ghz = s_router_ap.band_2_4ghz_active;
+            leds_snapshot.router_ap_5ghz = s_router_ap.band_5ghz_active;
             leds_snapshot.wifi_connected = rw.connected;
             strncpy(leds_snapshot.wifi_ssid, rw.ssid, sizeof(leds_snapshot.wifi_ssid) - 1);
             leds_snapshot.wifi_signal_percent = rw.signal_percent;
@@ -2851,9 +2867,32 @@ static void wifi_autoretry_task(void *arg)
             continue;
         }
 
-        ESP_LOGI(TAG, "WiFi auto-reconnect to Router-AP: %s", WIFI_SSID);
-        // max_retry=1: ein Versuch, kein langer Block; nächster Versuch nach 30s
-        esp_err_t err = womo_wifi_connect(WIFI_SSID, WIFI_PASSWORD, 1);
+        /* Priorität: 1. AP-Konfiguration (womo_ap_cfg), 2. NVS-Pool, 3. Kconfig-Fallback */
+        char ap_ssid[33] = {0}, ap_pass[65] = {0};
+        bool has_ap_cfg = (womo_ap_cfg_load(ap_ssid, sizeof(ap_ssid),
+                                             ap_pass, sizeof(ap_pass)) == ESP_OK
+                           && ap_ssid[0] != '\0');
+        esp_err_t err;
+        if (has_ap_cfg) {
+            if (womo_wifi_get_status() != WOMO_WIFI_CONNECTING) {
+                ESP_LOGI(TAG, "WiFi auto-reconnect: AP-Konfiguration '%s'", ap_ssid);
+                err = womo_wifi_connect(ap_ssid, ap_pass, 1);
+            } else {
+                ESP_LOGI(TAG, "WiFi auto-reconnect: Watchdog verbindet bereits, überspringe");
+                err = ESP_OK;
+            }
+        } else {
+            ESP_LOGI(TAG, "WiFi auto-reconnect: versuche gespeicherte Netzwerke …");
+            err = womo_wifi_connect_best_known(1);
+            if (err == ESP_ERR_NOT_FOUND) {
+                if (womo_wifi_get_status() != WOMO_WIFI_CONNECTING) {
+                    ESP_LOGI(TAG, "WiFi auto-reconnect Fallback: %s", WIFI_SSID);
+                    err = womo_wifi_connect(WIFI_SSID, WIFI_PASSWORD, 1);
+                } else {
+                    err = ESP_OK;
+                }
+            }
+        }
         if (err != ESP_OK) {
             ESP_LOGW(TAG, "WiFi reconnect failed: %s", esp_err_to_name(err));
         }
@@ -2887,6 +2926,7 @@ static void router_poll_task(void *arg)
                     memset(&s_router_lte,  0, sizeof(s_router_lte));
                     xSemaphoreGive(s_router_mutex);
                 }
+                s_router_reachable = false;
                 poll_count = 0;  /* Nach Reconnect wieder mit kurzen Intervallen pollen */
                 was_connected = false;
             }
@@ -2951,6 +2991,9 @@ static void router_poll_task(void *arg)
             if (a_err == ESP_OK) s_router_ap   = ap_tmp;
             xSemaphoreGive(s_router_mutex);
         }
+        /* Router gilt als erreichbar nur wenn HTTP/UCI WiFi-Abfrage erfolgreich war.
+         * LTE- und AP-Abfragen geben auch ohne RUTX11 ESP_OK zurück (leere Daten). */
+        s_router_reachable = (w_err == ESP_OK);
 
         /* ── GPS vom Router (GNSS-Antenne am RUTX11) ──────────── */
         womo_router_gps_t gps_tmp = {0};
@@ -4040,8 +4083,17 @@ void app_main()
     // Initialize WiFi + sofort async verbinden (läuft parallel zu Display-HW + UI-Konstruktion)
     ESP_LOGI(TAG, "Initializing WiFi...");
     womo_wifi_init();
-    ESP_LOGI(TAG, "WiFi async connect: %s (Hintergrund)", WIFI_SSID);
-    womo_wifi_connect_async(WIFI_SSID, WIFI_PASSWORD, 1);
+    {
+        char ap_ssid[33] = {0}, ap_pass[65] = {0};
+        if (womo_ap_cfg_load(ap_ssid, sizeof(ap_ssid), ap_pass, sizeof(ap_pass)) == ESP_OK
+            && ap_ssid[0] != '\0') {
+            ESP_LOGI(TAG, "WiFi boot: AP-Konfiguration '%s'", ap_ssid);
+            womo_wifi_connect_async(ap_ssid, ap_pass, 1);
+        } else {
+            ESP_LOGI(TAG, "WiFi boot async (Kconfig): %s", WIFI_SSID);
+            womo_wifi_connect_async(WIFI_SSID, WIFI_PASSWORD, 1);
+        }
+    }
 
 #if WOMO_ENABLE_BUZZER_STUDIO_HTTP
     esp_err_t buzzer_http_err = womo_buzzer_http_start();
@@ -4137,10 +4189,10 @@ void app_main()
         lv_obj_set_style_text_color(date_label, lv_color_black(), 0);
         lv_obj_align(date_label, LV_ALIGN_BOTTOM_LEFT, 310, -15);
         
-        // Create WiFi/LTE status button (top left) – Pill-Form, links WiFi, rechts LTE
+        // Create WiFi/LTE status button (top left) – Pill-Form, links WiFi, Mitte AP, rechts LTE
         wifi_label = lv_btn_create(screen);
-        lv_obj_set_size(wifi_label, 108, 44);
-        lv_obj_set_style_radius(wifi_label, LV_RADIUS_CIRCLE, 0);  // Pill-Form (halbkreisförmige Enden)
+        lv_obj_set_size(wifi_label, 118, 44);
+        lv_obj_set_style_radius(wifi_label, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_color(wifi_label, lv_color_hex(0xC0C0C0), 0);
         lv_obj_set_style_bg_opa(wifi_label, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(wifi_label, 0, 0);
@@ -4148,8 +4200,19 @@ void app_main()
         lv_obj_align(wifi_label, LV_ALIGN_TOP_LEFT, 78, 12);
         lv_obj_add_flag(wifi_label, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(wifi_label, wifi_label_event_cb, LV_EVENT_CLICKED, NULL);
+        // AP-Sektion (grün/grau) – vor inner_border erzeugt → liegt dahinter
+        wifi_ap_section = lv_obj_create(wifi_label);
+        lv_obj_set_size(wifi_ap_section, 16, 36);
+        lv_obj_set_style_bg_color(wifi_ap_section, lv_color_hex(0xC0C0C0), 0);
+        lv_obj_set_style_bg_opa(wifi_ap_section, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(wifi_ap_section, 0, 0);
+        lv_obj_set_style_pad_all(wifi_ap_section, 0, 0);
+        lv_obj_set_style_radius(wifi_ap_section, 0, 0);
+        lv_obj_align(wifi_ap_section, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_clear_flag(wifi_ap_section, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        // Innerer Rahmen
         wifi_inner_border = lv_obj_create(wifi_label);
-        lv_obj_set_size(wifi_inner_border, 100, 36);
+        lv_obj_set_size(wifi_inner_border, 110, 36);
         lv_obj_set_style_radius(wifi_inner_border, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(wifi_inner_border, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(wifi_inner_border, 2, 0);
@@ -4157,16 +4220,25 @@ void app_main()
         lv_obj_set_style_pad_all(wifi_inner_border, 0, 0);
         lv_obj_center(wifi_inner_border);
         lv_obj_clear_flag(wifi_inner_border, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-        // Trennlinie mittig zwischen WiFi und LTE
-        lv_obj_t *wifi_divider = lv_obj_create(wifi_label);
-        lv_obj_set_size(wifi_divider, 2, 24);
-        lv_obj_set_style_bg_color(wifi_divider, lv_color_hex(0x808080), 0);
-        lv_obj_set_style_bg_opa(wifi_divider, LV_OPA_COVER, 0);
-        lv_obj_set_style_border_width(wifi_divider, 0, 0);
-        lv_obj_set_style_pad_all(wifi_divider, 0, 0);
-        lv_obj_set_style_radius(wifi_divider, 1, 0);
-        lv_obj_center(wifi_divider);
-        lv_obj_clear_flag(wifi_divider, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        // Zwei Trennlinien: links und rechts der AP-Sektion
+        lv_obj_t *wifi_divider_l = lv_obj_create(wifi_label);
+        lv_obj_set_size(wifi_divider_l, 2, 36);
+        lv_obj_set_style_bg_color(wifi_divider_l, lv_color_hex(0x000000), 0);
+        lv_obj_set_style_bg_opa(wifi_divider_l, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(wifi_divider_l, 0, 0);
+        lv_obj_set_style_pad_all(wifi_divider_l, 0, 0);
+        lv_obj_set_style_radius(wifi_divider_l, 1, 0);
+        lv_obj_align(wifi_divider_l, LV_ALIGN_CENTER, -9, 0);
+        lv_obj_clear_flag(wifi_divider_l, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_t *wifi_divider_r = lv_obj_create(wifi_label);
+        lv_obj_set_size(wifi_divider_r, 2, 36);
+        lv_obj_set_style_bg_color(wifi_divider_r, lv_color_hex(0x000000), 0);
+        lv_obj_set_style_bg_opa(wifi_divider_r, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(wifi_divider_r, 0, 0);
+        lv_obj_set_style_pad_all(wifi_divider_r, 0, 0);
+        lv_obj_set_style_radius(wifi_divider_r, 1, 0);
+        lv_obj_align(wifi_divider_r, LV_ALIGN_CENTER, +9, 0);
+        lv_obj_clear_flag(wifi_divider_r, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
         // WiFi-Icon links, LTE-Icon rechts
         wifi_icon_img = lv_img_create(wifi_label);
         lv_obj_clear_flag(wifi_icon_img, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
@@ -4176,6 +4248,15 @@ void app_main()
         lv_obj_clear_flag(lte_icon_img, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_style_img_recolor_opa(lte_icon_img, LV_OPA_TRANSP, 0);
         lv_obj_align(lte_icon_img, LV_ALIGN_RIGHT_MID, -12, 0);
+        // „A\nP"-Label zentriert in der AP-Sektion
+        lv_obj_t *ap_section_label = lv_label_create(wifi_label);
+        lv_label_set_text(ap_section_label, "A\nP");
+        lv_obj_set_style_text_font(ap_section_label, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(ap_section_label, lv_color_black(), 0);
+        lv_obj_set_style_text_align(ap_section_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(ap_section_label, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_clear_flag(ap_section_label, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+
         update_connectivity_label();
 
         // Zusätzliche Schalter links (klassisch, Radio) und Netzstrom-Anzeige

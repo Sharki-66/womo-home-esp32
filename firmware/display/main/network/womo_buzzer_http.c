@@ -333,21 +333,4 @@ bool womo_buzzer_http_is_running(void)
     return s_server != NULL;
 }
 
-#else
-
-esp_err_t womo_buzzer_http_start(void)
-{
-    return ESP_ERR_NOT_SUPPORTED;
-}
-
-esp_err_t womo_buzzer_http_stop(void)
-{
-    return ESP_ERR_NOT_SUPPORTED;
-}
-
-bool womo_buzzer_http_is_running(void)
-{
-    return false;
-}
-
 #endif

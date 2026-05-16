@@ -47,12 +47,12 @@ typedef struct {
     lv_obj_t *overlay;
     lv_obj_t *panel;
     lv_obj_t *wifi_keyboard;
-    /* ── AP ── */
+    lv_obj_t *router_leds_btn;         /**< Blauer WiFi-Icon-Knopf im Header */
+    /* ── Hotspot (ESP32 eigenes WiFi) ── */
     lv_obj_t *ap_led;
     lv_obj_t *ap_status_label;
-    lv_obj_t *ap_info_label;
-    lv_obj_t *ap_client_list_label;    /**< Liste der verbundenen Geräte */
-    /* ── WiFi ── */
+    /* ── WiFi (RUTX11) ── */
+    lv_obj_t *rutx11_badge_wifi;       /**< Rot-Badge wenn Router nicht erreichbar */
     lv_obj_t *wifi_led;
     lv_obj_t *wifi_status_label;
     lv_obj_t *wifi_switch;
@@ -68,7 +68,8 @@ typedef struct {
     lv_obj_t *wifi_btn_row;           /**< Container für Verbinden/Abbrechen */
     lv_obj_t *wifi_scan_status_label;
     bool      wifi_switch_internal;
-    /* ── LTE ── */
+    /* ── LTE (RUTX11) ── */
+    lv_obj_t *rutx11_badge_lte;        /**< Rot-Badge wenn Router nicht erreichbar */
     lv_obj_t *lte_led;
     lv_obj_t *lte_status_label;
     lv_obj_t *lte_switch;
@@ -423,7 +424,8 @@ static void build_modal(lv_obj_t *parent)
 
     /* ── Router-LEDs-Button (zwischen Titel und Close) ── */
     extern void router_leds_button_event_cb(lv_event_t *event);
-    lv_obj_t *router_leds_btn = lv_btn_create(header);
+    s_ctx.router_leds_btn = lv_btn_create(header);
+    lv_obj_t *router_leds_btn = s_ctx.router_leds_btn;
     lv_obj_set_size(router_leds_btn, 36, 36);
     lv_obj_align(router_leds_btn, LV_ALIGN_RIGHT_MID, -120, 0); // links vom Close-Button
     lv_obj_set_style_radius(router_leds_btn, LV_RADIUS_CIRCLE, 0);
@@ -473,7 +475,7 @@ static void build_modal(lv_obj_t *parent)
     lv_obj_set_flex_grow(ap_col, 1);
     lv_obj_set_flex_flow(ap_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(ap_col, 4, 0);
-    lv_obj_clear_flag(ap_col, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_pad_right(ap_col, 4, 0);
 
     /* AP Header (Titel + LED) */
     lv_obj_t *ap_hdr = lv_obj_create(ap_col);
@@ -491,7 +493,7 @@ static void build_modal(lv_obj_t *parent)
     lv_obj_set_style_text_font(ap_title, WOMO_FONT_MEDIUM, 0);
     lv_obj_set_flex_grow(ap_title, 1);
 
-    s_ctx.ap_led = create_status_led(ap_hdr, s_latest_snapshot.ap_enabled);
+    s_ctx.ap_led = create_status_led(ap_hdr, s_latest_snapshot.esp_wifi_connected);
 
     /* Trennlinie unter Header */
     lv_obj_set_style_border_side(ap_hdr, LV_BORDER_SIDE_BOTTOM, 0);
@@ -499,30 +501,12 @@ static void build_modal(lv_obj_t *parent)
     lv_obj_set_style_border_color(ap_hdr, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
     lv_obj_set_style_pad_bottom(ap_hdr, 6, 0);
 
-    /* AP Status-Label (SSID oder Inaktiv) */
+    /* ESP32 WiFi Status-Label (SSID + Signal oder Getrennt) */
     s_ctx.ap_status_label = lv_label_create(ap_col);
     lv_label_set_text(s_ctx.ap_status_label, "");
     lv_obj_set_style_text_font(s_ctx.ap_status_label, WOMO_FONT_SMALL, 0);
     lv_obj_set_width(s_ctx.ap_status_label, LV_PCT(100));
     lv_label_set_long_mode(s_ctx.ap_status_label, LV_LABEL_LONG_DOT);
-
-    /* AP Info-Label (Anzahl Clients, grau, klein) */
-    s_ctx.ap_info_label = lv_label_create(ap_col);
-    lv_label_set_text(s_ctx.ap_info_label, "");
-    lv_obj_set_style_text_font(s_ctx.ap_info_label, WOMO_FONT_TINY, 0);
-    lv_obj_set_style_text_color(s_ctx.ap_info_label,
-                                lv_palette_main(LV_PALETTE_GREY), 0);
-    lv_obj_set_width(s_ctx.ap_info_label, LV_PCT(100));
-
-    /* AP Client-Liste (Gerätenamen, mehrzeilig) */
-    s_ctx.ap_client_list_label = lv_label_create(ap_col);
-    lv_label_set_text(s_ctx.ap_client_list_label, "");
-    lv_obj_set_style_text_font(s_ctx.ap_client_list_label, WOMO_FONT_TINY, 0);
-    lv_obj_set_style_text_color(s_ctx.ap_client_list_label,
-                                lv_color_hex(0x333333), 0);
-    lv_obj_set_width(s_ctx.ap_client_list_label, LV_PCT(100));
-    lv_label_set_long_mode(s_ctx.ap_client_list_label, LV_LABEL_LONG_WRAP);
-    lv_obj_add_flag(s_ctx.ap_client_list_label, LV_OBJ_FLAG_HIDDEN);
 
     /* ════════════════ WLAN-Spalte ═══════════════════════ */
     lv_obj_t *wifi_col = lv_obj_create(cols);
@@ -569,6 +553,22 @@ static void build_modal(lv_obj_t *parent)
     lv_obj_set_style_text_font(s_ctx.wifi_status_label, WOMO_FONT_SMALL, 0);
     lv_obj_set_width(s_ctx.wifi_status_label, LV_PCT(100));
     lv_label_set_long_mode(s_ctx.wifi_status_label, LV_LABEL_LONG_DOT);
+
+    /* RUTX11-Badge (rot, nicht klickbar – sichtbar wenn Router nicht erreichbar) */
+    s_ctx.rutx11_badge_wifi = lv_obj_create(wifi_col);
+    lv_obj_remove_style_all(s_ctx.rutx11_badge_wifi);
+    lv_obj_set_size(s_ctx.rutx11_badge_wifi, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_color(s_ctx.rutx11_badge_wifi, lv_palette_main(LV_PALETTE_RED), 0);
+    lv_obj_set_style_bg_opa(s_ctx.rutx11_badge_wifi, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(s_ctx.rutx11_badge_wifi, 4, 0);
+    lv_obj_set_style_pad_hor(s_ctx.rutx11_badge_wifi, 8, 0);
+    lv_obj_set_style_pad_ver(s_ctx.rutx11_badge_wifi, 4, 0);
+    lv_obj_clear_flag(s_ctx.rutx11_badge_wifi, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t *rutx11_lbl_wifi = lv_label_create(s_ctx.rutx11_badge_wifi);
+    lv_label_set_text(rutx11_lbl_wifi, "RUTX11 n. erreichbar");
+    lv_obj_set_style_text_font(rutx11_lbl_wifi, WOMO_FONT_TINY, 0);
+    lv_obj_set_style_text_color(rutx11_lbl_wifi, lv_color_white(), 0);
+    lv_obj_add_flag(s_ctx.rutx11_badge_wifi, LV_OBJ_FLAG_HIDDEN);
 
     /* WiFi Switch */
     lv_obj_t *wifi_spacer = lv_obj_create(wifi_col);
@@ -703,6 +703,22 @@ static void build_modal(lv_obj_t *parent)
     lv_obj_set_width(s_ctx.lte_status_label, LV_PCT(100));
     lv_label_set_long_mode(s_ctx.lte_status_label, LV_LABEL_LONG_DOT);
 
+    /* RUTX11-Badge LTE (rot, nicht klickbar – sichtbar wenn Router nicht erreichbar) */
+    s_ctx.rutx11_badge_lte = lv_obj_create(lte_col);
+    lv_obj_remove_style_all(s_ctx.rutx11_badge_lte);
+    lv_obj_set_size(s_ctx.rutx11_badge_lte, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_color(s_ctx.rutx11_badge_lte, lv_palette_main(LV_PALETTE_RED), 0);
+    lv_obj_set_style_bg_opa(s_ctx.rutx11_badge_lte, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(s_ctx.rutx11_badge_lte, 4, 0);
+    lv_obj_set_style_pad_hor(s_ctx.rutx11_badge_lte, 8, 0);
+    lv_obj_set_style_pad_ver(s_ctx.rutx11_badge_lte, 4, 0);
+    lv_obj_clear_flag(s_ctx.rutx11_badge_lte, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t *rutx11_lbl_lte = lv_label_create(s_ctx.rutx11_badge_lte);
+    lv_label_set_text(rutx11_lbl_lte, "RUTX11 n. erreichbar");
+    lv_obj_set_style_text_font(rutx11_lbl_lte, WOMO_FONT_TINY, 0);
+    lv_obj_set_style_text_color(rutx11_lbl_lte, lv_color_white(), 0);
+    lv_obj_add_flag(s_ctx.rutx11_badge_lte, LV_OBJ_FLAG_HIDDEN);
+
     /* LTE Switch */
     lv_obj_t *lte_spacer = lv_obj_create(lte_col);
     lv_obj_remove_style_all(lte_spacer);
@@ -777,52 +793,17 @@ static void update_ap_status(void)
 {
     if (!s_ctx.ap_status_label || !s_ctx.ap_led) return;
 
-    set_led_active(s_ctx.ap_led, s_latest_snapshot.ap_enabled);
+    set_led_active(s_ctx.ap_led, s_latest_snapshot.esp_wifi_connected);
 
-    if (s_latest_snapshot.ap_enabled && s_latest_snapshot.ap_ssid[0]) {
-        lv_label_set_text(s_ctx.ap_status_label, s_latest_snapshot.ap_ssid);
-    } else if (s_latest_snapshot.ap_enabled) {
-        lv_label_set_text(s_ctx.ap_status_label,
-                          womo_locale_get_string(STR_AP_STATUS_ACTIVE));
+    if (s_latest_snapshot.esp_wifi_connected && s_latest_snapshot.esp_wifi_ssid[0]) {
+        char buf[48];
+        snprintf(buf, sizeof(buf), "%s (%u%%)",
+                 s_latest_snapshot.esp_wifi_ssid,
+                 s_latest_snapshot.esp_wifi_signal_percent);
+        lv_label_set_text(s_ctx.ap_status_label, buf);
     } else {
         lv_label_set_text(s_ctx.ap_status_label,
                           womo_locale_get_string(STR_AP_STATUS_INACTIVE));
-    }
-
-    /* Kurzinfo: Anzahl Clients */
-    if (s_ctx.ap_info_label) {
-        if (s_latest_snapshot.ap_enabled && s_latest_snapshot.ap_clients > 0) {
-            char buf[32];
-            snprintf(buf, sizeof(buf), "%u Gerät%s verbunden",
-                     s_latest_snapshot.ap_clients,
-                     s_latest_snapshot.ap_clients == 1 ? "" : "e");
-            lv_label_set_text(s_ctx.ap_info_label, buf);
-        } else if (s_latest_snapshot.ap_enabled) {
-            lv_label_set_text(s_ctx.ap_info_label, "Keine Geräte");
-        } else {
-            lv_label_set_text(s_ctx.ap_info_label, "");
-        }
-    }
-
-    /* Detailliste der verbundenen Geräte */
-    if (s_ctx.ap_client_list_label) {
-        if (s_latest_snapshot.ap_enabled && s_latest_snapshot.ap_clients > 0) {
-            char list_buf[256] = {0};
-            size_t off = 0;
-            for (uint8_t i = 0; i < s_latest_snapshot.ap_clients && i < WOMO_AP_CLIENT_MAX; i++) {
-                const womo_ap_client_info_t *c = &s_latest_snapshot.ap_client_list[i];
-                const char *name = c->hostname[0] ? c->hostname : c->mac;
-                int n = snprintf(list_buf + off, sizeof(list_buf) - off,
-                                 "%s%s", (i > 0) ? "\n" : "", name);
-                if (n < 0 || (size_t)n >= sizeof(list_buf) - off) break;
-                off += (size_t)n;
-            }
-            lv_label_set_text(s_ctx.ap_client_list_label, list_buf);
-            lv_obj_clear_flag(s_ctx.ap_client_list_label, LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_label_set_text(s_ctx.ap_client_list_label, "");
-            lv_obj_add_flag(s_ctx.ap_client_list_label, LV_OBJ_FLAG_HIDDEN);
-        }
     }
 }
 
@@ -832,7 +813,43 @@ static void update_wifi_status_label(void)
         return;
     }
 
-    /* Während ein Connect/Disconnect-Task läuft oder Cooldown aktiv, Switch nicht überschreiben */
+    /* ── Router nicht erreichbar: Badge zeigen, Controls sperren ── */
+    /* Immer zuerst prüfen – Task/Cooldown darf das nicht übersteuern */
+    if (!s_latest_snapshot.router_reachable) {
+        if (s_ctx.rutx11_badge_wifi)
+            lv_obj_clear_flag(s_ctx.rutx11_badge_wifi, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_opa(s_ctx.wifi_switch, LV_OPA_40, 0);
+        lv_obj_clear_flag(s_ctx.wifi_switch, LV_OBJ_FLAG_CLICKABLE);
+        if (s_ctx.wifi_scan_row)
+            lv_obj_add_flag(s_ctx.wifi_scan_row, LV_OBJ_FLAG_HIDDEN);
+        if (s_ctx.wifi_password_label)
+            lv_obj_add_flag(s_ctx.wifi_password_label, LV_OBJ_FLAG_HIDDEN);
+        if (s_ctx.wifi_password_area)
+            lv_obj_add_flag(s_ctx.wifi_password_area, LV_OBJ_FLAG_HIDDEN);
+        if (s_ctx.wifi_btn_row)
+            lv_obj_add_flag(s_ctx.wifi_btn_row, LV_OBJ_FLAG_HIDDEN);
+        if (s_ctx.wifi_led) set_led_active(s_ctx.wifi_led, false);
+        if (s_ctx.router_leds_btn) {
+            lv_obj_set_style_bg_color(s_ctx.router_leds_btn,
+                                      lv_palette_main(LV_PALETTE_RED), 0);
+            lv_obj_clear_flag(s_ctx.router_leds_btn, LV_OBJ_FLAG_CLICKABLE);
+        }
+        lv_label_set_text(s_ctx.wifi_status_label, "");
+        return;
+    }
+
+    /* Router erreichbar: Badge ausblenden, Controls freischalten */
+    if (s_ctx.rutx11_badge_wifi)
+        lv_obj_add_flag(s_ctx.rutx11_badge_wifi, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_opa(s_ctx.wifi_switch, LV_OPA_COVER, 0);
+    lv_obj_add_flag(s_ctx.wifi_switch, LV_OBJ_FLAG_CLICKABLE);
+    if (s_ctx.router_leds_btn) {
+        lv_obj_set_style_bg_color(s_ctx.router_leds_btn,
+                                  lv_color_hex(0x0D47A1), 0);
+        lv_obj_add_flag(s_ctx.router_leds_btn, LV_OBJ_FLAG_CLICKABLE);
+    }
+
+    /* Während ein Connect/Disconnect-Task läuft oder Cooldown aktiv, Switch-Zustand nicht überschreiben */
     if (s_ctx.wifi_connect_task || s_ctx.wifi_disconnect_task) return;
     if (s_ctx.wifi_cooldown_until > esp_timer_get_time()) return;
 
@@ -903,7 +920,25 @@ static void update_lte_status_label(void)
         return;
     }
 
-    /* Während ein Toggle-Task läuft oder Cooldown aktiv, Switch nicht überschreiben */
+    /* ── Router nicht erreichbar: Badge zeigen, Controls sperren ── */
+    /* Immer zuerst prüfen – Task/Cooldown darf das nicht übersteuern */
+    if (!s_latest_snapshot.router_reachable) {
+        if (s_ctx.rutx11_badge_lte)
+            lv_obj_clear_flag(s_ctx.rutx11_badge_lte, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_opa(s_ctx.lte_switch, LV_OPA_40, 0);
+        lv_obj_clear_flag(s_ctx.lte_switch, LV_OBJ_FLAG_CLICKABLE);
+        if (s_ctx.lte_led) set_led_active(s_ctx.lte_led, false);
+        lv_label_set_text(s_ctx.lte_status_label, "");
+        return;
+    }
+
+    /* Router erreichbar: Badge ausblenden, Controls freischalten */
+    if (s_ctx.rutx11_badge_lte)
+        lv_obj_add_flag(s_ctx.rutx11_badge_lte, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_opa(s_ctx.lte_switch, LV_OPA_COVER, 0);
+    lv_obj_add_flag(s_ctx.lte_switch, LV_OBJ_FLAG_CLICKABLE);
+
+    /* Während ein Toggle-Task läuft oder Cooldown aktiv, Switch-Zustand nicht überschreiben */
     if (s_ctx.lte_toggle_task) return;
     if (s_ctx.lte_cooldown_until > esp_timer_get_time()) return;
 
@@ -1728,3 +1763,4 @@ static void configure_wifi_keyboard(void)
                         s_keyboard_ctrl_uc);
     lv_keyboard_set_mode(s_ctx.wifi_keyboard, LV_KEYBOARD_MODE_TEXT_LOWER);
 }
+

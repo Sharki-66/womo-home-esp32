@@ -48,6 +48,7 @@
 - WLAN und LTE werden über UCI JSON-RPC am RUTX11 gesteuert (nicht über RS485).
 - Router-WiFi-Zugangsdaten werden im NVS gespeichert (Namespace `rtr_wifi`, max. 20 Einträge, MRU-Reihenfolge). Bei Netzwerkauswahl aus Dropdown wird gespeichertes Passwort vorausgefüllt.
 - Router-Poll-Task (`router_poll_task` in main.c) aktualisiert AP/WiFi/LTE/GPS alle 15 s und füllt `womo_connectivity_snapshot_t` mit AP-Feldern (ap_enabled, ap_ssid, ap_clients, ap_client_list).
+- **ESP32-WLAN-Konfiguration**: Die AP-Spalte enthält einen "WLAN konfigurieren"-Button, der einen ESP32-eigenen WiFi-Scan (`womo_wifi_scan_async`) startet. Nach Auswahl + Passwort-Eingabe verbindet der ESP32 sich mit dem gewählten Netzwerk (`womo_wifi_connect`). Credentials werden in NVS (`wifi_cfg` / `known_list`) gespeichert und per RS485 `cmd:"wifi_config"` ans Sensorboard weitergeleitet. Der WiFi-Autoretry (`wifi_autoretry_task`) bevorzugt `womo_wifi_connect_best_known()` mit Fallback auf Kconfig-SSID.
 
 ## Display-Stack (LVGL)
 

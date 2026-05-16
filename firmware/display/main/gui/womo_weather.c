@@ -260,7 +260,7 @@ womo_weather_t* womo_weather_create(lv_obj_t *parent)
     weather->container = lv_obj_create(parent);
     lv_obj_set_size(weather->container, 80, 80);
     // Position 70px from the right edge and 70px from the top edge
-    lv_obj_align(weather->container, LV_ALIGN_TOP_RIGHT, -70, 70);
+    lv_obj_align(weather->container, LV_ALIGN_TOP_RIGHT, -160, 10);
     lv_obj_clear_flag(weather->container, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_bg_opa(weather->container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_opa(weather->container, LV_OPA_TRANSP, 0);

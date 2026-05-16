@@ -282,8 +282,13 @@ esp_err_t womo_wifi_connect(const char *ssid, const char *password, uint8_t max_
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
     wifi_config.sta.pmf_cfg.capable = true;
     wifi_config.sta.pmf_cfg.required = false;
-    
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+
+    esp_err_t cfg_err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+    if (cfg_err != ESP_OK) {
+        ESP_LOGW(TAG, "esp_wifi_set_config fehlgeschlagen (%s) – Verbindungsversuch abgebrochen",
+                 esp_err_to_name(cfg_err));
+        return cfg_err;
+    }
 
     // esp_wifi_start() bei bereits gestartetem WiFi (Reconnect-Versuch) tolerieren
     esp_err_t start_err = esp_wifi_start();
@@ -706,7 +711,12 @@ esp_err_t womo_wifi_connect_async(const char *ssid, const char *password, uint8_
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
     wifi_config.sta.pmf_cfg.capable  = true;
     wifi_config.sta.pmf_cfg.required = false;
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    esp_err_t cfg_err2 = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+    if (cfg_err2 != ESP_OK) {
+        ESP_LOGW(TAG, "esp_wifi_set_config (async) fehlgeschlagen (%s)",
+                 esp_err_to_name(cfg_err2));
+        return cfg_err2;
+    }
 
     esp_err_t start_err = esp_wifi_start();
     if (start_err != ESP_OK && start_err != ESP_ERR_WIFI_CONN && start_err != ESP_ERR_INVALID_STATE) {

@@ -9,16 +9,17 @@
 
 #include "lvgl.h"
 #include "network/womo_wifi.h"
-#include "network/womo_router_uci.h"
 #include <stdbool.h>
 #include <stdint.h>
 
 typedef struct {
-    /* AP / HotSpot */
-    bool ap_enabled;
-    char ap_ssid[33];
-    uint8_t ap_clients;
-    womo_ap_client_info_t ap_client_list[WOMO_AP_CLIENT_MAX];
+    /* ESP32 eigenes WiFi (Hotspot-Spalte) */
+    bool esp_wifi_connected;
+    char esp_wifi_ssid[33];
+    int8_t esp_wifi_rssi;
+    uint8_t esp_wifi_signal_percent;
+    /* Router erreichbar (steuert WLAN/LTE-Spalten) */
+    bool router_reachable;
     /* WLAN (Router STA) */
     bool wifi_enabled;            /**< WiFi-Radio aktiv (UCI disabled=0) */
     bool wifi_connected;
