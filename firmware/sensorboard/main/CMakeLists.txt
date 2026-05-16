@@ -12,6 +12,7 @@ idf_component_register(
         "sensors/bme680_sensor.c"
         "time/rtc_pcf8523.c"
         "sensors/hx711_sensor.c"
+        "sensors/ina226_sensor.c"
         "time/time_sync.c"
         "network/gasbee_ble_client.c"
     INCLUDE_DIRS
@@ -37,6 +38,7 @@ idf_component_register(
         bme280
         hx711
         i2c_bus
+        esp_ina226
         json
         bt
         driver

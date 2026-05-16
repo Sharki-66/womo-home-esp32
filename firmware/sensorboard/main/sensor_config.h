@@ -8,7 +8,7 @@
 
 #include "womo_config.h"
 
-/* WoMoHome ESP32 Sensor Board Configuration
+/* WoMoHome ESP32 Sensor Board Konfiguration
  * Sensor Board Configuration (ESP32-S3 DevKitC-1, N16R8)
  * Stand: Feb 2026 — Pinbelegung gemäß DevKitC-1 Header-Block
  *
@@ -124,6 +124,24 @@
 #define SENSOR_BNO055_AXIS_Z  POSITIVE_X
 
 // ====================================================================================
+// INA226 – Strom-/Leistungsmessung Hauptleitung
+// ====================================================================================
+#define SENSOR_INA226_I2C_ADDR      0x40    // A0=GND, A1=GND
+#define SENSOR_INA226_I2C_CLK_HZ    400000  // Fast-Mode
+
+// Shunt-Widerstand in mΩ (Milliohm) – MUSS an die verbaute Hardware angepasst werden!
+// Beispiel: 1 mΩ (0,001 Ω) bei max. ~80 A (Vshunt_max = 81,92 mV)
+// Formel Vshunt_max = 81,92 mV → I_max = 81,92 mV / R_shunt
+#define SENSOR_INA226_SHUNT_MOHM    1       // TODO: nach Hardwareeinbau anpassen!
+
+// Maximaler Messstrom (A) – bestimmt Current_LSB und damit die Auflösung
+// Current_LSB = MAX_CURRENT / 32768 → kleiner Wert = besser Auflösung, aber geringerer Bereich
+#define SENSOR_INA226_MAX_CURRENT_A 100
+
+// Abfrageintervall des Messtasks
+#define SENSOR_INA226_POLL_INTERVAL_MS 5000U
+
+// ====================================================================================
 // BME Sensor I2C Adressen (für einfache Änderung ohne Bibliotheks-Modifikation)
 // ====================================================================================
 #define SENSOR_BME280_I2C_ADDR      0x77    // BME280/BME260 Adresse
@@ -138,10 +156,14 @@
 #define SENSOR_TANK2_ADC_CHANNEL 1     // GPIO2 (Grauwasser)
 
 // Batterie-Kalibrierung (U_kalibriert = U_gemessen * SCALE + OFFSET_mV
-#define SENSOR_BATT1_CAL_SCALE 1.00f
-#define SENSOR_BATT1_CAL_OFFSET_MV 200
-#define SENSOR_BATT2_CAL_SCALE 1.00f
-#define SENSOR_BATT2_CAL_OFFSET_MV 200
+// Kalibriert 2026-05-03 nach Platinetausch (Q3 defekt):
+//   Batt1: Multimeter 13,0 V → Anzeige 9,8 V vor Neukalibrierung
+//   SCALE = 13000 / (9800 - 200_alt) = 13000 / 9600 = 1.354, OFFSET reset auf 0
+// Für Feinabgleich: SCALE = Multimeter_mV / (Anzeige_mV_ohne_Offset)
+#define SENSOR_BATT1_CAL_SCALE 1.354f
+#define SENSOR_BATT1_CAL_OFFSET_MV 0
+#define SENSOR_BATT2_CAL_SCALE 1.354f
+#define SENSOR_BATT2_CAL_OFFSET_MV 0
 
 // Tank-Kalibrierung (U_kalibriert = U_gemessen * SCALE + OFFSET_mV)
 // Hinweis: 0-1V Sensoren liegen direkt am ADC (kein Spannungsteiler).
@@ -229,6 +251,8 @@
 // Kalibrierung: Sensortemperatur mit Referenz-Thermometer vergleichen und die
 // Differenz hier eintragen (Ref = Sensor − Offset).
 #define SENSOR_BME680_TEMP_OFFSET_C  4.0f   // Typisch 3-6 °C für ESP32-S3 DevKitC
+// Bei Tausch des Innen-BME680 hochzaehlen, damit BSEC keinen alten Baseline-State laedt.
+#define SENSOR_BME680_BSEC_STATE_VERSION 3
 
 // =============================================================================
 // Gas Consumption Calculation (EMA-based rate tracking)
@@ -282,6 +306,7 @@
 #define LOG_LEVEL_BME680         ESP_LOG_WARN    // bme680_app + bme680-Komponente
 #define LOG_LEVEL_BME260         ESP_LOG_WARN    // bme260_app (falls separate Implementierung)
 #define LOG_LEVEL_HX711          ESP_LOG_WARN
+#define LOG_LEVEL_INA226         ESP_LOG_WARN    // ina226 Strom-/Leistungsmessung
 #define LOG_LEVEL_GASBEE_BLE     ESP_LOG_WARN
 #define LOG_LEVEL_I2C_BUS        ESP_LOG_INFO    // temporär INFO für I2C-Scan Diagnose
 #define LOG_LEVEL_PCF8523        ESP_LOG_WARN

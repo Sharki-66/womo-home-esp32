@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "/home/hajo/womo-home-esp32/tools/router-webui"
+    ]
+  }
+}

@@ -154,8 +154,12 @@ iwinfo "$AP_IFACE" assoclist 2>/dev/null > "$ASSOC_TMP"
 # awk: liest assoclist-File + /tmp/dhcp.leases direkt (kein -v Newline-Problem)
 awk -v iface="$AP_IFACE" '
 FNR==NR {
-  # Erste Datei: dhcp.leases einlesen (MAC→Hostname)
-  if (NF>=4 && $4!="*" && $4!="") hof[toupper($2)]=$4
+  # Erste Datei: dhcp.leases einlesen (MAC→Hostname + IP)
+  if (NF>=4) {
+    umac=toupper($2)
+    ip[umac]=$3
+    if ($4!="*" && $4!="") hof[umac]=$4
+  }
   next
 }
 # Zweite Datei: assoclist parsen
@@ -165,8 +169,9 @@ FNR==NR {
   mac=$1; sig=$2
   umac=toupper(mac)
   host = (umac in hof) ? hof[umac] : mac
+  clientip = (umac in ip) ? ip[umac] : ""
   gsub(/"/, "", host)
-  entries[++n] = sprintf("{\"mac\":\"%s\",\"host\":\"%s\",\"signal\":%s}", mac, host, sig)
+  entries[++n] = sprintf("{\"mac\":\"%s\",\"host\":\"%s\",\"ip\":\"%s\",\"signal\":%s}", mac, host, clientip, sig)
 }
 END {
   printf "{\"iface\":\"%s\",\"clients\":[", iface
@@ -184,87 +189,137 @@ $SSH 'cat > /etc/womo/poll.sh && chmod +x /etc/womo/poll.sh' << 'POLLSCRIPT'
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 export PATH
 TMP=$(mktemp /tmp/womo_poll_XXXXXX)
-trap 'rm -f "$TMP"' EXIT
+T_GPS=$(mktemp); T_LTE=$(mktemp)
+trap 'rm -f "$TMP" "$T_GPS" "$T_LTE"' EXIT
 
-# ── AP ─────────────────────────────────────────────────
-AP_SSID=$(uci get wireless.@wifi-iface[0].ssid 2>/dev/null | tr -d '"\n\r\\')
-AP_CHAN=$(uci get wireless.radio0.channel 2>/dev/null | tr -d '\n\r')
-AP_DIS=$(uci get wireless.@wifi-iface[0].disabled 2>/dev/null | tr -d '\n\r')
+# ── UCI (Config, kein Hardware-IO – sofort) ──────────────────────────
+AP_SSID=$(uci get wireless.@wifi-iface[0].ssid     2>/dev/null | tr -d '"\n\r\\')
+AP_CHAN=$( uci get wireless.radio0.channel          2>/dev/null | tr -d '\n\r')
+AP_DIS=$(  uci get wireless.@wifi-iface[0].disabled 2>/dev/null | tr -d '\n\r')
 AP_EN=$([ "$AP_DIS" = "1" ] && echo 0 || echo 1)
-AP_IFACE=$(iwinfo 2>/dev/null | awk 'NR==1{print $1}')
-for d in $(iwinfo 2>/dev/null | awk 'NR==1{print $1}'); do
-  if iwinfo "$d" info 2>/dev/null | grep -qi 'mode.*master'; then AP_IFACE="$d"; break; fi
-done
-AP_IFACE=${AP_IFACE:-wlan0}
-
-AP_CNT=$(iwinfo "$AP_IFACE" assoclist 2>/dev/null | grep -cE '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' || echo 0)
-
-# ── WLAN STA ───────────────────────────────────────────
-STA_DIS=0
+LTE_DIS=$( uci get network.mob1s1a1.disabled        2>/dev/null | tr -d '\n\r')
+STA_EN=1
 for i in 0 1 2 3; do
-  MODE=$(uci get wireless.@wifi-iface[$i].mode 2>/dev/null)
-  if [ "$MODE" = "sta" ]; then
-    STA_DIS=$(uci get wireless.@wifi-iface[$i].disabled 2>/dev/null | tr -d '\n\r')
-    break
-  fi
-done
-STA_EN=$([ "$STA_DIS" = "1" ] && echo 0 || echo 1)
-STA_SSID=""; STA_SIG=""; STA_BSSID=""; STA_CHAN=""; STA_CON=0
-for d in $(iwinfo 2>/dev/null | awk '{print $1}'); do
-  INFO=$(iwinfo "$d" info 2>/dev/null)
-  if echo "$INFO" | grep -qi 'mode.*client'; then
-    STA_SSID=$(echo "$INFO" | awk -F'"' '/ESSID/{if(NF>=3){print $2}else{print ""}; exit}')
-    STA_SIG=$(echo "$INFO" | grep 'Signal' | grep -oE '[-0-9]+ dBm' | grep -oE '[-0-9]+' | head -1)
-    STA_BSSID=$(echo "$INFO" | grep 'Access Point' | grep -oE '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' | head -1)
-    STA_CHAN=$(echo "$INFO" | grep 'Channel' | grep -oE '[0-9]+' | head -1)
-    [ -n "$STA_SSID" ] && STA_CON=1
-    break
-  fi
+  [ "$(uci get "wireless.@wifi-iface[$i].mode" 2>/dev/null)" = "sta" ] || continue
+  DIS=$(uci get "wireless.@wifi-iface[$i].disabled" 2>/dev/null | tr -d '\n\r')
+  STA_EN=$([ "$DIS" = "1" ] && echo 0 || echo 1)
+  break
 done
 
-# ── GPS ───────────────────────────────────────────────
-GPS_STAT=$(gpsctl -s  2>/dev/null | head -1 | tr -d '\n\r')
-GPS_LAT=$(gpsctl -i  2>/dev/null | head -1 | tr -d '\n\r')
-GPS_LON=$(gpsctl -x  2>/dev/null | head -1 | tr -d '\n\r')
-GPS_ALT=$(gpsctl -a  2>/dev/null | head -1 | tr -d '\n\r')
-GPS_SPD=$(gpsctl -v  2>/dev/null | head -1 | tr -d '\n\r')
-GPS_SAT=$(gpsctl -p  2>/dev/null | head -1 | tr -d '\n\r')
-# Fix ableiten: status-Flag oder Koordinaten als Fallback
+# ── Parallel: GPS + LTE gleichzeitig (Hardware-IO, teuerste Ops) ─────
+
+# GPS: ubus liest gpsd-Cache (1 Aufruf statt 6×gpsctl)
+# Fallback: 6×gpsctl parallel in Subshells
+{
+  GPS_J=$(ubus call gpsd position 2>/dev/null)
+  if [ -n "$GPS_J" ] && [ "$GPS_J" != "{}" ]; then
+    printf '%s\n' "$GPS_J" > "$T_GPS"
+  else
+    T1=$(mktemp); T2=$(mktemp); T3=$(mktemp)
+    T4=$(mktemp); T5=$(mktemp); T6=$(mktemp)
+    gpsctl -i 2>/dev/null > "$T1" & gpsctl -x 2>/dev/null > "$T2" &
+    gpsctl -a 2>/dev/null > "$T3" & gpsctl -v 2>/dev/null > "$T4" &
+    gpsctl -p 2>/dev/null > "$T5" & gpsctl -s 2>/dev/null > "$T6" &
+    wait
+    FIX=$([ "$(cat "$T6" | tr -d '\n\r')" = "0" ] && echo true || echo false)
+    printf '{"fix":%s,"latitude":"%s","longitude":"%s","altitude":"%s","speed":"%s","satellites":"%s"}\n' \
+      "$FIX" "$(cat "$T1" | tr -d '\n\r')" "$(cat "$T2" | tr -d '\n\r')" \
+      "$(cat "$T3" | tr -d '\n\r')" "$(cat "$T4" | tr -d '\n\r')" "$(cat "$T5" | tr -d '\n\r')" \
+      > "$T_GPS"
+    rm -f "$T1" "$T2" "$T3" "$T4" "$T5" "$T6"
+  fi
+} &
+
+# LTE: gsmctl sequential (Modem-Seriellport verträgt keinen parallelen Zugriff)
+# läuft aber parallel zum GPS-Block oben
+{
+  QOUT=$(gsmctl -q 2>/dev/null)
+  LTE_OP=$(  gsmctl -o              2>/dev/null | tr -d '\n\r')
+  LTE_TYPE=$(gsmctl -t              2>/dev/null | tr -d '\n\r')
+  LTE_SIM=$( gsmctl -A 'AT+QUIMSLOT?' 2>/dev/null | grep -oE '[12]' | head -1)
+  printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
+    "$LTE_OP" "$LTE_TYPE" \
+    "$(echo "$QOUT" | awk '/RSSI:/{match($0,/-?[0-9]+/);print substr($0,RSTART,RLENGTH);exit}')" \
+    "$(echo "$QOUT" | awk '/RSRP:/{match($0,/-?[0-9]+/);print substr($0,RSTART,RLENGTH);exit}')" \
+    "$(echo "$QOUT" | awk '/SINR:/{match($0,/-?[0-9]+/);print substr($0,RSTART,RLENGTH);exit}')" \
+    "$LTE_SIM" > "$T_LTE"
+} &
+
+# ── WiFi + AP (iwinfo, bekannte Interface-Namen direkt ansprechen) ────
+AP_IFACE="" STA_IFACE=""
+for d in wlan0-1 wlan0 wlan0-2 wlan1-1 wlan1 wlan1-2; do
+  INFO=$(iwinfo "$d" info 2>/dev/null) || continue
+  if   echo "$INFO" | grep -qi 'mode.*master'; then AP_IFACE="$d"
+  elif echo "$INFO" | grep -qi 'mode.*client'; then STA_IFACE="$d"; fi
+done
+AP_CNT=0
+[ -n "$AP_IFACE" ] && AP_CNT=$(iwinfo "$AP_IFACE" assoclist 2>/dev/null \
+  | grep -cE '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' || echo 0)
+STA_SSID="" STA_SIG="" STA_BSSID="" STA_CHAN="" STA_CON=0
+if [ -n "$STA_IFACE" ]; then
+  INFO=$(iwinfo "$STA_IFACE" info 2>/dev/null)
+  STA_SSID=$(echo "$INFO" | awk -F'"' '/ESSID/{if(NF>=3){print $2};exit}')
+  STA_SIG=$(  echo "$INFO" | grep 'Signal'       | grep -oE '[-0-9]+ dBm'                         | grep -oE '[-0-9]+' | head -1)
+  STA_BSSID=$(echo "$INFO" | grep 'Access Point' | grep -oE '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' | head -1)
+  STA_CHAN=$( echo "$INFO" | grep 'Channel'      | grep -oE '[0-9]+'                              | head -1)
+  [ -n "$STA_SSID" ] && STA_CON=1
+fi
+
+# ── Warten bis GPS + LTE fertig ───────────────────────────────────────
+wait
+
+# ── GPS parsen: ubus→latitude/longitude, Fallback→lat/lon ────────────
+GPS_J=$(cat "$T_GPS" 2>/dev/null)
+GPS_LAT=$(echo "$GPS_J" | jsonfilter -e '@.latitude'   2>/dev/null | tr -d '\n\r')
+GPS_LON=$(echo "$GPS_J" | jsonfilter -e '@.longitude'  2>/dev/null | tr -d '\n\r')
+[ -z "$GPS_LAT" ] && GPS_LAT=$(echo "$GPS_J" | jsonfilter -e '@.lat' 2>/dev/null | tr -d '"\n\r')
+[ -z "$GPS_LON" ] && GPS_LON=$(echo "$GPS_J" | jsonfilter -e '@.lon' 2>/dev/null | tr -d '"\n\r')
+GPS_ALT=$(echo "$GPS_J" | jsonfilter -e '@.altitude'   2>/dev/null | tr -d '\n\r')
+[ -z "$GPS_ALT" ] && GPS_ALT=$(echo "$GPS_J" | jsonfilter -e '@.alt' 2>/dev/null | tr -d '"\n\r')
+GPS_SPD=$(echo "$GPS_J" | jsonfilter -e '@.speed'      2>/dev/null | tr -d '\n\r')
+GPS_SAT=$(echo "$GPS_J" | jsonfilter -e '@.satellites' 2>/dev/null | tr -d '\n\r')
+GPS_FIX_R=$(echo "$GPS_J" | jsonfilter -e '@.fix_status' 2>/dev/null | tr -d '\n\r')
 GPS_FIX="none"
-if [ "$GPS_STAT" = "0" ]; then
-  GPS_FIX="fix"
-elif [ -n "$GPS_LAT" ] && [ "$GPS_LAT" != "0" ] && [ "$GPS_LAT" != "0.000000" ] \
-   && [ -n "$GPS_LON" ] && [ "$GPS_LON" != "0" ] && [ "$GPS_LON" != "0.000000" ]; then
+if [ "$GPS_FIX_R" = "1" ] \
+  || ([ -n "$GPS_LAT" ] && [ "$GPS_LAT" != "0" ] && [ "$GPS_LAT" != "0.000000" ] \
+   && [ -n "$GPS_LON" ] && [ "$GPS_LON" != "0" ] && [ "$GPS_LON" != "0.000000" ]); then
   GPS_FIX="fix"
 fi
 
-# ── LTE ────────────────────────────────────────────────
-LTE_OP=$(gsmctl -o 2>/dev/null | tr -d '\n\r')
-LTE_TYPE=$(gsmctl -t 2>/dev/null | tr -d '\n\r')
-LTE_DIS=$(uci get network.mob1s1a1.disabled 2>/dev/null | tr -d '\n\r')
-QOUT=$(gsmctl -q 2>/dev/null)
-LTE_RSSI=$(echo "$QOUT" | awk '/RSSI:/{match($0,/-?[0-9]+/); print substr($0,RSTART,RLENGTH); exit}')
-LTE_RSRP=$(echo "$QOUT" | awk '/RSRP:/{match($0,/-?[0-9]+/); print substr($0,RSTART,RLENGTH); exit}')
-LTE_SINR=$(echo "$QOUT" | awk '/SINR:/{match($0,/-?[0-9]+/); print substr($0,RSTART,RLENGTH); exit}')
+# ── LTE parsen ────────────────────────────────────────────────────────
+LTE_OP=$(      sed -n '1p' "$T_LTE")
+LTE_TYPE=$(    sed -n '2p' "$T_LTE")
+LTE_RSSI=$(    sed -n '3p' "$T_LTE")
+LTE_RSRP=$(    sed -n '4p' "$T_LTE")
+LTE_SINR=$(    sed -n '5p' "$T_LTE")
+LTE_SIMSLOT=$( sed -n '6p' "$T_LTE")
 
-# JSON-safe String-Escaping: backslash und quote
+# ── JSON atomar schreiben ─────────────────────────────────────────────
 json_str() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-
-# ── JSON atomar schreiben ──────────────────────────────
 TS=$(date +%s)
-AP_SSID_J=$(json_str "$AP_SSID")
-STA_SSID_J=$(json_str "$STA_SSID")
-LTE_OP_J=$(json_str "$LTE_OP")
-LTE_TYPE_J=$(json_str "$LTE_TYPE")
-GPS_FIX_J=$(json_str "$GPS_FIX")
-printf '{"ts":%s,"ap":{"enabled":%s,"ssid":"%s","chan":"%s","cnt":%s},"wifi":{"enabled":%s,"ssid":"%s","signal":"%s","bssid":"%s","chan":"%s","connected":%s},"lte":{"op":"%s","type":"%s","rssi":"%s","rsrp":"%s","sinr":"%s","disabled":"%s"},"gps":{"fix":"%s","lat":"%s","lon":"%s","alt":"%s","speed":"%s","sats":"%s"}}\n' \
-  "$TS" "$AP_EN" "$AP_SSID_J" "$AP_CHAN" "${AP_CNT:-0}" \
-  "$STA_EN" "$STA_SSID_J" "${STA_SIG:-}" "${STA_BSSID:-}" "${STA_CHAN:-}" "$STA_CON" \
-  "$LTE_OP_J" "$LTE_TYPE_J" "${LTE_RSSI:--}" "${LTE_RSRP:--}" "${LTE_SINR:--}" "${LTE_DIS:-0}" \
-  "$GPS_FIX_J" "${GPS_LAT:-}" "${GPS_LON:-}" "${GPS_ALT:-}" "${GPS_SPD:-}" "${GPS_SAT:-}" \
+printf '{"ts":%s,"ap":{"enabled":%s,"ssid":"%s","chan":"%s","cnt":%s},"wifi":{"enabled":%s,"ssid":"%s","signal":"%s","bssid":"%s","chan":"%s","connected":%s},"lte":{"op":"%s","type":"%s","rssi":"%s","rsrp":"%s","sinr":"%s","disabled":"%s","simslot":"%s"},"gps":{"fix":"%s","lat":"%s","lon":"%s","alt":"%s","speed":"%s","sats":"%s"}}\n' \
+  "$TS" "$AP_EN" "$(json_str "$AP_SSID")" "$AP_CHAN" "${AP_CNT:-0}" \
+  "$STA_EN" "$(json_str "$STA_SSID")" "${STA_SIG:-}" "${STA_BSSID:-}" "${STA_CHAN:-}" "$STA_CON" \
+  "$(json_str "$LTE_OP")" "$(json_str "$LTE_TYPE")" "${LTE_RSSI:--}" "${LTE_RSRP:--}" "${LTE_SINR:--}" "${LTE_DIS:-0}" "${LTE_SIMSLOT:-}" \
+  "$GPS_FIX" "${GPS_LAT:-}" "${GPS_LON:-}" "${GPS_ALT:-}" "${GPS_SPD:-}" "${GPS_SAT:-}" \
   > "$TMP" && mv "$TMP" /etc/womo/status.json && chmod 644 /etc/womo/status.json
 POLLSCRIPT
 echo "  → /etc/womo/poll.sh"
+
+# CGI-simswitch: wechselt zur nächsten SIM via sim_switch
+$SSH 'cat > /etc/womo/cgi-bin/simswitch && chmod +x /etc/womo/cgi-bin/simswitch' << 'CGISCRIPT'
+#!/bin/sh
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH
+printf "Content-Type: application/json\r\n\r\n"
+# Aktuelle SIM ermitteln
+CUR=$(ubus call sim.switch get 2>/dev/null | jsonfilter -e '@.sim' 2>/dev/null || \
+      gsmctl -A 'AT+QUIMSLOT?' 2>/dev/null | grep -oE '[12]' | head -1 || echo '1')
+if [ "$CUR" = "1" ]; then NEXT="sim2"; else NEXT="sim1"; fi
+/usr/bin/sim_switch "$NEXT" > /dev/null 2>&1 &
+printf '{"ok":true,"msg":"Wechsel zu %s ausgelöst"}\n' "$NEXT"
+CGISCRIPT
+echo "  → /etc/womo/cgi-bin/simswitch (SIM-Switch)"
 
 # cgi-bin/poll: führt poll.sh aus und liefert status.json zurück
 $SSH 'cat > /etc/womo/cgi-bin/poll && chmod +x /etc/womo/cgi-bin/poll' << 'CGISCRIPT'

@@ -16,9 +16,11 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
 .pill{border-radius:22px;border:none;outline:none;display:flex;align-items:center;justify-content:center}
 .sz48{width:48px;height:48px}
 .sz36{width:36px;height:36px}
-.bg-grey{background:#9E9E9E;box-shadow:inset 0 0 0 6px #1A1A1A,inset 0 0 0 4px #C8C8C8}
+.bg-grey{background:#D3D3D3;box-shadow:inset 0 0 0 3px #D3D3D3,inset 0 0 0 5px #111}
+.du{color:#333!important}
 .f10{font-size:10px}.f11{font-size:11px}.f12{font-size:12px}.f13{font-size:13px}.f14{font-size:14px}
 .f16{font-size:16px}.f18{font-size:18px}.f20{font-size:20px;font-weight:bold}
+svg text{font-family:'Segoe UI',Helvetica,Arial,sans-serif}
 .right{text-align:right}.center{text-align:center}
 
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);
@@ -43,7 +45,6 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
 .wifi-set-row label{width:80px;font-size:13px}
 .wifi-set-row input{flex:1;background:#2a2a3e;color:#fff;border:1px solid #555;
                     border-radius:6px;padding:5px 8px;font-size:13px}
-#dim-overlay{display:none;position:absolute;inset:0;background:#000;z-index:50;cursor:pointer}
 #imu-area{cursor:pointer;position:absolute;left:355px;top:268px;width:190px;height:60px;
           border-radius:8px;transition:background 0.2s}
 #imu-area:active{background:rgba(255,200,0,0.15)}
@@ -55,10 +56,22 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
 <img id="ducato-img" src="/Ducato-grau.png"
      style="position:absolute;top:0;left:0;width:800px;height:480px;pointer-events:none">
 
-<div id="dim-overlay" title="Tippen zum Einschalten"></div>
+<!-- Indoor Air (Windschutzscheibe Ducato) -->
+<div class="abs" style="left:315px;top:135px;width:390px;padding:17px 10px 17px 10px;pointer-events:none;color:#fff">
+  <div style="font-size:13px;font-weight:bold;margin-bottom:4px;letter-spacing:0.3px;margin-left:168px">Luftwerte innen</div>
+  <div style="display:flex;gap:8px;margin-bottom:2px;margin-left:179px">
+    <span class="f14" style="font-weight:bold" id="rh-in">--.-- %</span>
+    <span class="f14" style="font-weight:bold" id="temp-in">--.- °C</span>
+  </div>
+  <div class="f12" style="color:#F97316;margin-left:189px" id="bvoc-in">bVOC --.- ppm</div>
+  <div style="display:flex;gap:8px;margin-left:200px">
+    <span class="f12" id="co2-in">CO2 ---- ppm</span>
+    <span class="f12" id="iaq-in">IAQ --</span>
+  </div>
+</div>
 
 <!-- Power -->
-<div class="abs cir sz48 bg-grey" id="btn-pwr" style="left:10px;top:10px">
+<div class="abs cir sz48 bg-grey" id="btn-pwr" style="left:10px;top:422px">
   <svg width="28" height="28" viewBox="0 0 28 28">
     <path id="pwr-arc" d="M8 6 A9 9 0 1 0 20 6" fill="none" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round"/>
     <line id="pwr-line" x1="14" y1="2" x2="14" y2="14" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round"/>
@@ -79,13 +92,8 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
 </div>
 
 <!-- Settings Dots -->
-<div class="abs pill bg-grey"
-     style="left:204px;top:24px;width:44px;height:32px;flex-direction:row;
-            display:flex;align-items:center;justify-content:center;gap:5px;
-            border-radius:22px;cursor:pointer" id="btn-settings" title="Einstellungen">
-  <div style="width:6px;height:6px;border-radius:50%;background:#444"></div>
-  <div style="width:6px;height:6px;border-radius:50%;background:#444"></div>
-  <div style="width:6px;height:6px;border-radius:50%;background:#444"></div>
+<div class="abs cir sz36 bg-grey" style="left:10px;top:373px;cursor:pointer" id="btn-settings" title="Einstellungen">
+  <span style="font-size:26px;color:#444">⚙</span>
 </div>
 
 <div class="abs f20 center" style="left:0;top:8px;width:800px;pointer-events:none">WoMo Home Control</div>
@@ -98,130 +106,156 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
 <div class="abs f14 right" style="right:10px;top:87px" id="temp-out">--.- °C</div>
 <!-- Wetter-Widget (Open-Meteo + Meteocons) -->
 <div id="weather-icon" class="abs" style="right:156px;top:12px;width:56px;height:56px;pointer-events:none"></div>
-<div class="abs f11 center" style="right:152px;top:70px;width:64px;pointer-events:none;opacity:0.9" id="weather-temp"></div>
 
 
-<!-- Indoor Air Panel (Windschutzscheibe Ducato) -->
-<div class="abs" style="left:470px;top:95px;width:220px;background:rgba(0,0,60,0.55);border-radius:10px;padding:7px 10px;pointer-events:none">
-  <div style="font-size:13px;font-weight:bold;margin-bottom:4px;letter-spacing:0.3px">Luftwerte innen</div>
-  <div style="display:flex;gap:8px;margin-bottom:2px">
-    <span class="f14" style="font-weight:bold" id="rh-in">--.-- %</span>
-    <span class="f14" style="font-weight:bold" id="temp-in">--.- °C</span>
-  </div>
-  <div class="f12" style="color:#F97316" id="bvoc-in">bVOC --.- ppm</div>
-  <div style="display:flex;gap:8px">
-    <span class="f12" id="co2-in">CO2 ---- ppm</span>
-    <span class="f12" id="iaq-in">IAQ --</span>
-  </div>
-</div>
 
 <!-- IMU Labels (screen-absolut, außerhalb des Klick-Overlays) -->
-<div class="abs f14" style="left:365px;top:275px" id="imu-pitch">Pitch: --.-°</div>
-<div class="abs f14" style="left:365px;top:293px" id="imu-roll">Roll : --.-°</div>
-<div class="abs f14" style="left:365px;top:311px" id="imu-hdg">-- (---°)</div>
+<div class="abs f14 du" style="left:365px;top:275px" id="imu-pitch">Pitch: --.-°</div>
+<div class="abs f14 du" style="left:365px;top:293px" id="imu-roll">Roll : --.-°</div>
+<div class="abs f14 du" style="left:365px;top:311px" id="imu-hdg">-- (---°)</div>
 <!-- IMU Klickfläche (transparentes Overlay über den Labels) -->
 <div id="imu-area"></div>
 
 <!-- Tank info -->
-<div class="abs f12 right" style="left:10px;top:120px;width:110px;line-height:16px" id="tank-info">--</div>
+<div class="abs f12 right du" style="left:5px;top:120px;width:110px;line-height:16px" id="tank-info">--</div>
 
 <!-- Fresh Water Tank -->
-<div class="abs" style="left:125px;top:110px;width:72px">
-  <svg width="72" height="100" viewBox="0 0 72 100" style="display:block">
-    <rect x="20" y="3" width="16" height="10" rx="3" fill="#6C737F"/>
-    <rect x="10" y="13" width="46" height="84" rx="10" fill="#D9DDE3" stroke="#8A929E" stroke-width="2"/>
-    <clipPath id="clip-t1"><rect x="10" y="13" width="46" height="84" rx="10"/></clipPath>
-    <rect id="t1-fill" x="10" y="97" width="46" height="0" fill="#6AA9FF" clip-path="url(#clip-t1)"/>
-    <line x1="6" y1="27" x2="12" y2="27" stroke="#888" stroke-width="1.5"/>
-    <line x1="6" y1="55" x2="12" y2="55" stroke="#888" stroke-width="1.5"/>
-    <line x1="6" y1="83" x2="12" y2="83" stroke="#888" stroke-width="1.5"/>
-    <text id="t1-pct" x="33" y="62" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff" style="text-shadow:0 1px 2px rgba(0,0,0,0.7)">--%</text>
+<div class="abs" style="left:115px;top:110px;width:72px">
+  <svg width="72" height="95" viewBox="0 0 72 95" style="display:block">
+    <rect x="20" y="3" width="16" height="10" rx="0" fill="#222"/>
+    <rect id="t1-body" x="10" y="13" width="46" height="76" rx="4" fill="#D9DDE3" stroke="#8A929E" stroke-width="2"/>
+    <clipPath id="clip-t1"><rect x="10" y="13" width="46" height="76" rx="4"/></clipPath>
+    <rect id="t1-fill" x="10" y="89" width="46" height="0" fill="#6AA9FF" clip-path="url(#clip-t1)"/>
+    <line x1="10" y1="32" x2="16" y2="32" stroke="#444" stroke-width="1.5"/>
+    <line x1="10" y1="51" x2="22" y2="51" stroke="#444" stroke-width="1.5"/>
+    <line x1="10" y1="70" x2="16" y2="70" stroke="#444" stroke-width="1.5"/>
+    <text id="t1-pct" x="33" y="56" text-anchor="middle" font-size="14" fill="#333">--%</text>
   </svg>
-  <div class="f12 center" style="margin-top:2px;text-shadow:0 0 4px rgba(0,0,0,0.8)">Frisch</div>
+  <div class="f12 center du" style="margin-top:2px">Frisch</div>
 </div>
 
 <!-- Grey Water Tank -->
-<div class="abs" style="left:195px;top:110px;width:72px">
-  <svg width="72" height="100" viewBox="0 0 72 100" style="display:block">
-    <rect x="20" y="3" width="16" height="10" rx="3" fill="#6C737F"/>
-    <rect x="10" y="13" width="46" height="84" rx="10" fill="#D9DDE3" stroke="#8A929E" stroke-width="2"/>
-    <clipPath id="clip-t2"><rect x="10" y="13" width="46" height="84" rx="10"/></clipPath>
-    <rect id="t2-fill" x="10" y="97" width="46" height="0" fill="#70849B" clip-path="url(#clip-t2)"/>
-    <line x1="6" y1="27" x2="12" y2="27" stroke="#888" stroke-width="1.5"/>
-    <line x1="6" y1="55" x2="12" y2="55" stroke="#888" stroke-width="1.5"/>
-    <line x1="6" y1="83" x2="12" y2="83" stroke="#888" stroke-width="1.5"/>
-    <text id="t2-pct" x="33" y="62" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff" style="text-shadow:0 1px 2px rgba(0,0,0,0.7)">--%</text>
+<div class="abs" style="left:200px;top:110px;width:72px">
+  <svg width="72" height="95" viewBox="0 0 72 95" style="display:block;overflow:visible">
+    <rect id="t2-body" x="10" y="13" width="46" height="76" rx="4" fill="#D9DDE3" stroke="#8A929E" stroke-width="2"/>
+    <clipPath id="clip-t2"><rect x="10" y="13" width="46" height="76" rx="4"/></clipPath>
+    <rect id="t2-fill" x="10" y="89" width="46" height="0" fill="#70849B" clip-path="url(#clip-t2)"/>
+    <rect x="46" y="80" width="20" height="9" rx="0" fill="#222"/>
+    <line x1="10" y1="32" x2="16" y2="32" stroke="#444" stroke-width="1.5"/>
+    <line x1="10" y1="51" x2="22" y2="51" stroke="#444" stroke-width="1.5"/>
+    <line x1="10" y1="70" x2="16" y2="70" stroke="#444" stroke-width="1.5"/>
+    <text id="t2-pct" x="33" y="56" text-anchor="middle" font-size="14" fill="#333">--%</text>
   </svg>
-  <div class="f12 center" style="margin-top:2px;text-shadow:0 0 4px rgba(0,0,0,0.8)">Grau</div>
+  <div class="f12 center du" style="margin-top:2px">Grau</div>
 </div>
 
 <!-- Shore Power -->
-<div class="abs cir sz48" id="shore-btn" style="left:282px;top:151px;background:#555">
-  <svg width="26" height="26" viewBox="0 0 26 26">
+<div class="abs cir sz36 bg-grey" id="shore-btn" style="left:288px;top:157px">
+  <svg width="22" height="22" viewBox="0 0 26 26">
     <polyline points="13,2 8,13 13,13 13,24 18,13 13,13"
-              fill="#FFD700" stroke="#FFD700" stroke-width="1.5" stroke-linejoin="round"/>
+              fill="#333" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/>
   </svg>
 </div>
-<div class="abs f12 center" style="left:270px;top:204px;width:72px" id="shore-cap">220 V</div>
+<div class="abs f12 center du" style="left:270px;top:204px;width:72px" id="shore-cap">220 V</div>
 
 <!-- Gas Info -->
-<div class="abs f12 right" style="left:10px;top:255px;width:114px;line-height:16px" id="gas-info">--</div>
+<div class="abs f12 right du" style="left:5px;top:255px;width:114px;line-height:16px" id="gas-info">--</div>
 
 <!-- Gas Bottle A -->
-<div class="abs" style="left:130px;top:230px;width:76px;cursor:pointer" id="gas-a-wrap">
-  <svg width="76" height="120" viewBox="0 0 76 120" style="display:block">
-    <rect x="22" y="2" width="18" height="20" rx="6" fill="#E32636"/>
-    <rect x="9" y="20" width="52" height="81" rx="18" fill="#D3D3D3" stroke="#A9A9A9" stroke-width="1"/>
-    <rect x="4" y="101" width="62" height="18" rx="6" fill="#A0A0A0"/>
-    <clipPath id="clip-ga"><rect x="9" y="20" width="52" height="81" rx="18"/></clipPath>
-    <rect id="ga-fill" x="9" y="101" width="52" height="0" fill="#FFD700" clip-path="url(#clip-ga)"/>
-    <line x1="61" y1="36" x2="66" y2="36" stroke="#666" stroke-width="1"/>
-    <line x1="61" y1="60" x2="66" y2="60" stroke="#666" stroke-width="1"/>
-    <line x1="61" y1="84" x2="66" y2="84" stroke="#666" stroke-width="1"/>
-    <text id="ga-pct" x="35" y="114" text-anchor="middle" font-size="11" font-weight="bold" fill="#333">--%</text>
+<div class="abs" style="left:120px;top:230px;width:76px;cursor:pointer" id="gas-a-wrap">
+  <svg width="76" height="115" viewBox="0 0 76 115" style="display:block">
+    <defs>
+      <linearGradient id="gas-grad-ga-body" x1="0" y1="0" x2="1" y2="0">
+        <stop id="ga-bg1" offset="0%" stop-color="#E8E8E8"/>
+        <stop id="ga-bg2" offset="100%" stop-color="#B0B0B0"/>
+      </linearGradient>
+      <linearGradient id="gas-grad-ga-foot" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#E8E8E8"/>
+        <stop offset="100%" stop-color="#B0B0B0"/>
+      </linearGradient>
+    </defs>
+    <rect x="26" y="2" width="18" height="20" rx="6" fill="#E32636"/>
+    <rect id="ga-body" x="9" y="20" width="52" height="73" rx="18" fill="url(#gas-grad-ga-body)" stroke="#A9A9A9" stroke-width="1"/>
+    <clipPath id="clip-ga"><rect x="9" y="20" width="52" height="73" rx="18"/></clipPath>
+    <rect id="ga-fill" x="9" y="93" width="52" height="0" fill="#FFD700" clip-path="url(#clip-ga)"/>
+    <rect x="9" y="93" width="52" height="18" rx="9" fill="url(#gas-grad-ga-foot)" stroke="#A9A9A9" stroke-width="1"/>
+    <line x1="9" y1="38" x2="14" y2="38" stroke="#444" stroke-width="1.5"/>
+    <line x1="9" y1="57" x2="19" y2="57" stroke="#444" stroke-width="1.5"/>
+    <line x1="9" y1="75" x2="14" y2="75" stroke="#444" stroke-width="1.5"/>
+    <text id="ga-pct" x="35" y="106" text-anchor="middle" font-size="11" fill="#333">--%</text>
   </svg>
-  <div class="f12 center" style="margin-top:2px;text-shadow:0 0 4px rgba(0,0,0,0.8)" id="gas-a-lbl">Vorne</div>
+  <div class="f12 center du" style="margin-top:2px" id="gas-a-lbl">Vorne</div>
 </div>
 
 <!-- Gas Bottle B -->
-<div class="abs" style="left:207px;top:230px;width:76px;cursor:pointer" id="gas-b-wrap">
-  <svg width="76" height="120" viewBox="0 0 76 120" style="display:block">
-    <rect x="22" y="2" width="18" height="20" rx="6" fill="#E32636"/>
-    <rect x="9" y="20" width="52" height="81" rx="18" fill="#D3D3D3" stroke="#A9A9A9" stroke-width="1"/>
-    <rect x="4" y="101" width="62" height="18" rx="6" fill="#A0A0A0"/>
-    <clipPath id="clip-gb"><rect x="9" y="20" width="52" height="81" rx="18"/></clipPath>
-    <rect id="gb-fill" x="9" y="101" width="52" height="0" fill="#FFD700" clip-path="url(#clip-gb)"/>
-    <line x1="61" y1="36" x2="66" y2="36" stroke="#666" stroke-width="1"/>
-    <line x1="61" y1="60" x2="66" y2="60" stroke="#666" stroke-width="1"/>
-    <line x1="61" y1="84" x2="66" y2="84" stroke="#666" stroke-width="1"/>
-    <text id="gb-pct" x="35" y="114" text-anchor="middle" font-size="11" font-weight="bold" fill="#333">--%</text>
+<div class="abs" style="left:197px;top:230px;width:76px;cursor:pointer" id="gas-b-wrap">
+  <svg width="76" height="115" viewBox="0 0 76 115" style="display:block">
+    <defs>
+      <linearGradient id="gas-grad-gb-body" x1="0" y1="0" x2="1" y2="0">
+        <stop id="gb-bg1" offset="0%" stop-color="#E8E8E8"/>
+        <stop id="gb-bg2" offset="100%" stop-color="#B0B0B0"/>
+      </linearGradient>
+      <linearGradient id="gas-grad-gb-foot" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#E8E8E8"/>
+        <stop offset="100%" stop-color="#B0B0B0"/>
+      </linearGradient>
+    </defs>
+    <rect x="26" y="2" width="18" height="20" rx="6" fill="#E32636"/>
+    <rect id="gb-body" x="9" y="20" width="52" height="73" rx="18" fill="url(#gas-grad-gb-body)" stroke="#A9A9A9" stroke-width="1"/>
+    <clipPath id="clip-gb"><rect x="9" y="20" width="52" height="73" rx="18"/></clipPath>
+    <rect id="gb-fill" x="9" y="93" width="52" height="0" fill="#FFD700" clip-path="url(#clip-gb)"/>
+    <rect x="9" y="93" width="52" height="18" rx="9" fill="url(#gas-grad-gb-foot)" stroke="#A9A9A9" stroke-width="1"/>
+    <line x1="9" y1="38" x2="14" y2="38" stroke="#444" stroke-width="1.5"/>
+    <line x1="9" y1="57" x2="19" y2="57" stroke="#444" stroke-width="1.5"/>
+    <line x1="9" y1="75" x2="14" y2="75" stroke="#444" stroke-width="1.5"/>
+    <text id="gb-pct" x="35" y="106" text-anchor="middle" font-size="11" fill="#333">--%</text>
   </svg>
-  <div class="f12 center" style="margin-top:2px;text-shadow:0 0 4px rgba(0,0,0,0.8)">Hinten</div>
+  <div class="f12 center du" style="margin-top:2px">Hinten</div>
 </div>
 
 <div class="abs f14" id="malibu-logo"
      style="left:490px;top:318px;font-style:italic;font-weight:bold;letter-spacing:1px;opacity:0.4">malibu</div>
 
 <!-- Board Battery -->
-<div class="abs" style="left:415px;top:355px;width:72px;height:38px;border-radius:8px;border:2px solid #aaa;background:#D3D3D3;display:flex;align-items:center;justify-content:center" id="bat-board-box">
-  <span style="font-size:13px;font-weight:bold;color:#000" id="bat-board-v">--.-V</span>
+<div class="abs" style="left:415px;top:348px">
+  <svg width="58" height="49" viewBox="0 0 72 54">
+    <defs>
+      <linearGradient id="bat-grad-board" x1="0" y1="0" x2="1" y2="0">
+        <stop id="bat-board-g1" offset="0%" stop-color="#E8E8E8"/>
+        <stop id="bat-board-g2" offset="100%" stop-color="#B0B0B0"/>
+      </linearGradient>
+    </defs>
+    <rect x="16" y="0" width="7" height="8" rx="0" fill="#708090" stroke="#E0E0E0" stroke-width="1"/>
+    <rect x="49" y="0" width="7" height="8" rx="0" fill="#708090" stroke="#E0E0E0" stroke-width="1"/>
+    <rect id="bat-board-body" x="6" y="7" width="60" height="40" rx="0" fill="url(#bat-grad-board)" stroke="#E0E0E0" stroke-width="1"/>
+    <rect x="3" y="7" width="66" height="6" rx="0" fill="#708090" stroke="#E0E0E0" stroke-width="1"/>
+    <text id="bat-board-v" x="36" y="36" text-anchor="middle" font-size="13" font-weight="bold" fill="#000">--.-V</text>
+  </svg>
+  <div class="f12 center du">Board</div>
 </div>
-<div class="abs f12 center" style="left:415px;top:397px;width:72px">Board</div>
 
 <!-- KFZ Battery -->
-<div class="abs" style="left:628px;top:355px;width:72px;height:38px;border-radius:8px;border:2px solid #aaa;background:#D3D3D3;display:flex;align-items:center;justify-content:center" id="bat-kfz-box">
-  <span style="font-size:13px;font-weight:bold;color:#000" id="bat-kfz-v">--.-V</span>
+<div class="abs" style="left:628px;top:348px">
+  <svg width="58" height="49" viewBox="0 0 72 54">
+    <defs>
+      <linearGradient id="bat-grad-kfz" x1="0" y1="0" x2="1" y2="0">
+        <stop id="bat-kfz-g1" offset="0%" stop-color="#E8E8E8"/>
+        <stop id="bat-kfz-g2" offset="100%" stop-color="#B0B0B0"/>
+      </linearGradient>
+    </defs>
+    <rect x="16" y="0" width="7" height="8" rx="0" fill="#708090" stroke="#E0E0E0" stroke-width="1"/>
+    <rect x="49" y="0" width="7" height="8" rx="0" fill="#708090" stroke="#E0E0E0" stroke-width="1"/>
+    <rect id="bat-kfz-body" x="6" y="7" width="60" height="40" rx="0" fill="url(#bat-grad-kfz)" stroke="#E0E0E0" stroke-width="1"/>
+    <rect x="3" y="7" width="66" height="6" rx="0" fill="#708090" stroke="#E0E0E0" stroke-width="1"/>
+    <text id="bat-kfz-v" x="36" y="36" text-anchor="middle" font-size="13" font-weight="bold" fill="#000">--.-V</text>
+  </svg>
+  <div class="f12 center du">Kfz</div>
 </div>
-<div class="abs f12 center" style="left:628px;top:397px;width:72px">Kfz</div>
 <div class="abs f10 center" style="left:620px;top:333px;width:84px;opacity:0.8" id="link-info"></div>
 
 <!-- Bottom Bar -->
-<div class="abs cir sz48 bg-grey" style="left:10px;top:422px" id="btn-radio">
-  <svg width="28" height="28" viewBox="0 0 28 28">
-    <path id="radio-arc2" d="M3 15 A11 11 0 0 1 25 15" fill="none" stroke="#333" stroke-width="2.2" stroke-linecap="round"/>
-    <path id="radio-arc1" d="M7 18 A7 7 0 0 1 21 18"   fill="none" stroke="#333" stroke-width="2.2" stroke-linecap="round"/>
-    <circle id="radio-dot" cx="14" cy="20" r="2.5" fill="#333"/>
-  </svg>
+<div class="abs cir sz48 bg-grey" style="left:10px;top:10px" id="btn-radio">
+  <span id="radio-note" style="font-size:30px;color:#333">♪</span>
 </div>
 <div class="abs cir sz36 bg-grey" style="left:80px;top:431px" title="GPS (nicht verfuegbar vom Sensor)">
   <svg width="22" height="22" viewBox="0 0 22 22">
@@ -231,25 +265,19 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
   </svg>
 </div>
 <div class="abs f12" style="left:125px;top:447px;width:175px;white-space:nowrap;overflow:hidden" id="location">Standort n/v</div>
-<div class="abs f14" style="left:310px;top:449px" id="disp-date">--.--.----</div>
+<div class="abs f16" style="left:310px;top:449px" id="disp-date">--.--.----</div>
 <div class="abs pill bg-grey" id="btn-status"
-     style="left:539px;top:426px;width:110px;height:44px;border-radius:22px;cursor:pointer">
-  <span class="f14" id="status-txt" style="color:#22C55E;font-weight:bold">Status: OK</span>
-</div>
-<div class="abs cir sz48 bg-grey" style="left:742px;top:422px" id="btn-backlight" title="Helligkeit">
-  <svg width="26" height="26" viewBox="0 0 26 26">
-    <circle cx="13" cy="13" r="7" id="bl-circle" fill="#FFD700"/>
-    <line x1="13" y1="1"  x2="13" y2="5"  stroke="#FFD700" stroke-width="2" stroke-linecap="round"/>
-    <line x1="13" y1="21" x2="13" y2="25" stroke="#FFD700" stroke-width="2" stroke-linecap="round"/>
-    <line x1="1"  y1="13" x2="5"  y2="13" stroke="#FFD700" stroke-width="2" stroke-linecap="round"/>
-    <line x1="21" y1="13" x2="25" y2="13" stroke="#FFD700" stroke-width="2" stroke-linecap="round"/>
-    <line x1="4"  y1="4"  x2="7"  y2="7"  stroke="#FFD700" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="19" y1="19" x2="22" y2="22" stroke="#FFD700" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="19" y1="4"  x2="22" y2="7"  stroke="#FFD700" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="4"  y1="19" x2="7"  y2="22" stroke="#FFD700" stroke-width="1.5" stroke-linecap="round"/>
-  </svg>
+     style="left:539px;top:435px;width:110px;height:36px;border-radius:18px;cursor:pointer">
+  <span class="f14" id="status-txt" style="color:#22C55E;font-weight:normal">Status: OK</span>
 </div>
 
+<!-- Offline-Banner -->
+<div id="offline-banner" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+     background:rgba(20,20,20,0.82);border-radius:14px;padding:18px 32px;text-align:center;
+     border:2px solid rgba(220,80,80,0.7);z-index:999;pointer-events:none">
+  <div style="font-size:22px;font-weight:bold;color:#FF5252;margin-bottom:6px">⚠ Sensorboard offline</div>
+  <div style="font-size:13px;color:#ccc">Verbindung unterbrochen — warte auf Wiederverbindung …</div>
+</div>
 </div><!-- #screen -->
 
 <!-- MODALS -->
@@ -334,8 +362,7 @@ body{background:#111;display:flex;align-items:center;justify-content:center;
 'use strict';
 const POLL_MS=5000, STATUS_MS=15000;
 const BAT_MIN=10.5, BAT_MAX=14.4;
-let s_pwr_on=false, s_radio_on=false, s_dim_level=0;
-let s_wake_until=0;
+let s_pwr_on=false, s_radio_on=false;
 let s_errors=[], s_ack_idx=0, s_snooze_until=0;
 
 const THR_DEF={gas_warn:20,gas_crit:10,fresh_warn:25,fresh_crit:10,grey_warn:75,grey_crit:90,bat_warn:120,bat_crit:115,iaq_warn:100,iaq_crit:150};
@@ -408,6 +435,10 @@ function iaqColor(iaq){
   if(iaq<50)return '#22C55E';if(iaq<100)return '#84CC16';
   if(iaq<150)return '#EAB308';if(iaq<200)return '#F97316';return '#DC2626';
 }
+function co2Color(ppm){
+  if(ppm<800)return '#22C55E';if(ppm<1200)return '#84CC16';
+  if(ppm<1500)return '#EAB308';if(ppm<2000)return '#F97316';return '#DC2626';
+}
 function trendArrow(t){
   const m={falling_fast:'&#8595;&#8595;',falling:'&#8595;',rising:'&#8593;',rising_fast:'&#8593;&#8593;'};
   const c={falling_fast:'#F97316',falling:'#60A5FA',rising:'#EAB308',rising_fast:'#DC2626'};
@@ -415,36 +446,54 @@ function trendArrow(t){
 }
 function fmtH(h){if(!h||h<=0)return '--';if(h>999)return '>999 h';return h.toFixed(1)+' h';}
 
-function updateTank(fi,pi,pct,isFresh){
-  const mH=84,bB=97,fe=$(fi),pe=$(pi);if(!fe)return;
+function updateTank(bi,fi,pi,pct,isFresh,status){
+  const mH=76,bB=89,fe=$(fi),pe=$(pi),body=$(bi);if(!fe)return;
   const h=pct>=0?Math.round(mH*Math.max(0,Math.min(100,pct))/100):0;
   fe.setAttribute('y',bB-h);fe.setAttribute('height',h);
   fe.setAttribute('width','46');fe.setAttribute('x','10');
-  fe.setAttribute('fill',isFresh?(pct<10?'#DC2626':pct<20?'#F97316':'#6AA9FF'):(pct>90?'#DC2626':pct>75?'#F97316':'#70849B'));
+  fe.setAttribute('fill',isFresh?'#6AA9FF':'#70849B');
+  if(body)body.setAttribute('fill',status==='crit'?'#E53935':status==='warn'?'#FFA500':'#D9DDE3');
   if(pe)pe.textContent=pct>=0?Math.round(pct)+'%':'--%';
 }
-function updateGas(fi,pi,pct){
-  const mH=81,bB=101,fe=$(fi),pe=$(pi);if(!fe)return;
+function updateGas(bi,fi,pi,pct){
+  const mH=73,bB=93,fe=$(fi),pe=$(pi);if(!fe)return;
   const h=pct>=0?Math.round(mH*Math.max(0,Math.min(100,pct))/100):0;
   fe.setAttribute('y',bB-h);fe.setAttribute('height',h);
-  fe.setAttribute('fill',pct<5?'#DC2626':pct<20?'#F97316':'#FFD700');
+  fe.setAttribute('fill','#FFD700');
+  const c=pct<5?'#E53935':pct<20?'#FFA500':'#D3D3D3';
+  const pfx=bi.replace('-body','');
+  const g1=$(pfx+'-bg1'),g2=$(pfx+'-bg2');
+  if(g1)g1.setAttribute('stop-color',hexAdjust(c,25));
+  if(g2)g2.setAttribute('stop-color',hexAdjust(c,-20));
   if(pe)pe.textContent=pct>=0?Math.round(pct)+'%':'--%';
 }
-function updateBattery(boxId,txtId,v,nc){
-  const box=$(boxId),txt=$(txtId);
+function hexAdjust(hex,amt){
+  let r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  r=Math.max(0,Math.min(255,r+amt));g=Math.max(0,Math.min(255,g+amt));b=Math.max(0,Math.min(255,b+amt));
+  return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+function updateBattery(bodyId,txtId,v,nc){
+  const txt=$(txtId);
   const c=batColor(v,nc);
-  if(box){box.style.background=c;box.style.borderColor=c==='#D3D3D3'?'#aaa':'#fff';}
-  const dk=['#DC2626','#F97316','#1B5E20'].includes(c)||(c==='#22C55E');
-  if(txt){txt.style.color=dk?'#fff':'#000';txt.textContent=nc?'nc':(v>0?v.toFixed(1)+'V':'--.-V');}
+  const pfx=bodyId.replace('-body','');
+  const g1=$(pfx+'-g1'),g2=$(pfx+'-g2');
+  if(g1)g1.setAttribute('stop-color',hexAdjust(c,25));
+  if(g2)g2.setAttribute('stop-color',hexAdjust(c,-20));
+  const needsWhite=(c!=='#E5E7EB'&&c!=='#D3D3D3');
+  if(txt){txt.setAttribute('fill',needsWhite?'#fff':'#000');txt.textContent=nc?'nc':(v>0?v.toFixed(1)+'V':'--.-V');}
 }
 
 /* ── Theme: exakte Farbwerte + Twilight-Logik aus womo_theme.c ── */
 /* Night→Day Farbtabelle (24 Schritte, 1 min/Schritt) – identisch zu womo_theme.c */
 const TWILIGHT_COLORS=[
-  '#191970','#1E1E7A','#232384','#28288E','#2D2D98','#3232A2',
-  '#3737AC','#3C3CB6','#4141C0','#4646CA','#4B4BD4','#5050DE',
-  '#5555E8','#5A5AED','#5F5FEF','#6464F1','#6969F3','#6E6EF5',
-  '#7373F7','#7878F9','#7D7DFB','#8282E9','#8585EA','#87CEEB'
+  '#191970','#1C1D73','#1E2176','#212578','#23297B','#262E7E',
+  '#283281','#2B3684','#2D3A86','#303E89','#32428C','#35468F',
+  '#374A92','#3A4E94','#3C5397','#3F579A','#415B9D','#445FA0',
+  '#4663A2','#4967A5','#4B6BA8','#4E6FAB','#5074AE','#5378B0',
+  '#557CB3','#5880B6','#5A84B9','#5D88BB','#5F8CBE','#6290C1',
+  '#6494C4','#6799C7','#699DC9','#6CA1CC','#6EA5CF','#71A9D2',
+  '#73ADD5','#76B1D7','#78B5DA','#7BB9DD','#7DBEE0','#80C2E3',
+  '#82C6E5','#85CAE8','#87CEEB'
 ];
 const COLOR_DAY   = '#87CEEB'; /* WOMO_COLOR_DAY_NORMAL */
 const COLOR_NIGHT = '#191970'; /* WOMO_COLOR_NIGHT_NORMAL */
@@ -452,7 +501,7 @@ const COLOR_SUNSET= '#FF8C00'; /* WOMO_COLOR_SUNSET */
 const COLOR_SUNRISE='#FF6347'; /* WOMO_COLOR_SUNRISE */
 /* Sonnenzeiten – werden durch Open-Meteo (wenn erreichbar) aktualisiert */
 let s_sunrise={h:6,m:30}, s_sunset={h:20,m:15};
-const TWILIGHT_MIN=24; /* WOMO_CIVIL_TWILIGHT_MINUTES */
+const TWILIGHT_MIN=45; /* WOMO_CIVIL_TWILIGHT_MINUTES */
 
 function minuteOfDay(h,m){return h*60+m;}
 function getThemeColor(){
@@ -487,6 +536,8 @@ function applyTheme(tsMs){
   scr.style.color=day?'#000':'#fff';
   scr.classList.toggle('day',day);
   $('ducato-img').src=day?'/Ducato-weiss.png':'/Ducato-grau.png';
+  /* LVGL-Recolor nachbilden: Tag=weiß, Nacht=#9CA3AF (cool-grey) */
+  $('ducato-img').style.filter=day?'none':'brightness(0) invert(1) brightness(0.75)';
   $('malibu-logo').style.color=day?'#333':'#fff';
 }
 
@@ -497,23 +548,8 @@ function updateClock(){
   $('disp-date').textContent=days[n.getDay()]+' '+String(n.getDate()).padStart(2,'0')+'.'+String(n.getMonth()+1).padStart(2,'0')+'.'+n.getFullYear();
   /* Hintergrundfarbe jede Minute aktualisieren */
   if(n.getSeconds()===0)applyTheme(null);
-  const hh=n.getHours(),mm=n.getMinutes(),quiet=(hh>=22)||(hh<7)||(hh===7&&mm<30);
-  const woken=Date.now()<s_wake_until;
-  if(quiet&&!woken&&s_dim_level===0)applyDim(2);
-  else if(quiet&&woken&&s_dim_level===2)applyDim(0);
-  else if(!quiet&&s_dim_level===2)applyDim(0);
 }
 
-function applyDim(level){
-  s_dim_level=level;
-  const ov=$('dim-overlay');
-  if(level===2){ov.style.display='block';ov.style.opacity='0.97';}
-  else if(level===1){ov.style.display='block';ov.style.opacity='0.7';}
-  else{ov.style.display='none';}
-  const c=level===0?'#FFD700':level===1?'#FFA000':'#555';
-  $('bl-circle').setAttribute('fill',c);
-  document.querySelectorAll('#btn-backlight line').forEach(l=>l.setAttribute('stroke',c));
-}
 
 function updateWifiPill(st){
   const ok=st&&st.connected,rssi=ok?(st.rssi||0):0;
@@ -532,7 +568,7 @@ function updateWifiPill(st){
 }
 
 async function pollStatus(){
-  try{const r=await fetch('/api/status',{cache:'no-store'});if(r.ok)updateWifiPill(await r.json());}catch{}
+  try{const r=await fetch('/api/status',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(r.ok)updateWifiPill(await r.json());}catch{}
   setTimeout(pollStatus,STATUS_MS);
 }
 
@@ -540,13 +576,16 @@ function updateAll(d){
   applyTheme(d.ts);
   const c=d.ctrl||{};
   s_pwr_on=!!c.pwr_on;s_radio_on=!!c.radio_on;
-  const pwrClr=c.pwr_on?'#22C55E':'#DC2626';
-  ['pwr-arc','pwr-line'].forEach(id=>{const e=$(id);if(e){e.setAttribute('stroke',pwrClr);}});
-  $('shore-btn').style.background=c.ac_present?'#E65100':'#555';
+  ['pwr-arc','pwr-line'].forEach(id=>{const e=$(id);if(e){e.setAttribute('stroke','#333');}});
+  const pwrBg=c.pwr_on?'#22C55E':'#D3D3D3';
+  $('btn-pwr').style.background=pwrBg;
+  $('btn-pwr').style.boxShadow='inset 0 0 0 3px '+pwrBg+',inset 0 0 0 5px #111';
+  const shoreBg=c.ac_present?'#F9A825':'#555';
+  $('shore-btn').style.background=shoreBg;
+  $('shore-btn').style.boxShadow='inset 0 0 0 3px '+shoreBg+',inset 0 0 0 5px #111';
   $('shore-cap').textContent=c.ac_present?'220 V':'220 V';
-  const clr=c.radio_on?'#4CAF50':'#333';
-  ['radio-arc1','radio-arc2'].forEach(id=>{const e=$(id);if(e)e.setAttribute('stroke',clr);});
-  const rd=$('radio-dot');if(rd)rd.setAttribute('fill',clr);
+  const clr=c.radio_on?'#1565C0':'#333';
+  const rn=$('radio-note');if(rn)rn.style.color=clr;
 
   const imu=d.imu||{};
   if(imu.valid){
@@ -567,17 +606,21 @@ function updateAll(d){
   if(bi.valid){
     $('rh-in').textContent=(bi.rh||0).toFixed(1)+' %';$('temp-in').textContent=(bi.temp||0).toFixed(1)+' °C';
     if(bi.bvoc!=null){const bv=$('bvoc-in');bv.textContent='bVOC '+bi.bvoc.toFixed(2)+' ppm';bv.style.color=bi.bvoc>1.5?'#F97316':'#F97316';}
-    if(bi.eco2!=null)$('co2-in').textContent='CO2 '+Math.round(bi.eco2)+' ppm';
+    if(bi.eco2!=null){const co2e=$('co2-in');co2e.textContent='CO2 '+Math.round(bi.eco2)+' ppm';co2e.style.color=co2Color(bi.eco2);}
     if(bi.iaq!=null){const iq=$('iaq-in');iq.textContent='IAQ '+Math.round(bi.iaq);iq.style.color=iaqColor(bi.iaq);}
   }
 
   const bat=d.bat||{};
-  updateBattery('bat-board-box','bat-board-v',bat.b2||0,!!bat.nc2);
-  updateBattery('bat-kfz-box','bat-kfz-v',bat.b1||0,!!bat.nc1);
+  updateBattery('bat-board-body','bat-board-v',bat.b2||0,!!bat.nc2);
+  updateBattery('bat-kfz-body','bat-kfz-v',bat.b1||0,!!bat.nc1);
 
   const tk=d.tank||{};
-  updateTank('t1-fill','t1-pct',tk.nc1?-1:(tk.t1!=null?tk.t1:-1),true);
-  updateTank('t2-fill','t2-pct',tk.nc2?-1:(tk.t2!=null?tk.t2:-1),false);
+  const t1pct=tk.nc1?-1:(tk.t1!=null?tk.t1:-1);
+  const t2pct=tk.nc2?-1:(tk.t2!=null?tk.t2:-1);
+  const t1stat=!tk.nc1&&tk.t1!=null?(tk.t1<THR.fresh_crit?'crit':tk.t1<THR.fresh_warn?'warn':'ok'):'ok';
+  const t2stat=!tk.nc2&&tk.t2!=null?(tk.t2>THR.grey_crit?'crit':tk.t2>THR.grey_warn?'warn':'ok'):'ok';
+  updateTank('t1-body','t1-fill','t1-pct',t1pct,true,t1stat);
+  updateTank('t2-body','t2-fill','t2-pct',t2pct,false,t2stat);
   let ti='Frisch:<br>';
   if(!tk.nc1&&tk.t1!=null){
     ti+=(tk.t1_l||0).toFixed(0)+' L<br>';
@@ -587,13 +630,13 @@ function updateAll(d){
 
   const gas=d.gas||{};
   if(!gas.nc){
-    updateGas('ga-fill','ga-pct',gas.pct_a!=null?gas.pct_a:-1);
-    updateGas('gb-fill','gb-pct',gas.pct_b!=null?gas.pct_b:-1);
+    updateGas('ga-body','ga-fill','ga-pct',gas.pct_a!=null?gas.pct_a:-1);
+    updateGas('gb-body','gb-fill','gb-pct',gas.pct_b!=null?gas.pct_b:-1);
     const sl=gas.active,lb=sl===0?'V':sl===1?'H':'-',rG=(gas.rate2h||0)*1000;
     $('gas-info').innerHTML='Gas ('+lb+'):<br>'+(gas.net||0).toFixed(2)+' kg<br>'+(rG>0?rG.toFixed(0)+' g/h':'-- g/h')+'<br>'+fmtH(gas.rest_h);
     $('gas-a-lbl').style.fontWeight=sl===0?'bold':'normal';
   } else {
-    updateGas('ga-fill','ga-pct',-1);updateGas('gb-fill','gb-pct',-1);
+    updateGas('ga-body','ga-fill','ga-pct',-1);updateGas('gb-body','gb-fill','gb-pct',-1);
     $('gas-info').innerHTML='Gas (nc):<br>--<br>--<br>--';
   }
   updateStatusBtn(computeErrors(d));
@@ -601,13 +644,15 @@ function updateAll(d){
 
 async function poll(){
   try{
-    const r=await fetch('/api/data',{cache:'no-store'});
+    const r=await fetch('/api/data',{cache:'no-store',signal:AbortSignal.timeout(3000)});
     if(!r.ok)throw new Error(r.status);
     updateAll(await r.json());
     $('link-info').textContent='';
+    $('offline-banner').style.display='none';
   } catch(e){
-    $('status-txt').textContent='Netz-Fehler';$('status-txt').style.color='#DC2626';
+    $('status-txt').textContent='Offline';$('status-txt').style.color='#DC2626';
     $('link-info').textContent='ERR '+e.message;$('link-info').style.color='#F97316';
+    $('offline-banner').style.display='block';
   }
   setTimeout(poll,POLL_MS);
 }
@@ -644,16 +689,6 @@ $('btn-radio').addEventListener('click',async()=>{await sendCmd(s_radio_on?'radi
 $('btn-status').addEventListener('click',()=>{
   s_snooze_until=Date.now()+30*60*1000;
   updateStatusBtn(s_errors);
-});
-
-/* Backlight */
-$('btn-backlight').addEventListener('click',()=>{
-  s_wake_until=Date.now()+5*60*1000;
-  applyDim((s_dim_level+1)%3);
-});
-$('dim-overlay').addEventListener('click',()=>{
-  s_wake_until=Date.now()+5*60*1000;
-  applyDim(0);
 });
 
 /* Gas long-press */
@@ -709,6 +744,7 @@ $('settings-save').addEventListener('click',async()=>{
 
 /* Weather: Open-Meteo + Meteocons Icons (Bas Milius) via jsDelivr */
 const ICON_CDN='https://cdn.jsdelivr.net/gh/basmilius/weather-icons/production/fill/svg/';
+const DEFAULT_LAT=53.55,DEFAULT_LON=10.0;
 const WMO_MAP={
   0:['clear-day','clear-night'],1:['clear-day','clear-night'],
   2:['partly-cloudy-day','partly-cloudy-night'],3:['cloudy','cloudy'],
@@ -768,10 +804,14 @@ async function pollWeather(){
     let lat=parseFloat(localStorage.getItem('womo_lat')||'0');
     let lon=parseFloat(localStorage.getItem('womo_lon')||'0');
     if(!lat&&!lon){
-      await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(p=>{
-        lat=p.coords.latitude;lon=p.coords.longitude;
-        localStorage.setItem('womo_lat',lat);localStorage.setItem('womo_lon',lon);res();
-      },rej,{timeout:8000}));
+      try{
+        await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(p=>{
+          lat=p.coords.latitude;lon=p.coords.longitude;
+          localStorage.setItem('womo_lat',lat);localStorage.setItem('womo_lon',lon);res();
+        },rej,{timeout:8000}));
+      }catch(geoErr){
+        lat=DEFAULT_LAT;lon=DEFAULT_LON;
+      }
     }
     await fetchWeather(lat,lon);
   }catch(e){console.warn('weather',e);}

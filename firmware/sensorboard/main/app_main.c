@@ -17,6 +17,7 @@
 #include "sensors/bno055_sensor.h"
 #include "sensors/bme680_sensor.h"
 #include "sensors/hx711_sensor.h"
+#include "sensors/ina226_sensor.h"
 #include "time/rtc_pcf8523.h"
 #include "time/time_sync.h"
 #include "network/rs485_modem.h"
@@ -43,6 +44,7 @@ static void sensor_log_init(void)
     esp_log_level_set("bme680_app",   LOG_LEVEL_BME680);
     esp_log_level_set("bme680",       LOG_LEVEL_BME680);
     esp_log_level_set("hx711_app",    LOG_LEVEL_HX711);
+    esp_log_level_set("ina226",       LOG_LEVEL_INA226);
     esp_log_level_set("gasbee_ble",   LOG_LEVEL_GASBEE_BLE);
     esp_log_level_set("i2c_bus",      LOG_LEVEL_I2C_BUS);
     esp_log_level_set("pcf8523_app",  LOG_LEVEL_PCF8523);
@@ -207,6 +209,12 @@ void app_main(void)
     esp_err_t hx_err = hx711_app_start();
     if (hx_err != ESP_OK) {
         ESP_LOGW(TAG, "HX711 nicht aktiv (err=%s)", esp_err_to_name(hx_err));
+    }
+
+    // INA226 (Strom-/Leistungsmessung Hauptleitung) starten
+    esp_err_t ina_err = ina226_app_start();
+    if (ina_err != ESP_OK) {
+        ESP_LOGW(TAG, "INA226 nicht aktiv (err=%s)", esp_err_to_name(ina_err));
     }
 
     // GasBee BLE Client (ESP32-C3 Mini Gaswaage via BLE)

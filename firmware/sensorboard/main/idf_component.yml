@@ -6,3 +6,4 @@ dependencies:
   espressif/mdns: '*'
   espressif/led_strip: '*'
   espressif/bme280: '^0.1.1'
+  k0i05/esp_ina226: '^1.2.7'

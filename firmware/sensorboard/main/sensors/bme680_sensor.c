@@ -86,7 +86,7 @@ typedef struct {
     uint32_t state_len;
     bme680_plausibility_t *plausibility;
     bool is_indoor;
-    char state_key[16];    // Adressspezifisch, damit alter Baseline-State nicht auf neue Sensoren angewandt wird
+    char state_key[20];    // Adresse + Version, damit alter Baseline-State nicht auf neue Sensoren angewandt wird
     uint8_t fail_count;   // I2C-Fehlerzähler; bei >= 5 wird hw_disabled gesetzt
     bool hw_disabled;     // Sensor dauerhaft deaktiviert (defekter/Fake-Chip)
     int last_saved_accuracy; // Zuletzt gespeicherter IAQ-Accuracy-Level (-1 = nie gespeichert)
@@ -1090,7 +1090,7 @@ esp_err_t bme680_app_start(void)
         init_one(SENSOR_BME280_I2C_ADDR, &s_bme_lo);
         s_bsec_lo.handle = s_bme_lo;
         snprintf(s_bsec_lo.state_key, sizeof(s_bsec_lo.state_key),
-                 "state_in_%02x", SENSOR_BME280_I2C_ADDR);
+                 "state_in_%02x_v%u", SENSOR_BME280_I2C_ADDR, SENSOR_BME680_BSEC_STATE_VERSION);
     } else if (s_chip_lo == BME_CHIP_BME280 || s_chip_lo == BME_CHIP_BME260) {
         init_one_bme280(SENSOR_BME280_I2C_ADDR, &s_bme280_lo);
     }
@@ -1099,7 +1099,7 @@ esp_err_t bme680_app_start(void)
         init_one(SENSOR_BME680_I2C_ADDR, &s_bme_hi);
         s_bsec_hi.handle = s_bme_hi;
         snprintf(s_bsec_hi.state_key, sizeof(s_bsec_hi.state_key),
-                 "state_in_%02x", SENSOR_BME680_I2C_ADDR);
+                 "state_in_%02x_v%u", SENSOR_BME680_I2C_ADDR, SENSOR_BME680_BSEC_STATE_VERSION);
     } else if (s_chip_hi == BME_CHIP_BME280 || s_chip_hi == BME_CHIP_BME260) {
         init_one_bme280(SENSOR_BME680_I2C_ADDR, &s_bme280_hi);
     }

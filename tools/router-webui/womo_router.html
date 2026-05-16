@@ -170,6 +170,9 @@ input:checked+.sw-slider:before{transform:translateX(20px)}
       <div class="irow"><span>Signal</span><b id="lte-sig">–</b></div>
       <div class="sig-bar"><div class="sig-fill" id="lte-bar" style="width:0%"></div></div>
       <div class="irow"><span>SIM</span><b id="lte-sim">–</b></div>
+      <div class="irow"><span>Aktiver Slot</span><b id="lte-simslot">–</b></div>
+      <button id="sim-switch-btn" class="btn-sec" style="width:100%;margin-top:10px" onclick="switchSim()">🔄 SIM wechseln</button>
+      <div id="sim-switch-msg" style="font-size:.75rem;color:var(--muted);margin-top:5px;text-align:center"></div>
     </div>
 
     <!-- ── GPS ── -->
@@ -355,12 +358,18 @@ async function refreshApClients() {
     return; // still silent – AP ist immer da, Clients optional
   }
   const clients = data.clients || [];
+  // Nach IP sortieren – fehlende IPs ans Ende
+  clients.sort((a, b) => {
+    const toNum = ip => ip ? ip.split('.').reduce((acc, v) => acc * 256 + parseInt(v), 0) : Infinity;
+    return toNum(a.ip) - toNum(b.ip);
+  });
   document.getElementById('ap-cnt').textContent = clients.length;
   listEl.innerHTML = '';
   for (const c of clients) {
     const div = document.createElement('div');
     div.className = 'client-item';
-    div.innerHTML = `<span>${h(c.host || c.mac)}</span><span class="cmac">${c.signal ?? '?'} dBm</span>`;
+    const ipStr = c.ip ? ` <span class="cmac">${h(c.ip)}</span>` : '';
+    div.innerHTML = `<span>${h(c.host || c.mac)}${ipStr}</span><span class="cmac">${c.signal ?? '?'} dBm</span>`;
     listEl.appendChild(div);
   }
 }
@@ -453,7 +462,7 @@ async function refreshWifi() {
       devs.map(d => ubusCall('iwinfo', 'info', { device: d }))
     );
     for (const r of infoResults) {
-      if (r.status === 'fulfilled' && r.value?.mode === 'Client' && r.value?.ssid) {
+      if (r.status === 'fulfilled' && r.value?.mode?.toLowerCase() === 'client' && r.value?.ssid) {
         ssid = r.value.ssid;
         sig  = r.value.signal ?? null;
         bssid = r.value.bssid || '–';
@@ -520,6 +529,7 @@ async function refreshLte() {
   document.getElementById('lte-sig').textContent  =
     sigDbm !== null ? `${sigPct}% (${sigDbm} dBm)` : '–';
   document.getElementById('lte-sim').textContent  = sim;
+  document.getElementById('lte-simslot').textContent = d.simslot ? `SIM ${d.simslot}` : '–';
   const bar = document.getElementById('lte-bar');
   bar.style.width = sigPct + '%';
   bar.style.background = sigColor(sigPct);
@@ -677,21 +687,33 @@ async function doConnect() {
 async function toggleWifi(on) {
   const sta = await resolveStaIface();
   if (!sta) return;
+  const sw = document.getElementById('wifi-sw');
+  sw.disabled = true;
   setStat((on ? 'Aktiviere' : 'Deaktiviere') + ' WLAN…');
   try {
-    await ubusCall('uci', 'set', { config: 'wireless', section: sta, values: { disabled: on ? '0' : '1' } });
-    await ubusCall('uci', 'commit', { config: 'wireless' });
-    await ubusExec('/sbin/wifi', ['reload']);
-    await new Promise(r => setTimeout(r, 2500));
+    // netifd-Interface-Name aus UCI (Feld "network"), Fallback "wan1" (RUTX11-Standard)
+    // KEIN wifi reload / reload_config – das würde den AP kurz mit runterfahren
+    const uciSec = await ubusCall('uci', 'get', { config: 'wireless', section: sta }).catch(() => null);
+    const netIface = uciSec?.values?.network || 'wan1';
+
+    // Nur das WAN-Interface schalten – Radio/AP bleiben unberührt.
+    // KEIN uci commit wireless – das triggert auf RUTX11 einen Wireless-Neustart!
+    await ubusCall('network.interface.' + netIface, on ? 'up' : 'down', {});
+
+    await new Promise(r => setTimeout(r, 1500));
     await refreshAll(true);
     setStat('OK');
   } catch (e) {
     setStat('Fehler: ' + e.message);
     await refreshAll(true);
+  } finally {
+    sw.disabled = false;
   }
 }
 
 async function toggleLte(on) {
+  const sw = document.getElementById('lte-sw');
+  sw.disabled = true;
   setStat((on ? 'Aktiviere' : 'Deaktiviere') + ' LTE…');
   try {
     await ubusCall('uci', 'set', { config: 'network', section: 'mob1s1a1', values: { disabled: on ? '0' : '1' } });
@@ -703,7 +725,37 @@ async function toggleLte(on) {
   } catch (e) {
     setStat('Fehler: ' + e.message);
     await refreshAll(true);
+  } finally {
+    sw.disabled = false;
   }
+}
+
+/* ══════════════════════════════════════════════
+   SIM Switch
+══════════════════════════════════════════════ */
+async function switchSim() {
+  const btn = document.getElementById('sim-switch-btn');
+  const msg = document.getElementById('sim-switch-msg');
+  btn.disabled = true;
+  msg.style.color = 'var(--muted)';
+  msg.textContent = '⏳ Wechsle SIM…';
+  try {
+    const r = await fetch('/cgi-bin/simswitch', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      msg.style.color = 'var(--green)';
+      msg.textContent = '✓ ' + (d.msg || 'SIM gewechselt – Verbindung wird neu aufgebaut…');
+      await new Promise(r => setTimeout(r, 5000));
+      await refreshAll(true);
+    } else {
+      msg.style.color = 'var(--red)';
+      msg.textContent = '✗ ' + (d.error || 'Fehler');
+    }
+  } catch (e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = '✗ ' + e.message;
+  }
+  btn.disabled = false;
 }
 
 /* ══════════════════════════════════════════════

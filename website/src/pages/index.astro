@@ -284,9 +284,9 @@ import Layout from '../layouts/Layout.astro';
       <h3 class="text-lg font-semibold text-amber-400 mb-4">Eigenentwicklungen</h3>
       <div class="grid sm:grid-cols-3 gap-6">
         {[
-          { title: "Sensorboard",    price: "50 €",  desc: "Fertig aufgebaut und getestet. Inkl. Firmware.",                      available: true  },
-          { title: "SensorBee",      price: "25 €",  desc: "BLE-Gaswaage für bestehende Wägezellen-Setups.",                      available: false },
-          { title: "Waageplattform", price: "70 €",  desc: "Komplette Wägeplattform für zwei Gasflaschen inkl. Wägezellen.",      available: false },
+          { title: "Sensorboard",    price: "150 €", desc: "Fertig aufgebaut und getestet. Inkl. Firmware.",                      available: true  },
+          { title: "SensorBee",      price: "50 €",  desc: "BLE-Gaswaage für bestehende Wägezellen-Setups.",                      available: false },
+          { title: "Waageplattform", price: "70 €",  desc: "1 Wägemodul inkl. Wägezellen und Platte (pro Gasflasche).",           available: true  },
         ].map(p => (
           <div class="rounded-2xl p-6 flex flex-col gap-3" style={`background:#132742;border:1px solid ${p.available ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)'};opacity:${p.available ? '1' : '0.7'}`}>
             <div class="flex items-start justify-between gap-2">

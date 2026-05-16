@@ -31,6 +31,7 @@
 #include "hal/deep_sleep.h"
 #include "sensors/bme680_sensor.h"
 #include "sensors/hx711_sensor.h"
+#include "sensors/ina226_sensor.h"
 #include "sensors/analog_sensor.h"
 #include "time/time_sync.h"
 
@@ -100,6 +101,7 @@ static void rs485_publish_tank(void);
 static void rs485_publish_hx(void);
 static void rs485_publish_gas(void);
 static void rs485_publish_bme(void);
+static void rs485_publish_elec(void);
 
 // ── Hilfsfunktionen ─────────────────────────────────────────────────────
 
@@ -450,6 +452,8 @@ static void rs485_handle_display_ready(void)
     rs485_publish_gas();
     vTaskDelay(pdMS_TO_TICKS(20));
     rs485_publish_bme();
+    vTaskDelay(pdMS_TO_TICKS(20));
+    rs485_publish_elec();
     ESP_LOGI(TAG, "Initiale Sensor-Daten gesendet");
 }
 
@@ -1046,6 +1050,27 @@ typedef struct {
     void (*publish)(void);
 } rs485_topic_t;
 
+static void rs485_publish_elec(void)
+{
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return;
+    cJSON_AddStringToObject(root, "type", "elec");
+
+    ina226_snapshot_t ina = {0};
+    if (ina226_app_get_snapshot(&ina) == ESP_OK) {
+        cJSON_AddNumberToObject(root, "v_bus",     round2(ina.v_bus_v));
+        cJSON_AddNumberToObject(root, "i_a",       (double)roundf(ina.i_a * 100.0f) / 100.0);
+        cJSON_AddNumberToObject(root, "p_w",       (double)roundf(ina.p_w * 10.0f) / 10.0);
+        cJSON_AddNumberToObject(root, "v_shunt_mv",(double)roundf(ina.v_shunt_mv * 1000.0f) / 1000.0);
+        cJSON_AddNumberToObject(root, "ts",        (double)(ina.timestamp_us / 1000LL));
+    } else {
+        cJSON_AddBoolToObject(root, "nc", true);
+    }
+
+    rs485_send_frame("elec", root, false);
+    cJSON_Delete(root);
+}
+
 static rs485_topic_t s_topics[] = {
     { "ctrl",  WOMO_TOPIC_CTRL_INTERVAL_MS, 0, rs485_publish_ctrl },
     { "imu",   WOMO_TOPIC_IMU_INTERVAL_MS,  0, rs485_publish_imu  },
@@ -1054,6 +1079,7 @@ static rs485_topic_t s_topics[] = {
     { "hx",    WOMO_TOPIC_HX_INTERVAL_MS,   0, rs485_publish_hx   },
     { "gas",   WOMO_TOPIC_GAS_INTERVAL_MS,  0, rs485_publish_gas  },
     { "bme",   WOMO_TOPIC_BME_INTERVAL_MS,  0, rs485_publish_bme  },
+    { "elec",  SENSOR_INA226_POLL_INTERVAL_MS, 0, rs485_publish_elec },
 };
 #define RS485_TOPIC_COUNT (sizeof(s_topics) / sizeof(s_topics[0]))
 static size_t s_topic_rr = 0;

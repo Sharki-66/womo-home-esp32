@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/hajo/esp/v5.5.2/esp-idf/components/**)",
+      "Bash(mkdir -p /home/hajo/womo-home-esp32/firmware/sensorboard/memory-bank)"
+    ],
+    "additionalDirectories": [
+      "/home/hajo/womo-home-esp32/firmware/sensorboard"
+    ]
+  }
+}
