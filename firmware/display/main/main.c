@@ -1783,38 +1783,45 @@ static void ui_update_timer_cb(lv_timer_t *timer)
         static float last_rate = NAN;
         static float last_rest = NAN;
 
-        bool hx_nc = snapshot.hx711.valid && snapshot.hx711.nc;
-        bool hx_available = snapshot.hx711.valid && !hx_nc;
-        bool pct_a_valid = snapshot.gas.valid && isfinite(snapshot.gas.pct_a);
-        bool pct_b_valid = snapshot.gas.valid && isfinite(snapshot.gas.pct_b);
+        bool nc_a = snapshot.gas.valid && snapshot.gas.nc_a;
+        bool nc_b = snapshot.gas.valid && snapshot.gas.nc_b;
+        // Fallback auf hx711.nc wenn gas-Topic noch nicht empfangen
+        if (!snapshot.gas.valid) {
+            bool hx_nc = snapshot.hx711.valid && snapshot.hx711.nc;
+            nc_a = hx_nc;
+            nc_b = hx_nc;
+        }
+        bool hx_available = snapshot.hx711.valid && !snapshot.hx711.nc;
+        bool pct_a_valid = snapshot.gas.valid && !nc_a && isfinite(snapshot.gas.pct_a);
+        bool pct_b_valid = snapshot.gas.valid && !nc_b && isfinite(snapshot.gas.pct_b);
 
-        if (hx_nc) {
-            gas_nc_active = true;
-            if (gas_bottle_a) {
-                womo_gas_bottle_set_nc(gas_bottle_a);
-                womo_gas_bottle_set_status(gas_bottle_a, WOMO_STATUS_OK);
-            }
-            if (gas_bottle_b) {
-                womo_gas_bottle_set_nc(gas_bottle_b);
-                womo_gas_bottle_set_status(gas_bottle_b, WOMO_STATUS_OK);
-            }
+        gas_nc_active = nc_a && nc_b;
+
+        // Pro-Kanal nc setzen
+        if (gas_bottle_a && nc_a) {
+            womo_gas_bottle_set_nc(gas_bottle_a);
+            womo_gas_bottle_set_status(gas_bottle_a, WOMO_STATUS_OK);
+            gas_has_data_a = false;
+            last_level_a = NAN;
+        }
+        if (gas_bottle_b && nc_b) {
+            womo_gas_bottle_set_nc(gas_bottle_b);
+            womo_gas_bottle_set_status(gas_bottle_b, WOMO_STATUS_OK);
+            gas_has_data_b = false;
+            last_level_b = NAN;
+        }
+        if (gas_nc_active) {
             if (gas_info_label) {
                 lv_label_set_text(gas_info_label, "Gas (nc):\n--.-- kg\n---- g/h\n--.- h");
             }
-            gas_has_data_a = false;
-            gas_has_data_b = false;
-            last_level_a = NAN;
-            last_level_b = NAN;
             last_active_idx = -2;
             last_net_kg = NAN;
             last_rate = NAN;
             last_rest = NAN;
             goto gas_done;
-        } else {
-            gas_nc_active = false;
         }
 
-        if (gas_bottle_a) {
+        if (gas_bottle_a && !nc_a) {
             if (pct_a_valid) {
                 float pct = snapshot.gas.pct_a;
                 if (!gas_has_data_a || isnan(last_level_a) || fabsf(pct - last_level_a) > 0.5f) {
@@ -1848,7 +1855,7 @@ static void ui_update_timer_cb(lv_timer_t *timer)
             }
         }
 
-        if (gas_bottle_b) {
+        if (gas_bottle_b && !nc_b) {
             if (pct_b_valid) {
                 float pct = snapshot.gas.pct_b;
                 if (!gas_has_data_b || isnan(last_level_b) || fabsf(pct - last_level_b) > 0.5f) {

@@ -1580,7 +1580,11 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             cJSON *pct = cJSON_GetObjectItem(root, "pct");
             cJSON *pct_a = cJSON_GetObjectItem(root, "pct_a");
             cJSON *pct_b = cJSON_GetObjectItem(root, "pct_b");
+            cJSON *nc_a  = cJSON_GetObjectItem(root, "nc_a");
+            cJSON *nc_b  = cJSON_GetObjectItem(root, "nc_b");
             if (cJSON_IsNumber(active)) s_latest_data.gas.active_idx = (int8_t)active->valueint;
+            s_latest_data.gas.nc_a = cJSON_IsTrue(nc_a);
+            s_latest_data.gas.nc_b = cJSON_IsTrue(nc_b);
             if (cJSON_IsNumber(net))    s_latest_data.gas.net_kg = (float)net->valuedouble;
             if (cJSON_IsNumber(rate1h)) s_latest_data.gas.rate_kgph_1h = (float)rate1h->valuedouble;
             if (cJSON_IsNumber(rate2h)) s_latest_data.gas.rate_kgph_2h = (float)rate2h->valuedouble;

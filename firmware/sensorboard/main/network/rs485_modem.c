@@ -471,10 +471,14 @@ typedef struct {
     int64_t last_ts_us;
     double rate1h;
     double rate2h;
+    float ref_full_a;   // Gewicht bei Flaschenwechsel Kanal A (0 = nicht gesetzt → Fallback auf TARE)
+    float ref_full_b;   // Gewicht bei Flaschenwechsel Kanal B (0 = nicht gesetzt → Fallback auf TARE)
 } gas_state_t;
 
 static gas_state_t s_gas_state = {0};
 static int s_gas_active_override = SENSOR_GAS_ACTIVE_DEFAULT; // -1 = auto
+static bool s_ref_pending_a = false;  // nächste HX711-Messung als Voll-Referenz A speichern
+static bool s_ref_pending_b = false;  // nächste HX711-Messung als Voll-Referenz B speichern
 
 #define GAS_NVS_NAMESPACE "gas_state"
 #define GAS_NVS_KEY       "gas"
@@ -842,21 +846,47 @@ static void rs485_publish_gas(void)
     hx711_app_get_snapshot(&hx);
 
     const double fill_kg = SENSOR_GAS_FILL_KG;
-    const double tare_kg = SENSOR_GAS_TARE_KG;
+    const double tare_kg = SENSOR_GAS_TARE_KG;  // Fallback wenn keine Voll-Referenz gesetzt
+    const double no_bottle_thr = SENSOR_GAS_NO_BOTTLE_THRESHOLD_KG;
+
     double net_a = hx.valid_a ? hx.kg_a : 0.0;
     double net_b = hx.valid_b ? hx.kg_b : 0.0;
-    int active = (s_gas_active_override >= 0) ? s_gas_active_override : SENSOR_GAS_ACTIVE_DEFAULT;
 
+    // Flaschenpräsenz: unter Schwellwert = keine Flasche auf der Waage
+    bool nc_a = !hx.valid_a || net_a < no_bottle_thr;
+    bool nc_b = !hx.valid_b || net_b < no_bottle_thr;
+
+    // Voll-Referenz erfassen (erste Messung nach Flaschenwechsel)
+    bool nvs_dirty = false;
+    if (s_ref_pending_a && hx.valid_a && !nc_a) {
+        s_gas_state.ref_full_a = (float)net_a;
+        s_ref_pending_a = false;
+        nvs_dirty = true;
+        ESP_LOGI(TAG, "Voll-Referenz A gesetzt: %.2f kg", net_a);
+    }
+    if (s_ref_pending_b && hx.valid_b && !nc_b) {
+        s_gas_state.ref_full_b = (float)net_b;
+        s_ref_pending_b = false;
+        nvs_dirty = true;
+        ESP_LOGI(TAG, "Voll-Referenz B gesetzt: %.2f kg", net_b);
+    }
+    if (nvs_dirty) gas_state_save_to_nvs();
+
+    int active = (s_gas_active_override >= 0) ? s_gas_active_override : SENSOR_GAS_ACTIVE_DEFAULT;
     if (active < 0) {
-        if (hx.valid_a) active = 0;
-        else if (hx.valid_b) active = 1;
+        if (hx.valid_a && !nc_a) active = 0;
+        else if (hx.valid_b && !nc_b) active = 1;
     }
 
     double net = (active == 0) ? net_a : (active == 1) ? net_b : 0.0;
+
+    // Füllstandsberechnung: referenzbasiert wenn Voll-Referenz gesetzt, sonst Fallback auf Tara
     double pct = 0.0, pct_a = 0.0, pct_b = 0.0;
     if (fill_kg > 0.0) {
-        pct_a = ((net_a - tare_kg) / fill_kg) * 100.0;
-        pct_b = ((net_b - tare_kg) / fill_kg) * 100.0;
+        double leer_a = (s_gas_state.ref_full_a > 0.0f) ? s_gas_state.ref_full_a - fill_kg : tare_kg;
+        double leer_b = (s_gas_state.ref_full_b > 0.0f) ? s_gas_state.ref_full_b - fill_kg : tare_kg;
+        pct_a = nc_a ? 0.0 : ((net_a - leer_a) / fill_kg) * 100.0;
+        pct_b = nc_b ? 0.0 : ((net_b - leer_b) / fill_kg) * 100.0;
         if (active == 0) pct = pct_a;
         else if (active == 1) pct = pct_b;
     }
@@ -931,10 +961,13 @@ static void rs485_publish_gas(void)
     cJSON_AddNumberToObject(root, "pct", round2(pct));
     cJSON_AddNumberToObject(root, "pct_a", round2(pct_a));
     cJSON_AddNumberToObject(root, "pct_b", round2(pct_b));
-    
-    ESP_LOGI(TAG, "GAS: active=%d, %.2f kg (%.0f%%), A=%.2f kg, B=%.2f kg, rate=%.3f/%.3f kg/h, rest=%.1f h",
-             active, fill_kg, pct, net_a, net_b, rate1h, rate2h, rest_h);
-    
+    if (nc_a) cJSON_AddBoolToObject(root, "nc_a", true);
+    if (nc_b) cJSON_AddBoolToObject(root, "nc_b", true);
+
+    ESP_LOGI(TAG, "GAS: active=%d, %.2f kg (%.0f%%), A=%.2f kg%s, B=%.2f kg%s, rate=%.3f/%.3f kg/h, rest=%.1f h",
+             active, fill_kg, pct, net_a, nc_a ? " (nc)" : "", net_b, nc_b ? " (nc)" : "",
+             rate1h, rate2h, rest_h);
+
     rs485_send_frame("gas", root, false);
     cJSON_Delete(root);
 }
@@ -1130,9 +1163,15 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
         }
 
         s_gas_active_override = override;
-        s_gas_state = (gas_state_t){0};
+        // Alte Referenzen beibehalten bis neue Messung vorliegt, EMA zurücksetzen
+        gas_state_t reset = {.ref_full_a = s_gas_state.ref_full_a, .ref_full_b = s_gas_state.ref_full_b};
+        s_gas_state = reset;
         gas_state_save_to_nvs();
-        ESP_LOGI(TAG, "Gas bottle replace: slot=%d channel=%s -> active_override=%d", slot_idx, chan, override);
+        // Nächste gültige HX711-Messung als Voll-Referenz für den jeweiligen Kanal speichern
+        if (override == 0 || override < 0) s_ref_pending_a = true;
+        if (override == 1 || override < 0) s_ref_pending_b = true;
+        ESP_LOGI(TAG, "Gas bottle replace: slot=%d channel=%s -> active_override=%d, ref pending: A=%d B=%d",
+                 slot_idx, chan, override, s_ref_pending_a, s_ref_pending_b);
     } else if (strcmp(cmd_str, "pwr_12v_on") == 0) {
         s_pwr_on_state = true;
         cmd_err = rs485_set_12v_power(true);
@@ -1571,31 +1610,42 @@ esp_err_t rs485_modem_get_snapshot(char **json_out)
         if (hx.valid_a) cJSON_AddNumberToObject(jh, "a", round2(hx.kg_a));
         if (hx.valid_b) cJSON_AddNumberToObject(jh, "b", round2(hx.kg_b));
 
+        const double fill_kg = SENSOR_GAS_FILL_KG;
+        const double tare_kg = SENSOR_GAS_TARE_KG;
+        const double no_bottle_thr = SENSOR_GAS_NO_BOTTLE_THRESHOLD_KG;
+        double net_a = hx.valid_a ? hx.kg_a : 0.0;
+        double net_b = hx.valid_b ? hx.kg_b : 0.0;
+        bool nc_a = !hx.valid_a || net_a < no_bottle_thr;
+        bool nc_b = !hx.valid_b || net_b < no_bottle_thr;
+
         cJSON *jg = cJSON_AddObjectToObject(root, "gas");
-        cJSON_AddBoolToObject(jg, "nc", nc);
-        if (!nc) {
-            const double fill_kg = SENSOR_GAS_FILL_KG;
-            const double tare_kg = SENSOR_GAS_TARE_KG;
-            double net_a = hx.valid_a ? hx.kg_a : 0.0;
-            double net_b = hx.valid_b ? hx.kg_b : 0.0;
+        cJSON_AddBoolToObject(jg, "nc",   nc_a && nc_b);
+        cJSON_AddBoolToObject(jg, "nc_a", nc_a);
+        cJSON_AddBoolToObject(jg, "nc_b", nc_b);
+        if (!(nc_a && nc_b)) {
             int active = (s_gas_active_override >= 0)
                          ? s_gas_active_override : SENSOR_GAS_ACTIVE_DEFAULT;
             if (active < 0) {
-                if (hx.valid_a) active = 0;
-                else if (hx.valid_b) active = 1;
+                if (!nc_a) active = 0;
+                else if (!nc_b) active = 1;
             }
             double net = (active == 0) ? net_a : (active == 1) ? net_b : 0.0;
             double pct = 0.0, pct_a = 0.0, pct_b = 0.0;
             if (fill_kg > 0.0) {
-                pct_a = ((net_a - tare_kg) / fill_kg) * 100.0;
-                pct_b = ((net_b - tare_kg) / fill_kg) * 100.0;
+                double leer_a = (s_gas_state.ref_full_a > 0.0f) ? s_gas_state.ref_full_a - fill_kg : tare_kg;
+                double leer_b = (s_gas_state.ref_full_b > 0.0f) ? s_gas_state.ref_full_b - fill_kg : tare_kg;
+                pct_a = nc_a ? 0.0 : ((net_a - leer_a) / fill_kg) * 100.0;
+                pct_b = nc_b ? 0.0 : ((net_b - leer_b) / fill_kg) * 100.0;
                 pct   = (active == 0) ? pct_a : (active == 1) ? pct_b : 0.0;
             }
             if (pct_a < 0.0) { pct_a = 0.0; } else if (pct_a > 100.0) { pct_a = 100.0; }
             if (pct_b < 0.0) { pct_b = 0.0; } else if (pct_b > 100.0) { pct_b = 100.0; }
             if (pct   < 0.0) { pct   = 0.0; } else if (pct   > 100.0) { pct   = 100.0; }
-            double rest_h = (s_gas_state.rate2h > 0.05 && net > tare_kg)
-                            ? (net - tare_kg) / s_gas_state.rate2h : 0.0;
+            double leer_active = (active == 0)
+                ? ((s_gas_state.ref_full_a > 0.0f) ? s_gas_state.ref_full_a - fill_kg : tare_kg)
+                : ((s_gas_state.ref_full_b > 0.0f) ? s_gas_state.ref_full_b - fill_kg : tare_kg);
+            double rest_h = (s_gas_state.rate2h > 0.05 && net > leer_active)
+                            ? (net - leer_active) / s_gas_state.rate2h : 0.0;
             cJSON_AddNumberToObject(jg, "active", active);
             cJSON_AddNumberToObject(jg, "net",    round2(net));
             cJSON_AddNumberToObject(jg, "pct",    round2(pct));

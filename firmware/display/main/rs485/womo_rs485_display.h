@@ -44,6 +44,8 @@ typedef struct {
     // Gas summary (Sensorboard)
     struct {
         bool valid;
+        bool nc_a;           // true: keine Flasche auf Kanal A (Gewicht < Schwellwert)
+        bool nc_b;           // true: keine Flasche auf Kanal B (Gewicht < Schwellwert)
         int8_t active_idx;   // 0=A/Vorne, 1=B/Hinten
         float net_kg;        // Netto der aktiven Flasche
         float rate_kgph_1h;  // Verbrauch kg/h (1h-Glättung)
