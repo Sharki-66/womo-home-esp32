@@ -88,7 +88,7 @@ static void rgb_led_off(void)
  */
 static void pwr_12v_on_early(void)
 {
-    /* Display 5V einschalten: P-Kanal MOSFET → Gate LOW = leitet */
+    /* Display 5V einschalten: GPIO7 HIGH → Q5 (2N7002) leitet → Q4 (AO3401A) leitet */
     gpio_config_t cfg = {
         .pin_bit_mask   = BIT64(SENSOR_DISPLAY_PWR_GPIO),
         .mode           = GPIO_MODE_OUTPUT,
@@ -97,8 +97,8 @@ static void pwr_12v_on_early(void)
         .intr_type      = GPIO_INTR_DISABLE,
     };
     gpio_config(&cfg);
-    gpio_set_level(SENSOR_DISPLAY_PWR_GPIO, 0);  /* P-MOSFET: LOW = EIN */
-    ESP_LOGI(TAG, "Display 5V EIN (GPIO%d LOW, P-MOSFET leitet)", SENSOR_DISPLAY_PWR_GPIO);
+    gpio_set_level(SENSOR_DISPLAY_PWR_GPIO, 1);  /* HIGH → Q5 leitet → Display EIN */
+    ESP_LOGI(TAG, "Display 5V EIN (GPIO%d HIGH, Q5→Q4 leitet)", SENSOR_DISPLAY_PWR_GPIO);
 
     /* LBE 12V-Relais EIN: bistabiles Relais benötigt Puls 1-3 s auf GPIO11.
      * GPIO11 (EIN) und GPIO12 (AUS) müssen im Ruhezustand LOW sein! */
@@ -122,20 +122,19 @@ void app_main(void)
 {
     sensor_log_init();
 
-    /* Display 5V sperren – GPIO7 als Hi-Z Input konfigurieren.
-     * R21 (100k, Source→Gate) im Schaltplan zieht Gate passiv auf ~5V → Vgs≈0V → FET aus.
-     * OUTPUT HIGH (3,3V) wäre FALSCH: Vgs = 3,3−5 = −1,7V → AO3401A leitet → ~300mA Querstrom!
-     * Nach Deep Sleep: rtc_gpio_isolate() aufheben, dann normalen GPIO-Modus zurücksetzen. */
+    /* Display 5V sperren – GPIO7 OUTPUT LOW: Q5 (2N7002) sperrt → Q4 (AO3401A) sperrt.
+     * Nach Deep Sleep: RTC-Hold aufheben, dann normalen GPIO-Modus zurücksetzen. */
     rtc_gpio_hold_dis(SENSOR_DISPLAY_PWR_GPIO);
     rtc_gpio_deinit(SENSOR_DISPLAY_PWR_GPIO);
     gpio_config_t disp_cfg = {
         .pin_bit_mask = BIT64(SENSOR_DISPLAY_PWR_GPIO),
-        .mode         = GPIO_MODE_INPUT,
+        .mode         = GPIO_MODE_OUTPUT,
         .pull_up_en   = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type    = GPIO_INTR_DISABLE,
     };
     gpio_config(&disp_cfg);
+    gpio_set_level(SENSOR_DISPLAY_PWR_GPIO, 0);  /* LOW → Q5 aus → Display AUS */
     /* GPIO13 (N-Kanal MOSFET Radio): OUTPUT LOW = sicher aus (kein passiver Pulldown in Hardware) */
     gpio_config_t mm_cfg = {
         .pin_bit_mask = BIT64(SENSOR_MULTIMEDIA_PWR_GPIO),

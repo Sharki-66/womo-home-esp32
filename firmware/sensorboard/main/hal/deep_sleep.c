@@ -109,22 +109,15 @@ void deep_sleep_enter(void)
 
     /* ── Peripherie abschalten ─────────────────────────────────────── */
 
-    /* Display 5V abschalten: GPIO7 – ZUERST, solange 5V noch stabil.
-     * KRITISCHE REIHENFOLGE:
-     *  1. rtc_gpio_init: Pad-Kontrolle an RTC übergeben
-     *  2. RTC_GPIO_MODE_INPUT_ONLY: Output-Treiber deaktivieren (wenn noch OUTPUT LOW aktiv,
-     *     würde rtc_gpio_hold_en() genau dieses LOW einfrieren → R21 verliert gegen Hold)
-     *  3. Pulldown/Pullup aus: kein interner Gegenwiderstand zu R21
-     *  4. Kurz warten: R21 (100k) lädt Gate-Kapazität auf ~5V (Source-Potential)
-     *  5. rtc_gpio_hold_en: HIGH-Zustand (Gate ≈ 5V) einfrieren → Vgs ≈ 0V → AO3401A sperrt
-     * OUTPUT HIGH (3,3V) am normalen GPIO verboten: Vgs = −1,7V → AO3401A leitet → ~300mA! */
+    /* Display 5V abschalten: GPIO7 LOW → Q5 (2N7002) sperrt → R21 zieht Q4-Gate auf 5V → AUS.
+     * LOW im RTC-Hold einfrieren, damit Display auch im Deep Sleep aus bleibt. */
     rtc_gpio_init(SENSOR_DISPLAY_PWR_GPIO);
-    rtc_gpio_set_direction(SENSOR_DISPLAY_PWR_GPIO, RTC_GPIO_MODE_INPUT_ONLY);
+    rtc_gpio_set_direction(SENSOR_DISPLAY_PWR_GPIO, RTC_GPIO_MODE_OUTPUT_ONLY);
+    rtc_gpio_set_level(SENSOR_DISPLAY_PWR_GPIO, 0);
     rtc_gpio_pulldown_dis(SENSOR_DISPLAY_PWR_GPIO);
     rtc_gpio_pullup_dis(SENSOR_DISPLAY_PWR_GPIO);
-    vTaskDelay(pdMS_TO_TICKS(50));   /* R21 (100k) zieht Gate auf ~5V – 50ms für RC-Ladezeit */
     rtc_gpio_hold_en(SENSOR_DISPLAY_PWR_GPIO);
-    ESP_LOGI(TAG, "Display 5V AUS: GPIO%d → RTC Input + Hold (Gate ~5V, Vgs≈0V)", SENSOR_DISPLAY_PWR_GPIO);
+    ESP_LOGI(TAG, "Display 5V AUS: GPIO%d → RTC OUTPUT LOW + Hold (Q5 sperrt)", SENSOR_DISPLAY_PWR_GPIO);
 
     /* HX711: Power-Down (SCK HIGH > 60 µs → ~0,1 µA statt 1,5 mA) */
     hx711_app_sleep();

@@ -135,7 +135,8 @@
 
 // Maximaler Messstrom (A) – bestimmt Current_LSB und damit die Auflösung
 // Current_LSB = MAX_CURRENT / 32768 → kleiner Wert = besser Auflösung, aber geringerer Bereich
-#define SENSOR_INA226_MAX_CURRENT_A 100
+// 3 A: misst Display+Sensorboard inkl. Relais-Schaltstöme (max ~2 A), LSB = 91 µA
+#define SENSOR_INA226_MAX_CURRENT_A 3
 
 // Abfrageintervall des Messtasks
 #define SENSOR_INA226_POLL_INTERVAL_MS 5000U
@@ -224,12 +225,12 @@
 #define SENSOR_MULTIMEDIA_PWR_GPIO 13  // Schaltausgang: Multimedia Power
 
 // ====================================================================================
-// Display-Versorgung (P-Kanal MOSFET Q4, AO3401A)
-// GPIO7: LOW = FET leitet = Display EIN
-//        Hi-Z (Input) = R21 (100k) zieht Gate auf 5V → Vgs≈0V → FET sperrt = Display AUS
-//        OUTPUT HIGH (3,3V) VERBOTEN: Vgs=−1,7V → AO3401A leitet → ~300mA Querstrom!
+// Display-Versorgung (neue Platine: N-Kanal Treiber Q5/2N7002 vor P-Kanal Q4/AO3401A)
+// GPIO7 → R22(10k) → Q5-Gate: HIGH = Q5 leitet → Q4-Gate LOW → AO3401A leitet = Display EIN
+//                               LOW/Hi-Z = Q5 sperrt → R21(100k) zieht Q4-Gate auf 5V → Display AUS
+// OUTPUT HIGH ist sicher (treibt nur Q5-Gate, kein direkter Vgs-Querstrom mehr).
 // ====================================================================================
-#define SENSOR_DISPLAY_PWR_GPIO 7      // P-MOSFET Q4: LOW=ein, Hi-Z/Input=aus
+#define SENSOR_DISPLAY_PWR_GPIO 7      // HIGH=ein (Q5→Q4), LOW/Hi-Z=aus
 
 // ====================================================================================
 // Deep Sleep / Wakeup

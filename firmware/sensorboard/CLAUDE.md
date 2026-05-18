@@ -11,7 +11,7 @@ Build, Flash und Monitor werden vom Nutzer über VS Code Tasks gestartet — nur
 | Constraint | Grund |
 |---|---|
 | RS485: **57600** Baud, nicht 115200 | 115200 verursacht Framing-Fehler durch DE-Toggle |
-| GPIO7 (Display 5V): nur **OUTPUT LOW** oder **INPUT (Hi-Z)** | OUTPUT HIGH → Vgs=−1,7V → P-MOSFET Q4 leitet → ~300mA Querstrom! |
+| GPIO7 (Display 5V): **HIGH=EIN, LOW/Hi-Z=AUS** | Neue Platine: Q5 (2N7002) als Treiber vor Q4 (AO3401A) — OUTPUT HIGH jetzt sicher |
 | GPIO35, GPIO36, GPIO37: **nicht verwenden** | Intern vom Octal-PSRAM (N16R8) belegt |
 | GPIO11/12 (12V-Relais): im Ruhezustand **LOW** | Bistabiles Relais — versehentlicher Puls schaltet Bordnetz |
 
