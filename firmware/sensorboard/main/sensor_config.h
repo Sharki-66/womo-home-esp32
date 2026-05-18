@@ -129,10 +129,9 @@
 #define SENSOR_INA226_I2C_ADDR      0x40    // A0=GND, A1=GND
 #define SENSOR_INA226_I2C_CLK_HZ    400000  // Fast-Mode
 
-// Shunt-Widerstand in mΩ (Milliohm) – MUSS an die verbaute Hardware angepasst werden!
-// Beispiel: 1 mΩ (0,001 Ω) bei max. ~80 A (Vshunt_max = 81,92 mV)
-// Formel Vshunt_max = 81,92 mV → I_max = 81,92 mV / R_shunt
-#define SENSOR_INA226_SHUNT_MOHM    1       // TODO: nach Hardwareeinbau anpassen!
+// Shunt-Widerstand in mΩ (Milliohm)
+// 10 mΩ (0,01 Ω) → I_max = 81,92 mV / 10 mΩ = 8,192 A (bei MAX_CURRENT_A=100 ist LSB ~3 mA)
+#define SENSOR_INA226_SHUNT_MOHM    10
 
 // Maximaler Messstrom (A) – bestimmt Current_LSB und damit die Auflösung
 // Current_LSB = MAX_CURRENT / 32768 → kleiner Wert = besser Auflösung, aber geringerer Bereich
@@ -155,14 +154,16 @@
 #define SENSOR_TANK1_ADC_CHANNEL 0     // GPIO1 (Frischwasser)
 #define SENSOR_TANK2_ADC_CHANNEL 1     // GPIO2 (Grauwasser)
 
-// Batterie-Kalibrierung (U_kalibriert = U_gemessen * SCALE + OFFSET_mV
-// Kalibriert 2026-05-03 nach Platinetausch (Q3 defekt):
-//   Batt1: Multimeter 13,0 V → Anzeige 9,8 V vor Neukalibrierung
-//   SCALE = 13000 / (9800 - 200_alt) = 13000 / 9600 = 1.354, OFFSET reset auf 0
-// Für Feinabgleich: SCALE = Multimeter_mV / (Anzeige_mV_ohne_Offset)
-#define SENSOR_BATT1_CAL_SCALE 1.354f
+// Batterie-Kalibrierung (U_kalibriert = U_gemessen * SCALE + OFFSET_mV)
+// Pipeline: ADC-mV × (122/22) = U_roh → × SCALE + OFFSET = U_kalibriert
+// Für Feinabgleich: SCALE = Multimeter_mV / (Anzeige_mV / alter_SCALE)
+// Kalibriert 2026-05-18 neue Platine:
+//   Multimeter 13,0 V → Anzeige 17,4 V mit altem SCALE=1.354
+//   U_roh = 17400/1.354 = 12850 mV → SCALE = 13000/12850 = 1.012
+//   (alter SCALE=1.354 war Ausreißer wegen Q3-Defekt auf Vorgängerplatine)
+#define SENSOR_BATT1_CAL_SCALE 1.012f
 #define SENSOR_BATT1_CAL_OFFSET_MV 0
-#define SENSOR_BATT2_CAL_SCALE 1.354f
+#define SENSOR_BATT2_CAL_SCALE 1.012f
 #define SENSOR_BATT2_CAL_OFFSET_MV 0
 
 // Tank-Kalibrierung (U_kalibriert = U_gemessen * SCALE + OFFSET_mV)
