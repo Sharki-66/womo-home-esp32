@@ -309,7 +309,7 @@
 #define LOG_LEVEL_BME680         ESP_LOG_WARN    // bme680_app + bme680-Komponente
 #define LOG_LEVEL_BME260         ESP_LOG_WARN    // bme260_app (falls separate Implementierung)
 #define LOG_LEVEL_HX711          ESP_LOG_WARN
-#define LOG_LEVEL_INA226         ESP_LOG_WARN    // ina226 Strom-/Leistungsmessung
+#define LOG_LEVEL_INA226         ESP_LOG_INFO    // ina226 Strom-/Leistungsmessung (DEBUG)
 #define LOG_LEVEL_GASBEE_BLE     ESP_LOG_WARN
 #define LOG_LEVEL_I2C_BUS        ESP_LOG_INFO    // temporär INFO für I2C-Scan Diagnose
 #define LOG_LEVEL_PCF8523        ESP_LOG_WARN

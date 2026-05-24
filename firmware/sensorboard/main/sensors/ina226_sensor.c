@@ -43,8 +43,10 @@ static void ina226_task(void *arg)
         };
 
         if (ok) {
-            ESP_LOGI(TAG, "V=%.3f V  I=%.3f A  P=%.1f W  Vsh=%.3f mV",
-                     (double)v_bus, (double)i_a, (double)p_w, (double)(v_shunt * 1000.0f));
+            float i_calc = (v_shunt * 1000.0f) / SENSOR_INA226_SHUNT_MOHM;  // mV / mΩ = A
+            ESP_LOGI(TAG, "V=%.3f V  I=%.3f A  P=%.1f W  Vsh=%.4f mV  I_direkt=%.3f A",
+                     (double)v_bus, (double)i_a, (double)p_w,
+                     (double)(v_shunt * 1000.0f), (double)i_calc);
         } else {
             ESP_LOGW(TAG, "Lesefehler – Snapshot ungültig");
         }
@@ -83,11 +85,17 @@ esp_err_t ina226_app_start(void)
         return ESP_ERR_NOT_FOUND;
     }
 
+    uint16_t cal_reg = 0;
+    ina226_get_calibration_register(s_dev, &cal_reg);
     ESP_LOGI(TAG, "INA226 0x%02X bereit (Shunt=%.1f mΩ, I_max=%d A, lib %s)",
              SENSOR_INA226_I2C_ADDR,
              (double)(SENSOR_INA226_SHUNT_MOHM),
              SENSOR_INA226_MAX_CURRENT_A,
              ina226_get_fw_version());
+    ESP_LOGI(TAG, "INA226 Kalibrierung: Cal-Register=%u, current_lsb=%.2f µA, erwartet Cal=%.0f",
+             cal_reg,
+             (double)(s_dev->current_lsb * 1e6),
+             (double)(0.00512f / (s_dev->current_lsb * (SENSOR_INA226_SHUNT_MOHM / 1000.0f))));
 
     s_mutex = xSemaphoreCreateMutex();
     if (!s_mutex) {
