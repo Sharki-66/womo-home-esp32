@@ -475,17 +475,34 @@
         "wire_width": 6
       },
       {
-        "name": "+3.3V",
+        "line_style": 0,
+        "name": "+12V",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": 0,
+        "schematic_color": "rgb(194, 0, 255)",
+        "wire_width": 15
+      },
+      {
+        "line_style": 0,
+        "name": "+3.3V",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 2,
         "schematic_color": "rgb(255, 3, 0)",
         "wire_width": 6
       },
       {
         "line_style": 0,
+        "name": "+5V",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 1,
+        "schematic_color": "rgb(255, 145, 0)",
+        "wire_width": 10
+      },
+      {
+        "line_style": 0,
         "name": "GND",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
-        "priority": 2,
+        "priority": 4,
         "schematic_color": "rgb(0, 0, 0)",
         "wire_width": 15
       },
@@ -493,8 +510,8 @@
         "line_style": 0,
         "name": "WB",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
-        "priority": 1,
-        "schematic_color": "rgb(255, 140, 0)",
+        "priority": 3,
+        "schematic_color": "rgb(255, 238, 0)",
         "wire_width": 15
       }
     ],
@@ -515,6 +532,14 @@
       {
         "netclass": "WB",
         "pattern": "WB"
+      },
+      {
+        "netclass": "+5V",
+        "pattern": "+5V"
+      },
+      {
+        "netclass": "+12V",
+        "pattern": "+12V"
       }
     ]
   },
