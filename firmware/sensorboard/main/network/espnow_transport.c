@@ -124,6 +124,10 @@ esp_err_t espnow_transport_init(void)
         return err;
     }
 
+    // TX-Power auf 10 dBm begrenzen (40 = 10 dBm in 0.25-dBm-Schritten)
+    // Fahrzeuginterner Link <1 m, spart ~15-20 mA gegenüber Standard 20 dBm
+    esp_wifi_set_max_tx_power(40);
+
     esp_now_register_send_cb(espnow_send_cb);
     esp_now_register_recv_cb(espnow_recv_cb);
 
