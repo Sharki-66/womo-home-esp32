@@ -37,7 +37,7 @@ bool sensor_wifi_is_connected(void);
 esp_err_t sensor_wifi_set_credentials(const char *ssid, const char *pass);
 
 /// Callback-Typ: wird aufgerufen wenn WiFi nach max. Retries nicht verbinden kann.
-/// Nutzbar z.B. um per RS485 das Passwort beim Display anzufragen.
+/// Nutzbar z.B. um per ESP-NOW das Passwort beim Display anzufragen.
 typedef void (*sensor_wifi_auth_fail_cb_t)(void);
 
 /// Registriert den Auth-Failure-Callback (nur einer, überschreibbar).

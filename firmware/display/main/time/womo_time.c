@@ -129,7 +129,7 @@ esp_err_t womo_time_sync_gps(time_t gps_time)
     return ESP_OK;
 }
 
-esp_err_t womo_time_mark_synced_rs485(void)
+esp_err_t womo_time_mark_synced_sensor(void)
 {
     time_t now;
     time(&now);
@@ -138,15 +138,15 @@ esp_err_t womo_time_mark_synced_rs485(void)
     
     // Nur als synced markieren wenn Zeit plausibel ist (>= 2024)
     if (timeinfo.tm_year < (2024 - 1900)) {
-        ESP_LOGW(TAG, "RS485 time not plausible (year < 2024), not marking as synced");
+        ESP_LOGW(TAG, "Sensorboard time not plausible (year < 2024), not marking as synced");
         return ESP_FAIL;
     }
     
     time(&last_sync_time);
-    last_sync_source = TIME_SOURCE_RS485;
+    last_sync_source = TIME_SOURCE_SENSOR;
     time_synced = true;
     
-    ESP_LOGI(TAG, "Time marked as synced from RS485 sensor");
+    ESP_LOGI(TAG, "Time marked as synced from Sensorboard");
     return ESP_OK;
 }
 
@@ -221,7 +221,7 @@ void womo_time_auto_sync(void)
             return;
         }
         
-        // Try RS485 Sensorboard time sync
+        // Try Sensorboard ESP-NOW time sync
         // (handled in main.c time_update_timer_cb)
         
         ESP_LOGW(TAG, "Auto-sync failed - no sync source available");

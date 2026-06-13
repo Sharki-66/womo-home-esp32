@@ -25,7 +25,7 @@
 #define LOG_LEVEL_DISPLAY_HW     ESP_LOG_WARN   // hardware/waveshare_rgb_lcd_port.c
 
 // ── RS485 ────────────────────────────────────────────────────────────────────────────
-#define LOG_LEVEL_RS485          ESP_LOG_WARN   // rs485/womo_rs485_display.c
+#define LOG_LEVEL_SENSORBOARD          ESP_LOG_WARN   // sensorboard/womo_sensorboard.c
 
 // ── Netzwerk ─────────────────────────────────────────────────────────────────────────
 #define LOG_LEVEL_WIFI           ESP_LOG_WARN   // network/womo_wifi.c + ESP-IDF Netz (esp_netif etc.)

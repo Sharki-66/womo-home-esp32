@@ -20,7 +20,7 @@
 #include "sensors/ina226_sensor.h"
 #include "time/rtc_pcf8523.h"
 #include "time/time_sync.h"
-#include "network/rs485_modem.h"
+#include "network/espnow_modem.h"
 #include "network/wifi/sensor_wifi.h"
 #include "network/wifi/sensor_http.h"
 #include "network/gasbee_ble_client.h"
@@ -36,8 +36,8 @@ static void sensor_log_init(void)
 {
     esp_log_level_set("sensor_main",  LOG_LEVEL_SENSOR_MAIN);
     esp_log_level_set("deep_sleep",   LOG_LEVEL_DEEP_SLEEP);
-    esp_log_level_set("womo_rs485",   LOG_LEVEL_RS485);
-    esp_log_level_set("rs485_modem",  LOG_LEVEL_RS485);
+    esp_log_level_set("womo_rs485_legacy",   LOG_LEVEL_SENSORBOARD);
+    esp_log_level_set("espnow_modem",  LOG_LEVEL_SENSORBOARD);
     esp_log_level_set("analog",       LOG_LEVEL_ANALOG);
     esp_log_level_set("bno055_app",   LOG_LEVEL_BNO055);
     esp_log_level_set("BNO055",       LOG_LEVEL_BNO055);
@@ -153,7 +153,7 @@ void app_main(void)
     bool is_touch_wakeup = deep_sleep_wakeup_by_touch();
     if (is_touch_wakeup) {
         ESP_LOGI(TAG, "Touch-Wakeup erkannt → Hold aufheben");
-        gpio_hold_dis(SENSOR_RS485_DE_GPIO);
+        gpio_hold_dis(SENSOR_ESPNOW_DE_LEGACY_GPIO);
     } else {
         ESP_LOGI(TAG, "Cold Boot erkannt");
     }
@@ -230,11 +230,11 @@ void app_main(void)
     }
 
     // RS485-Kommunikation zum Display initialisieren
-    esp_err_t rs485_err = rs485_modem_init();
+    esp_err_t rs485_err = espnow_modem_init();
     if (rs485_err != ESP_OK) {
-        ESP_LOGW(TAG, "RS485 nicht gestartet (err=%s)", esp_err_to_name(rs485_err));
+        ESP_LOGW(TAG, "ESP-NOW nicht gestartet (err=%s)", esp_err_to_name(rs485_err));
     } else {
-        ESP_LOGI(TAG, "✓ RS485-Display-Kommunikation aktiv");
+        ESP_LOGI(TAG, "✓ ESP-NOW-Kommunikation aktiv");
     }
 
     // Touch-Debug-Monitor (nur Log-Ausgabe, keine Aktion)

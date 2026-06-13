@@ -26,42 +26,28 @@
 //  Kategorie 1: RS485 Protokoll (MUSS identisch sein)
 // ═══════════════════════════════════════════════════════════════════════
 
-/** Baudrate – 57600: Kompromiss zwischen Geschwindigkeit und Stabilität
- *  mit dem Auto-DE-Transistor des Waveshare-Boards.
- *  115200 erzeugt Framing-Fehler durch DE-Toggle bei jedem Byte. */
-#define WOMO_RS485_BAUDRATE                 57600
+/** Heartbeat-Intervall (ms): Display sendet alle X ms einen Heartbeat ans Sensorboard.
+ *  Das Sensorboard erkennt daran den Display-Peer per ESP-NOW. */
+#define WOMO_SENSOR_HEARTBEAT_INTERVAL_MS   2000
 
-/** Heartbeat-Intervall (ms). Sender schickt alle X ms einen Heartbeat,
- *  Empfänger erkennt Verbindungsverlust nach ~2× diesem Wert. */
-#define WOMO_RS485_HEARTBEAT_INTERVAL_MS    2000
-
-/** Hello-Intervall (ms) solange Display noch nicht "ready" gemeldet hat. */
-#define WOMO_RS485_HELLO_PENDING_MS         1000
-
-/** Hello-Intervall (ms) nachdem Display "ready" ist (Keep-Alive). */
-#define WOMO_RS485_HELLO_READY_MS           10000
-
-/** Timeout (ms) für ACK-Antwort auf ein Kommando. */
-#define WOMO_RS485_COMMAND_TIMEOUT_MS       3000
+/** Timeout (ms) für ACK-Antwort auf ein Kommando (ESP-NOW). */
+#define WOMO_SENSOR_COMMAND_TIMEOUT_MS      3000
 
 /** Maximale Anzahl gleichzeitig wartender Kommandos. */
-#define WOMO_RS485_MAX_PENDING_CMDS         4
-
-/** Timeout (ms) für uart_wait_tx_done – muss groß genug sein für
- *  das längste Paket bei der konfigurierten Baudrate. */
-#define WOMO_RS485_TX_WAIT_TIMEOUT_MS       500
+#define WOMO_SENSOR_MAX_PENDING_CMDS        4
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Kategorie 2: Topic-Intervalle (Sensor sendet, Display erwartet)
 // ═══════════════════════════════════════════════════════════════════════
 
 #define WOMO_TOPIC_CTRL_INTERVAL_MS         2000
-#define WOMO_TOPIC_IMU_INTERVAL_MS          5000
-#define WOMO_TOPIC_BAT_INTERVAL_MS          10000
+#define WOMO_TOPIC_ELEC_INTERVAL_MS         1000
+#define WOMO_TOPIC_IMU_INTERVAL_MS          1000
+#define WOMO_TOPIC_BAT_INTERVAL_MS          1000
 #define WOMO_TOPIC_TANK_INTERVAL_MS         10000
 #define WOMO_TOPIC_HX_INTERVAL_MS           10000
 #define WOMO_TOPIC_GAS_INTERVAL_MS          10000
-#define WOMO_TOPIC_BME_INTERVAL_MS          15000
+#define WOMO_TOPIC_BME_INTERVAL_MS          10000
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Kategorie 3: Netzwerk / Infrastruktur
@@ -72,3 +58,16 @@
 
 /** IP-Adresse des RUTX11 Routers im internen Netz. */
 #define WOMO_ROUTER_IP                      "192.168.10.1"
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Kategorie 4: ESP-NOW Transport (ersetzt RS485)
+// ═══════════════════════════════════════════════════════════════════════
+
+/** WiFi-Kanal wenn kein Router verbunden. MUSS auf beiden Boards identisch sein. */
+#define WOMO_ESPNOW_CHANNEL_FALLBACK        6
+
+/** Hardware-Limit ESP-NOW Payload (Byte). Frames müssen darunter bleiben. */
+#define WOMO_ESPNOW_MAX_PAYLOAD             250
+
+/** Empfangs-Queue-Tiefe (Anzahl Frames). */
+#define WOMO_ESPNOW_RECV_QUEUE_LEN          16

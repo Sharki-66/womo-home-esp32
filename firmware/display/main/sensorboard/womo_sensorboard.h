@@ -172,45 +172,44 @@ typedef struct {
     int64_t elec_topic_rx_us;
 } womo_sensor_data_t;
 
-// Callback for received sensor data
-typedef void (*womo_rs485_data_cb_t)(const womo_sensor_data_t *data, void *user_data);
+// Callback für empfangene Sensordaten
+typedef void (*womo_sensorboard_data_cb_t)(const womo_sensor_data_t *data, void *user_data);
 
 typedef enum {
-    WOMO_RS485_EVENT_HELLO = 0,
-    WOMO_RS485_EVENT_HEARTBEAT,
-    WOMO_RS485_EVENT_INVALID_JSON,
-} womo_rs485_event_t;
+    WOMO_SENSORBOARD_EVENT_HELLO = 0,
+    WOMO_SENSORBOARD_EVENT_HEARTBEAT,
+    WOMO_SENSORBOARD_EVENT_INVALID_JSON,
+} womo_sensorboard_event_t;
 
-typedef void (*womo_rs485_event_cb_t)(womo_rs485_event_t event, void *user_data);
+typedef void (*womo_sensorboard_event_cb_t)(womo_sensorboard_event_t event, void *user_data);
 
-// Initialize RS485 communication
-esp_err_t womo_rs485_display_init(void);
+// Sensorboard-Kommunikation initialisieren (ESP-NOW)
+esp_err_t womo_sensorboard_init(void);
 
-// Set callback for full sensor data
-void womo_rs485_set_data_callback(womo_rs485_data_cb_t callback, void *user_data);
+// Sensordaten-Callback setzen
+void womo_sensorboard_set_data_callback(womo_sensorboard_data_cb_t callback, void *user_data);
 
-// Optional event callback (handshake, heartbeat, parse errors)
-void womo_rs485_set_event_callback(womo_rs485_event_cb_t callback, void *user_data);
+// Optionaler Event-Callback (Handshake, Heartbeat, Parse-Fehler)
+void womo_sensorboard_set_event_callback(womo_sensorboard_event_cb_t callback, void *user_data);
 
-// Send commands to Sensorboard
-esp_err_t womo_rs485_send_level_start(void);
-esp_err_t womo_rs485_send_level_stop(void);
-esp_err_t womo_rs485_send_tare_a(void);
-esp_err_t womo_rs485_send_tare_b(void);
-esp_err_t womo_rs485_send_display_ready(void);
-esp_err_t womo_rs485_send_wifi_control(bool enable, const char *ssid, const char *password);
-esp_err_t womo_rs485_send_lte_control(bool enable);
-esp_err_t womo_rs485_send_wifi_credentials(const char *ssid, const char *pass);
-esp_err_t womo_rs485_send_gas_bottle_replace(uint8_t slot, const char *channel);
-esp_err_t womo_rs485_send_pwr_12v(bool enable);
-esp_err_t womo_rs485_send_radio(bool enable);
-esp_err_t womo_rs485_send_imu_zero(void);
-esp_err_t womo_rs485_send_buzzer(bool enable);
-esp_err_t womo_rs485_send_touch_click(bool enable);
-esp_err_t womo_rs485_send_buzzer_alert(bool is_alarm); /* One-Shot: true=Alarm, false=Warnung */
+// Kommandos an Sensorboard senden
+esp_err_t womo_sensorboard_send_level_start(void);
+esp_err_t womo_sensorboard_send_level_stop(void);
+esp_err_t womo_sensorboard_send_tare_a(void);
+esp_err_t womo_sensorboard_send_tare_b(void);
+esp_err_t womo_sensorboard_send_wifi_control(bool enable, const char *ssid, const char *password);
+esp_err_t womo_sensorboard_send_lte_control(bool enable);
+esp_err_t womo_sensorboard_send_wifi_credentials(const char *ssid, const char *pass);
+esp_err_t womo_sensorboard_send_gas_bottle_replace(uint8_t slot, const char *channel);
+esp_err_t womo_sensorboard_send_pwr_12v(bool enable);
+esp_err_t womo_sensorboard_send_radio(bool enable);
+esp_err_t womo_sensorboard_send_imu_zero(void);
+esp_err_t womo_sensorboard_send_buzzer(bool enable);
+esp_err_t womo_sensorboard_send_touch_click(bool enable);
+esp_err_t womo_sensorboard_send_buzzer_alert(bool is_alarm); /* One-Shot: true=Alarm, false=Warnung */
 
-// Get latest sensor data (non-blocking)
-bool womo_rs485_get_latest_data(womo_sensor_data_t *data);
+// Letzte Sensordaten lesen (nicht-blockierend)
+bool womo_sensorboard_get_latest_data(womo_sensor_data_t *data);
 
 #ifdef __cplusplus
 }

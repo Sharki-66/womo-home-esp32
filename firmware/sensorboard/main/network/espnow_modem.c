@@ -13,9 +13,9 @@
  * und die Gas-Verbrauchslogik sind vollständig portiert.
  */
 
-#include "network/rs485_modem.h"
+#include "network/espnow_modem.h"
 
-#include "network/womo_rs485.h"
+#include "network/espnow_transport.h"
 #include "sensors/bno055_sensor.h"
 #include "network/wifi/sensor_wifi.h"
 
@@ -41,24 +41,14 @@
 #include <string.h>
 #include <sys/time.h>
 
-#define TAG "rs485_modem"
+#define TAG "espnow_modem"
 
 // ── Protokollparameter ──────────────────────────────────────────────────
-#define RS485_BUF_SIZE                4096
 #define RS485_LINE_MAX                4096
-#define RS485_MAX_PENDING_CMDS        WOMO_RS485_MAX_PENDING_CMDS
-#define RS485_COMMAND_TIMEOUT_MS      WOMO_RS485_COMMAND_TIMEOUT_MS
-#define RS485_MIN_IDLE_US             150000   // 150 ms TX-Sperre nach RX
-#define RS485_IDLE_WAIT_MAX_US        400000
-#define RS485_MIN_TX_GAP_US            80000   // 80 ms Mindestabstand zwischen zwei TX (Empfangsfenster)
+#define RS485_MAX_PENDING_CMDS        WOMO_SENSOR_MAX_PENDING_CMDS
+#define RS485_COMMAND_TIMEOUT_MS      WOMO_SENSOR_COMMAND_TIMEOUT_MS
 
 // Heartbeat / Handshake Intervalle
-#define RS485_HEARTBEAT_INTERVAL_MS   SENSOR_RS485_HEARTBEAT_INTERVAL_MS
-#define RS485_HELLO_PENDING_MS        SENSOR_RS485_HELLO_PENDING_INTERVAL_MS
-#define RS485_HELLO_READY_MS          SENSOR_RS485_HELLO_READY_INTERVAL_MS
-
-// Stack-Logintervall in ms
-#define RS485_STACK_LOG_INTERVAL_MS   60000
 
 // ── Pending Command Tracking ────────────────────────────────────────────
 typedef struct {
@@ -69,7 +59,6 @@ typedef struct {
     char label[32];
 } rs485_pending_cmd_t;
 
-static SemaphoreHandle_t s_tx_mutex = NULL;
 static rs485_pending_cmd_t s_pending[RS485_MAX_PENDING_CMDS];
 static portMUX_TYPE s_pending_lock = portMUX_INITIALIZER_UNLOCKED;
 static portMUX_TYPE s_seq_lock     = portMUX_INITIALIZER_UNLOCKED;
@@ -77,20 +66,9 @@ static uint32_t s_tx_seq            = 1;
 static uint32_t s_last_rx_seq       = 0;
 static uint32_t s_last_ack_seq      = 0;
 static int64_t  s_last_ack_time_us  = 0;
-static int64_t  s_last_rx_us        = 0;
-static int64_t  s_last_rx_line_us   = 0;
-static int64_t  s_last_tx_us        = 0;   // letzter TX-Abschluss (für Empfangsfenster)
-static volatile bool s_echo_suppress = false; // TX-Echo: eigene Bytes auf Half-Duplex-Bus unterdrücken
-static int64_t  s_last_rx_heartbeat_us = 0;
-static int64_t  s_last_tx_heartbeat_us = 0;
 static bool     s_display_ready     = false;
 static uint32_t s_display_ready_seen = 0;
-static uint32_t s_hello_sent        = 0;
-static uint32_t s_heartbeat_sent    = 0;
 static TaskHandle_t s_tx_task       = NULL;
-static TaskHandle_t s_rx_task       = NULL;
-static uint8_t  s_rx_buffer[RS485_BUF_SIZE];
-static char     s_rx_line_buffer[RS485_LINE_MAX];
 
 // ── Forward-Deklarationen ───────────────────────────────────────────────
 
@@ -100,7 +78,8 @@ static void rs485_publish_bat(void);
 static void rs485_publish_tank(void);
 static void rs485_publish_hx(void);
 static void rs485_publish_gas(void);
-static void rs485_publish_bme(void);
+static void rs485_publish_bme_in(void);
+static void rs485_publish_bme_out(void);
 static void rs485_publish_elec(void);
 
 // ── Hilfsfunktionen ─────────────────────────────────────────────────────
@@ -256,9 +235,7 @@ static void rs485_check_command_timeouts(void)
 
 static esp_err_t rs485_send_frame(const char *label, cJSON *payload, bool need_ack)
 {
-    if (!payload || !s_tx_mutex) {
-        return ESP_ERR_INVALID_STATE;
-    }
+    if (!payload) return ESP_ERR_INVALID_STATE;
 
     uint32_t seq = rs485_next_seq();
     cJSON_AddNumberToObject(payload, "seq", seq);
@@ -267,59 +244,18 @@ static esp_err_t rs485_send_frame(const char *label, cJSON *payload, bool need_a
     }
 
     char *json = cJSON_PrintUnformatted(payload);
-    if (!json) {
-        return ESP_ERR_NO_MEM;
-    }
+    if (!json) return ESP_ERR_NO_MEM;
 
-    size_t json_len = strlen(json);
-    // Newline anhängen
-    char *buf = malloc(json_len + 2);
-    if (!buf) {
-        cJSON_free(json);
-        return ESP_ERR_NO_MEM;
-    }
-    memcpy(buf, json, json_len);
-    buf[json_len]     = '\n';
-    buf[json_len + 1] = '\0';
-    size_t pos = json_len + 1;
+    size_t len = strlen(json);
+    esp_err_t err = espnow_transport_send(json, len);
     cJSON_free(json);
 
-    // Mindest-Idle abwarten (Half-Duplex)
-    int64_t now = esp_timer_get_time();
-    int64_t since_rx = now - s_last_rx_us;
-    if (since_rx < RS485_MIN_IDLE_US && since_rx >= 0) {
-        int64_t wait = RS485_MIN_IDLE_US - since_rx;
-        if (wait > RS485_IDLE_WAIT_MAX_US) wait = RS485_IDLE_WAIT_MAX_US;
-        vTaskDelay(pdMS_TO_TICKS((uint32_t)(wait / 1000)));
-    }
-    // Mindestabstand zum letzten TX einhalten → Empfangsfenster für Display
-    int64_t since_tx = esp_timer_get_time() - s_last_tx_us;
-    if (s_last_tx_us > 0 && since_tx < RS485_MIN_TX_GAP_US && since_tx >= 0) {
-        int64_t wait_tx = RS485_MIN_TX_GAP_US - since_tx;
-        vTaskDelay(pdMS_TO_TICKS((uint32_t)(wait_tx / 1000)));
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "TX %s seq=%u fehlgeschlagen: %s", label, (unsigned)seq, esp_err_to_name(err));
+        return err;
     }
 
-    // TX-Zeit schätzen (zum Logging)
-    uint32_t tx_time_ms = (uint32_t)((pos * 10 * 1000 + (SENSOR_RS485_BAUDRATE - 1)) / SENSOR_RS485_BAUDRATE);
-
-    // Half-Duplex: eigene TX-Bytes erscheinen auf RX → unterdrücken bis TX fertig + Buffer geleert
-    s_echo_suppress = true;
-    xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
-    esp_err_t wr_err = womo_rs485_write((const uint8_t *)buf, pos, pdMS_TO_TICKS(1000));
-    // womo_rs485_write ruft uart_wait_tx_done() – alle Bits sind jetzt physisch gesendet
-    s_last_tx_us = esp_timer_get_time();   // Empfangsfenster ab jetzt
-    xSemaphoreGive(s_tx_mutex);
-    // Echo-Bytes aus RX-Ringpuffer verwerfen, dann RX wieder freigeben
-    womo_rs485_flush_input();
-    s_echo_suppress = false;
-    free(buf);
-
-    if (wr_err != ESP_OK) {
-        ESP_LOGW(TAG, "TX %s failed: %s", label, esp_err_to_name(wr_err));
-        return ESP_FAIL;
-    }
-
-    ESP_LOGI(TAG, "TX %s seq=%u len=%zu tx_ms=%u", label, (unsigned)seq, pos, (unsigned)tx_time_ms);
+    ESP_LOGI(TAG, "TX %s seq=%u len=%u", label, (unsigned)seq, (unsigned)len);
 
     if (need_ack) {
         rs485_register_pending(seq, label);
@@ -343,30 +279,9 @@ static esp_err_t rs485_send_ack(uint32_t ack_seq, bool success, const char *labe
 
 // ── Hello / Heartbeat ───────────────────────────────────────────────────
 
-static esp_err_t rs485_send_hello(void)
-{
-    cJSON *hello = cJSON_CreateObject();
-    if (!hello) return ESP_ERR_NO_MEM;
-    cJSON_AddStringToObject(hello, "type", "hello");
-    cJSON_AddStringToObject(hello, "board", SENSOR_BOARD_NAME);
-
-    const esp_app_desc_t *desc = esp_app_get_description();
-    if (desc) {
-        cJSON_AddStringToObject(hello, "fw", desc->version);
-    }
-
-    int64_t now_us = esp_timer_get_time();
-    cJSON_AddNumberToObject(hello, "uptime", round2((double)now_us / 1000000.0));
-    cJSON_AddNumberToObject(hello, "ts", round2((double)rs485_epoch_ms()));
-
-    esp_err_t err = rs485_send_frame("hello", hello, false);
-    cJSON_Delete(hello);
-    if (err == ESP_OK) s_hello_sent++;
-    return err;
-}
 
 // ── WiFi Passwort-Anfrage ans Display ─────────────────────────────────
-esp_err_t rs485_modem_request_wifi_pass(void)
+esp_err_t espnow_modem_request_wifi_pass(void)
 {
     ESP_LOGI(TAG, "→ Frage Display nach WiFi-Passwort...");
     cJSON *root = cJSON_CreateObject();
@@ -381,30 +296,9 @@ esp_err_t rs485_modem_request_wifi_pass(void)
 // Void-Wrapper für den Auth-Failure-Callback (erwartet void(void))
 static void rs485_wifi_auth_fail_cb(void)
 {
-    rs485_modem_request_wifi_pass();
+    espnow_modem_request_wifi_pass();
 }
 
-static esp_err_t rs485_send_heartbeat(void)
-{
-    cJSON *hb = cJSON_CreateObject();
-    if (!hb) return ESP_ERR_NO_MEM;
-    cJSON_AddStringToObject(hb, "type", "hb");
-
-    int64_t now_us = esp_timer_get_time();
-    cJSON_AddNumberToObject(hb, "uptime", round2((double)now_us / 1000000.0));
-    cJSON_AddNumberToObject(hb, "ts", round2((double)rs485_epoch_ms()));
-
-    UBaseType_t free_heap = esp_get_free_heap_size();
-    cJSON_AddNumberToObject(hb, "heap", (double)free_heap);
-
-    esp_err_t err = rs485_send_frame("hb", hb, false);
-    cJSON_Delete(hb);
-    if (err == ESP_OK) {
-        s_heartbeat_sent++;
-        s_last_tx_heartbeat_us = esp_timer_get_time();
-    }
-    return err;
-}
 
 // ── ACK Handling ────────────────────────────────────────────────────────
 
@@ -434,8 +328,7 @@ static void rs485_handle_display_ready(void)
 {
     s_display_ready = true;
     s_display_ready_seen++;
-    s_last_rx_heartbeat_us = esp_timer_get_time();
-    ESP_LOGI(TAG, "Display ready (count=%u)", (unsigned)s_display_ready_seen);
+    ESP_LOGI(TAG, "Display bereit (count=%u)", (unsigned)s_display_ready_seen);
     
     // Initial-Burst: Alle Topics sofort einmal senden
     ESP_LOGI(TAG, "Sende initiale Sensor-Daten...");
@@ -451,7 +344,9 @@ static void rs485_handle_display_ready(void)
     vTaskDelay(pdMS_TO_TICKS(20));
     rs485_publish_gas();
     vTaskDelay(pdMS_TO_TICKS(20));
-    rs485_publish_bme();
+    rs485_publish_bme_in();
+    vTaskDelay(pdMS_TO_TICKS(20));
+    rs485_publish_bme_out();
     vTaskDelay(pdMS_TO_TICKS(20));
     rs485_publish_elec();
     ESP_LOGI(TAG, "Initiale Sensor-Daten gesendet");
@@ -636,12 +531,17 @@ static void rs485_publish_ctrl(void)
     cJSON_AddBoolToObject(root, "radio_on", s_radio_on);
     cJSON_AddBoolToObject(root, "ac_present", rs485_ac_present());
 
-    // RTC-Batteriestatus mitübertragen
+    // RTC-Batteriestatus
     time_sync_status_t ts_status = {0};
     if (time_sync_get_status(&ts_status) == ESP_OK) {
         cJSON_AddBoolToObject(root, "rtc_bat_low",      ts_status.rtc_battery_low);
         cJSON_AddBoolToObject(root, "rtc_bat_switched", ts_status.rtc_bat_switched);
     }
+
+    // Diagnose-Felder (ehemals hb-Topic)
+    int64_t now_us = esp_timer_get_time();
+    cJSON_AddNumberToObject(root, "uptime", round2((double)now_us / 1000000.0));
+    cJSON_AddNumberToObject(root, "heap",   (double)esp_get_free_heap_size());
 
     rs485_send_frame("ctrl", root, false);
     cJSON_Delete(root);
@@ -684,110 +584,102 @@ static void rs485_publish_imu(void)
     cJSON_Delete(root);
 }
 
-static void rs485_publish_bme(void)
+static void rs485_publish_bme_in(void)
 {
     bme680_snapshot_t bme = {0};
     bme680_app_get_snapshot(&bme);
     cJSON *root = cJSON_CreateObject();
     if (!root) return;
-    cJSON_AddStringToObject(root, "type", "bme");
-
-    // Legacy-Display erwartet semantische Slots: 0x76=Indoor, 0x77=Outdoor.
-    // Die echte physische Adresse liefern wir zusätzlich im Objekt mit.
-    const char *key_in = "0x76";
-    const char *key_out = "0x77";
-
-    // Indoor – ohne Trend-State (nicht benötigt)
-    cJSON *in = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "type", "bme_in");
     if (bme.indoor.valid) {
-        const char *in_chip = bme.indoor.chip == BME_CHIP_BME680 ? "bme680" :
-                              bme.indoor.chip == BME_CHIP_BME280 ? "bme280" :
-                              bme.indoor.chip == BME_CHIP_BME260 ? "bme260" : "unknown";
-        cJSON_AddStringToObject(in, "chip", in_chip);
-        cJSON_AddNumberToObject(in, "addr", bme.indoor_addr);
-        cJSON_AddNumberToObject(in, "temp_c", round2(bme.indoor.temperature_c));
-        cJSON_AddNumberToObject(in, "rh_pct", round2(bme.indoor.humidity_pct));
-        cJSON_AddNumberToObject(in, "press_hpa", round2(bme.indoor.pressure_hpa));
+        const char *chip = bme.indoor.chip == BME_CHIP_BME680 ? "bme680" :
+                           bme.indoor.chip == BME_CHIP_BME280 ? "bme280" :
+                           bme.indoor.chip == BME_CHIP_BME260 ? "bme260" : "unknown";
+        cJSON_AddStringToObject(root, "chip", chip);
+        cJSON_AddNumberToObject(root, "addr", bme.indoor_addr);
+        cJSON_AddNumberToObject(root, "temp_c", round2(bme.indoor.temperature_c));
+        cJSON_AddNumberToObject(root, "rh_pct", round2(bme.indoor.humidity_pct));
+        cJSON_AddNumberToObject(root, "press_hpa", round2(bme.indoor.pressure_hpa));
         if (bme.indoor.gas_valid)
-            cJSON_AddNumberToObject(in, "gas_kohm", round2(bme.indoor.gas_kohm));
+            cJSON_AddNumberToObject(root, "gas_kohm", round2(bme.indoor.gas_kohm));
         if (bme.indoor.iaq_valid) {
-            cJSON_AddNumberToObject(in, "iaq", round2(bme.indoor.iaq));
-            cJSON_AddNumberToObject(in, "iaq_acc", bme.indoor.iaq_accuracy);
-            cJSON_AddNumberToObject(in, "eco2_ppm", round2(bme.indoor.eco2_ppm));
-            cJSON_AddNumberToObject(in, "bvoc_ppm", round2(bme.indoor.bvoc_ppm));
+            cJSON_AddNumberToObject(root, "iaq", round2(bme.indoor.iaq));
+            cJSON_AddNumberToObject(root, "iaq_acc", bme.indoor.iaq_accuracy);
+            cJSON_AddNumberToObject(root, "eco2_ppm", round2(bme.indoor.eco2_ppm));
+            cJSON_AddNumberToObject(root, "bvoc_ppm", round2(bme.indoor.bvoc_ppm));
         }
-        cJSON_AddNumberToObject(in, "ts", ts_us_to_epoch_ms(bme.indoor.timestamp_us));
+        cJSON_AddNumberToObject(root, "ts", ts_us_to_epoch_ms(bme.indoor.timestamp_us));
     } else {
-        cJSON_AddNumberToObject(in, "temp_c", 0.0);
-        cJSON_AddNumberToObject(in, "rh_pct", 0.0);
-        cJSON_AddNumberToObject(in, "press_hpa", 0.0);
+        cJSON_AddNumberToObject(root, "temp_c", 0.0);
+        cJSON_AddNumberToObject(root, "rh_pct", 0.0);
+        cJSON_AddNumberToObject(root, "press_hpa", 0.0);
     }
-    cJSON_AddItemToObject(root, key_in, in);
+    rs485_send_frame("bme_in", root, false);
+    cJSON_Delete(root);
+}
 
-    // Outdoor – mit 5-stufigem Trend
-    cJSON *out = cJSON_CreateObject();
+static void rs485_publish_bme_out(void)
+{
+    bme680_snapshot_t bme = {0};
+    bme680_app_get_snapshot(&bme);
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return;
+    cJSON_AddStringToObject(root, "type", "bme_out");
     if (bme.outdoor.valid) {
-        const char *out_chip = bme.outdoor.chip == BME_CHIP_BME680 ? "bme680" :
-                               bme.outdoor.chip == BME_CHIP_BME280 ? "bme280" :
-                               bme.outdoor.chip == BME_CHIP_BME260 ? "bme260" : "unknown";
-        cJSON_AddStringToObject(out, "chip", out_chip);
-        cJSON_AddNumberToObject(out, "addr", bme.outdoor_addr);
-        cJSON_AddNumberToObject(out, "temp_c", round2(bme.outdoor.temperature_c));
-        cJSON_AddNumberToObject(out, "rh_pct", round2(bme.outdoor.humidity_pct));
-        cJSON_AddNumberToObject(out, "press_hpa", round2(bme.outdoor.pressure_hpa));
-        
+        const char *chip = bme.outdoor.chip == BME_CHIP_BME680 ? "bme680" :
+                           bme.outdoor.chip == BME_CHIP_BME280 ? "bme280" :
+                           bme.outdoor.chip == BME_CHIP_BME260 ? "bme260" : "unknown";
+        cJSON_AddStringToObject(root, "chip", chip);
+        cJSON_AddNumberToObject(root, "addr", bme.outdoor_addr);
+        cJSON_AddNumberToObject(root, "temp_c", round2(bme.outdoor.temperature_c));
+        cJSON_AddNumberToObject(root, "rh_pct", round2(bme.outdoor.humidity_pct));
+        cJSON_AddNumberToObject(root, "press_hpa", round2(bme.outdoor.pressure_hpa));
+
         // Luftdruck-Trend: bevorzugt 3h, Fallback 1h
-        {
-            bool have_trend = false;
-            bme680_pressure_trend_t trend_state = BME680_TREND_STEADY;
-            float trend_hpa_h = 0.0f;
-
-            if (bme.outdoor.press_trend_3h_valid) {
-                trend_state = bme.outdoor.press_trend_3h_state;
-                trend_hpa_h = bme.outdoor.press_trend_3h_hpa_h;
-                have_trend = true;
-                if (bme.outdoor.press_trend_1h_valid) {
-                    bool t3_rising  = (trend_state == BME680_TREND_RISING || trend_state == BME680_TREND_RISING_FAST);
-                    bool t3_falling = (trend_state == BME680_TREND_FALLING || trend_state == BME680_TREND_FALLING_FAST);
-                    bme680_pressure_trend_t s1h = bme.outdoor.press_trend_1h_state;
-                    bool t1_rising  = (s1h == BME680_TREND_RISING || s1h == BME680_TREND_RISING_FAST);
-                    bool t1_falling = (s1h == BME680_TREND_FALLING || s1h == BME680_TREND_FALLING_FAST);
-                    if ((t3_rising && !t1_rising) || (t3_falling && !t1_falling)) {
-                        trend_state = s1h;
-                        trend_hpa_h = bme.outdoor.press_trend_1h_hpa_h;
-                    }
+        bool have_trend = false;
+        bme680_pressure_trend_t trend_state = BME680_TREND_STEADY;
+        float trend_hpa_h = 0.0f;
+        if (bme.outdoor.press_trend_3h_valid) {
+            trend_state = bme.outdoor.press_trend_3h_state;
+            trend_hpa_h = bme.outdoor.press_trend_3h_hpa_h;
+            have_trend = true;
+            if (bme.outdoor.press_trend_1h_valid) {
+                bool t3_rising  = (trend_state == BME680_TREND_RISING || trend_state == BME680_TREND_RISING_FAST);
+                bool t3_falling = (trend_state == BME680_TREND_FALLING || trend_state == BME680_TREND_FALLING_FAST);
+                bme680_pressure_trend_t s1h = bme.outdoor.press_trend_1h_state;
+                bool t1_rising  = (s1h == BME680_TREND_RISING || s1h == BME680_TREND_RISING_FAST);
+                bool t1_falling = (s1h == BME680_TREND_FALLING || s1h == BME680_TREND_FALLING_FAST);
+                if ((t3_rising && !t1_rising) || (t3_falling && !t1_falling)) {
+                    trend_state = s1h;
+                    trend_hpa_h = bme.outdoor.press_trend_1h_hpa_h;
                 }
-            } else if (bme.outdoor.press_trend_1h_valid) {
-                trend_state = bme.outdoor.press_trend_1h_state;
-                trend_hpa_h = bme.outdoor.press_trend_1h_hpa_h;
-                have_trend = true;
             }
-
-            if (have_trend) {
-                const char *s = "steady";
-                switch (trend_state) {
-                    case BME680_TREND_FALLING_FAST: s = "fall_fast"; break;
-                    case BME680_TREND_FALLING:      s = "fall_slow"; break;
-                    case BME680_TREND_STEADY:       s = "steady"; break;
-                    case BME680_TREND_RISING:       s = "rise_slow"; break;
-                    case BME680_TREND_RISING_FAST:  s = "rise_fast"; break;
-                }
-                cJSON_AddStringToObject(out, "press_trend_state", s);
-                cJSON_AddNumberToObject(out, "press_trend_hpa_h", round2(trend_hpa_h));
-            }
+        } else if (bme.outdoor.press_trend_1h_valid) {
+            trend_state = bme.outdoor.press_trend_1h_state;
+            trend_hpa_h = bme.outdoor.press_trend_1h_hpa_h;
+            have_trend = true;
         }
-        
+        if (have_trend) {
+            const char *s = "steady";
+            switch (trend_state) {
+                case BME680_TREND_FALLING_FAST: s = "fall_fast"; break;
+                case BME680_TREND_FALLING:      s = "fall_slow"; break;
+                case BME680_TREND_STEADY:       s = "steady";    break;
+                case BME680_TREND_RISING:       s = "rise_slow"; break;
+                case BME680_TREND_RISING_FAST:  s = "rise_fast"; break;
+            }
+            cJSON_AddStringToObject(root, "press_trend_state", s);
+            cJSON_AddNumberToObject(root, "press_trend_hpa_h", round2(trend_hpa_h));
+        }
         if (bme.outdoor.gas_valid)
-            cJSON_AddNumberToObject(out, "gas_kohm", round2(bme.outdoor.gas_kohm));
-        cJSON_AddNumberToObject(out, "ts", ts_us_to_epoch_ms(bme.outdoor.timestamp_us));
+            cJSON_AddNumberToObject(root, "gas_kohm", round2(bme.outdoor.gas_kohm));
+        cJSON_AddNumberToObject(root, "ts", ts_us_to_epoch_ms(bme.outdoor.timestamp_us));
     } else {
-        cJSON_AddNumberToObject(out, "temp_c", 0.0);
-        cJSON_AddNumberToObject(out, "rh_pct", 0.0);
-        cJSON_AddNumberToObject(out, "press_hpa", 0.0);
+        cJSON_AddNumberToObject(root, "temp_c", 0.0);
+        cJSON_AddNumberToObject(root, "rh_pct", 0.0);
+        cJSON_AddNumberToObject(root, "press_hpa", 0.0);
     }
-    cJSON_AddItemToObject(root, key_out, out);
-
-    rs485_send_frame("bme", root, false);
+    rs485_send_frame("bme_out", root, false);
     cJSON_Delete(root);
 }
 
@@ -1110,9 +1002,10 @@ static rs485_topic_t s_topics[] = {
     { "bat",   WOMO_TOPIC_BAT_INTERVAL_MS,  0, rs485_publish_bat  },
     { "tank",  WOMO_TOPIC_TANK_INTERVAL_MS, 0, rs485_publish_tank },
     { "hx",    WOMO_TOPIC_HX_INTERVAL_MS,   0, rs485_publish_hx   },
-    { "gas",   WOMO_TOPIC_GAS_INTERVAL_MS,  0, rs485_publish_gas  },
-    { "bme",   WOMO_TOPIC_BME_INTERVAL_MS,  0, rs485_publish_bme  },
-    { "elec",  SENSOR_INA226_POLL_INTERVAL_MS, 0, rs485_publish_elec },
+    { "gas",     WOMO_TOPIC_GAS_INTERVAL_MS,  0, rs485_publish_gas     },
+    { "bme_in",  WOMO_TOPIC_BME_INTERVAL_MS,  0, rs485_publish_bme_in  },
+    { "bme_out", WOMO_TOPIC_BME_INTERVAL_MS,  0, rs485_publish_bme_out },
+    { "elec",    WOMO_TOPIC_ELEC_INTERVAL_MS,    0, rs485_publish_elec  },
 };
 #define RS485_TOPIC_COUNT (sizeof(s_topics) / sizeof(s_topics[0]))
 static size_t s_topic_rr = 0;
@@ -1206,7 +1099,7 @@ static bool rs485_line_is_ascii(const char *line)
     const unsigned char *p = (const unsigned char *)line;
     while (*p) {
         if (*p < 0x20 || *p > 0x7E) {
-            ESP_LOGW(TAG, "RS485 line dropped (non-ASCII 0x%02X)", (unsigned)*p);
+            ESP_LOGW(TAG, "Sensor frame dropped (non-ASCII 0x%02X)", (unsigned)*p);
             return false;
         }
         ++p;
@@ -1285,16 +1178,10 @@ static void rs485_process_rx_line(const char *line)
         rs485_handle_ack_packet(root);
         need_ack = false;
         ack_success = true;
-    } else if (type && strcmp(type, "hb") == 0) {
-        s_last_rx_heartbeat_us = esp_timer_get_time();
-        if (!s_display_ready) rs485_handle_display_ready();
+    } else if (type && (strcmp(type, "hb") == 0 || strcmp(type, "hello") == 0)) {
+        /* Display-Heartbeat/-Hello: kein ACK nötig, Peer-Erkennung läuft via espnow_transport */
         ack_success = true;
         need_ack = false;
-    } else if (type && strcmp(type, "hello") == 0) {
-        s_last_rx_heartbeat_us = esp_timer_get_time();
-        ack_success = true;
-        need_ack = false;
-        rs485_handle_display_ready();
     } else if (cmd_str) {
         esp_err_t cmd_err = ESP_OK;
         bool handled = rs485_execute_command(root, cmd_str, &cmd_err);
@@ -1324,67 +1211,15 @@ static void rs485_process_rx_line(const char *line)
     }
 }
 
-// ── RX / TX Tasks ───────────────────────────────────────────────────────
-
-static void rs485_rx_task(void *arg)
-{
-    (void)arg;
-    ESP_LOGI(TAG, "RX task started");
-    TickType_t last_stack_log = xTaskGetTickCount();
-    size_t line_pos = 0;
-
-    while (true) {
-        int len = womo_rs485_read(s_rx_buffer, sizeof(s_rx_buffer) - 1, pdMS_TO_TICKS(100));
-        if (len > 0) {
-            s_last_rx_us = esp_timer_get_time();
-            for (int i = 0; i < len; ++i) {
-                char c = (char)s_rx_buffer[i];
-                if (c == '\n' || c == '\r') {
-                    if (line_pos > 0) {
-                        s_rx_line_buffer[line_pos] = '\0';
-                        s_last_rx_line_us = s_last_rx_us;
-                        if (!s_echo_suppress) {
-                            rs485_process_rx_line(s_rx_line_buffer);
-                        } else {
-                            ESP_LOGD(TAG, "TX-Echo unterdrückt: %s", s_rx_line_buffer);
-                        }
-                        line_pos = 0;
-                    }
-                } else if ((unsigned char)c >= 0x20 && (unsigned char)c <= 0x7E) {
-                    if (line_pos < sizeof(s_rx_line_buffer) - 1) {
-                        s_rx_line_buffer[line_pos++] = c;
-                    } else {
-                        line_pos = 0;
-                    }
-                } else {
-                    // Ignore noise/non-ASCII
-                    line_pos = 0;
-                }
-            }
-        }
-
-        TickType_t now = xTaskGetTickCount();
-        if ((now - last_stack_log) >= pdMS_TO_TICKS(RS485_STACK_LOG_INTERVAL_MS)) {
-            UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
-            ESP_LOGI(TAG, "RX stack watermark: %u words (%u bytes)", (unsigned)watermark, (unsigned)(watermark * sizeof(StackType_t)));
-            last_stack_log = now;
-        }
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-}
+// ── TX Task ─────────────────────────────────────────────────────────────
+// RX läuft im espnow_transport: espnow_rx_task → rs485_process_rx_line()
 
 static void rs485_tx_task(void *arg)
 {
     (void)arg;
     ESP_LOGI(TAG, "TX task started (topic-based, %d topics)", (int)RS485_TOPIC_COUNT);
 
-    const TickType_t loop_delay         = pdMS_TO_TICKS(100);
-    const TickType_t hello_interval     = ms_to_ticks(RS485_HELLO_PENDING_MS);
-    const TickType_t heartbeat_interval = (RS485_HEARTBEAT_INTERVAL_MS > 0)
-                                              ? ms_to_ticks(RS485_HEARTBEAT_INTERVAL_MS)
-                                              : 0;
-    TickType_t last_hello_send     = xTaskGetTickCount() - hello_interval;
-    TickType_t last_heartbeat_send = xTaskGetTickCount();
+    const TickType_t loop_delay = pdMS_TO_TICKS(100);
 
     // Initialisiere Topic-Timer
     TickType_t now_init = xTaskGetTickCount();
@@ -1392,22 +1227,12 @@ static void rs485_tx_task(void *arg)
         s_topics[i].last_sent = now_init;
     }
 
-    rs485_send_hello();
-    last_hello_send = xTaskGetTickCount();
-
     while (true) {
         TickType_t now = xTaskGetTickCount();
 
-        // Hello bis Display bereit
-        if (!s_display_ready && (now - last_hello_send) >= hello_interval) {
-            rs485_send_hello();
-            last_hello_send = now;
-        }
-
-        // Heartbeat (Lebenszeichen, kein Daten-Payload)
-        if (heartbeat_interval > 0 && s_display_ready && (now - last_heartbeat_send) >= heartbeat_interval) {
-            rs485_send_heartbeat();
-            last_heartbeat_send = now;
+        // Display-Peer über ESP-NOW bekannt? → Topics einmalig freischalten + Initial-Burst
+        if (!s_display_ready && espnow_transport_peer_known()) {
+            rs485_handle_display_ready();
         }
 
         // Sofort-Ctrl nach Command-Ausführung (Button-Feedback)
@@ -1437,46 +1262,34 @@ static void rs485_tx_task(void *arg)
 
 // ── Init ────────────────────────────────────────────────────────────────
 
-esp_err_t rs485_modem_init(void)
+esp_err_t espnow_modem_init(void)
 {
-    if (s_tx_task || s_rx_task) {
+    if (s_tx_task) {
         return ESP_OK;
     }
 
-    esp_err_t err = womo_rs485_init();
+    esp_err_t err = espnow_transport_init();
     if (err != ESP_OK) {
         return err;
     }
+    espnow_transport_set_recv_cb(rs485_process_rx_line);
 
     rs485_power_gpio_init();
 
-    s_tx_mutex = xSemaphoreCreateMutex();
-    if (!s_tx_mutex) {
-        return ESP_ERR_NO_MEM;
-    }
-
-    // RX-Task braucht großen Stack (4k RX-Buffer + 4k Line-Buffer + 4k clean_line + Parsing)
-    BaseType_t rx_created = xTaskCreate(rs485_rx_task, "rs485_rx", 16384, NULL, 5, &s_rx_task);
-    if (rx_created != pdPASS) {
-        return ESP_FAIL;
-    }
-
-    BaseType_t tx_created = xTaskCreate(rs485_tx_task, "rs485_tx", 6144, NULL, 5, &s_tx_task);
+    BaseType_t tx_created = xTaskCreate(rs485_tx_task, "espnow_tx", 6144, NULL, 5, &s_tx_task);
     if (tx_created != pdPASS) {
         return ESP_FAIL;
     }
 
-    // WiFi Auth-Failure-Callback registrieren: bei Verbindungsproblem
-    // wird das Display nach dem Passwort gefragt
     sensor_wifi_set_auth_fail_cb(rs485_wifi_auth_fail_cb);
 
-    ESP_LOGI(TAG, "RS485 sensor link ready (UART%d)", (int)SENSOR_RS485_UART_PORT);
+    ESP_LOGI(TAG, "ESP-NOW sensor link bereit");
     return ESP_OK;
 }
 
 // ── Web-Snapshot: alle Sensordaten als JSON-String ──────────────────────
 
-esp_err_t rs485_modem_get_snapshot(char **json_out)
+esp_err_t espnow_modem_get_snapshot(char **json_out)
 {
     if (!json_out) return ESP_ERR_INVALID_ARG;
 
@@ -1691,13 +1504,13 @@ static esp_err_t execute_cmd_with_root(const cJSON *root, const char *cmd)
     return ESP_OK;
 }
 
-esp_err_t rs485_modem_execute_cmd(const char *cmd)
+esp_err_t espnow_modem_execute_cmd(const char *cmd)
 {
     if (!cmd || cmd[0] == '\0') return ESP_ERR_INVALID_ARG;
     return execute_cmd_with_root(NULL, cmd);
 }
 
-esp_err_t rs485_modem_execute_cmd_json(const cJSON *root)
+esp_err_t espnow_modem_execute_cmd_json(const cJSON *root)
 {
     if (!root) return ESP_ERR_INVALID_ARG;
     const cJSON *cmd_item = cJSON_GetObjectItemCaseSensitive(root, "cmd");

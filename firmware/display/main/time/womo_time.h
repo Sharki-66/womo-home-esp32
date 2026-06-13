@@ -10,7 +10,7 @@
  * Manages system time with multiple sources:
  * - Internal ESP32 RTC (always running)
  * - NTP sync via WiFi (when available)
- * - GPS sync via RS485 Sensorboard
+ * - GPS sync via Sensorboard ESP-NOW
  */
 
 #ifndef WOMO_TIME_H
@@ -26,7 +26,7 @@ typedef enum {
     TIME_SOURCE_INTERNAL_RTC,
     TIME_SOURCE_NTP,
     TIME_SOURCE_GPS,
-    TIME_SOURCE_RS485
+    TIME_SOURCE_SENSOR
 } womo_time_source_t;
 
 // Time sync configuration
@@ -54,7 +54,7 @@ esp_err_t womo_time_init(void);
 esp_err_t womo_time_sync_ntp(bool wait_for_sync);
 
 /**
- * @brief Sync time from GPS/RS485 (Sensorboard)
+ * @brief Sync time from GPS/Sensorboard (Sensorboard)
  * 
  * Uses timestamp from Sensorboard RS485 packets
  * 
@@ -64,14 +64,14 @@ esp_err_t womo_time_sync_ntp(bool wait_for_sync);
 esp_err_t womo_time_sync_gps(time_t gps_time);
 
 /**
- * @brief Mark time as synced from RS485 sensor
+ * @brief Mark time as synced from Sensorboard
  * 
- * Call this after successfully receiving timestamp from RS485 sensor
+ * Call this after successfully receiving timestamp from Sensorboard
  * and updating system time via settimeofday()
  * 
  * @return ESP_OK on success
  */
-esp_err_t womo_time_mark_synced_rs485(void);
+esp_err_t womo_time_mark_synced_sensor(void);
 
 /**
  * @brief Get current time

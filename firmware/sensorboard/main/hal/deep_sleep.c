@@ -141,11 +141,11 @@ void deep_sleep_enter(void)
     gpio_set_level(SENSOR_MULTIMEDIA_PWR_GPIO, 0);
     gpio_hold_en(SENSOR_MULTIMEDIA_PWR_GPIO);
 
-    /* RS485-Transceiver: DE/RTS LOW halten (kein Empfangsstrom).
+    /* Ehemaliger RS485-DE (GPIO8): im Deep-Sleep LOW halten (kein Empfangsstrom).
      * gpio_hold_en() friert den Pegel ein, auch wenn UART im Sleep aus ist. */
-    gpio_set_direction(SENSOR_RS485_DE_GPIO, GPIO_MODE_OUTPUT);
-    gpio_set_level(SENSOR_RS485_DE_GPIO, 0);
-    gpio_hold_en(SENSOR_RS485_DE_GPIO);
+    gpio_set_direction(SENSOR_ESPNOW_DE_LEGACY_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(SENSOR_ESPNOW_DE_LEGACY_GPIO, 0);
+    gpio_hold_en(SENSOR_ESPNOW_DE_LEGACY_GPIO);
 
     /* ── Sleep einleiten ───────────────────────────────────────────── */
 

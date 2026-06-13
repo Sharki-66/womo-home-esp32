@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "womo_rs485_display.h"
+#include "womo_sensorboard.h"
+#include "espnow/womo_espnow.h"
 #include "womo_config.h"
-#include "driver/uart.h"
-#include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -24,68 +23,22 @@
 #include "time/womo_time.h"
 #include "hardware/buzzer.h"
 
-static const char *TAG = "rs485_display";
+static const char *TAG = "sensorboard";
 
-// RS485 Hardware Configuration
-#define RS485_UART_NUM      UART_NUM_1
-#define RS485_TX_GPIO       16  // Hardware connector pin (Waveshare: TXD=16)
-#define RS485_RX_GPIO       15  // Hardware connector pin (Waveshare: RXD=15)
-#define RS485_DE_GPIO       -1  // DE handled by onboard transistor logic
-#define RS485_BAUD_RATE     WOMO_RS485_BAUDRATE
-#define RS485_BUF_SIZE      16384
-#define RS485_LINE_MAX      16384
-// Maximale Länge für ein unvollständiges Fragment, bevor wir es verwerfen
-#define RS485_FRAGMENT_MAX_KEEP 4096
-#define RS485_RX_IDLE_GUARD_US   30000   // TX-Sperre nach RX für ca. 30 ms
-#define RS485_LINE_STALE_US      200000  // 200 ms: line_buffer-Daten ohne CRLF verwerfen
-#define RS485_FRAG_STALE_US      500000  // 500 ms: Fragment-Buffer verwerfen
-    
-    // Log einen kurzen Ausschnitt eines Fragments (Anfang/Ende), um Framing-Probleme schneller zu sehen
-    static void log_fragment_preview(const char *buf, size_t len)
-    {
-        if (!buf || len == 0) {
-            ESP_LOGW(TAG, "Fragment preview: empty");
-            return;
-        }
-    
-        const size_t head_len = (len < 16) ? len : 16;
-        const size_t tail_len = (len <= 32) ? 0 : 16;
-        char head[17] = {0};
-        char tail[17] = {0};
-    
-        memcpy(head, buf, head_len);
-        head[head_len] = '\0';
-    
-        if (tail_len > 0) {
-            memcpy(tail, buf + (len - tail_len), tail_len);
-            tail[tail_len] = '\0';
-            ESP_LOGW(TAG, "Fragment len=%u head=\"%s\" tail=\"%s\"", (unsigned)len, head, tail);
-        } else {
-            ESP_LOGW(TAG, "Fragment len=%u head=\"%s\"", (unsigned)len, head);
-        }
-    }
+#define SB_LINE_MAX      4096
 
-#define RS485_HEARTBEAT_INTERVAL_MS   WOMO_RS485_HEARTBEAT_INTERVAL_MS
-#define RS485_COMMAND_TIMEOUT_MS      WOMO_RS485_COMMAND_TIMEOUT_MS
-#define RS485_MAX_PENDING_CMDS        WOMO_RS485_MAX_PENDING_CMDS
+#define SB_HEARTBEAT_INTERVAL_MS   WOMO_SENSOR_HEARTBEAT_INTERVAL_MS
+#define SB_COMMAND_TIMEOUT_MS         WOMO_SENSOR_COMMAND_TIMEOUT_MS
 
 // State
 static bool s_initialized = false;
 static womo_sensor_data_t s_latest_data = {0};
 static SemaphoreHandle_t s_data_mutex = NULL;
-static SemaphoreHandle_t s_tx_mutex = NULL;
-static womo_rs485_data_cb_t s_data_callback = NULL;
+static womo_sensorboard_data_cb_t s_data_callback = NULL;
 static void *s_callback_user_data = NULL;
-static womo_rs485_event_cb_t s_event_callback = NULL;
+static womo_sensorboard_event_cb_t s_event_callback = NULL;
 static void *s_event_user_data = NULL;
 static TaskHandle_t s_heartbeat_task = NULL;
-static uint8_t s_uart_buffer[RS485_BUF_SIZE] = {0};
-static char s_line_buffer[RS485_LINE_MAX] = {0};
-static char s_fragment_buffer[RS485_LINE_MAX] = {0};
-static size_t s_fragment_len = 0;
-static int64_t s_fragment_start_us = 0;
-static volatile bool s_rx_line_pending = false;  // true solange RX-Task eine Zeile akkumuliert (kein CRLF)
-static volatile bool s_tx_active = false;        // true während UART TX läuft (Echo-Unterdrückung)
 
 typedef struct {
     bool in_use;
@@ -95,7 +48,7 @@ typedef struct {
     int64_t sent_us;
 } rs485_pending_cmd_t;
 
-static rs485_pending_cmd_t s_pending_cmds[RS485_MAX_PENDING_CMDS] = {0};
+static rs485_pending_cmd_t s_pending_cmds[WOMO_SENSOR_MAX_PENDING_CMDS] = {0};
 static portMUX_TYPE s_pending_cmd_lock = portMUX_INITIALIZER_UNLOCKED;
 static portMUX_TYPE s_seq_lock = portMUX_INITIALIZER_UNLOCKED;
 static uint32_t s_tx_seq_counter = 1;
@@ -104,9 +57,8 @@ static uint32_t s_last_ack_seq = 0;
 static int64_t s_last_ack_time_us = 0;
 static int64_t s_last_heartbeat_rx_us = 0;
 static int64_t s_last_heartbeat_tx_us = 0;
-static int64_t s_last_rx_activity_us = 0;
 
-static void rs485_emit_event(womo_rs485_event_t event)
+static void sb_emit_event(womo_sensorboard_event_t event)
 {
     if (s_event_callback) {
         s_event_callback(event, s_event_user_data);
@@ -114,92 +66,22 @@ static void rs485_emit_event(womo_rs485_event_t event)
 }
 
 // Forward declarations
-static void rs485_rx_task(void *arg);
-static void rs485_heartbeat_task(void *arg);
-static void rs485_process_line(char *line_buffer, size_t captured_len);
-static bool rs485_find_json_end(const char *start, char **end_ptr);
+static void espnow_frame_received_cb(const char *json_str);
+static void sb_heartbeat_task(void *arg);
 static void parse_json_packet(const char *json_str, size_t raw_line_len, bool truncated_before_parse);
-static bool rs485_recent_rx_activity(void);
-static esp_err_t rs485_write_and_wait(const char *payload);
-static esp_err_t rs485_send_simple_command(const char *cmd);
-static uint32_t rs485_next_seq(void);
-static esp_err_t rs485_send_frame_ex(cJSON *root, const char *pending_cmd, bool priority);
-static esp_err_t rs485_send_frame(cJSON *root, const char *pending_cmd);
-static esp_err_t rs485_send_ack(uint32_t rx_seq, bool ok, const char *cmd, const char *err_msg);
-static void rs485_handle_ack_packet(const cJSON *root);
-static void rs485_record_rx_seq(uint32_t seq);
-static void rs485_add_pending(uint32_t seq, const char *label);
-static void rs485_resolve_pending(uint32_t seq, bool success, const char *label_from_packet, const char *err_text);
-static void rs485_check_command_timeouts(void);
-static esp_err_t rs485_send_heartbeat(void);
+static esp_err_t sb_send_simple_command(const char *cmd);
+static uint32_t sb_next_seq(void);
+static esp_err_t sb_send_frame(cJSON *root, const char *pending_cmd);
+static esp_err_t sb_send_ack(uint32_t rx_seq, bool ok, const char *cmd, const char *err_msg);
+static void sb_handle_ack_packet(const cJSON *root);
+static void sb_record_rx_seq(uint32_t seq);
+static void sb_add_pending(uint32_t seq, const char *label);
+static void sb_remove_pending(uint32_t seq);
+static void sb_resolve_pending(uint32_t seq, bool success, const char *label_from_packet, const char *err_text);
+static void sb_check_command_timeouts(void);
+static esp_err_t sb_send_heartbeat(void);
 
-static bool rs485_recent_rx_activity(void)
-{
-    if (s_last_rx_activity_us == 0) {
-        return false;
-    }
-
-    const int64_t now = esp_timer_get_time();
-    return (now - s_last_rx_activity_us) < RS485_RX_IDLE_GUARD_US;
-}
-
-static esp_err_t rs485_write_and_wait(const char *payload)
-{
-    if (!s_initialized || !payload) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    const size_t len = strlen(payload);
-    if (len == 0) {
-        return ESP_OK;
-    }
-
-    // ── Auto-DE Preamble ──────────────────────────────────────────────
-    // Der Auto-DE-Transistor auf dem Waveshare-Board toggelt DE bei
-    // JEDEM Stop-Bit (TX→HIGH für ~8,7 µs bei 115200 Baud).
-    // Dadurch wechselt der Transceiver bei jedem Byte kurz auf RX und
-    // der Bus geht in den (undefinierten) Idle-Zustand → Framing-Errors.
-    // Workaround: 32 Null-Bytes als Preamble senden, damit der Empfänger
-    // genug Transitionen sieht, um sich einzusynchronisieren.
-    // Der Sensor-Parser ignoriert Bytes außerhalb 0x20–0x7E automatisch.
-    static const uint8_t preamble[32] = {0};
-    size_t total = sizeof(preamble) + len;
-    char *tx_buf = malloc(total);
-    if (!tx_buf) {
-        return ESP_ERR_NO_MEM;
-    }
-    memcpy(tx_buf, preamble, sizeof(preamble));
-    memcpy(tx_buf + sizeof(preamble), payload, len);
-
-    s_tx_active = true;
-    int written = uart_write_bytes(RS485_UART_NUM, tx_buf, total);
-    free(tx_buf);
-
-    if (written <= 0) {
-        s_tx_active = false;
-        return ESP_FAIL;
-    }
-
-    // Timeout muss groß genug sein für die aktuelle Baudrate.
-    // Bei 9600 Baud braucht ein 200-Byte-Paket ~210 ms → 500 ms Timeout.
-    // Bei 115200 Baud braucht es ~17 ms → 500 ms schadet nicht.
-    esp_err_t wait_err = uart_wait_tx_done(RS485_UART_NUM, pdMS_TO_TICKS(WOMO_RS485_TX_WAIT_TIMEOUT_MS));
-    if (wait_err != ESP_OK) {
-        ESP_LOGW(TAG, "uart_wait_tx_done failed: %s", esp_err_to_name(wait_err));
-        s_tx_active = false;
-        return wait_err;
-    }
-
-    // Auto-DE-Transistor: TX-Echo landet im RX-Buffer.
-    // Half-Duplex: Sensor wartet 150 ms nach RX vor eigenem TX,
-    // daher sind direkt nach unserem TX keine Sensor-Bytes im Buffer.
-    uart_flush_input(RS485_UART_NUM);
-    s_tx_active = false;
-
-    return ESP_OK;
-}
-
-static uint32_t rs485_next_seq(void)
+static uint32_t sb_next_seq(void)
 {
     uint32_t seq = 0;
     taskENTER_CRITICAL(&s_seq_lock);
@@ -209,12 +91,12 @@ static uint32_t rs485_next_seq(void)
     }
     taskEXIT_CRITICAL(&s_seq_lock);
     if (seq == 0) {
-        return rs485_next_seq();
+        return sb_next_seq();
     }
     return seq;
 }
 
-static void rs485_record_rx_seq(uint32_t seq)
+static void sb_record_rx_seq(uint32_t seq)
 {
     if (seq == 0) {
         return;
@@ -224,7 +106,7 @@ static void rs485_record_rx_seq(uint32_t seq)
     taskEXIT_CRITICAL(&s_seq_lock);
 }
 
-static void rs485_add_pending(uint32_t seq, const char *label)
+static void sb_add_pending(uint32_t seq, const char *label)
 {
     if (!seq || !label || label[0] == '\0') {
         return;
@@ -241,7 +123,7 @@ static void rs485_add_pending(uint32_t seq, const char *label)
 
     bool stored = false;
     taskENTER_CRITICAL(&s_pending_cmd_lock);
-    for (size_t i = 0; i < RS485_MAX_PENDING_CMDS; ++i) {
+    for (size_t i = 0; i < WOMO_SENSOR_MAX_PENDING_CMDS; ++i) {
         if (s_pending_cmds[i].in_use && strncmp(s_pending_cmds[i].label, label, sizeof(s_pending_cmds[i].label)) == 0) {
             /* Bereits ausstehend: seq + Zeitstempel aktualisieren, damit das ACK
              * der erneut gesendeten Nachricht den Eintrag korrekt auflöst. */
@@ -264,7 +146,20 @@ static void rs485_add_pending(uint32_t seq, const char *label)
     }
 }
 
-static void rs485_resolve_pending(uint32_t seq,
+static void sb_remove_pending(uint32_t seq)
+{
+    if (!seq) return;
+    taskENTER_CRITICAL(&s_pending_cmd_lock);
+    for (size_t i = 0; i < WOMO_SENSOR_MAX_PENDING_CMDS; ++i) {
+        if (s_pending_cmds[i].in_use && s_pending_cmds[i].seq == seq) {
+            s_pending_cmds[i].in_use = false;
+            break;
+        }
+    }
+    taskEXIT_CRITICAL(&s_pending_cmd_lock);
+}
+
+static void sb_resolve_pending(uint32_t seq,
                                   bool success,
                                   const char *label_from_packet,
                                   const char *err_text)
@@ -277,7 +172,7 @@ static void rs485_resolve_pending(uint32_t seq,
     bool found = false;
 
     taskENTER_CRITICAL(&s_pending_cmd_lock);
-    for (size_t i = 0; i < RS485_MAX_PENDING_CMDS; ++i) {
+    for (size_t i = 0; i < WOMO_SENSOR_MAX_PENDING_CMDS; ++i) {
         if (s_pending_cmds[i].in_use && s_pending_cmds[i].seq == seq) {
             resolved = s_pending_cmds[i];
             s_pending_cmds[i].in_use = false;
@@ -298,23 +193,23 @@ static void rs485_resolve_pending(uint32_t seq,
 
     if (found) {
         ESP_LOGI(TAG,
-                 "RS485 ACK for %s (seq=%lu) status=%s",
+                 "Sensor ACK für %s (seq=%lu) status=%s",
                  label,
                  (unsigned long)seq,
                  success ? "ok" : "err");
     } else {
         ESP_LOGW(TAG,
-                 "Unexpected RS485 ACK for seq=%lu (label=%s)",
+                 "Unexpected Sensor ACK für seq=%lu (label=%s)",
                  (unsigned long)seq,
                  label);
     }
 
     if (!success && err_text && err_text[0] != '\0') {
-        ESP_LOGW(TAG, "RS485 ACK error detail: %s", err_text);
+        ESP_LOGW(TAG, "Sensor ACK error: %s", err_text);
     }
 }
 
-static void rs485_check_command_timeouts(void)
+static void sb_check_command_timeouts(void)
 {
     typedef struct {
         uint32_t seq;
@@ -322,13 +217,13 @@ static void rs485_check_command_timeouts(void)
         int64_t age_us;
     } timeout_log_t;
 
-    timeout_log_t expired[RS485_MAX_PENDING_CMDS];
+    timeout_log_t expired[WOMO_SENSOR_MAX_PENDING_CMDS];
     size_t expired_count = 0;
     const int64_t now_us = esp_timer_get_time();
-    const int64_t timeout_us = (int64_t)RS485_COMMAND_TIMEOUT_MS * 1000;
+    const int64_t timeout_us = (int64_t)SB_COMMAND_TIMEOUT_MS * 1000;
 
     taskENTER_CRITICAL(&s_pending_cmd_lock);
-    for (size_t i = 0; i < RS485_MAX_PENDING_CMDS; ++i) {
+    for (size_t i = 0; i < WOMO_SENSOR_MAX_PENDING_CMDS; ++i) {
         if (!s_pending_cmds[i].in_use || s_pending_cmds[i].warned) {
             continue;
         }
@@ -336,7 +231,7 @@ static void rs485_check_command_timeouts(void)
         if (age_us >= timeout_us) {
             s_pending_cmds[i].in_use = false;   /* Slot freigeben, nicht nur warnen */
             s_pending_cmds[i].warned = false;
-            if (expired_count < RS485_MAX_PENDING_CMDS) {
+            if (expired_count < WOMO_SENSOR_MAX_PENDING_CMDS) {
                 expired[expired_count].seq = s_pending_cmds[i].seq;
                 expired[expired_count].age_us = age_us;
                 strncpy(expired[expired_count].label,
@@ -352,76 +247,43 @@ static void rs485_check_command_timeouts(void)
     for (size_t i = 0; i < expired_count; ++i) {
         double age_ms = (double)expired[i].age_us / 1000.0;
         ESP_LOGW(TAG,
-                 "RS485 command %s (seq=%lu) waiting for ACK for %.0f ms",
+                 "Sensor-Kommando %s (seq=%lu) waiting for ACK for %.0f ms",
                  expired[i].label[0] ? expired[i].label : "unknown",
                  (unsigned long)expired[i].seq,
                  age_ms);
     }
 }
 
-static esp_err_t rs485_send_frame_ex(cJSON *root, const char *pending_cmd, bool priority)
+static esp_err_t sb_send_frame(cJSON *root, const char *pending_cmd)
 {
-    if (!root) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    if (!root) return ESP_ERR_INVALID_ARG;
 
-    uint32_t seq = rs485_next_seq();
+    uint32_t seq = sb_next_seq();
     cJSON_AddNumberToObject(root, "seq", (double)seq);
-
-    if (!cJSON_GetObjectItemCaseSensitive(root, "ts")) {
-        cJSON_AddNumberToObject(root, "ts", (double)(esp_timer_get_time() / 1000));
-    }
-
     if (!cJSON_GetObjectItemCaseSensitive(root, "need_ack")) {
-        cJSON_AddBoolToObject(root, "need_ack", true);
+        cJSON_AddBoolToObject(root, "need_ack", (pending_cmd && pending_cmd[0] != '\0'));
     }
 
     char *json_str = cJSON_PrintUnformatted(root);
-    if (!json_str) {
-        return ESP_ERR_NO_MEM;
-    }
+    if (!json_str) return ESP_ERR_NO_MEM;
 
     size_t len = strlen(json_str);
-    char *payload = malloc(len + 3);
-    if (!payload) {
-        cJSON_free(json_str);
-        return ESP_ERR_NO_MEM;
+
+    if (pending_cmd && pending_cmd[0] != '\0') {
+        sb_add_pending(seq, pending_cmd);
     }
 
-    memcpy(payload, json_str, len);
-    payload[len]     = '\r';
-    payload[len + 1] = '\n';
-    payload[len + 2] = '\0';
-
-    TickType_t mutex_ticks = priority ? pdMS_TO_TICKS(500) : 0;
-    if (s_tx_mutex && xSemaphoreTake(s_tx_mutex, mutex_ticks) != pdTRUE) {
-        free(payload);
-        cJSON_free(json_str);
-        return priority ? ESP_ERR_TIMEOUT : ESP_OK;
-    }
-
-    esp_err_t err = rs485_write_and_wait(payload);
-
-    if (s_tx_mutex) {
-        xSemaphoreGive(s_tx_mutex);
-    }
-
-    free(payload);
+    esp_err_t err = womo_espnow_send(json_str, len);
     cJSON_free(json_str);
 
-    if (err == ESP_OK && pending_cmd && pending_cmd[0] != '\0') {
-        rs485_add_pending(seq, pending_cmd);
+    if (err != ESP_OK && pending_cmd && pending_cmd[0] != '\0') {
+        /* Senden fehlgeschlagen → Pending-Slot wieder freigeben */
+        sb_remove_pending(seq);
     }
-
     return err;
 }
 
-static esp_err_t rs485_send_frame(cJSON *root, const char *pending_cmd)
-{
-    return rs485_send_frame_ex(root, pending_cmd, true);
-}
-
-static esp_err_t rs485_send_ack(uint32_t rx_seq, bool ok, const char *cmd, const char *err_msg)
+static esp_err_t sb_send_ack(uint32_t rx_seq, bool ok, const char *cmd, const char *err_msg)
 {
     if (rx_seq == 0) {
         return ESP_ERR_INVALID_ARG;
@@ -443,31 +305,15 @@ static esp_err_t rs485_send_ack(uint32_t rx_seq, bool ok, const char *cmd, const
         cJSON_AddStringToObject(root, "err", err_msg);
     }
 
-    esp_err_t err = rs485_send_frame(root, NULL);
+    esp_err_t err = sb_send_frame(root, NULL);
     cJSON_Delete(root);
     return err;
 }
 
-static esp_err_t rs485_send_heartbeat(void)
+static esp_err_t sb_send_heartbeat(void)
 {
-    // Heartbeat nur senden wenn Sensorboard länger als 10 s nicht gesendet hat.
-    // Während normaler Kommunikation (Sensorboard sendet alle 2 s) entfällt
-    // der Display-Heartbeat komplett → kein TX-Echo auf Half-Duplex-Bus.
-    if (s_last_rx_activity_us != 0) {
-        int64_t silence_us = esp_timer_get_time() - s_last_rx_activity_us;
-        if (silence_us < 10000000) {   // < 10 Sekunden
-            return ESP_OK;
-        }
-    }
-
-    if (rs485_recent_rx_activity() || s_rx_line_pending) {
-        return ESP_OK;
-    }
-
     cJSON *hb = cJSON_CreateObject();
-    if (!hb) {
-        return ESP_ERR_NO_MEM;
-    }
+    if (!hb) return ESP_ERR_NO_MEM;
 
     cJSON_AddStringToObject(hb, "type", "hb");
     cJSON_AddBoolToObject(hb, "need_ack", false);
@@ -475,11 +321,8 @@ static esp_err_t rs485_send_heartbeat(void)
     if (s_last_rx_seq != 0) {
         cJSON_AddNumberToObject(hb, "rx_seq", (double)s_last_rx_seq);
     }
-    if (s_last_ack_seq != 0) {
-        cJSON_AddNumberToObject(hb, "last_ack", (double)s_last_ack_seq);
-    }
 
-    esp_err_t err = rs485_send_frame_ex(hb, NULL, false);
+    esp_err_t err = sb_send_frame(hb, NULL);
     if (err == ESP_OK) {
         s_last_heartbeat_tx_us = esp_timer_get_time();
     }
@@ -487,22 +330,22 @@ static esp_err_t rs485_send_heartbeat(void)
     return err;
 }
 
-static void rs485_heartbeat_task(void *arg)
+static void sb_heartbeat_task(void *arg)
 {
     (void)arg;
     while (true) {
         if (s_initialized) {
-            esp_err_t hb_err = rs485_send_heartbeat();
+            esp_err_t hb_err = sb_send_heartbeat();
             if (hb_err != ESP_OK) {
                 ESP_LOGW(TAG, "Heartbeat send failed: %s", esp_err_to_name(hb_err));
             }
-            rs485_check_command_timeouts();
+            sb_check_command_timeouts();
         }
-        vTaskDelay(pdMS_TO_TICKS(RS485_HEARTBEAT_INTERVAL_MS));
+        vTaskDelay(pdMS_TO_TICKS(SB_HEARTBEAT_INTERVAL_MS));
     }
 }
 
-static void rs485_handle_ack_packet(const cJSON *root)
+static void sb_handle_ack_packet(const cJSON *root)
 {
     if (!root) {
         return;
@@ -532,7 +375,7 @@ static void rs485_handle_ack_packet(const cJSON *root)
                               ? err->valuestring
                               : NULL;
 
-    rs485_resolve_pending(ack_seq, success, cmd_str, err_str);
+    sb_resolve_pending(ack_seq, success, cmd_str, err_str);
 
     taskENTER_CRITICAL(&s_seq_lock);
     s_last_ack_seq = ack_seq;
@@ -540,7 +383,7 @@ static void rs485_handle_ack_packet(const cJSON *root)
     taskEXIT_CRITICAL(&s_seq_lock);
 }
 
-static esp_err_t rs485_send_simple_command(const char *cmd)
+static esp_err_t sb_send_simple_command(const char *cmd)
 {
     if (!cmd) {
         return ESP_ERR_INVALID_ARG;
@@ -552,161 +395,59 @@ static esp_err_t rs485_send_simple_command(const char *cmd)
     }
 
     cJSON_AddStringToObject(root, "cmd", cmd);
-    esp_err_t err = rs485_send_frame(root, cmd);
+    esp_err_t err = sb_send_frame(root, cmd);
     cJSON_Delete(root);
     return err;
 }
 
-esp_err_t womo_rs485_display_init(void)
+esp_err_t womo_sensorboard_init(void)
 {
     if (s_initialized) {
         return ESP_OK;
     }
-    
-    // Create mutexes for data protection and TX serialization
+
     s_data_mutex = xSemaphoreCreateMutex();
     if (!s_data_mutex) {
         ESP_LOGE(TAG, "Failed to create data mutex");
         return ESP_ERR_NO_MEM;
     }
-    s_tx_mutex = xSemaphoreCreateMutex();
-    if (!s_tx_mutex) {
-        ESP_LOGE(TAG, "Failed to create TX mutex");
-        vSemaphoreDelete(s_data_mutex);
-        s_data_mutex = NULL;
-        return ESP_ERR_NO_MEM;
-    }
-    
-    // Configure UART (like demo example)
-    uart_config_t uart_config = {
-        .baud_rate = RS485_BAUD_RATE,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_DEFAULT,  // DEFAULT (wie alte Version + Waveshare-Demo)
-    };
-    
-    // Install driver (RX buffer, TX buffer=0 wie alte Version + Waveshare-Demo)
-    esp_err_t err = uart_driver_install(RS485_UART_NUM, RS485_BUF_SIZE * 2, 0, 0, NULL, 0);
+
+    esp_err_t err = womo_espnow_init();
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to install UART driver: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "womo_espnow_init: %s", esp_err_to_name(err));
         vSemaphoreDelete(s_data_mutex);
-        vSemaphoreDelete(s_tx_mutex);
         s_data_mutex = NULL;
-        s_tx_mutex = NULL;
         return err;
     }
-    
-    // Configure parameters second
-    err = uart_param_config(RS485_UART_NUM, &uart_config);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to configure UART: %s", esp_err_to_name(err));
-        uart_driver_delete(RS485_UART_NUM);
-        vSemaphoreDelete(s_data_mutex);
-        vSemaphoreDelete(s_tx_mutex);
-        s_data_mutex = NULL;
-        s_tx_mutex = NULL;
-        return err;
-    }
-    
-    // Set pins third - TX must be set even for RX-only to control DE/RE via transistor
-    err = uart_set_pin(RS485_UART_NUM,
-                       RS485_TX_GPIO,
-                       RS485_RX_GPIO,
-                       UART_PIN_NO_CHANGE,
-                       UART_PIN_NO_CHANGE);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to set UART pins: %s", esp_err_to_name(err));
-        uart_driver_delete(RS485_UART_NUM);
-        vSemaphoreDelete(s_data_mutex);
-        vSemaphoreDelete(s_tx_mutex);
-        s_data_mutex = NULL;
-        s_tx_mutex = NULL;
-        return err;
-    }
-    
-    ESP_LOGI(TAG, "UART pins configured: TX=%d RX=%d (TX controls DE/RE via transistor)", 
-             RS485_TX_GPIO, RS485_RX_GPIO);
-    
-    // HINWEIS: UART_SIGNAL_TXD_INV darf NICHT gesetzt werden!
-    // Der Auto-DE-Transistor auf dem Waveshare-Board erkennt TX-Aktivität
-    // am Pin-Level (idle=HIGH→RX, active=LOW→TX). Bei invertiertem TX
-    // ist idle=LOW → Transceiver permanent im TX-Modus → RX tot.
+    womo_espnow_set_recv_cb(espnow_frame_received_cb);
 
-    // Plain UART-Modus (wie alte funktionierende Version + Waveshare-Demo):
-    // Kein uart_set_mode, kein uart_set_rx_timeout, kein RS485 Half-Duplex.
-    // Auto-DE-Transistor steuert DE/RE über TX-Pin-Aktivität.
-
-    // ── Loopback-Diagnose: UART intern kurzschließen (TX→RX ohne Hardware) ──
-    {
-        uart_set_loop_back(RS485_UART_NUM, true);
-        uart_flush_input(RS485_UART_NUM);
-        const char *test_msg = "LOOPBACK_OK\r\n";
-        int test_len = (int)strlen(test_msg);
-        uart_write_bytes(RS485_UART_NUM, test_msg, test_len);
-        uart_wait_tx_done(RS485_UART_NUM, pdMS_TO_TICKS(100));
-
-        uint8_t lb_buf[32];
-        int lb_read = uart_read_bytes(RS485_UART_NUM, lb_buf, sizeof(lb_buf) - 1,
-                                      pdMS_TO_TICKS(100));
-        if (lb_read > 0) {
-            lb_buf[lb_read] = '\0';
-            ESP_LOGI(TAG, "LOOPBACK OK: sent %d, recv %d bytes → UART%d TX+RX funktioniert",
-                     test_len, lb_read, RS485_UART_NUM);
-        } else {
-            ESP_LOGE(TAG, "LOOPBACK FAIL: sent %d, recv 0 bytes → UART%d TX defekt!",
-                     test_len, RS485_UART_NUM);
-        }
-        uart_set_loop_back(RS485_UART_NUM, false);
-        uart_flush_input(RS485_UART_NUM);
-    }
-
-    ESP_LOGI(TAG, "RS485 plain UART mode (auto-DE transistor, post-TX echo flush)");
-    
-    // Start RX task with large stack (16KB for JSON parsing + LVGL callback + buffers)
-    BaseType_t task_created = xTaskCreateWithCaps(rs485_rx_task, "rs485_rx", 16384, NULL, 5, NULL,
-                                                   MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (task_created != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create RX task");
-        uart_driver_delete(RS485_UART_NUM);
-        vSemaphoreDelete(s_data_mutex);
-        vSemaphoreDelete(s_tx_mutex);
-        s_data_mutex = NULL;
-        s_tx_mutex = NULL;
-        return ESP_FAIL;
-    }
-    
     s_initialized = true;
     if (!s_heartbeat_task) {
-        BaseType_t hb_created = xTaskCreateWithCaps(rs485_heartbeat_task,
-                                            "rs485_hb",
-                                            4096,
-                                            NULL,
-                                            4,
-                                            &s_heartbeat_task,
-                                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        BaseType_t hb_created = xTaskCreateWithCaps(sb_heartbeat_task,
+                                                    "espnow_hb", 4096, NULL, 4,
+                                                    &s_heartbeat_task,
+                                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (hb_created != pdPASS) {
             ESP_LOGW(TAG, "Failed to create heartbeat task");
         }
     }
-    ESP_LOGI(TAG, "RS485 display receiver initialized (UART%d, %d baud)", RS485_UART_NUM, RS485_BAUD_RATE);
+    ESP_LOGI(TAG, "ESP-NOW Display Transport initialisiert");
     return ESP_OK;
 }
 
-void womo_rs485_set_data_callback(womo_rs485_data_cb_t callback, void *user_data)
+void womo_sensorboard_set_data_callback(womo_sensorboard_data_cb_t callback, void *user_data)
 {
     s_data_callback = callback;
     s_callback_user_data = user_data;
 }
 
-void womo_rs485_set_event_callback(womo_rs485_event_cb_t callback, void *user_data)
+void womo_sensorboard_set_event_callback(womo_sensorboard_event_cb_t callback, void *user_data)
 {
     s_event_callback = callback;
     s_event_user_data = user_data;
 }
 
-bool womo_rs485_get_latest_data(womo_sensor_data_t *data)
+bool womo_sensorboard_get_latest_data(womo_sensor_data_t *data)
 {
     if (!data || !s_initialized) {
         return false;
@@ -721,64 +462,44 @@ bool womo_rs485_get_latest_data(womo_sensor_data_t *data)
     return false;
 }
 
-esp_err_t womo_rs485_send_level_start(void)
+esp_err_t womo_sensorboard_send_level_start(void)
 {
-    esp_err_t err = rs485_send_simple_command("level_start");
+    esp_err_t err = sb_send_simple_command("level_start");
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Sent level_start command");
     }
     return err;
 }
 
-esp_err_t womo_rs485_send_level_stop(void)
+esp_err_t womo_sensorboard_send_level_stop(void)
 {
-    esp_err_t err = rs485_send_simple_command("level_stop");
+    esp_err_t err = sb_send_simple_command("level_stop");
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Sent level_stop command");
     }
     return err;
 }
 
-esp_err_t womo_rs485_send_tare_a(void)
+esp_err_t womo_sensorboard_send_tare_a(void)
 {
-    esp_err_t err = rs485_send_simple_command("tare_a");
+    esp_err_t err = sb_send_simple_command("tare_a");
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Sent tare_a command");
     }
     return err;
 }
 
-esp_err_t womo_rs485_send_tare_b(void)
+esp_err_t womo_sensorboard_send_tare_b(void)
 {
-    esp_err_t err = rs485_send_simple_command("tare_b");
+    esp_err_t err = sb_send_simple_command("tare_b");
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Sent tare_b command");
     }
     return err;
 }
 
-esp_err_t womo_rs485_send_display_ready(void)
-{
-    cJSON *root = cJSON_CreateObject();
-    if (!root) {
-        return ESP_ERR_NO_MEM;
-    }
 
-    cJSON_AddStringToObject(root, "cmd", "display_ready");
-    cJSON_AddStringToObject(root, "role", "display");
-    cJSON_AddNumberToObject(root, "uptime", (double)esp_timer_get_time() / 1000000.0);
-
-    esp_err_t err = rs485_send_frame(root, "display_ready");
-    cJSON_Delete(root);
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Sent display_ready acknowledgement");
-    } else {
-        ESP_LOGW(TAG, "Failed to send display_ready acknowledgement: %s", esp_err_to_name(err));
-    }
-    return err;
-}
-
-esp_err_t womo_rs485_send_wifi_control(bool enable, const char *ssid, const char *password)
+esp_err_t womo_sensorboard_send_wifi_control(bool enable, const char *ssid, const char *password)
 {
     if (enable) {
         bool have_ssid = (ssid && ssid[0] != '\0');
@@ -792,7 +513,7 @@ esp_err_t womo_rs485_send_wifi_control(bool enable, const char *ssid, const char
             cJSON_AddStringToObject(root, "ssid", ssid);
             cJSON_AddStringToObject(root, "password", password ? password : "");
 
-            esp_err_t cred_err = rs485_send_frame(root, "wifi_set_credentials");
+            esp_err_t cred_err = sb_send_frame(root, "wifi_set_credentials");
             cJSON_Delete(root);
             if (cred_err != ESP_OK) {
                 ESP_LOGW(TAG, "Failed to send WiFi credentials: %s", esp_err_to_name(cred_err));
@@ -803,7 +524,7 @@ esp_err_t womo_rs485_send_wifi_control(bool enable, const char *ssid, const char
             ESP_LOGW(TAG, "WiFi enable requested without SSID - skipping credential update");
         }
 
-        esp_err_t enable_err = rs485_send_simple_command("wifi_enable_sta");
+        esp_err_t enable_err = sb_send_simple_command("wifi_enable_sta");
         if (enable_err == ESP_OK) {
             ESP_LOGI(TAG, "Sent wifi_enable_sta command");
         } else {
@@ -812,7 +533,7 @@ esp_err_t womo_rs485_send_wifi_control(bool enable, const char *ssid, const char
         return enable_err;
     }
 
-    esp_err_t disable_err = rs485_send_simple_command("wifi_disable_sta");
+    esp_err_t disable_err = sb_send_simple_command("wifi_disable_sta");
     if (disable_err == ESP_OK) {
         ESP_LOGI(TAG, "Sent wifi_disable_sta command");
     } else {
@@ -821,7 +542,7 @@ esp_err_t womo_rs485_send_wifi_control(bool enable, const char *ssid, const char
     return disable_err;
 }
 
-esp_err_t womo_rs485_send_wifi_credentials(const char *ssid, const char *pass)
+esp_err_t womo_sensorboard_send_wifi_credentials(const char *ssid, const char *pass)
 {
     if (!ssid || ssid[0] == '\0') {
         ESP_LOGW(TAG, "wifi_credentials: kein SSID angegeben");
@@ -835,7 +556,7 @@ esp_err_t womo_rs485_send_wifi_credentials(const char *ssid, const char *pass)
     cJSON_AddStringToObject(root, "ssid", ssid);
     cJSON_AddStringToObject(root, "pass", pass ? pass : "");
 
-    esp_err_t err = rs485_send_frame(root, "wifi_config");
+    esp_err_t err = sb_send_frame(root, "wifi_config");
     cJSON_Delete(root);
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "WiFi-Credentials an Sensor gesendet: SSID='%s'", ssid);
@@ -846,10 +567,10 @@ esp_err_t womo_rs485_send_wifi_credentials(const char *ssid, const char *pass)
 }
 
 
-esp_err_t womo_rs485_send_lte_control(bool enable)
+esp_err_t womo_sensorboard_send_lte_control(bool enable)
 {
     const char *cmd = enable ? "lte_enable" : "lte_disable";
-    esp_err_t err = rs485_send_simple_command(cmd);
+    esp_err_t err = sb_send_simple_command(cmd);
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Sent %s command", cmd);
     } else {
@@ -858,7 +579,7 @@ esp_err_t womo_rs485_send_lte_control(bool enable)
     return err;
 }
 
-esp_err_t womo_rs485_send_gas_bottle_replace(uint8_t slot, const char *channel)
+esp_err_t womo_sensorboard_send_gas_bottle_replace(uint8_t slot, const char *channel)
 {
     if (slot > 1) {
         return ESP_ERR_INVALID_ARG;
@@ -879,7 +600,7 @@ esp_err_t womo_rs485_send_gas_bottle_replace(uint8_t slot, const char *channel)
     cJSON_AddStringToObject(root, "channel", channel_value);
 
     const char *label = (slot == 0) ? "gas_bottle_replace_front" : "gas_bottle_replace_rear";
-    esp_err_t err = rs485_send_frame(root, label);
+    esp_err_t err = sb_send_frame(root, label);
     cJSON_Delete(root);
 
     if (err == ESP_OK) {
@@ -891,10 +612,10 @@ esp_err_t womo_rs485_send_gas_bottle_replace(uint8_t slot, const char *channel)
     return err;
 }
 
-esp_err_t womo_rs485_send_pwr_12v(bool enable)
+esp_err_t womo_sensorboard_send_pwr_12v(bool enable)
 {
     const char *cmd = enable ? "pwr_12v_on" : "pwr_12v_off";
-    esp_err_t err = rs485_send_simple_command(cmd);
+    esp_err_t err = sb_send_simple_command(cmd);
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Sent %s command", cmd);
     } else {
@@ -903,10 +624,10 @@ esp_err_t womo_rs485_send_pwr_12v(bool enable)
     return err;
 }
 
-esp_err_t womo_rs485_send_radio(bool enable)
+esp_err_t womo_sensorboard_send_radio(bool enable)
 {
     const char *cmd = enable ? "radio_on" : "radio_off";
-    esp_err_t err = rs485_send_simple_command(cmd);
+    esp_err_t err = sb_send_simple_command(cmd);
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Sent %s command", cmd);
     } else {
@@ -915,9 +636,9 @@ esp_err_t womo_rs485_send_radio(bool enable)
     return err;
 }
 
-esp_err_t womo_rs485_send_imu_zero(void)
+esp_err_t womo_sensorboard_send_imu_zero(void)
 {
-    esp_err_t err = rs485_send_simple_command("imu_zero");
+    esp_err_t err = sb_send_simple_command("imu_zero");
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Sent imu_zero command (Pitch/Roll nullen)");
     } else {
@@ -926,10 +647,10 @@ esp_err_t womo_rs485_send_imu_zero(void)
     return err;
 }
 
-esp_err_t womo_rs485_send_buzzer(bool enable)
+esp_err_t womo_sensorboard_send_buzzer(bool enable)
 {
     const char *cmd = enable ? "buzzer_on" : "buzzer_off";
-    esp_err_t err = rs485_send_simple_command(cmd);
+    esp_err_t err = sb_send_simple_command(cmd);
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Sent %s command", cmd);
     } else {
@@ -938,10 +659,10 @@ esp_err_t womo_rs485_send_buzzer(bool enable)
     return err;
 }
 
-esp_err_t womo_rs485_send_touch_click(bool enable)
+esp_err_t womo_sensorboard_send_touch_click(bool enable)
 {
     const char *cmd = enable ? "touch_click_on" : "touch_click_off";
-    esp_err_t err = rs485_send_simple_command(cmd);
+    esp_err_t err = sb_send_simple_command(cmd);
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Sent %s command", cmd);
     } else {
@@ -950,10 +671,10 @@ esp_err_t womo_rs485_send_touch_click(bool enable)
     return err;
 }
 
-esp_err_t womo_rs485_send_buzzer_alert(bool is_alarm)
+esp_err_t womo_sensorboard_send_buzzer_alert(bool is_alarm)
 {
     const char *cmd = is_alarm ? "buzzer_alarm" : "buzzer_warn";
-    esp_err_t err = rs485_send_simple_command(cmd);
+    esp_err_t err = sb_send_simple_command(cmd);
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Sent %s command", cmd);
     } else {
@@ -962,264 +683,14 @@ esp_err_t womo_rs485_send_buzzer_alert(bool is_alarm)
     return err;
 }
 
-static void rs485_flush_line(char *line_buffer, size_t *line_pos)
+// ── ESP-NOW RX Callback ──────────────────────────────────────────────────
+// Wird vom womo_espnow rx-Task aufgerufen – kein Zeilenassembler nötig,
+// ESP-NOW liefert vollständige null-terminierte JSON-Frames.
+
+static void espnow_frame_received_cb(const char *json_str)
 {
-    if (*line_pos == 0) {
-        return;
-    }
-
-    s_rx_line_pending = false;   // Zeile komplett → TX (ACK) erlauben
-    line_buffer[*line_pos] = '\0';
-    rs485_process_line(line_buffer, *line_pos);
-    *line_pos = 0;
-}
-
-static void rs485_process_line(char *line_buffer, size_t captured_len)
-{
-    if (!line_buffer || captured_len == 0) {
-        return;
-    }
-
-    char *working_buffer = line_buffer;
-    size_t working_len = captured_len;
-
-    // Vorhandenes Fragment fortsetzen
-    if (s_fragment_len > 0) {
-        // Fragment-Timeout: Verwerfe veraltete Fragmente,
-        // damit neue Nachrichten nicht an Stale-Daten angehängt werden.
-        int64_t frag_age_us = esp_timer_get_time() - s_fragment_start_us;
-        if (s_fragment_start_us > 0 && frag_age_us > RS485_FRAG_STALE_US) {
-            ESP_LOGW(TAG,
-                     "Fragment timeout (age=%.0f ms, len=%zu) - discarding",
-                     (double)frag_age_us / 1000.0, s_fragment_len);
-            s_fragment_len = 0;
-            s_fragment_buffer[0] = '\0';
-            s_fragment_start_us = 0;
-            // Weiter ohne Fragment: neue Daten als eigenständige Zeile behandeln
-        }
-    }
-
-    if (s_fragment_len > 0) {
-        size_t space = (RS485_LINE_MAX > s_fragment_len + 1) ? (RS485_LINE_MAX - s_fragment_len - 1) : 0;
-        size_t copy_len = (captured_len < space) ? captured_len : space;
-        if (copy_len > 0) {
-            memcpy(&s_fragment_buffer[s_fragment_len], line_buffer, copy_len);
-            s_fragment_len += copy_len;
-            s_fragment_buffer[s_fragment_len] = '\0';
-            working_buffer = s_fragment_buffer;
-            working_len = s_fragment_len;
-            ESP_LOGW(TAG, "Incomplete JSON fragment (len=%zu) - storing for reassembly", working_len);
-            log_fragment_preview(working_buffer, working_len);
-
-            if (s_fragment_len > RS485_FRAGMENT_MAX_KEEP) {
-                ESP_LOGW(TAG, "Fragment exceeded %u bytes, dropping partial JSON", (unsigned)RS485_FRAGMENT_MAX_KEEP);
-                s_fragment_len = 0;
-                s_fragment_buffer[0] = '\0';
-                s_fragment_start_us = 0;
-                working_buffer = line_buffer;
-                working_len = captured_len;
-                working_buffer[working_len] = '\0';
-                return;
-            }
-        }
-
-        if (copy_len < captured_len) {
-            ESP_LOGW(TAG, "Fragment reassembly buffer overflow (dropped %zu trailing bytes)", captured_len - copy_len);
-            s_fragment_len = 0;
-            s_fragment_buffer[0] = '\0';
-            s_fragment_start_us = 0;
-            working_buffer = line_buffer;
-            working_len = captured_len;
-            working_buffer[working_len] = '\0';
-        }
-    } else {
-        working_buffer[working_len] = '\0';
-    }
-
-    // Suche nach JSON-Anfang und -Ende
-    char *cursor = working_buffer;
-    while (*cursor) {
-        while (*cursor && (unsigned char)*cursor < 0x20) {
-            ++cursor;
-        }
-        if (*cursor == '\0') {
-            break;
-        }
-
-        // Unser Protokoll: jedes JSON-Objekt beginnt mit {"type":...
-        // Daher nur {" als gültigen Start akzeptieren.
-        // Garbled Bytes vom Auto-DE-Transistor (z.B. {7\xBF...) werden so übersprungen.
-        while (*cursor) {
-            if (*cursor == '{' && *(cursor + 1) == '"') break;
-            ++cursor;
-        }
-        if (*cursor == '\0') {
-            break;
-        }
-
-        char *json_start = cursor;
-        char *json_end = NULL;
-        if (!rs485_find_json_end(json_start, &json_end)) {
-            size_t remaining = strlen(json_start);
-            if (remaining >= RS485_LINE_MAX - 1 || remaining > RS485_FRAGMENT_MAX_KEEP) {
-                ESP_LOGW(TAG,
-                         "Incomplete JSON fragment too large (%zu bytes) - clearing assembly buffer",
-                         remaining);
-                log_fragment_preview(json_start, remaining > RS485_FRAGMENT_MAX_KEEP ? RS485_FRAGMENT_MAX_KEEP : remaining);
-                s_fragment_len = 0;
-                s_fragment_buffer[0] = '\0';
-                s_fragment_start_us = 0;
-            } else {
-                memmove(s_fragment_buffer, json_start, remaining);
-                s_fragment_len = remaining;
-                s_fragment_buffer[s_fragment_len] = '\0';
-                if (s_fragment_start_us == 0) {
-                    s_fragment_start_us = esp_timer_get_time();
-                }
-                ESP_LOGW(TAG,
-                         "Incomplete JSON fragment (remaining=%zu bytes, captured=%zu) - storing for reassembly",
-                         remaining,
-                         working_len);
-                log_fragment_preview(s_fragment_buffer, s_fragment_len);
-            }
-            return;
-        }
-
-        char saved = json_end[1];
-        bool truncated_segment = (saved != '\0');
-        json_end[1] = '\0';
-
-        parse_json_packet(json_start, working_len, truncated_segment);
-
-        json_end[1] = saved;
-        cursor = json_end + 1;
-    }
-
-    s_fragment_len = 0;
-    s_fragment_buffer[0] = '\0';
-    s_fragment_start_us = 0;
-}
-
-static bool rs485_find_json_end(const char *start, char **end_ptr)
-{
-    if (!start || !end_ptr || (*start != '{' && *start != '[')) {
-        return false;
-    }
-
-    int brace_depth = (*start == '{') ? 1 : 0;
-    int bracket_depth = (*start == '[') ? 1 : 0;
-    bool in_string = false;
-    bool escape = false;
-
-    for (const char *p = start + 1; *p; ++p) {
-        char ch = *p;
-        if (in_string) {
-            if (escape) {
-                escape = false;
-            } else if (ch == '\\') {
-                escape = true;
-            } else if (ch == '"') {
-                in_string = false;
-            }
-            continue;
-        }
-
-        if (ch == '"') {
-            in_string = true;
-            continue;
-        }
-
-        if (ch == '{') {
-            ++brace_depth;
-        } else if (ch == '}') {
-            if (brace_depth == 0) {
-                return false;
-            }
-            --brace_depth;
-            if (brace_depth == 0 && bracket_depth == 0) {
-                *end_ptr = (char *)p;
-                return true;
-            }
-        } else if (ch == '[') {
-            ++bracket_depth;
-        } else if (ch == ']') {
-            if (bracket_depth == 0) {
-                return false;
-            }
-            --bracket_depth;
-            if (brace_depth == 0 && bracket_depth == 0) {
-                *end_ptr = (char *)p;
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-static void rs485_rx_task(void *arg)
-{
-    ESP_LOGI(TAG, "RS485 RX task started");
-    
-    size_t line_pos = 0;
-    uint32_t packet_count = 0;
-    
-    while (true) {
-        int len = uart_read_bytes(RS485_UART_NUM, s_uart_buffer, sizeof(s_uart_buffer), pdMS_TO_TICKS(100));
-        
-        if (len > 0) {
-            // Half-duplex Echo-Unterdrückung: während einer aktiven
-            // Übertragung gelesene Bytes sind TX-Echo, nicht Sensorboard-Daten.
-            if (s_tx_active) {
-                continue;
-            }
-
-            int64_t now_us = esp_timer_get_time();
-
-            // Stale-Check: Wenn seit letztem RX > 200 ms vergangen und noch
-            // ungeflusht Daten im line_buffer liegen, stammen diese aus einer
-            // abgebrochenen Übertragung → verwerfen, damit die neue Nachricht
-            // nicht mit den alten Bytes vermischt wird.
-            if (line_pos > 0 && s_last_rx_activity_us > 0) {
-                int64_t gap_us = now_us - s_last_rx_activity_us;
-                if (gap_us > RS485_LINE_STALE_US) {
-                    ESP_LOGW(TAG,
-                             "Stale line_buffer discarded (%zu bytes, gap=%.0f ms)",
-                             line_pos, (double)gap_us / 1000.0);
-                    line_pos = 0;
-                }
-            }
-
-            packet_count++;
-            ESP_LOGI(TAG, "*** RX: %d bytes (pkt#%lu) ***", len, packet_count);
-            s_last_rx_activity_us = now_us;
-
-            for (int i = 0; i < len; i++) {
-                char c = (char)s_uart_buffer[i];
-
-                if (c == '\n' || c == '\r') {
-                    rs485_flush_line(s_line_buffer, &line_pos);
-                    continue;
-                }
-
-                if (c == '\0') {
-                    continue;
-                }
-
-                if (line_pos < sizeof(s_line_buffer) - 1) {
-                    s_line_buffer[line_pos++] = c;
-                } else {
-                    ESP_LOGW(TAG,
-                             "Line buffer overflow at %zu bytes (max %zu) - dropping partial JSON",
-                             line_pos,
-                             sizeof(s_line_buffer) - 1);
-                    line_pos = 0;
-                }
-            }
-        }
-
-        s_rx_line_pending = (line_pos > 0);
-    }
+    if (!json_str || json_str[0] == '\0') return;
+    parse_json_packet(json_str, strlen(json_str), false);
 }
 
 static void parse_json_packet(const char *json_str, size_t raw_line_len, bool truncated_before_parse)
@@ -1243,7 +714,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
                  raw_line_len,
                  truncated_before_parse ? "yes" : "no");
         ESP_LOGW(TAG, "Offending JSON snippet: %s", json_str);
-        rs485_emit_event(WOMO_RS485_EVENT_INVALID_JSON);
+        sb_emit_event(WOMO_SENSORBOARD_EVENT_INVALID_JSON);
         return;
     }
     
@@ -1255,7 +726,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
     if (cJSON_IsNumber(seq_obj)) {
         seq_value = (uint32_t)seq_obj->valuedouble;
         have_seq = true;
-        rs485_record_rx_seq(seq_value);
+        sb_record_rx_seq(seq_value);
     }
 
     // Systemzeit vom Sensor übernehmen, wenn unsere Zeit ungültig ist (vor NTP-Sync)
@@ -1275,14 +746,14 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             if (settimeofday(&tv, NULL) == 0) {
                 ESP_LOGI(TAG, "Systemzeit vom Sensor übernommen: %lld ms", sensor_ts_ms);
                 // Zeit als synced markieren damit Weather-Task starten kann
-                womo_time_mark_synced_rs485();
+                womo_time_mark_synced_sensor();
             } else {
                 ESP_LOGW(TAG, "settimeofday fehlgeschlagen");
             }
         }
     }
 
-    bool need_ack = true;
+    bool need_ack = false;
     const cJSON *need_ack_obj = cJSON_GetObjectItem(root, "need_ack");
     if (cJSON_IsBool(need_ack_obj)) {
         need_ack = cJSON_IsTrue(need_ack_obj);
@@ -1309,40 +780,35 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         ESP_LOGW(TAG, "No type/cmd field");
         ack_error = "missing type/cmd";
         if (ack_needed) {
-            rs485_send_ack(seq_value, false, ack_label, ack_error);
+            sb_send_ack(seq_value, false, ack_label, ack_error);
         }
         cJSON_Delete(root);
-        rs485_emit_event(WOMO_RS485_EVENT_INVALID_JSON);
+        sb_emit_event(WOMO_SENSORBOARD_EVENT_INVALID_JSON);
         return;
     }
 
     ESP_LOGI(TAG, "Frame: %s", frame_kind);
 
     if (strcmp(frame_kind, "ack") == 0 || strcmp(frame_kind, "cmd_ack") == 0) {
-        rs485_handle_ack_packet(root);
+        sb_handle_ack_packet(root);
         cJSON_Delete(root);
         return;
     }
 
     if (strcmp(frame_kind, "hb") == 0) {
         s_last_heartbeat_rx_us = esp_timer_get_time();
-        rs485_emit_event(WOMO_RS485_EVENT_HEARTBEAT);
+        sb_emit_event(WOMO_SENSORBOARD_EVENT_HEARTBEAT);
         cJSON_Delete(root);
         return;
     }
 
     if (strcmp(frame_kind, "hello") == 0) {
-        ack_needed = false;  // handshake handled via display_ready
+        ack_needed = false;
         const cJSON *fw = cJSON_GetObjectItem(root, "fw");
-        const cJSON *uptime = cJSON_GetObjectItem(root, "uptime");
         if (cJSON_IsString(fw)) {
             ESP_LOGI(TAG, "Sensorboard hello: fw=%s", fw->valuestring);
         }
-        if (cJSON_IsNumber(uptime)) {
-            ESP_LOGI(TAG, "Sensorboard uptime: %.0f s", uptime->valuedouble);
-        }
-        rs485_emit_event(WOMO_RS485_EVENT_HELLO);
-        womo_rs485_send_display_ready();
+        sb_emit_event(WOMO_SENSORBOARD_EVENT_HELLO);
         cJSON_Delete(root);
         return;
     }
@@ -1359,7 +825,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             esp_err_t pwd_err = womo_wifi_get_known_credentials(ssid, pwd, sizeof(pwd));
             if (pwd_err == ESP_OK && pwd[0] != '\0') {
                 ESP_LOGI(TAG, "Sende Credentials an Sensor: SSID='%s'", ssid);
-                womo_rs485_send_wifi_credentials(ssid, pwd);
+                womo_sensorboard_send_wifi_credentials(ssid, pwd);
                 ack_success = true;
             } else {
                 ESP_LOGW(TAG, "Kein Passwort für SSID '%s' im NVS gefunden", ssid);
@@ -1370,7 +836,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             ack_error = "display not connected";
         }
         if (ack_needed) {
-            rs485_send_ack(seq_value, ack_success, "wifi_pass_request", ack_error);
+            sb_send_ack(seq_value, ack_success, "wifi_pass_request", ack_error);
         }
         cJSON_Delete(root);
         return;
@@ -1411,6 +877,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             topic_handled = true;
             ack_success = true;
         }
+        s_last_heartbeat_rx_us = esp_timer_get_time();  // ctrl ersetzt hb als Kontakt-Marker
     }
     else if (strcmp(frame_kind, "imu") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
@@ -1500,6 +967,66 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
                     }
                     if (trend_hpa) s_latest_data.bme680.press_trend_slope_hpa_h = (float)trend_hpa->valuedouble;
                 }
+            }
+            s_latest_data.bme_topic_rx_us = esp_timer_get_time();
+            notify_snapshot = s_latest_data;
+            xSemaphoreGive(s_data_mutex);
+            topic_handled = true;
+            ack_success = true;
+        }
+    }
+    else if (strcmp(frame_kind, "bme_in") == 0) {
+        if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            cJSON *temp_c    = cJSON_GetObjectItem(root, "temp_c");
+            cJSON *rh_pct    = cJSON_GetObjectItem(root, "rh_pct");
+            cJSON *press_hpa = cJSON_GetObjectItem(root, "press_hpa");
+            cJSON *gas_kohm  = cJSON_GetObjectItem(root, "gas_kohm");
+            cJSON *iaq_val   = cJSON_GetObjectItem(root, "iaq");
+            cJSON *iaq_acc   = cJSON_GetObjectItem(root, "iaq_acc");
+            cJSON *eco2      = cJSON_GetObjectItem(root, "eco2_ppm");
+            cJSON *bvoc      = cJSON_GetObjectItem(root, "bvoc_ppm");
+            cJSON *trend_st  = cJSON_GetObjectItem(root, "press_trend_state");
+            cJSON *trend_hpa = cJSON_GetObjectItem(root, "press_trend_hpa_h");
+            if (temp_c || rh_pct || press_hpa) {
+                s_latest_data.bme680_indoor.valid = true;
+                if (temp_c)    s_latest_data.bme680_indoor.temperature_c   = (float)temp_c->valuedouble;
+                if (rh_pct)    s_latest_data.bme680_indoor.humidity_percent = (float)rh_pct->valuedouble;
+                if (press_hpa) s_latest_data.bme680_indoor.pressure_hpa    = (float)press_hpa->valuedouble;
+                if (gas_kohm)  s_latest_data.bme680_indoor.gas_kohm        = (float)gas_kohm->valuedouble;
+                if (iaq_val)   s_latest_data.bme680_indoor.iaq             = (uint16_t)iaq_val->valueint;
+                if (iaq_acc)   s_latest_data.bme680_indoor.iaq_accuracy    = (uint8_t)iaq_acc->valueint;
+                if (eco2)      s_latest_data.bme680_indoor.eco2_ppm        = (float)eco2->valuedouble;
+                if (bvoc)      s_latest_data.bme680_indoor.bvoc_ppm        = (float)bvoc->valuedouble;
+                if (cJSON_IsString(trend_st) && trend_st->valuestring)
+                    strncpy(s_latest_data.bme680_indoor.press_trend_state, trend_st->valuestring,
+                            sizeof(s_latest_data.bme680_indoor.press_trend_state) - 1);
+                if (trend_hpa) s_latest_data.bme680_indoor.press_trend_slope_hpa_h = (float)trend_hpa->valuedouble;
+            }
+            s_latest_data.bme_topic_rx_us = esp_timer_get_time();
+            notify_snapshot = s_latest_data;
+            xSemaphoreGive(s_data_mutex);
+            topic_handled = true;
+            ack_success = true;
+        }
+    }
+    else if (strcmp(frame_kind, "bme_out") == 0) {
+        if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            cJSON *temp_c    = cJSON_GetObjectItem(root, "temp_c");
+            cJSON *rh_pct    = cJSON_GetObjectItem(root, "rh_pct");
+            cJSON *press_hpa = cJSON_GetObjectItem(root, "press_hpa");
+            cJSON *gas_kohm  = cJSON_GetObjectItem(root, "gas_kohm");
+            cJSON *trend_st  = cJSON_GetObjectItem(root, "press_trend_state");
+            cJSON *trend_hpa = cJSON_GetObjectItem(root, "press_trend_hpa_h");
+            if (temp_c || rh_pct || press_hpa) {
+                s_latest_data.bme680.valid = true;
+                if (temp_c)    s_latest_data.bme680.temperature_c   = (float)temp_c->valuedouble;
+                if (rh_pct)    s_latest_data.bme680.humidity_percent = (float)rh_pct->valuedouble;
+                if (press_hpa) s_latest_data.bme680.pressure_hpa    = (float)press_hpa->valuedouble;
+                if (gas_kohm)  s_latest_data.bme680.gas_kohm        = (float)gas_kohm->valuedouble;
+                if (cJSON_IsString(trend_st) && trend_st->valuestring)
+                    strncpy(s_latest_data.bme680.press_trend_state, trend_st->valuestring,
+                            sizeof(s_latest_data.bme680.press_trend_state) - 1);
+                if (trend_hpa) s_latest_data.bme680.press_trend_slope_hpa_h = (float)trend_hpa->valuedouble;
             }
             s_latest_data.bme_topic_rx_us = esp_timer_get_time();
             notify_snapshot = s_latest_data;
@@ -1653,8 +1180,8 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         }
     }
     else {
-        ESP_LOGW(TAG, "Unrecognized RS485 frame: %s", frame_kind);
-        rs485_emit_event(WOMO_RS485_EVENT_INVALID_JSON);
+        ESP_LOGW(TAG, "Unbekannter Sensor-Frame: %s", frame_kind);
+        sb_emit_event(WOMO_SENSORBOARD_EVENT_INVALID_JSON);
         snprintf(ack_error_buf, sizeof(ack_error_buf), "frame %s not supported", frame_kind);
         ack_error = ack_error_buf;
     }
@@ -1665,7 +1192,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
     }
 
     if (ack_needed) {
-        esp_err_t ack_err = rs485_send_ack(seq_value, ack_success, ack_label, ack_error);
+        esp_err_t ack_err = sb_send_ack(seq_value, ack_success, ack_label, ack_error);
         if (ack_err != ESP_OK) {
             ESP_LOGW(TAG,
                      "Failed to send ACK for %s (seq=%lu): %s",

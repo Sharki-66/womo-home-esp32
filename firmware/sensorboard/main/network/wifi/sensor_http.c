@@ -20,7 +20,7 @@
 #include "esp_spiffs.h"
 #include "sensor_config.h"
 #include "sensors/bno055_sensor.h"
-#include "network/rs485_modem.h"
+#include "network/espnow_modem.h"
 #include "network/wifi/sensor_wifi.h"
 #include "cJSON.h"
 
@@ -94,7 +94,7 @@ static esp_err_t cmd_post_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    esp_err_t err = rs485_modem_execute_cmd_json(root);
+    esp_err_t err = espnow_modem_execute_cmd_json(root);
     const char *resp = (err == ESP_OK) ? "{\"ok\":true}" : "{\"ok\":false}";
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
@@ -130,7 +130,7 @@ static esp_err_t status_get_handler(httpd_req_t *req)
 static esp_err_t data_get_handler(httpd_req_t *req)
 {
     char *json = NULL;
-    if (rs485_modem_get_snapshot(&json) != ESP_OK || !json) {
+    if (espnow_modem_get_snapshot(&json) != ESP_OK || !json) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Snapshot failed");
         return ESP_FAIL;
     }

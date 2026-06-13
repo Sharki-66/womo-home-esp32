@@ -28,7 +28,7 @@
 #include "network/womo_http_mutex.h"
 #include "network/womo_buzzer_http.h"
 #include "storage/womo_sd.h"
-#include "rs485/womo_rs485_display.h"
+#include "sensorboard/womo_sensorboard.h"
 #include "hardware/buzzer.h"
 #include "nvs.h"
 #include "sdkconfig.h"
@@ -105,9 +105,10 @@ static lv_obj_t *shore_caption_label = NULL;
 static lv_obj_t *shore_icon_label = NULL;  // Bolt-Icon auf Landstrom-Anzeige
 static lv_obj_t *battery_board_label = NULL;
 static lv_obj_t *battery_kfz_label = NULL;
-static lv_obj_t *elec_title_label = NULL;   // "Strom"
-static lv_obj_t *elec_vi_label    = NULL;   // "12.4V  8.3A"
-static lv_obj_t *elec_power_label = NULL;   // "102W"
+static lv_obj_t *elec_title_label = NULL;
+static lv_obj_t *elec_vi_label    = NULL;
+static lv_obj_t *elec_power_label = NULL;
+static lv_obj_t *elec_container   = NULL;
 static lv_obj_t *fresh_water_caption_label = NULL;
 static lv_obj_t *grey_water_caption_label = NULL;
 static lv_obj_t *location_label = NULL;
@@ -144,7 +145,7 @@ static lv_obj_t *logo_img = NULL;    // Fahrzeug-Logo über Hintergrundbild
 static uint8_t *logo_png_data = NULL; // Geladener Logo-PNG-Puffer
 static TaskHandle_t sd_init_task_handle = NULL;
 static TaskHandle_t rs485_init_task_handle = NULL;
-static lv_obj_t *rs485_debug_label = NULL; // RS485 debug status
+static lv_obj_t *sensor_debug_label = NULL; // RS485 debug status
 static lv_obj_t *imu_zero_modal = NULL;     // IMU calibration modal
 static womo_weather_t *weather_widget = NULL; // Weather widget
 static womo_battery_t *main_battery = NULL;   // Battery 1 widget
@@ -259,7 +260,7 @@ typedef enum {
 } sensor_err_src_t;
 
 static const char * const sensor_err_src_name[SENSOR_ERR_SRC_MAX] = {
-    "Gas", "Wasser", "Abw.", "Bat", "RS485", "IAQ"
+    "Gas", "Wasser", "Abw.", "Bat", "Sensor", "IAQ"
 };
 
 typedef struct {
@@ -275,7 +276,7 @@ static char sensor_detail_text[32] = "";
 static portMUX_TYPE system_status_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
 // RS485 data callback
-static void rs485_data_received(const womo_sensor_data_t *data, void *user_data);
+static void sensorboard_data_received(const womo_sensor_data_t *data, void *user_data);
 static void imu_labels_update(bool has_data,
                               float roll_deg,
                               float pitch_deg,
@@ -327,9 +328,9 @@ static bool theme_mode_is_daylike(womo_theme_mode_t mode);
 static void full_theme_refresh(void);
 static void load_logo_image(lv_obj_t *screen);
 static void sd_init_task(void *arg);
-static void rs485_init_task(void *arg);
+static void sensorboard_init_task(void *arg);
 static void connectivity_snapshot_fill(womo_connectivity_snapshot_t *snapshot);
-static void rs485_event_handler(womo_rs485_event_t event, void *user_data);
+static void sensorboard_event_handler(womo_sensorboard_event_t event, void *user_data);
 static void gas_replace_show_modal(uint8_t slot);
 static void gas_replace_close_modal(void);
 static void gas_replace_msgbox_event_cb(lv_event_t *event);
@@ -453,7 +454,7 @@ static void apply_text_theme_colors(void)
     if (humid_label_in) lv_obj_set_style_text_color(humid_label_in, text_color, 0);
     if (temp_label_in) lv_obj_set_style_text_color(temp_label_in, text_color, 0);
     // IAQ, CO2, bVOC bleiben immer schwarz (dynamisch eingefärbt je Wert)
-    if (rs485_debug_label) lv_obj_set_style_text_color(rs485_debug_label, text_color, 0);
+    if (sensor_debug_label) lv_obj_set_style_text_color(sensor_debug_label, text_color, 0);
     if (imu_pitch_label) lv_obj_set_style_text_color(imu_pitch_label, lv_color_black(), 0);
     if (imu_roll_label) lv_obj_set_style_text_color(imu_roll_label, lv_color_black(), 0);
     if (imu_heading_label) lv_obj_set_style_text_color(imu_heading_label, lv_color_black(), 0);
@@ -1069,21 +1070,19 @@ static void system_status_apply_sensor_level(womo_status_level_t level)
     system_status_sensor_level = level;
 }
 
-static void rs485_event_handler(womo_rs485_event_t event, void *user_data)
+static void sensorboard_event_handler(womo_sensorboard_event_t event, void *user_data)
 {
     (void)user_data;
 
     switch (event) {
-        case WOMO_RS485_EVENT_HELLO:
-            ESP_LOGI(TAG, "RS485 hello empfangen - Sensorboard ist bereit");
+        case WOMO_SENSORBOARD_EVENT_HELLO:
+            ESP_LOGI(TAG, "Sensorboard hello empfangen");
             rs485_waiting_for_handshake = false;
-            /* Immer mit display_ready antworten – auch nach Sensor-Neustart */
-            womo_rs485_send_display_ready();
             break;
-        case WOMO_RS485_EVENT_HEARTBEAT:
+        case WOMO_SENSORBOARD_EVENT_HEARTBEAT:
             // Heartbeats dienen aktuell nur zur Diagnose
             break;
-        case WOMO_RS485_EVENT_INVALID_JSON:
+        case WOMO_SENSORBOARD_EVENT_INVALID_JSON:
             rs485_invalid_data_active = true;
             break;
         default:
@@ -1368,9 +1367,9 @@ static void ui_update_timer_cb(lv_timer_t *timer)
         double elapsed_s = (reference_us > 0) ?
                            (double)(now_us - reference_us) / 1000000.0 : 0.0;
         if (timed_out_now) {
-            ESP_LOGE(TAG, "RS485 Timeout: keine neuen Pakete seit %.1f s", elapsed_s);
+            ESP_LOGE(TAG, "Sensor-Timeout: keine neuen Pakete seit %.1f s", elapsed_s);
         } else {
-            ESP_LOGI(TAG, "RS485 Timeout aufgehoben (Unterbrechung %.1f s)", elapsed_s);
+            ESP_LOGI(TAG, "Sensor-Timeout aufgehoben (Unterbrechung %.1f s)", elapsed_s);
         }
     }
 
@@ -1509,50 +1508,50 @@ static void ui_update_timer_cb(lv_timer_t *timer)
     }
 
     // RS485 debug label
-    if (rs485_debug_label) {
+    if (sensor_debug_label) {
         static uint32_t last_packet_count = 0;
         static char last_rs485_text[60] = "";
         if (rs485_timeout_snapshot) {
-            const char *timeout_text = womo_locale_get_string(STR_RS485_TIMEOUT_LABEL);
+            const char *timeout_text = womo_locale_get_string(STR_SENSOR_TIMEOUT_LABEL);
             if (strcmp(timeout_text, last_rs485_text) != 0) {
-                lv_label_set_text(rs485_debug_label, timeout_text);
+                lv_label_set_text(sensor_debug_label, timeout_text);
                 strncpy(last_rs485_text, timeout_text, sizeof(last_rs485_text) - 1);
                 last_rs485_text[sizeof(last_rs485_text) - 1] = '\0';
             }
-            lv_obj_set_style_text_color(rs485_debug_label, lv_color_make(255, 0, 0), 0);
+            lv_obj_set_style_text_color(sensor_debug_label, lv_color_make(255, 0, 0), 0);
         } else if (rs485_invalid_snapshot) {
-            const char *invalid = womo_locale_get_string(STR_RS485_INVALID_DATA);
+            const char *invalid = womo_locale_get_string(STR_SENSOR_INVALID_DATA);
             if (strcmp(invalid, last_rs485_text) != 0) {
-                lv_label_set_text(rs485_debug_label, invalid);
+                lv_label_set_text(sensor_debug_label, invalid);
                 strncpy(last_rs485_text, invalid, sizeof(last_rs485_text) - 1);
                 last_rs485_text[sizeof(last_rs485_text) - 1] = '\0';
             }
-            lv_obj_set_style_text_color(rs485_debug_label, lv_color_make(255, 0, 0), 0);
+            lv_obj_set_style_text_color(sensor_debug_label, lv_color_make(255, 0, 0), 0);
         } else if (rs485_waiting_snapshot) {
-            const char *waiting_hello = womo_locale_get_string(STR_RS485_WAITING_HELLO);
+            const char *waiting_hello = womo_locale_get_string(STR_SENSOR_WAITING_HELLO);
             if (strcmp(waiting_hello, last_rs485_text) != 0) {
-                lv_label_set_text(rs485_debug_label, waiting_hello);
+                lv_label_set_text(sensor_debug_label, waiting_hello);
                 strncpy(last_rs485_text, waiting_hello, sizeof(last_rs485_text) - 1);
                 last_rs485_text[sizeof(last_rs485_text) - 1] = '\0';
             }
-            lv_obj_set_style_text_color(rs485_debug_label, lv_color_make(255, 165, 0), 0);
+            lv_obj_set_style_text_color(sensor_debug_label, lv_color_make(255, 165, 0), 0);
         } else if (!data_valid) {
-            const char *waiting = womo_locale_get_string(STR_RS485_WAITING);
+            const char *waiting = womo_locale_get_string(STR_SENSOR_WAITING);
             if (strcmp(waiting, last_rs485_text) != 0) {
-                lv_label_set_text(rs485_debug_label, waiting);
+                lv_label_set_text(sensor_debug_label, waiting);
                 strncpy(last_rs485_text, waiting, sizeof(last_rs485_text) - 1);
                 last_rs485_text[sizeof(last_rs485_text) - 1] = '\0';
             }
-            lv_obj_set_style_text_color(rs485_debug_label, lv_color_make(255, 0, 0), 0);
+            lv_obj_set_style_text_color(sensor_debug_label, lv_color_make(255, 0, 0), 0);
         } else if (packet_count != last_packet_count) {
             char buf[60];
-            snprintf(buf, sizeof(buf), womo_locale_get_string(STR_RS485_PACKETS), packet_count);
+            snprintf(buf, sizeof(buf), womo_locale_get_string(STR_SENSOR_PACKETS), packet_count);
             if (strcmp(buf, last_rs485_text) != 0) {
-                lv_label_set_text(rs485_debug_label, buf);
+                lv_label_set_text(sensor_debug_label, buf);
                 strncpy(last_rs485_text, buf, sizeof(last_rs485_text) - 1);
                 last_rs485_text[sizeof(last_rs485_text) - 1] = '\0';
             }
-            lv_obj_set_style_text_color(rs485_debug_label, lv_color_make(0, 200, 0), 0);
+            lv_obj_set_style_text_color(sensor_debug_label, lv_color_make(0, 200, 0), 0);
             last_packet_count = packet_count;
         }
     }
@@ -2066,10 +2065,10 @@ gas_done:
                                fabsf(snapshot.elec.p_w     - last_p) > 0.5f));
             if (changed) {
                 if (snapshot.elec.nc) {
-                    lv_label_set_text(elec_vi_label, "---");
+                    lv_label_set_text(elec_vi_label, "---\n---\n---");
                 } else {
                     char buf[32];
-                    snprintf(buf, sizeof(buf), "%.2fV  %.0fmA  %.2fW",
+                    snprintf(buf, sizeof(buf), "%.2fV\n%.0fmA\n%.2fW",
                              snapshot.elec.v_bus_v, snapshot.elec.i_a * 1000.0f, snapshot.elec.p_w);
                     lv_label_set_text(elec_vi_label, buf);
                 }
@@ -2080,7 +2079,7 @@ gas_done:
                 elec_has_data = true;
             }
         } else if (elec_has_data) {
-            lv_label_set_text(elec_vi_label, "---");
+            lv_label_set_text(elec_vi_label, "---\n---\n---");
             last_v = last_i = last_p = NAN;
             elec_has_data = false;
         }
@@ -3093,9 +3092,9 @@ static void gas_replace_msgbox_event_cb(lv_event_t *event)
         } else {
             ESP_LOGW(TAG, "Timer create failed, sending directly");
             const char *channel = (slot == 0) ? "front" : "back";
-            esp_err_t err = womo_rs485_send_gas_bottle_replace(slot, channel);
+            esp_err_t err = womo_sensorboard_send_gas_bottle_replace(slot, channel);
             if (err != ESP_OK) {
-                ESP_LOGW(TAG, "RS485 gas_bottle_replace (slot=%u) failed: %s", (unsigned)slot, esp_err_to_name(err));
+                ESP_LOGW(TAG, "Sensor gas_bottle_replace (slot=%u) failed: %s", (unsigned)slot, esp_err_to_name(err));
             }
         }
     }
@@ -3173,9 +3172,9 @@ static void gas_replace_send_timer_cb(lv_timer_t *timer)
     uint8_t slot = (uint8_t)(uintptr_t)lv_timer_get_user_data(timer);
     const char *channel = (slot == 0) ? "front" : "back";
 
-    esp_err_t err = womo_rs485_send_gas_bottle_replace(slot, channel);
+    esp_err_t err = womo_sensorboard_send_gas_bottle_replace(slot, channel);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "RS485 gas_bottle_replace (slot=%u) failed: %s", (unsigned)slot, esp_err_to_name(err));
+        ESP_LOGW(TAG, "Sensor gas_bottle_replace (slot=%u) failed: %s", (unsigned)slot, esp_err_to_name(err));
     }
 }
 
@@ -3193,9 +3192,9 @@ static void imu_zero_close_modal(void)
 static void imu_zero_send_timer_cb(lv_timer_t *timer)
 {
     (void)timer;
-    esp_err_t err = womo_rs485_send_imu_zero();
+    esp_err_t err = womo_sensorboard_send_imu_zero();
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "RS485 imu_zero failed: %s", esp_err_to_name(err));
+        ESP_LOGW(TAG, "Sensor imu_zero failed: %s", esp_err_to_name(err));
     }
 }
 
@@ -3214,7 +3213,7 @@ static void imu_zero_msgbox_event_cb(lv_event_t *event)
         if (t) {
             lv_timer_set_repeat_count(t, 1);
         } else {
-            womo_rs485_send_imu_zero();
+            womo_sensorboard_send_imu_zero();
         }
     }
 }
@@ -3634,11 +3633,11 @@ static void perf_monitor_toggle_event_cb(lv_event_t *e)
     ESP_LOGI(TAG, "Performance Monitor %s", perf_monitor_visible ? "eingeblendet" : "ausgeblendet");
 
     // RS485 Debug Label mittogglen
-    if (rs485_debug_label) {
+    if (sensor_debug_label) {
         if (perf_monitor_visible) {
-            lv_obj_clear_flag(rs485_debug_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(sensor_debug_label, LV_OBJ_FLAG_HIDDEN);
         } else {
-            lv_obj_add_flag(rs485_debug_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(sensor_debug_label, LV_OBJ_FLAG_HIDDEN);
         }
     }
 }
@@ -3647,15 +3646,11 @@ static void elec_toggle_event_cb(lv_event_t *e)
 {
     if (!e || lv_event_get_code(e) != LV_EVENT_LONG_PRESSED) return;
     elec_visible = !elec_visible;
-    if (elec_title_label) {
-        if (elec_visible) lv_obj_clear_flag(elec_title_label, LV_OBJ_FLAG_HIDDEN);
-        else              lv_obj_add_flag(elec_title_label,   LV_OBJ_FLAG_HIDDEN);
+    if (elec_container) {
+        if (elec_visible) lv_obj_clear_flag(elec_container, LV_OBJ_FLAG_HIDDEN);
+        else              lv_obj_add_flag(elec_container,   LV_OBJ_FLAG_HIDDEN);
     }
-    if (elec_vi_label) {
-        if (elec_visible) lv_obj_clear_flag(elec_vi_label, LV_OBJ_FLAG_HIDDEN);
-        else              lv_obj_add_flag(elec_vi_label,   LV_OBJ_FLAG_HIDDEN);
-    }
-    ESP_LOGI(TAG, "Verbrauch-Widget %s", elec_visible ? "eingeblendet" : "ausgeblendet");
+    ESP_LOGI(TAG, "INA-Widget %s", elec_visible ? "eingeblendet" : "ausgeblendet");
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -3805,27 +3800,24 @@ static void sd_init_task(void *arg)
     vTaskDelete(NULL);
 }
 
-static void rs485_init_task(void *arg)
+static void sensorboard_init_task(void *arg)
 {
     (void)arg;
 
     int64_t start_us = esp_timer_get_time();
-    ESP_LOGI(TAG, "Async RS485 init started");
+    ESP_LOGI(TAG, "Async Sensorboard init started");
 
-    esp_err_t rs485_err = womo_rs485_display_init();
+    esp_err_t rs485_err = womo_sensorboard_init();
     int32_t elapsed_ms = (int32_t)((esp_timer_get_time() - start_us) / 1000);
 
     if (rs485_err == ESP_OK) {
-        ESP_LOGI(TAG, "Async RS485 init finished after %d ms", elapsed_ms);
-        ESP_LOGI(TAG, "RS485 initialized - receiving data from Sensorboard");
-        womo_rs485_set_data_callback(rs485_data_received, NULL);
-        womo_rs485_set_event_callback(rs485_event_handler, NULL);
+        ESP_LOGI(TAG, "Async Sensorboard init finished after %d ms", elapsed_ms);
+        ESP_LOGI(TAG, "ESP-NOW initialisiert - receiving data from Sensorboard");
+        womo_sensorboard_set_data_callback(sensorboard_data_received, NULL);
+        womo_sensorboard_set_event_callback(sensorboard_event_handler, NULL);
         rs485_waiting_for_handshake = true;
-        vTaskDelay(pdMS_TO_TICKS(100));  // Kurz warten damit UART bereit
-        womo_rs485_send_display_ready();
-        ESP_LOGI(TAG, "Sent display_ready to trigger sensor data");
     } else {
-        ESP_LOGW(TAG, "Async RS485 init failed after %d ms: %s",
+        ESP_LOGW(TAG, "Async Sensorboard init failed after %d ms: %s",
                  elapsed_ms, esp_err_to_name(rs485_err));
     }
 
@@ -3934,11 +3926,11 @@ static void pwr_12v_send_timer_cb(lv_timer_t *timer)
 {
     s_pwr_send_timer = NULL;
     bool enable = (bool)(uintptr_t)lv_timer_get_user_data(timer);
-    esp_err_t err = womo_rs485_send_pwr_12v(enable);
+    esp_err_t err = womo_sensorboard_send_pwr_12v(enable);
     if (err == ESP_OK) {
         s_pwr_cmd_sent_us = esp_timer_get_time();
     } else {
-        ESP_LOGW(TAG, "12V RS485-Send fehlgeschlagen: %s – warte auf ctrl-Korrektur", esp_err_to_name(err));
+        ESP_LOGW(TAG, "12V Sensorboard-Send fehlgeschlagen: %s – warte auf ctrl-Korrektur", esp_err_to_name(err));
     }
     lv_timer_del(timer);
 }
@@ -3947,11 +3939,11 @@ static void radio_send_timer_cb(lv_timer_t *timer)
 {
     s_radio_send_timer = NULL;
     bool enable = (bool)(uintptr_t)lv_timer_get_user_data(timer);
-    esp_err_t err = womo_rs485_send_radio(enable);
+    esp_err_t err = womo_sensorboard_send_radio(enable);
     if (err == ESP_OK) {
         s_radio_cmd_sent_us = esp_timer_get_time();
     } else {
-        ESP_LOGW(TAG, "Radio RS485-Send fehlgeschlagen: %s – warte auf ctrl-Korrektur", esp_err_to_name(err));
+        ESP_LOGW(TAG, "Radio Sensorboard-Send fehlgeschlagen: %s – warte auf ctrl-Korrektur", esp_err_to_name(err));
     }
     lv_timer_del(timer);
 }
@@ -4060,7 +4052,7 @@ void app_main()
     esp_log_level_set("WaveShare_7_UI",   LOG_LEVEL_UI);
     esp_log_level_set("lv_port",          LOG_LEVEL_LVGL_PORT);
     esp_log_level_set("womo_display",     LOG_LEVEL_DISPLAY_HW);
-    esp_log_level_set("rs485_display",    LOG_LEVEL_RS485);
+    esp_log_level_set("sensorboard",    LOG_LEVEL_SENSORBOARD);
     esp_log_level_set("womo_wifi",        LOG_LEVEL_WIFI);
     esp_log_level_set("esp_netif_lwip",   LOG_LEVEL_WIFI);
     esp_log_level_set("esp_netif_handlers", LOG_LEVEL_WIFI);
@@ -4752,47 +4744,36 @@ void app_main()
     }
 
     // Elec-Labels (INA226) zwischen den beiden Batterien
-    if (!elec_title_label && main_battery && secondary_battery) {
-        // Mitte zwischen rechtem Rand der Board-Batterie und linkem Rand der KFZ-Batterie
-        lv_coord_t board_right = lv_obj_get_x(secondary_battery->container)
-                               + lv_obj_get_width(secondary_battery->container);
-        lv_coord_t kfz_left   = lv_obj_get_x(main_battery->container);
-        lv_coord_t mid_x      = (board_right + kfz_left) / 2;
-        lv_coord_t bat_y      = lv_obj_get_y(main_battery->container);
+    if (!elec_container) {
+        elec_container = lv_obj_create(screen);
+        lv_obj_set_size(elec_container, 110, 56);
+        lv_obj_align(elec_container, LV_ALIGN_RIGHT_MID, -5, -120);
+        lv_obj_set_style_bg_color(elec_container, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
+        lv_obj_set_style_bg_opa(elec_container, LV_OPA_80, 0);
+        lv_obj_set_style_border_width(elec_container, 0, 0);
+        lv_obj_set_style_pad_all(elec_container, 4, 0);
+        lv_obj_set_style_radius(elec_container, 4, 0);
+        lv_obj_add_flag(elec_container, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(elec_container, elec_toggle_event_cb, LV_EVENT_LONG_PRESSED, NULL);
 
-        elec_title_label = lv_label_create(screen);
-        lv_label_set_text(elec_title_label, "Verbrauch");
-        lv_obj_set_style_text_font(elec_title_label, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(elec_title_label, lv_color_black(), 0);
-        lv_obj_set_style_text_align(elec_title_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_pos(elec_title_label, mid_x - 25, bat_y);
-
-        elec_vi_label = lv_label_create(screen);
-        lv_label_set_text(elec_vi_label, "---");
+        elec_vi_label = lv_label_create(elec_container);
+        lv_label_set_text(elec_vi_label, "---\n---\n---");
         lv_obj_set_style_text_font(elec_vi_label, &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(elec_vi_label, lv_color_black(), 0);
-        lv_obj_set_style_text_align(elec_vi_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_pos(elec_vi_label, mid_x - 50, bat_y + 16);
-
-        lv_obj_t *elec_touch = lv_obj_create(screen);
-        lv_obj_set_size(elec_touch, 120, 36);
-        lv_obj_set_pos(elec_touch, mid_x - 45, bat_y - 2);
-        lv_obj_set_style_bg_opa(elec_touch, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_width(elec_touch, 0, 0);
-        lv_obj_add_flag(elec_touch, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(elec_touch, elec_toggle_event_cb, LV_EVENT_LONG_PRESSED, NULL);
+        lv_obj_set_style_text_align(elec_vi_label, LV_TEXT_ALIGN_LEFT, 0);
+        lv_obj_align(elec_vi_label, LV_ALIGN_TOP_LEFT, 0, 0);
     }
 
     // RS485 Debug label (über KFZ-Batterie, fallback unten links)
 #if CONFIG_LOG_DEFAULT_LEVEL >= ESP_LOG_INFO
-    rs485_debug_label = lv_label_create(screen);
-    lv_label_set_text(rs485_debug_label, womo_locale_get_string(STR_RS485_WAITING));
-    lv_obj_set_style_text_font(rs485_debug_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(rs485_debug_label, lv_color_make(255, 0, 0), 0); // Red for visibility
+    sensor_debug_label = lv_label_create(screen);
+    lv_label_set_text(sensor_debug_label, womo_locale_get_string(STR_SENSOR_WAITING));
+    lv_obj_set_style_text_font(sensor_debug_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(sensor_debug_label, lv_color_make(255, 0, 0), 0); // Red for visibility
     if (main_battery && main_battery->container) {
-        lv_obj_align_to(rs485_debug_label, main_battery->container, LV_ALIGN_OUT_TOP_MID, 0, -6);
+        lv_obj_align_to(sensor_debug_label, main_battery->container, LV_ALIGN_OUT_TOP_MID, 0, -6);
     } else {
-        lv_obj_align(rs485_debug_label, LV_ALIGN_BOTTOM_LEFT, 20, -60);
+        lv_obj_align(sensor_debug_label, LV_ALIGN_BOTTOM_LEFT, 20, -60);
     }
 #endif // CONFIG_LOG_DEFAULT_LEVEL >= ESP_LOG_INFO
         
@@ -4909,7 +4890,7 @@ void app_main()
                 // Plausibilitätscheck: nach 2024-01-01
                 if (rs485_secs > 1704067200) {
                     womo_time_sync_gps((time_t)rs485_secs);
-                    ESP_LOGI(TAG, "Time synced from RS485 after %d ms", i * 100);
+                    ESP_LOGI(TAG, "Time synced from Sensorboard after %d ms", i * 100);
                     time_ok = true;
                     break;
                 }
@@ -4982,8 +4963,8 @@ void app_main()
     }
 
     if (rs485_init_task_handle == NULL) {
-        BaseType_t rs485_created = xTaskCreateWithCaps(rs485_init_task,
-                                                       "rs485_init",
+        BaseType_t rs485_created = xTaskCreateWithCaps(sensorboard_init_task,
+                                                       "sensorboard_init",
                                                        4096,
                                                        NULL,
                                                        4,
@@ -4991,7 +4972,7 @@ void app_main()
                                                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (rs485_created != pdPASS) {
             rs485_init_task_handle = NULL;
-            ESP_LOGW(TAG, "Async RS485 init task could not be started");
+            ESP_LOGW(TAG, "Async Sensorboard init task could not be started");
         }
     }
 
@@ -5036,7 +5017,7 @@ void app_main()
 }
 
 // RS485 data received callback - updates display labels
-static void rs485_data_received(const womo_sensor_data_t *data, void *user_data)
+static void sensorboard_data_received(const womo_sensor_data_t *data, void *user_data)
 {
     if (!data) {
         return;
@@ -5044,7 +5025,7 @@ static void rs485_data_received(const womo_sensor_data_t *data, void *user_data)
 
     if (rs485_waiting_for_handshake) {
         rs485_waiting_for_handshake = false;
-        ESP_LOGI(TAG, "RS485 handshake abgeschlossen (erstes Datenpaket)");
+        ESP_LOGI(TAG, "ESP-NOW Handshake abgeschlossen (erstes Datenpaket)");
     }
 
     if (rs485_invalid_data_active) {
@@ -5065,16 +5046,16 @@ static void rs485_data_received(const womo_sensor_data_t *data, void *user_data)
 
     int64_t delta_us = (previous_us == 0) ? 0 : (now_us - previous_us);
     if (timeout_was_active) {
-        ESP_LOGI(TAG, "RS485 Timeout beendet, Empfang nach %.1f s wieder aktiv",
+        ESP_LOGI(TAG, "Sensor-Timeout beendet, Empfang nach %.1f s wieder aktiv",
                  (double)delta_us / 1000000.0);
     }
-    ESP_LOGD(TAG, "rs485_data_received: packet %lu (Δ%lld us)", rs485_packet_count, (long long)delta_us);
+    ESP_LOGD(TAG, "sensorboard_data_received: packet %lu (Δ%lld us)", rs485_packet_count, (long long)delta_us);
 
     womo_sensor_data_t snapshot = *data;
 
     if (snapshot.bno.valid && (rs485_packet_count % 20 == 0)) {
         const char *dir = snapshot.bno.direction[0] ? snapshot.bno.direction : "?";
-        ESP_LOGD(TAG, "RS485 IMU: %s %.1f° R:%.1f° P:%.1f°",
+        ESP_LOGD(TAG, "Sensor IMU: %s %.1f° R:%.1f° P:%.1f°",
                  dir, snapshot.bno.heading_deg, snapshot.bno.roll_deg, snapshot.bno.pitch_deg);
     }
 

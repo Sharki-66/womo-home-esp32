@@ -28,11 +28,11 @@
  *     (ADC2_CH5, RTC, GPIO16) I2C SDA | I/O/T|  🟨 |   16 | 9          -         9 | 39   | 🟩  | I/O/T | MTCK, GPIO39
  * (ADC2_CH6, U1TXD, RTC, GPIO17) frei | I/O/T|  ⬜ |   17 | 10         W        10 | 38   | 🟨  | I/O/T | RGB_LED  (GPIO38)
  * (ADC2_CH7, U1RXD, RTC, GPIO18) frei | I/O/T|  ⬜ |   18 | 11         R        11 | 37   | 🟥  | I/O/T | ⚠ PSRAM (GPIO37, nicht nutzbar!)
- *  (ADC1_CH7, RTC) RS485 DE/RTS GPIO8 | I/O/T|  🟨 |    8 | 12         O        12 | 36   | 🟥  | I/O/T | ⚠ PSRAM (GPIO36, nicht nutzbar!)
+ *               (ADC1_CH7, RTC) GPIO8 | I/O/T|  ⬜ |    8 | 12         O        12 | 36   | 🟥  | I/O/T | ⚠ PSRAM (GPIO36, nicht nutzbar!)
  *                ADC1_CH2, RTC, GPIO3 | I/O/T|  ⬜ |    3 | 13         O        13 | 35   | 🟥  | I/O/T | ⚠ PSRAM (GPIO35, nicht nutzbar!)
  *                   GPIO46, STRAP/LOG | I/O/T|  🟩 |   46 | 14         M        14 | 0    | 🟩  | I/O/T | BOOT/STRAP, GPIO0
- *     (ADC1_CH8, RTC) RS485 TX, GPIO9 | I/O/T|  🟨 |    9 | 15         -        15 | 45   | 🟨  | I/O/T | HX711 SCK (GPIO45)
- *    (ADC1_CH9, RTC) RS485 RX, GPIO10 | I/O/T|  🟨 |   10 | 16         1        16 | 48   | 🟩  | I/O/T | Onboard WS2812 RGB-LED (GPIO48)
+ *               (ADC1_CH8, RTC) GPIO9 | I/O/T|  ⬜ |    9 | 15         -        15 | 45   | 🟨  | I/O/T | HX711 SCK (GPIO45)
+ *              (ADC1_CH9, RTC) GPIO10 | I/O/T|  ⬜ |   10 | 16         1        16 | 48   | 🟩  | I/O/T | Onboard WS2812 RGB-LED (GPIO48)
  *     (ADC2_CH0, RTC, GPIO11) 12V EIN | I/O/T|  🟨 |   11 | 17                  17 | 47   | 🟨  | I/O/T | HX711 DOUT (GPIO47)
  *     (ADC2_CH1, RTC, GPIO12) 12V AUS | I/O/T|  🟨 |   12 | 18                  18 | 21   | 🟨  | I/O/T | AC 220V Sence (GPIO21, RTC)
  *  (ADC2_CH2, RTC, GPIO13) Multimedia | I/O/T|  🟨 |   13 | 19                  19 | 20   | 🟩  | I/O/T | USB_D+, GPIO20, RTC
@@ -81,21 +81,10 @@
 #define SENSOR_HX711_SCALE_B -0.15674f
 
 // ====================================================================================
-// RS485 Communication (Display Link)
-// Belegung gemäß Pinout-Tabelle (J1): TX=GPIO9, RX=GPIO10, DE=GPIO8
-// GPIO35-37 sind beim N16R8-Modul intern vom Octal-PSRAM belegt!
+// ESP-NOW Transport (Display Link) – vormals RS485 GPIO9/10/8
+// GPIO8 (ehemaliger RS485-DE) wird im Deep-Sleep LOW gehalten (floating prevention).
 // ====================================================================================
-#define SENSOR_RS485_UART_PORT 2
-#define SENSOR_RS485_BAUDRATE WOMO_RS485_BAUDRATE
-#define SENSOR_RS485_TX_GPIO 9
-#define SENSOR_RS485_RX_GPIO 10
-#define SENSOR_RS485_DE_GPIO 8
-#define SENSOR_RS485_RTS_GPIO SENSOR_RS485_DE_GPIO
-#define SENSOR_RS485_BUFFER_SIZE 4096
-#define SENSOR_RS485_READ_TIMEOUT_MS 50
-#define SENSOR_RS485_HELLO_PENDING_INTERVAL_MS WOMO_RS485_HELLO_PENDING_MS
-#define SENSOR_RS485_HELLO_READY_INTERVAL_MS   WOMO_RS485_HELLO_READY_MS
-#define SENSOR_RS485_HEARTBEAT_INTERVAL_MS     WOMO_RS485_HEARTBEAT_INTERVAL_MS
+#define SENSOR_ESPNOW_DE_LEGACY_GPIO  8   /* Ehemaliger RS485-DE: im Deep-Sleep LOW halten */
 
 // ====================================================================================
 // BNO055 IMU – Achsen-Remapping für Einbaulage
@@ -138,8 +127,8 @@
 // 3 A: misst Display+Sensorboard inkl. Relais-Schaltstöme (max ~2 A), LSB = 91 µA
 #define SENSOR_INA226_MAX_CURRENT_A 3
 
-// Abfrageintervall des Messtasks
-#define SENSOR_INA226_POLL_INTERVAL_MS 5000U
+// Abfrageintervall des Messtasks (unabhängig vom ESP-NOW Publish-Intervall WOMO_TOPIC_ELEC_INTERVAL_MS)
+#define SENSOR_INA226_POLL_INTERVAL_MS 500U
 
 // ====================================================================================
 // BME Sensor I2C Adressen (für einfache Änderung ohne Bibliotheks-Modifikation)
@@ -303,7 +292,7 @@
 // ====================================================================================
 #define LOG_LEVEL_SENSOR_MAIN    ESP_LOG_INFO
 #define LOG_LEVEL_DEEP_SLEEP     ESP_LOG_WARN
-#define LOG_LEVEL_RS485          ESP_LOG_WARN
+#define LOG_LEVEL_SENSORBOARD    ESP_LOG_WARN
 #define LOG_LEVEL_ANALOG         ESP_LOG_WARN
 #define LOG_LEVEL_BNO055         ESP_LOG_WARN    // bno055_app + BNO055-Komponente
 #define LOG_LEVEL_BME680         ESP_LOG_WARN    // bme680_app + bme680-Komponente

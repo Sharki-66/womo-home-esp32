@@ -108,7 +108,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         } else {
             ESP_LOGW(TAG, "Max Retries erreicht – Passwort falsch?");
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
-            // Callback aufrufen (z.B. RS485 Passwort-Anfrage ans Display)
+            // Callback aufrufen (z.B. ESP-NOW Passwort-Anfrage ans Display)
             if (s_auth_fail_cb) {
                 ESP_LOGI(TAG, "→ Auth-Failure-Callback wird aufgerufen");
                 s_auth_fail_cb();

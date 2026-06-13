@@ -16,7 +16,7 @@
 #include "womo_thresholds.h"
 #include "womo_fonts_german.h"
 #include "../time/womo_time.h"
-#include "../rs485/womo_rs485_display.h"
+#include "../sensorboard/womo_sensorboard.h"
 #include "../hardware/buzzer.h"
 #include "../hardware/lvgl_port.h"
 #include "../network/womo_wifi.h"
@@ -331,7 +331,7 @@ static void sound_tones_cb(lv_event_t *e)
     lv_obj_t *lbl = lv_obj_get_child(s_btn_tones, 0);
     bool new_state = !(lbl && lv_label_get_text(lbl)[0] == 'E');
     sound_btn_update(s_btn_tones, new_state);
-    womo_rs485_send_buzzer(new_state);
+    womo_sensorboard_send_buzzer(new_state);
     display_buzzer_set_enabled(new_state);
     ESP_LOGI(TAG, "Systemtöne → %s", new_state ? "EIN" : "AUS");
 }
@@ -343,7 +343,7 @@ static void sound_touch_cb(lv_event_t *e)
     lv_obj_t *lbl = lv_obj_get_child(s_btn_touch, 0);
     bool new_state = !(lbl && lv_label_get_text(lbl)[0] == 'E');
     sound_btn_update(s_btn_touch, new_state);
-    womo_rs485_send_touch_click(new_state);
+    womo_sensorboard_send_touch_click(new_state);
     display_buzzer_set_click_enabled(new_state);
     ESP_LOGI(TAG, "Touch-Klick → %s", new_state ? "EIN" : "AUS");
 }
@@ -759,7 +759,7 @@ static void ap_save_btn_cb(lv_event_t *e)
     }
 
     /* 2. Credentials ans Sensorboard senden */
-    womo_rs485_send_wifi_credentials(s_ap_selected_ssid, pwd);
+    womo_sensorboard_send_wifi_credentials(s_ap_selected_ssid, pwd);
 
     /* 3. Verbindungsversuch starten */
     ap_connect_params_t *params = calloc(1, sizeof(ap_connect_params_t));
@@ -868,7 +868,7 @@ static void build_tab_rtc(lv_obj_t *tab)
     switch (womo_time_get_source()) {
         case TIME_SOURCE_NTP:          src_name = "NTP (Internet)";  break;
         case TIME_SOURCE_GPS:          src_name = "GPS (Router)";    break;
-        case TIME_SOURCE_RS485:        src_name = "RS485 Sensor";    break;
+        case TIME_SOURCE_SENSOR:        src_name = "Sensorboard ESP-NOW";    break;
         case TIME_SOURCE_INTERNAL_RTC: src_name = "RTC (intern)";    break;
         default:                       src_name = "---"; break;
     }

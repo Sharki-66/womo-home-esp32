@@ -11,7 +11,7 @@
 #include "gui/womo_fonts_german.h"
 #include "hardware/lvgl_port.h"
 #include "network/womo_router_uci.h"
-#include "rs485/womo_rs485_display.h"
+#include "sensorboard/womo_sensorboard.h"
 #include "time/womo_time.h"
 #include "sdkconfig.h"
 #include "esp_log.h"
