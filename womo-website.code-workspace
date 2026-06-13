@@ -1,0 +1,65 @@
+{
+  "folders": [
+    {
+      "name": "🌐 Website (Astro + Tailwind)",
+      "path": "website"
+    }
+  ],
+  "settings": {
+    "explorer.sortOrder": "foldersNestsFiles",
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "astro-build.astro-vscode",
+    "[astro]": {
+      "editor.defaultFormatter": "astro-build.astro-vscode"
+    },
+    "[typescript]": {
+      "editor.defaultFormatter": "vscode.typescript-language-features"
+    },
+    "typescript.tsdk": "website/node_modules/typescript/lib",
+    "tailwindCSS.experimental.classRegex": [],
+    "chat.agent.maxRequests": 50
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Astro Dev Server",
+        "type": "shell",
+        "command": "npm",
+        "args": ["run", "dev"],
+        "options": { "cwd": "${workspaceFolder:🌐 Website (Astro + Tailwind)}" },
+        "group": { "kind": "build", "isDefault": true },
+        "isBackground": true,
+        "problemMatcher": [],
+        "presentation": { "echo": true, "reveal": "always", "focus": true, "panel": "dedicated", "showReuseMessage": false, "clear": true }
+      },
+      {
+        "label": "Astro Build",
+        "type": "shell",
+        "command": "npm",
+        "args": ["run", "build"],
+        "options": { "cwd": "${workspaceFolder:🌐 Website (Astro + Tailwind)}" },
+        "group": "build",
+        "problemMatcher": [],
+        "presentation": { "echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": false }
+      },
+      {
+        "label": "Astro Preview",
+        "type": "shell",
+        "command": "npm",
+        "args": ["run", "preview"],
+        "options": { "cwd": "${workspaceFolder:🌐 Website (Astro + Tailwind)}" },
+        "group": "build",
+        "isBackground": true,
+        "problemMatcher": [],
+        "presentation": { "echo": true, "reveal": "always", "focus": true, "panel": "dedicated", "showReuseMessage": false, "clear": true }
+      }
+    ]
+  },
+  "extensions": {
+    "recommendations": [
+      "astro-build.astro-vscode",
+      "bradlc.vscode-tailwindcss"
+    ]
+  }
+}

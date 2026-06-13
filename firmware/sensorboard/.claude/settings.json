@@ -8,7 +8,9 @@
       "Bash(sed -n '1,100p' /home/hajo/womo-home-esp32/hardware/schematics/Sensorboard/Sensorboard.kicad_sch)",
       "Bash(sed -n '18300,18365p' /home/hajo/womo-home-esp32/hardware/schematics/Sensorboard/Sensorboard.kicad_sch)",
       "Bash(awk '/lib_id.*BNO055/{flag=1} flag && /instances/{flag=0} flag' /home/hajo/womo-home-esp32/hardware/schematics/Sensorboard/Sensorboard.kicad_sch)",
-      "Bash(awk '/lib_id.*INA226/{flag=1} flag && /instances/{flag=0} flag' /home/hajo/womo-home-esp32/hardware/schematics/Sensorboard/Sensorboard.kicad_sch)"
+      "Bash(awk '/lib_id.*INA226/{flag=1} flag && /instances/{flag=0} flag' /home/hajo/womo-home-esp32/hardware/schematics/Sensorboard/Sensorboard.kicad_sch)",
+      "Bash(node -e ' *)",
+      "Bash(python3 -c ' *)"
     ],
     "additionalDirectories": [
       "/home/hajo/womo-home-esp32/firmware/sensorboard"

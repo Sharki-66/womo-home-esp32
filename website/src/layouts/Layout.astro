@@ -10,7 +10,7 @@ const {
 } = Astro.props;
 ---
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="night">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -18,8 +18,47 @@ const {
     <meta name="description" content={description} />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
+    <!-- Theme sofort setzen (verhindert Flackern) -->
+    <script is:inline>
+      (function () {
+        var h = document.documentElement;
+        var hour = new Date().getHours();
+        h.setAttribute('data-theme', (hour >= 8 && hour < 20) ? 'day' : 'night');
+      })();
+    </script>
   </head>
-  <body class="text-gray-100 font-sans antialiased" style="background:#191970;">
+  <body class="text-gray-100 font-sans antialiased">
     <slot />
+
+    <!-- Theme-Toggle: alle 60 s neu prüfen -->
+    <script is:inline>
+      function applyTheme() {
+        var hour = new Date().getHours();
+        var theme = (hour >= 8 && hour < 20) ? 'day' : 'night';
+        document.documentElement.setAttribute('data-theme', theme);
+        var btn = document.getElementById('theme-toggle');
+        if (btn) btn.textContent = theme === 'day' ? '🌙' : '☀️';
+      }
+
+      // Manuelles Umschalten (überschreibt die Zeit bis zum nächsten Reload)
+      window.__themeManual = false;
+      document.addEventListener('DOMContentLoaded', function () {
+        applyTheme();
+        setInterval(function () {
+          if (!window.__themeManual) applyTheme();
+        }, 60000);
+
+        var btn = document.getElementById('theme-toggle');
+        if (btn) {
+          btn.addEventListener('click', function () {
+            var cur = document.documentElement.getAttribute('data-theme');
+            var next = cur === 'day' ? 'night' : 'day';
+            document.documentElement.setAttribute('data-theme', next);
+            btn.textContent = next === 'day' ? '🌙' : '☀️';
+            window.__themeManual = true;
+          });
+        }
+      });
+    </script>
   </body>
 </html>

@@ -158,7 +158,8 @@ static int64_t last_time_sync_try_us = 0; // Throttle multi-source time sync att
 static const uint32_t UI_UPDATE_INTERVAL_DEFAULT_MS = 500;
 static bool geocode_in_progress = false;
 static bool geocode_last_failed  = false; // steuert Retry- vs. Normal-Intervall
-static bool perf_monitor_visible = true;    // Performance monitor visibility
+static bool perf_monitor_visible = true;
+static bool elec_visible = true;
 static int64_t geocode_last_request_us = 0;
 static double geocode_last_lat = NAN;
 static double geocode_last_lon = NAN;
@@ -338,6 +339,7 @@ static void imu_zero_show_modal(void);
 static void imu_zero_close_modal(void);
 static void imu_zero_msgbox_event_cb(lv_event_t *event);
 static void perf_monitor_toggle_event_cb(lv_event_t *e);
+static void elec_toggle_event_cb(lv_event_t *e);
 static void imu_zero_area_cb(lv_event_t *event);
 static void indoor_air_long_press_cb(lv_event_t *event);
 static void on_locale_changed(void);
@@ -2051,7 +2053,7 @@ gas_done:
     }
 
     // Elec widget (INA226)
-    if (elec_vi_label && elec_power_label) {
+    if (elec_vi_label) {
         static float last_v = NAN, last_i = NAN, last_p = NAN;
         static bool  last_nc = false, elec_has_data = false;
 
@@ -2064,15 +2066,12 @@ gas_done:
                                fabsf(snapshot.elec.p_w     - last_p) > 0.5f));
             if (changed) {
                 if (snapshot.elec.nc) {
-                    lv_label_set_text(elec_vi_label,    "---");
-                    lv_label_set_text(elec_power_label, "---");
+                    lv_label_set_text(elec_vi_label, "---");
                 } else {
-                    char buf_vi[24], buf_p[12];
-                    snprintf(buf_vi, sizeof(buf_vi), "%.1fV  %.1fA",
-                             snapshot.elec.v_bus_v, snapshot.elec.i_a);
-                    snprintf(buf_p, sizeof(buf_p), "%.0fW", snapshot.elec.p_w);
-                    lv_label_set_text(elec_vi_label,    buf_vi);
-                    lv_label_set_text(elec_power_label, buf_p);
+                    char buf[32];
+                    snprintf(buf, sizeof(buf), "%.2fV  %.0fmA  %.2fW",
+                             snapshot.elec.v_bus_v, snapshot.elec.i_a * 1000.0f, snapshot.elec.p_w);
+                    lv_label_set_text(elec_vi_label, buf);
                 }
                 last_v = snapshot.elec.v_bus_v;
                 last_i = snapshot.elec.i_a;
@@ -2081,8 +2080,7 @@ gas_done:
                 elec_has_data = true;
             }
         } else if (elec_has_data) {
-            lv_label_set_text(elec_vi_label,    "---");
-            lv_label_set_text(elec_power_label, "---");
+            lv_label_set_text(elec_vi_label, "---");
             last_v = last_i = last_p = NAN;
             elec_has_data = false;
         }
@@ -3616,7 +3614,7 @@ static void status_label_event_cb(lv_event_t *event)
 
 static void perf_monitor_toggle_event_cb(lv_event_t *e)
 {
-    if (!e || lv_event_get_code(e) != LV_EVENT_CLICKED) {
+    if (!e || lv_event_get_code(e) != LV_EVENT_LONG_PRESSED) {
         return;
     }
 
@@ -3643,6 +3641,21 @@ static void perf_monitor_toggle_event_cb(lv_event_t *e)
             lv_obj_add_flag(rs485_debug_label, LV_OBJ_FLAG_HIDDEN);
         }
     }
+}
+
+static void elec_toggle_event_cb(lv_event_t *e)
+{
+    if (!e || lv_event_get_code(e) != LV_EVENT_LONG_PRESSED) return;
+    elec_visible = !elec_visible;
+    if (elec_title_label) {
+        if (elec_visible) lv_obj_clear_flag(elec_title_label, LV_OBJ_FLAG_HIDDEN);
+        else              lv_obj_add_flag(elec_title_label,   LV_OBJ_FLAG_HIDDEN);
+    }
+    if (elec_vi_label) {
+        if (elec_visible) lv_obj_clear_flag(elec_vi_label, LV_OBJ_FLAG_HIDDEN);
+        else              lv_obj_add_flag(elec_vi_label,   LV_OBJ_FLAG_HIDDEN);
+    }
+    ESP_LOGI(TAG, "Verbrauch-Widget %s", elec_visible ? "eingeblendet" : "ausgeblendet");
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -4746,28 +4759,28 @@ void app_main()
         lv_coord_t kfz_left   = lv_obj_get_x(main_battery->container);
         lv_coord_t mid_x      = (board_right + kfz_left) / 2;
         lv_coord_t bat_y      = lv_obj_get_y(main_battery->container);
-        lv_coord_t bat_h      = lv_obj_get_height(main_battery->container);
 
         elec_title_label = lv_label_create(screen);
-        lv_label_set_text(elec_title_label, "Strom");
+        lv_label_set_text(elec_title_label, "Verbrauch");
         lv_obj_set_style_text_font(elec_title_label, &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(elec_title_label, lv_color_black(), 0);
         lv_obj_set_style_text_align(elec_title_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_pos(elec_title_label, mid_x - 20, bat_y);
+        lv_obj_set_pos(elec_title_label, mid_x - 25, bat_y);
 
         elec_vi_label = lv_label_create(screen);
         lv_label_set_text(elec_vi_label, "---");
-        lv_obj_set_style_text_font(elec_vi_label, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_font(elec_vi_label, &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(elec_vi_label, lv_color_black(), 0);
         lv_obj_set_style_text_align(elec_vi_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_pos(elec_vi_label, mid_x - 30, bat_y + 16);
+        lv_obj_set_pos(elec_vi_label, mid_x - 50, bat_y + 16);
 
-        elec_power_label = lv_label_create(screen);
-        lv_label_set_text(elec_power_label, "---");
-        lv_obj_set_style_text_font(elec_power_label, &lv_font_montserrat_14, 0);
-        lv_obj_set_style_text_color(elec_power_label, lv_color_black(), 0);
-        lv_obj_set_style_text_align(elec_power_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_pos(elec_power_label, mid_x - 20, bat_y + bat_h / 2);
+        lv_obj_t *elec_touch = lv_obj_create(screen);
+        lv_obj_set_size(elec_touch, 120, 36);
+        lv_obj_set_pos(elec_touch, mid_x - 45, bat_y - 2);
+        lv_obj_set_style_bg_opa(elec_touch, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(elec_touch, 0, 0);
+        lv_obj_add_flag(elec_touch, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(elec_touch, elec_toggle_event_cb, LV_EVENT_LONG_PRESSED, NULL);
     }
 
     // RS485 Debug label (über KFZ-Batterie, fallback unten links)
@@ -4818,7 +4831,7 @@ void app_main()
         lv_obj_set_style_bg_opa(perf_toggle_btn, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(perf_toggle_btn, 0, 0);
         lv_obj_add_flag(perf_toggle_btn, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(perf_toggle_btn, perf_monitor_toggle_event_cb, LV_EVENT_CLICKED, NULL);
+        lv_obj_add_event_cb(perf_toggle_btn, perf_monitor_toggle_event_cb, LV_EVENT_LONG_PRESSED, NULL);
 #endif // CONFIG_LOG_DEFAULT_LEVEL >= ESP_LOG_INFO
 
         // LVGL-Timer für 1s-Updates und UI-Updates

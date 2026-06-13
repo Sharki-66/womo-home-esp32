@@ -4,7 +4,7 @@ import Layout from '../layouts/Layout.astro';
 <Layout title="WoMoHome – Künstlicher Horizont Demo" description="Live-Demo des WoMoHome Künstlichen Horizonts mit BNO055 Sensor">
 
   <!-- NAV -->
-  <header class="fixed top-0 inset-x-0 z-50 backdrop-blur border-b" style="background:rgba(15,15,69,0.88);border-color:rgba(255,255,255,0.10)">
+  <header class="fixed top-0 inset-x-0 z-50 backdrop-blur border-b" style="background:var(--c-nav-bg);border-color:var(--c-border)">
     <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <a href="/" class="flex items-center gap-1 text-gray-300 hover:text-amber-400 transition text-sm font-semibold border border-white/20 px-3 py-1.5 rounded-lg hover:border-amber-400">
@@ -23,7 +23,7 @@ import Layout from '../layouts/Layout.astro';
   </header>
 
   <!-- HERO -->
-  <section class="pt-28 pb-10 px-4 text-center" style="background:linear-gradient(180deg,#0f0f45 0%,#191970 60%,#0f0f45 100%)">
+  <section class="pt-28 pb-10 px-4 text-center" style="background:linear-gradient(180deg,var(--c-bg-inset) 0%,var(--c-bg-deep) 60%,var(--c-bg-inset) 100%)">
     <div class="inline-flex items-center gap-2 bg-blue-400/10 border border-blue-400/30 text-blue-300 text-xs font-semibold px-3 py-1 rounded-full mb-6">
       ✈️ BNO055 · Echtzeit-Demo
     </div>
@@ -34,7 +34,7 @@ import Layout from '../layouts/Layout.astro';
   </section>
 
   <!-- DEMO -->
-  <section id="demo" style="background:linear-gradient(180deg,#191970 0%,#0f0f45 100%);" class="px-4 pb-16">
+  <section id="demo" style="background:linear-gradient(180deg,var(--c-bg-deep) 0%,var(--c-bg-inset) 100%);" class="px-4 pb-16">
     <div class="max-w-lg mx-auto">
 
       <!-- Horizont-Widget (1:1 aus horizon.html übernommen) -->
@@ -110,7 +110,7 @@ import Layout from '../layouts/Layout.astro';
   </section>
 
   <!-- TECHNIK -->
-  <section id="info" class="py-20 px-4" style="background:#0f0f45;">
+  <section id="info" class="py-20 px-4" style="background:var(--c-bg-inset);">
     <div class="max-w-4xl mx-auto">
       <h2 class="text-3xl font-bold text-center mb-12">Technik dahinter</h2>
       <div class="grid md:grid-cols-3 gap-6">
@@ -130,14 +130,13 @@ import Layout from '../layouts/Layout.astro';
   </section>
 
   <!-- FOOTER -->
-  <footer class="py-10 px-4 border-t border-blue-900/40 text-center text-gray-500 text-sm" style="background:#0f0f45;">
+  <footer class="py-10 px-4 border-t text-center text-gray-500 text-sm" style="background:var(--c-bg-inset);border-color:var(--c-border);">
     <p><span class="text-amber-400 font-bold">WoMoHome</span> &ndash; <a href="/" class="hover:text-amber-400 transition">← Startseite</a></p>
   </footer>
 
 </Layout>
 
 <style>
-  body { background: #191970 !important; }
   .cal-0{color:#ff4d4f}
   .cal-1{color:#ffb347}
   .cal-2{color:#ffe156}

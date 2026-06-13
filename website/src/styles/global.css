@@ -1,21 +1,68 @@
 @import "tailwindcss";
 
 @layer base {
-  /* Farbschema identisch zum Display Nacht-Modus (womo_theme.h) */
+  /* Nacht-Modus (Standard, 20:00–08:00) — identisch zu womo_theme.h */
   :root {
-    --c-bg-deep:    #191970;   /* Midnight Blue – exakt WOMO_COLOR_NIGHT_NORMAL */
-    --c-bg-mid:     #1e1e8f;   /* etwas heller */
-    --c-bg-card:    #14145a;   /* Karten / Panels */
-    --c-bg-inset:   #0f0f45;   /* Inputs / tiefste Ebene */
+    --c-bg-deep:    #191970;
+    --c-bg-mid:     #1e1e8f;
+    --c-bg-card:    #14145a;
+    --c-bg-inset:   #0f0f45;
+    --c-bg-surface: #132742;
     --c-border:     rgba(255,255,255,0.10);
     --c-border-h:   rgba(251,191,36,0.5);
+    --c-nav-bg:     rgba(15,15,69,0.88);
+    --c-text:       #f3f4f6;
+    --c-text-muted: #9ca3af;
+    --c-text-dim:   #6b7280;
+  }
+
+  /* Tag-Modus (08:00–20:00) */
+  [data-theme="day"] {
+    --c-bg-deep:    #dbeafe;
+    --c-bg-mid:     #bfdbfe;
+    --c-bg-card:    #eff6ff;
+    --c-bg-inset:   #e0f2fe;
+    --c-bg-surface: #c7d9f7;
+    --c-border:     rgba(30,58,138,0.12);
+    --c-border-h:   rgba(217,119,6,0.5);
+    --c-nav-bg:     rgba(219,234,254,0.92);
+    --c-text:       #1e3a5f;
+    --c-text-muted: #3b6289;
+    --c-text-dim:   #5b82a6;
+  }
+
+  body {
+    background: var(--c-bg-deep);
+    color: var(--c-text);
   }
 }
 
-.bg-gray-950 { background: var(--c-bg-inset) !important; }
-.bg-gray-900 { background: var(--c-bg-deep)  !important; }
-.bg-gray-800 { background: var(--c-bg-card)  !important; }
-.bg-gray-700 { background: var(--c-bg-inset) !important; }
+/* Tailwind-Klassen auf CSS-Variablen mappen */
+.bg-gray-950 { background: var(--c-bg-inset)   !important; }
+.bg-gray-900 { background: var(--c-bg-deep)    !important; }
+.bg-gray-800 { background: var(--c-bg-card)    !important; }
+.bg-gray-700 { background: var(--c-bg-inset)   !important; }
 .border-gray-800 { border-color: var(--c-border) !important; }
 .border-gray-700 { border-color: var(--c-border) !important; }
 .border-gray-600 { border-color: var(--c-border) !important; }
+
+/* Textfarben im Tag-Modus */
+[data-theme="day"] .text-gray-100 { color: var(--c-text)      !important; }
+[data-theme="day"] .text-gray-300 { color: var(--c-text-muted) !important; }
+[data-theme="day"] .text-gray-400 { color: var(--c-text-muted) !important; }
+[data-theme="day"] .text-gray-500 { color: var(--c-text-dim)   !important; }
+[data-theme="day"] .placeholder-gray-500::placeholder { color: var(--c-text-dim) !important; }
+[data-theme="day"] .text-gray-950 { color: var(--c-text) !important; }
+
+/* SVG-Umschaltung Tag/Nacht */
+[data-theme="night"] .svg-day  { display: none; }
+[data-theme="day"]   .svg-night { display: none; }
+
+/* Inputs im Tag-Modus lesbar */
+[data-theme="day"] input,
+[data-theme="day"] textarea,
+[data-theme="day"] select {
+  color: var(--c-text) !important;
+  background: var(--c-bg-card) !important;
+  border-color: var(--c-border) !important;
+}

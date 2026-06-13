@@ -4,7 +4,7 @@ import Layout from '../layouts/Layout.astro';
 <Layout>
 
   <!-- NAV -->
-  <header class="fixed top-0 inset-x-0 z-50 backdrop-blur border-b" style="background:rgba(15,15,69,0.88);border-color:rgba(255,255,255,0.10)">
+  <header class="fixed top-0 inset-x-0 z-50 backdrop-blur border-b" style="background:var(--c-nav-bg);border-color:var(--c-border)">
     <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-2">
         <img src="/logo.png" alt="WoMoHome Logo" class="h-12 w-12 rounded-full" />
@@ -17,20 +17,24 @@ import Layout from '../layouts/Layout.astro';
         <a href="#faq" class="hover:text-amber-400 transition">FAQ</a>
         <a href="#kontakt" class="hover:text-amber-400 transition">Kontakt</a>
       </nav>
+      <button id="theme-toggle" title="Tag/Nacht umschalten"
+        class="text-xl w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition">☀️</button>
     </div>
   </header>
 
   <!-- HERO -->
-  <section class="min-h-screen flex flex-col items-center justify-center text-center px-4 pt-24 pb-16 relative overflow-hidden" style="background:#0f0f45">
-    <div class="absolute inset-0" style="background:linear-gradient(180deg,#0f0f45 0%,#191970 50%,#0f0f45 100%)"></div>
+  <section class="min-h-screen flex flex-col items-center justify-center text-center px-4 pt-24 pb-16 relative overflow-hidden" style="background:var(--c-bg-inset)">
+    <div class="absolute inset-0" style="background:linear-gradient(180deg,var(--c-bg-inset) 0%,var(--c-bg-deep) 50%,var(--c-bg-inset) 100%)"></div>
     <div class="relative z-10 flex flex-col items-center w-full">
     <img src="/logo.png" alt="WoMoHome" class="h-32 w-32 md:h-40 md:w-40 rounded-full shadow-2xl shadow-amber-400/20 mb-8 ring-4 ring-amber-400/30" />
     <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 max-w-3xl">
       Dein Wohnmobil.<br /><span class="text-amber-400">Immer im Blick.</span>
     </h1>
+    <p class="text-lg md:text-xl text-gray-400 max-w-2xl mb-6">
+      WoMoHome ist ein selbst entwickeltes Smart-Home-System für Wohnmobile (mit dem Anzeige Panel LT_45X von Schaudt).
+    </p>
     <p class="text-lg md:text-xl text-gray-400 max-w-2xl mb-10">
-      WoMoHome ist ein selbst entwickeltes Smart-Home-System für Wohnmobile – mit Touch-Display, 
-      Sensorboard, LTE-Router und vollständiger Eigenversorgungsüberwachung.
+      Mit Touch-Display, Sensorboard, LTE-Router zur vollständigen Eigenversorgungsüberwachung.
     </p>
     <div class="flex flex-wrap justify-center gap-4">
       <!-- Foto-Thumbnails -->
@@ -61,7 +65,7 @@ import Layout from '../layouts/Layout.astro';
           <div class="absolute z-50 left-1/2 -translate-x-1/2"
                style="bottom:calc(100% + 0.5rem);width:440px;visibility:hidden;opacity:0;transition:opacity 0.2s;pointer-events:none"
                id="collage-panel">
-            <div style="background:#0f0f45;border:1px solid rgba(255,255,255,0.15);border-radius:1rem;padding:0.75rem;box-shadow:0 8px 40px rgba(0,0,0,0.8);display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+            <div style="background:var(--c-bg-inset);border:1px solid var(--c-border);border-radius:1rem;padding:0.75rem;box-shadow:0 8px 40px rgba(0,0,0,0.4);display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
               {([{n:2,cap:"Wetter"},{n:7,cap:"Einstellungen"},{n:13,cap:"Gas wechseln"},{n:15,cap:"Nivellieren"}]).map(({n,cap}) => (
                 <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer"
                      onclick={`event.stopPropagation();document.getElementById('lb').style.display='flex';document.getElementById('lb-img').src='/photos/screen${n}.jpg'`}>
@@ -95,6 +99,20 @@ import Layout from '../layouts/Layout.astro';
     </div>
   </section>
 
+  <!-- WARUM? -->
+  <section class="py-24 px-4 bg-gray-950">
+    <div class="max-w-2xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold mb-8">Warum?</h2>
+      <p class="text-gray-400 text-lg leading-relaxed">
+        Die meisten Wohnmobilisten dürften es kennen: Wieviel Gas ist noch da, oder wieviel Frischwasser haben wir noch?
+        Leider gab es in unserem Wohni keine Anzeige für Gas, und die für Frischwasser war sehr grob (0 / 25 / 50 / 100%) –
+        wenn man häufig autonom steht, ist das ein Problem. Bei uns dauerte das eine ganze Zeit und wir haben es auch mit
+        Gaswaagen probiert. Aber alles nicht sehr komfortable. Und dann kam die KI und Vibe Coding –
+        damit war es mir möglich, so ein Projekt anzupacken.
+      </p>
+    </div>
+  </section>
+
   <!-- WAS IST WOMOHOME? -->
   <section class="py-24 px-4 bg-gray-900">
     <div class="max-w-6xl mx-auto">
@@ -108,26 +126,35 @@ import Layout from '../layouts/Layout.astro';
             icon: "🖥️",
             title: "Display-Einheit",
             chip: "ESP32-S3 · 7\" Touch",
+            img: "/ESP32-S3-Touch-LCD-7.png",
+            imgStyle: "margin-top:-1rem;margin-right:-1rem",
             desc: "Visualisiert alle Sensor- und Statusdaten in Echtzeit. Bedienbar per Touch – Steuerbefehle werden per RS485 an das Sensorboard weitergeleitet. On-Board-Buzzer für akustische Alarme. LVGL-basierte Benutzeroberfläche."
           },
           {
             icon: "🔧",
             title: "Sensorboard",
             chip: "ESP32-S3 · RS485",
-            desc: "Erfasst Batterien, Tanks, Gas, Temperatur/Luftdruck/IAQ (2× BME680), Inklination (BNO055) und Wägezellen (HX711). Schaltet Bordnetz und Multimedia direkt. Kommuniziert per RS485 mit dem Display-Board."
+            img: "/Sensor-Board.png",
+            imgStyle: "margin-top:-1rem;margin-right:-1rem",
+            desc: "Erfasst Batterien, Tanks, Gas, Temperatur/Luftdruck/IAQ (BME680 und BME280), Inklination (BNO055) und Wägezellen (HX711). Schaltet Bordnetz und Multimedia direkt. Kommuniziert per RS485 mit dem Display-Board."
           },
           {
             icon: "📡",
             title: "LTE-Router",
             chip: "Teltonika RUTX11",
+            img: "/RUTX11.png",
+            imgStyle: "margin-top:-1rem",
             desc: "OpenWRT-basierter Router mit LTE, WLAN-AP, GNSS und HotSpot. Liefert Konnektivität und GPS-Daten für das gesamte System."
           }
         ].map(c => (
-          <div class="rounded-2xl p-8 flex flex-col gap-4" style="background:#132742;border:1px solid rgba(255,255,255,0.08)">
-            <div class="text-5xl">{c.icon}</div>
-            <div>
-              <h3 class="text-xl font-bold mb-1">{c.title}</h3>
-              <span class="text-xs text-amber-400 font-mono bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded">{c.chip}</span>
+          <div class="rounded-2xl p-8 flex flex-col gap-4" style="background:var(--c-bg-surface);border:1px solid var(--c-border)">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <div class="text-5xl mb-2">{c.icon}</div>
+                <h3 class="text-xl font-bold mb-1">{c.title}</h3>
+                <span class="text-xs text-amber-400 font-mono bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded">{c.chip}</span>
+              </div>
+              {c.img && <img src={c.img} alt={c.title} class="w-36 h-28 object-contain shrink-0" style={c.imgStyle ?? ""} />}
             </div>
             <p class="text-gray-400 text-sm leading-relaxed">{c.desc}</p>
           </div>
@@ -136,7 +163,8 @@ import Layout from '../layouts/Layout.astro';
       <!-- Systemübersicht -->
       <div class="mt-16">
         <h3 class="text-center text-lg font-semibold text-gray-400 mb-6">Systemübersicht</h3>
-        <img src="/system-overview.svg" alt="WoMoHome Systemübersicht" class="w-full max-w-4xl mx-auto block rounded-2xl" />
+        <img src="/system-overview.svg"     alt="WoMoHome Systemübersicht" class="svg-night w-full max-w-4xl mx-auto block rounded-2xl" />
+        <img src="/system-overview-day.svg" alt="WoMoHome Systemübersicht" class="svg-day   w-full max-w-4xl mx-auto block rounded-2xl" />
       </div>
     </div>
   </section>
@@ -266,7 +294,7 @@ import Layout from '../layouts/Layout.astro';
             href: "https://www.votronic.de/tankgeber/"
           }
         ].map(p => (
-          <div class="rounded-2xl p-6 flex flex-col gap-3" style="background:#132742;border:1px solid rgba(255,255,255,0.08)">
+          <div class="rounded-2xl p-6 flex flex-col gap-3" style="background:var(--c-bg-surface);border:1px solid var(--c-border)">
             <div>
               <h4 class="font-bold text-lg mb-1">{p.title}</h4>
               <span class="text-amber-400 font-semibold text-sm">{p.price}</span>
@@ -288,7 +316,7 @@ import Layout from '../layouts/Layout.astro';
           { title: "SensorBee",      price: "50 €",  desc: "BLE-Gaswaage für bestehende Wägezellen-Setups.",                      available: false },
           { title: "Waageplattform", price: "70 €",  desc: "1 Wägemodul inkl. Wägezellen und Platte (pro Gasflasche).",           available: true  },
         ].map(p => (
-          <div class="rounded-2xl p-6 flex flex-col gap-3" style={`background:#132742;border:1px solid ${p.available ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)'};opacity:${p.available ? '1' : '0.7'}`}>
+          <div class="rounded-2xl p-6 flex flex-col gap-3" style={`background:var(--c-bg-surface);border:1px solid var(--c-border);opacity:${p.available ? '1' : '0.7'}`}>
             <div class="flex items-start justify-between gap-2">
               <div>
                 <h4 class="font-bold text-lg mb-1">{p.title}</h4>
@@ -345,7 +373,7 @@ import Layout from '../layouts/Layout.astro';
           },
           {
             q: "Wird das Projekt weiterentwickelt?",
-            a: "Ja. Aktuell laufende Projekte: LVGL v9 Migration, verbesserte Gaslogik, Web-Konfiguration über den Router."
+            a: "Ja. Aktuell laufende Projekte: Web-Konfiguration über das Sensorboard (Standalone, ohne Router), SensorBee (Platine zum Anschluss beliebiger Sensoren mit Bluetooth-Übertragung)."
           }
         ].map(item => (
           <details class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden group">
@@ -388,11 +416,11 @@ import Layout from '../layouts/Layout.astro';
         <div>
           <label class="block text-sm font-semibold mb-2">Interesse</label>
           <select name="interest" class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-gray-100 focus:outline-none focus:border-amber-400 transition">
-            <option value="sensorboard">Sensorboard (50 €)</option>
+            <option value="sensorboard">Sensorboard (150 €)</option>
             <option value="sensorbee">SensorBee (demnächst)</option>
             <option value="waage">Waageplattform (demnächst)</option>
             <option value="komplett">Komplettsystem</option>
-            <option value="frage">Allgemeine Frage</option>
+            <option value="frage" selected>Allgemeine Frage</option>
           </select>
         </div>
         <div>
@@ -409,7 +437,7 @@ import Layout from '../layouts/Layout.astro';
   </section>
 
   <!-- FOOTER -->
-  <footer class="py-10 px-4 border-t text-center text-gray-500 text-sm" style="background:#0f0f45;border-color:rgba(255,255,255,0.10)">
+  <footer class="py-10 px-4 border-t text-center text-gray-500 text-sm" style="background:var(--c-bg-inset);border-color:var(--c-border)">
     <p class="mb-2">
       <span class="text-amber-400 font-bold">WoMoHome</span> – Open Hardware Projekt · 
       Entwickelt mit ❤️ und ESP-IDF

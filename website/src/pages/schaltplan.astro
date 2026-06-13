@@ -4,7 +4,7 @@ import Layout from '../layouts/Layout.astro';
 <Layout title="Schaltpläne – WoMoHome" description="WoMoHome Sensorboard Schaltplan in KiCad, lizenziert unter CERN-OHL-P v2.">
 
   <!-- NAV -->
-  <header class="fixed top-0 inset-x-0 z-50 backdrop-blur border-b" style="background:rgba(15,15,69,0.88);border-color:rgba(255,255,255,0.10)">
+  <header class="fixed top-0 inset-x-0 z-50 backdrop-blur border-b" style="background:var(--c-nav-bg);border-color:var(--c-border)">
     <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <a href="/" class="flex items-center gap-1 text-gray-300 hover:text-amber-400 transition text-sm font-semibold border border-white/20 px-3 py-1.5 rounded-lg hover:border-amber-400">
@@ -25,7 +25,7 @@ import Layout from '../layouts/Layout.astro';
   </header>
 
   <!-- INHALT -->
-  <main class="pt-24 pb-20 px-4" style="background:#191970;min-height:100vh">
+  <main class="pt-24 pb-20 px-4" style="background:var(--c-bg-deep);min-height:100vh">
     <div class="max-w-5xl mx-auto">
 
       <!-- Zurück + Überschrift -->
@@ -34,7 +34,7 @@ import Layout from '../layouts/Layout.astro';
         <h1 class="text-3xl md:text-4xl font-extrabold mb-3">Sensorboard – Schaltplan</h1>
         <p class="text-gray-400 text-sm">Rev. 0.2 · ESP32-S3 DevKitC-1 (N16R8) · KiCad 8 · CERN-OHL-P v2</p>
         <p class="text-gray-500 text-xs mt-1">
-          Enthält: 2× BME680 (I²C) · BNO055 (IMU) · HX711 (Wägezellen) · PCF8523 (RTC) · RS485 · Batterie-ADC · Tank-ADC
+          Enthält: BME680 + BME280 (I²C) · BNO055 (IMU) · HX711 (Wägezellen) · PCF8523 (RTC) · RS485 · Batterie-ADC · Tank-ADC
         </p>
       </div>
 
