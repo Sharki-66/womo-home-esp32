@@ -181,6 +181,15 @@ void app_main(void)
         ESP_LOGW(TAG, "WiFi nicht gestartet: %s", esp_err_to_name(wifi_err));
     }
 
+    // ESP-NOW direkt nach WiFi-Start (nicht erst nach Sensor-Inits) —
+    // esp_now_init() braucht nur esp_wifi_start(), keine Router-Verbindung
+    esp_err_t rs485_err = espnow_modem_init();
+    if (rs485_err != ESP_OK) {
+        ESP_LOGW(TAG, "ESP-NOW nicht gestartet (err=%s)", esp_err_to_name(rs485_err));
+    } else {
+        ESP_LOGI(TAG, "✓ ESP-NOW-Kommunikation aktiv");
+    }
+
     // HTTP-Server für Parkhilfe (womo-sensor.local)
     esp_err_t http_err = sensor_http_start();
     if (http_err != ESP_OK) {
@@ -228,14 +237,6 @@ void app_main(void)
     esp_err_t bno_err = bno055_app_start();
     if (bno_err != ESP_OK) {
         ESP_LOGW(TAG, "BNO055 nicht aktiv (err=%s)", esp_err_to_name(bno_err));
-    }
-
-    // RS485-Kommunikation zum Display initialisieren
-    esp_err_t rs485_err = espnow_modem_init();
-    if (rs485_err != ESP_OK) {
-        ESP_LOGW(TAG, "ESP-NOW nicht gestartet (err=%s)", esp_err_to_name(rs485_err));
-    } else {
-        ESP_LOGI(TAG, "✓ ESP-NOW-Kommunikation aktiv");
     }
 
     // Touch-Debug-Monitor (nur Log-Ausgabe, keine Aktion)
