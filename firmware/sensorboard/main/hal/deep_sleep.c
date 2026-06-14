@@ -102,6 +102,42 @@ bool deep_sleep_wakeup_by_touch(void)
     return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TOUCHPAD;
 }
 
+void deep_sleep_enter_cold(void)
+{
+    ESP_LOGI(TAG, "Cold Boot → Deep Sleep. Touch auf GPIO%d weckt das System.", SENSOR_WAKEUP_GPIO);
+
+    /* Display AUS: GPIO7 LOW + RTC Hold */
+    rtc_gpio_init(SENSOR_DISPLAY_PWR_GPIO);
+    rtc_gpio_set_direction(SENSOR_DISPLAY_PWR_GPIO, RTC_GPIO_MODE_OUTPUT_ONLY);
+    rtc_gpio_set_level(SENSOR_DISPLAY_PWR_GPIO, 0);
+    rtc_gpio_pulldown_dis(SENSOR_DISPLAY_PWR_GPIO);
+    rtc_gpio_pullup_dis(SENSOR_DISPLAY_PWR_GPIO);
+    rtc_gpio_hold_en(SENSOR_DISPLAY_PWR_GPIO);
+
+    /* 12V Bordnetz: kein Puls (bistabiles Relais, Zustand unbekannt) — nur LOW einfrieren */
+    gpio_set_direction(SENSOR_PWR_12V_ON_GPIO,  GPIO_MODE_OUTPUT);
+    gpio_set_direction(SENSOR_PWR_12V_OFF_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  0);
+    gpio_set_level(SENSOR_PWR_12V_OFF_GPIO, 0);
+    gpio_hold_en(SENSOR_PWR_12V_ON_GPIO);
+    gpio_hold_en(SENSOR_PWR_12V_OFF_GPIO);
+
+    /* Multimedia (Radio) AUS */
+    gpio_set_direction(SENSOR_MULTIMEDIA_PWR_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(SENSOR_MULTIMEDIA_PWR_GPIO, 0);
+    gpio_hold_en(SENSOR_MULTIMEDIA_PWR_GPIO);
+
+    /* RS485-DE / Legacy GPIO LOW */
+    gpio_set_direction(SENSOR_ESPNOW_DE_LEGACY_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(SENSOR_ESPNOW_DE_LEGACY_GPIO, 0);
+    gpio_hold_en(SENSOR_ESPNOW_DE_LEGACY_GPIO);
+
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+    esp_sleep_enable_touchpad_wakeup();
+    esp_deep_sleep_start();
+    /* Kehrt nicht zurück */
+}
+
 void deep_sleep_enter(void)
 {
     ESP_LOGI(TAG, "Deep Sleep. Touch-Wakeup auf GPIO%d (HW, Schwelle=+%" PRIu32 ").",

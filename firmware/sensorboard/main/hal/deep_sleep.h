@@ -30,3 +30,10 @@ bool deep_sleep_wakeup_by_touch(void);
  * @note  Kehrt NICHT zurück.
  */
 void deep_sleep_enter(void);
+
+/**
+ * @brief Deep Sleep direkt beim Cold Boot — ohne Komponenten-Shutdown.
+ *        HX711/BNO055 noch nicht gestartet, kein 12V-Relais-Puls.
+ * @note  Kehrt NICHT zurück.
+ */
+void deep_sleep_enter_cold(void);

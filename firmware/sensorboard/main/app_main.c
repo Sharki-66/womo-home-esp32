@@ -155,9 +155,10 @@ void app_main(void)
         ESP_LOGI(TAG, "Touch-Wakeup erkannt → Hold aufheben");
         gpio_hold_dis(SENSOR_ESPNOW_DE_LEGACY_GPIO);
     } else {
-        ESP_LOGI(TAG, "Cold Boot erkannt");
+        deep_sleep_enter_cold();
+        /* Kehrt nicht zurück */
     }
-    /* Display und 12V immer einschalten (Cold Boot & Touch-Wakeup) */
+    /* Ab hier: nur Touch-Wakeup-Pfad */
     pwr_12v_on_early();
 
     rgb_led_off();

@@ -110,15 +110,6 @@ static inline int adc_mv_to_percent_cal(int mv, int empty_mv, int full_mv)
     return ((mv - empty_mv) * 100) / (full_mv - empty_mv);
 }
 
-static TickType_t ms_to_ticks(uint32_t ms)
-{
-    if (ms == 0) {
-        return 1;
-    }
-    TickType_t ticks = pdMS_TO_TICKS(ms);
-    return (ticks == 0) ? 1 : ticks;
-}
-
 static int64_t rs485_epoch_ms(void)
 {
     struct timeval tv;
