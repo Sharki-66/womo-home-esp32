@@ -217,7 +217,9 @@ esp_err_t pcf8523_app_start(void)
 
         // PM-Bits 7-5 auf 000 = Standard Battery Switch-over aktivieren
         // BSF und BLF löschen (Sticky-Flags müssen explizit quittiert werden)
-        uint8_t new_ctrl3 = ctrl3 & ~(PCF8523_CTRL3_BSF | PCF8523_CTRL3_BLF);
+        uint8_t new_ctrl3 = ctrl3
+            & ~(PCF8523_CTRL3_PM2 | PCF8523_CTRL3_PM1 | PCF8523_CTRL3_PM0)
+            & ~(PCF8523_CTRL3_BSF | PCF8523_CTRL3_BLF);
         esp_err_t write_err = pcf8523_write_byte(PCF8523_REG_CONTROL_3, new_ctrl3);
         if (write_err == ESP_OK) {
             ESP_LOGI(TAG, "Battery Switch-over aktiviert, Flags quittiert (Standard-Mode)");
