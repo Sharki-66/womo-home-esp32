@@ -8,32 +8,28 @@
  * gasbee_ble_client.c
  *
  * NimBLE Central – verbindet mit GasBee (ESP32-C3):
- *  1. Scan nach Gerätename "GasBee"
- *  2. Verbinden + Service-/Characteristic-Discovery
- *  3. Notify-Subscription für Weight_kg / Gas_pct / Net_gas_kg
+ *  1. Advertisement-Events vom BLE-Manager empfangen (gasbee_on_adv)
+ *  2. Verbinden bei Gerätename "GasBee" → ble_manager_connect()
+ *  3. Service-/Characteristic-Discovery + Notify-Subscription
  *  4. Werte loggen + Snapshot aktualisieren
- *  5. Bei Trennung: automatisch neu scannen
+ *  5. Bei Trennung: BLE-Manager startet Scan automatisch neu
  */
 
 #include "gasbee_ble_client.h"
+#include "ble_manager.h"
 
 #include <string.h>
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 #include <freertos/semphr.h>
-#include <freertos/timers.h>
 
-#include <nimble/nimble_port.h>
-#include <nimble/nimble_port_freertos.h>
 #include <host/ble_hs.h>
 #include <host/ble_gap.h>
-#include <host/util/util.h>
 
 static const char *TAG = "gasbee_ble";
 
-// ── UUIDs (müssen mit gasbee_config.h übereinstimmen) ──────────────────────
+// ── UUIDs (müssen mit gasbee_config.h übereinstimmen) ────────────────────
 
 // Service: 4a5b6c7d-8e9f-0a1b-2c3d-4e5f60718293 (little-endian)
 static const ble_uuid128_t s_svc_uuid = BLE_UUID128_INIT(
@@ -45,7 +41,7 @@ static const ble_uuid128_t s_svc_uuid = BLE_UUID128_INIT(
 #define CHR_GAS_PCT    0x2B02
 #define CHR_NET_GAS_KG 0x2B03
 
-// ── Characteristic-Tracking ─────────────────────────────────────────────────
+// ── Characteristic-Tracking ───────────────────────────────────────────────
 
 typedef struct {
     uint16_t uuid16;
@@ -59,27 +55,13 @@ static chr_slot_t s_chrs[3] = {
 };
 #define NUM_CHRS 3
 
-// ── Zustand ──────────────────────────────────────────────────────────────────
+// ── Zustand ───────────────────────────────────────────────────────────────
 
 static uint16_t          s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
 static gasbee_snapshot_t s_snapshot    = {0};
 static SemaphoreHandle_t s_mutex       = NULL;
-static TimerHandle_t     s_reconnect_timer = NULL;
 
-// ── Vorwärts-Deklarationen ────────────────────────────────────────────────────
-
-static void start_scan(void);
-static int  gap_event_cb(struct ble_gap_event *event, void *arg);
-
-// ── Reconnect-Timer (aus GAP-Callback sicher aufrufbar) ──────────────────────
-
-static void reconnect_timer_cb(TimerHandle_t t)
-{
-    (void)t;
-    start_scan();
-}
-
-// ── CCCD-Subscription ────────────────────────────────────────────────────────
+// ── CCCD-Subscription ─────────────────────────────────────────────────────
 // NimBLE-Server legt CCCD direkt nach dem Value-Attribut an → val_handle + 1.
 
 static void subscribe_all_chrs(void)
@@ -101,14 +83,13 @@ static void subscribe_all_chrs(void)
     }
 }
 
-// ── GATT Discovery-Callbacks ─────────────────────────────────────────────────
+// ── GATT Discovery-Callbacks ──────────────────────────────────────────────
 
 static int disc_chr_cb(uint16_t conn_handle,
                        const struct ble_gatt_error *error,
                        const struct ble_gatt_chr *chr, void *arg)
 {
     if (error->status == BLE_HS_EDONE) {
-        // Alle Characteristics entdeckt → subscriben
         ESP_LOGI(TAG, "Chr-Discovery abgeschlossen");
         subscribe_all_chrs();
         return 0;
@@ -143,7 +124,7 @@ static int disc_svc_cb(uint16_t conn_handle,
     return 0;
 }
 
-// ── Notify-Handler ───────────────────────────────────────────────────────────
+// ── Notify-Handler ────────────────────────────────────────────────────────
 
 static void handle_notify(uint16_t attr_handle,
                            const uint8_t *data, uint16_t len)
@@ -183,46 +164,45 @@ static void handle_notify(uint16_t attr_handle,
     xSemaphoreGive(s_mutex);
 }
 
-// ── GAP Event Handler ────────────────────────────────────────────────────────
+// ── Advertisement-Handler (vom BLE-Manager) ───────────────────────────────
 
-static int gap_event_cb(struct ble_gap_event *event, void *arg)
+static void gasbee_on_adv(const struct ble_gap_disc_desc *disc)
 {
+    // Bereits verbunden oder Verbindungsaufbau läuft → ignorieren
+    if (s_conn_handle != BLE_HS_CONN_HANDLE_NONE) return;
+    if (ble_gap_conn_active()) return;
+
     struct ble_hs_adv_fields fields;
+    if (ble_hs_adv_parse_fields(&fields, disc->data, disc->length_data) != 0) return;
+    if (fields.name == NULL || fields.name_len != 6) return;
+    if (memcmp(fields.name, "GasBee", 6) != 0) return;
+
+    ESP_LOGI(TAG, "GasBee gefunden (%02X:%02X:%02X:%02X:%02X:%02X), verbinde...",
+             disc->addr.val[5], disc->addr.val[4], disc->addr.val[3],
+             disc->addr.val[2], disc->addr.val[1], disc->addr.val[0]);
+
+    for (int i = 0; i < NUM_CHRS; i++) s_chrs[i].val_handle = 0;
+    ble_manager_connect(&disc->addr);
+}
+
+// ── Connection-Event-Handler (vom BLE-Manager) ────────────────────────────
+
+static int gasbee_conn_cb(struct ble_gap_event *event, void *arg)
+{
+    (void)arg;
 
     switch (event->type) {
-
-        case BLE_GAP_EVENT_DISC: {
-            if (ble_hs_adv_parse_fields(&fields, event->disc.data,
-                                         event->disc.length_data) != 0) break;
-            if (fields.name == NULL) break;
-            if (fields.name_len != 6) break; // strlen("GasBee")
-            if (memcmp(fields.name, "GasBee", 6) != 0) break;
-
-            ESP_LOGI(TAG, "GasBee gefunden (%02X:%02X:%02X:%02X:%02X:%02X), verbinde...",
-                     event->disc.addr.val[5], event->disc.addr.val[4],
-                     event->disc.addr.val[3], event->disc.addr.val[2],
-                     event->disc.addr.val[1], event->disc.addr.val[0]);
-            ble_gap_disc_cancel();
-            ble_gap_connect(BLE_OWN_ADDR_PUBLIC, &event->disc.addr,
-                            30000, NULL, gap_event_cb, NULL);
-            break;
-        }
 
         case BLE_GAP_EVENT_CONNECT:
             if (event->connect.status == 0) {
                 s_conn_handle = event->connect.conn_handle;
-                ESP_LOGI(TAG, "Verbunden (handle=%d) → Discovery...",
+                ESP_LOGI(TAG, "GasBee verbunden (handle=%d) → Discovery...",
                          s_conn_handle);
-                // Chr-Handles zurücksetzen
-                for (int i = 0; i < NUM_CHRS; i++) s_chrs[i].val_handle = 0;
                 ble_gattc_disc_svc_by_uuid(s_conn_handle,
                                            &s_svc_uuid.u,
                                            disc_svc_cb, NULL);
             } else {
-                ESP_LOGW(TAG, "Verbindung fehlgeschlagen (status=%d)",
-                         event->connect.status);
                 s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
-                xTimerStart(s_reconnect_timer, 0);
             }
             break;
 
@@ -233,7 +213,6 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
                 s_snapshot.valid = false;
                 xSemaphoreGive(s_mutex);
             }
-            xTimerStart(s_reconnect_timer, 0);
             break;
 
         case BLE_GAP_EVENT_NOTIFY_RX:
@@ -248,63 +227,17 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
     return 0;
 }
 
-// ── Scan ─────────────────────────────────────────────────────────────────────
-
-static void start_scan(void)
-{
-    struct ble_gap_disc_params p = {
-        .passive           = 0,
-        .filter_duplicates = 1,
-        .itvl              = 0x0050,  // ~50 ms
-        .window            = 0x0030,  // ~30 ms
-    };
-    ESP_LOGI(TAG, "Suche nach GasBee...");
-    int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &p,
-                          gap_event_cb, NULL);
-    if (rc != 0) {
-        ESP_LOGE(TAG, "Scan-Start fehlgeschlagen: rc=%d", rc);
-        xTimerStart(s_reconnect_timer, 0);
-    }
-}
-
-// ── NimBLE Host ───────────────────────────────────────────────────────────────
-
-static void on_sync(void)
-{
-    ble_hs_util_ensure_addr(0);
-    start_scan();
-}
-
-static void on_reset(int reason)
-{
-    ESP_LOGE(TAG, "BLE Reset: reason=%d", reason);
-}
-
-static void nimble_host_task(void *arg)
-{
-    nimble_port_run();
-    nimble_port_freertos_deinit();
-}
-
-// ── Public API ────────────────────────────────────────────────────────────────
+// ── Public API ─────────────────────────────────────────────────────────────
 
 esp_err_t gasbee_ble_client_start(void)
 {
     s_mutex = xSemaphoreCreateMutex();
     if (!s_mutex) return ESP_ERR_NO_MEM;
 
-    // Reconnect-Timer: 3 s, one-shot
-    s_reconnect_timer = xTimerCreate("ble_rc", pdMS_TO_TICKS(3000),
-                                      pdFALSE, NULL, reconnect_timer_cb);
-    if (!s_reconnect_timer) return ESP_ERR_NO_MEM;
+    ble_manager_register_adv_handler(gasbee_on_adv);
+    ble_manager_set_conn_handler(gasbee_conn_cb, NULL);
 
-    nimble_port_init();
-    ble_hs_cfg.sync_cb  = on_sync;
-    ble_hs_cfg.reset_cb = on_reset;
-
-    nimble_port_freertos_init(nimble_host_task);
-
-    ESP_LOGI(TAG, "GasBee BLE Client gestartet");
+    ESP_LOGI(TAG, "GasBee BLE Client registriert");
     return ESP_OK;
 }
 

@@ -552,6 +552,7 @@ static void process_bme680(bsec_ctx_t *ctx)
             ctx->fail_count++;
             if (ctx->fail_count >= BME680_MAX_FAIL_COUNT) {
                 ctx->hw_disabled = true;
+                ctx->plausibility->have_value = false;  // Fallback-Quellen (Ruuvi) freigeben
                 ESP_LOGE(TAG, "%s: %d I2C-Fehler in Folge – Sensor deaktiviert (defekter/Fake-Chip)",
                          ctx->label, ctx->fail_count);
             } else {
@@ -762,6 +763,7 @@ static void process_bme280(bsec_ctx_t *ctx, bme280_handle_t dev)
         ctx->fail_count++;
         if (ctx->fail_count >= BME680_MAX_FAIL_COUNT) {
             ctx->hw_disabled = true;
+            ctx->plausibility->have_value = false;  // Fallback-Quellen (Ruuvi) freigeben
             ESP_LOGE(TAG, "%s: %d I2C-Fehler in Folge – Sensor deaktiviert",
                      ctx->label, ctx->fail_count);
         } else {

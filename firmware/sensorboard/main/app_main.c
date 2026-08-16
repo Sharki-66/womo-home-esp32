@@ -23,7 +23,9 @@
 #include "network/espnow_modem.h"
 #include "network/wifi/sensor_wifi.h"
 #include "network/wifi/sensor_http.h"
+#include "network/ble_manager.h"
 #include "network/gasbee_ble_client.h"
+#include "network/ruuvi_ble_scanner.h"
 #include "hal/deep_sleep.h"
 #include "led_strip.h"
 #include "driver/gpio.h"
@@ -45,7 +47,9 @@ static void sensor_log_init(void)
     esp_log_level_set("bme680",       LOG_LEVEL_BME680);
     esp_log_level_set("hx711_app",    LOG_LEVEL_HX711);
     esp_log_level_set("ina226",       LOG_LEVEL_INA226);
+    esp_log_level_set("ble_manager",   LOG_LEVEL_BLE_MANAGER);
     esp_log_level_set("gasbee_ble",   LOG_LEVEL_GASBEE_BLE);
+    esp_log_level_set("ruuvi_ble",    LOG_LEVEL_RUUVI_BLE);
     esp_log_level_set("i2c_bus",      LOG_LEVEL_I2C_BUS);
     esp_log_level_set("pcf8523_app",  LOG_LEVEL_PCF8523);
     esp_log_level_set("time_sync",    LOG_LEVEL_TIME_SYNC);
@@ -226,10 +230,22 @@ void app_main(void)
         ESP_LOGW(TAG, "INA226 nicht aktiv (err=%s)", esp_err_to_name(ina_err));
     }
 
-    // GasBee BLE Client (ESP32-C3 Mini Gaswaage via BLE)
+    // BLE-Manager (NimBLE-Stack-Eigentümer, muss zuerst gestartet werden)
+    esp_err_t ble_err = ble_manager_init();
+    if (ble_err != ESP_OK) {
+        ESP_LOGW(TAG, "BLE Manager nicht gestartet (err=%s)", esp_err_to_name(ble_err));
+    }
+
+    // GasBee BLE Client (registriert sich beim BLE-Manager)
     esp_err_t gasbee_err = gasbee_ble_client_start();
     if (gasbee_err != ESP_OK) {
         ESP_LOGW(TAG, "GasBee BLE Client nicht gestartet (err=%s)", esp_err_to_name(gasbee_err));
+    }
+
+    // Ruuvi BLE Scanner (registriert sich beim BLE-Manager, unabhängig von GasBee)
+    esp_err_t ruuvi_err = ruuvi_ble_scanner_init();
+    if (ruuvi_err != ESP_OK) {
+        ESP_LOGW(TAG, "Ruuvi Scanner nicht gestartet (err=%s)", esp_err_to_name(ruuvi_err));
     }
 
     // BNO055 als letztes initialisieren, kleine Pause davor

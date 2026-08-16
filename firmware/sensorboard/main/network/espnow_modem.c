@@ -16,6 +16,7 @@
 #include "network/espnow_modem.h"
 
 #include "network/espnow_transport.h"
+#include "network/ruuvi_ble_scanner.h"
 #include "sensors/bno055_sensor.h"
 #include "network/wifi/sensor_wifi.h"
 
@@ -601,9 +602,20 @@ static void rs485_publish_bme_in(void)
         }
         cJSON_AddNumberToObject(root, "ts", ts_us_to_epoch_ms(bme.indoor.timestamp_us));
     } else {
-        cJSON_AddNumberToObject(root, "temp_c", 0.0);
-        cJSON_AddNumberToObject(root, "rh_pct", 0.0);
-        cJSON_AddNumberToObject(root, "press_hpa", 0.0);
+        // Kein Kabel-Sensor → Ruuvi Innen-Tag als Fallback
+        ruuvi_snapshot_t ruuvi = {0};
+        ruuvi_ble_scanner_get_indoor(&ruuvi);
+        if (ruuvi.valid) {
+            cJSON_AddStringToObject(root, "chip", "ruuvi");
+            cJSON_AddNumberToObject(root, "temp_c",    round2(ruuvi.temp_c));
+            cJSON_AddNumberToObject(root, "rh_pct",    round2(ruuvi.humidity_pct));
+            cJSON_AddNumberToObject(root, "press_hpa", round2(ruuvi.pressure_hpa));
+            cJSON_AddNumberToObject(root, "ts",        ts_us_to_epoch_ms(ruuvi.timestamp_us));
+        } else {
+            cJSON_AddNumberToObject(root, "temp_c",    0.0);
+            cJSON_AddNumberToObject(root, "rh_pct",    0.0);
+            cJSON_AddNumberToObject(root, "press_hpa", 0.0);
+        }
     }
     rs485_send_frame("bme_in", root, false);
     cJSON_Delete(root);
@@ -666,9 +678,32 @@ static void rs485_publish_bme_out(void)
             cJSON_AddNumberToObject(root, "gas_kohm", round2(bme.outdoor.gas_kohm));
         cJSON_AddNumberToObject(root, "ts", ts_us_to_epoch_ms(bme.outdoor.timestamp_us));
     } else {
-        cJSON_AddNumberToObject(root, "temp_c", 0.0);
-        cJSON_AddNumberToObject(root, "rh_pct", 0.0);
-        cJSON_AddNumberToObject(root, "press_hpa", 0.0);
+        // Kein Kabel-Sensor → Ruuvi Außen-Tag als Fallback
+        ruuvi_snapshot_t ruuvi = {0};
+        ruuvi_ble_scanner_get_outdoor(&ruuvi);
+        if (ruuvi.valid) {
+            cJSON_AddStringToObject(root, "chip", "ruuvi");
+            cJSON_AddNumberToObject(root, "temp_c", round2(ruuvi.temp_c));
+            cJSON_AddNumberToObject(root, "rh_pct", round2(ruuvi.humidity_pct));
+            if (ruuvi.has_pressure) {
+                cJSON_AddNumberToObject(root, "press_hpa", round2(ruuvi.pressure_hpa));
+            } else {
+                // Außen-Tag ohne Drucksensor (z. B. Pro 3in1) → Druck vom Innensensor
+                if (bme.indoor.valid) {
+                    cJSON_AddNumberToObject(root, "press_hpa", round2(bme.indoor.pressure_hpa));
+                } else {
+                    ruuvi_snapshot_t ruuvi_in = {0};
+                    ruuvi_ble_scanner_get_indoor(&ruuvi_in);
+                    if (ruuvi_in.valid && ruuvi_in.has_pressure)
+                        cJSON_AddNumberToObject(root, "press_hpa", round2(ruuvi_in.pressure_hpa));
+                }
+            }
+            cJSON_AddNumberToObject(root, "ts", ts_us_to_epoch_ms(ruuvi.timestamp_us));
+        } else {
+            cJSON_AddNumberToObject(root, "temp_c",    0.0);
+            cJSON_AddNumberToObject(root, "rh_pct",    0.0);
+            cJSON_AddNumberToObject(root, "press_hpa", 0.0);
+        }
     }
     rs485_send_frame("bme_out", root, false);
     cJSON_Delete(root);
@@ -994,9 +1029,9 @@ static rs485_topic_t s_topics[] = {
     { "tank",  WOMO_TOPIC_TANK_INTERVAL_MS, 0, rs485_publish_tank },
     { "hx",    WOMO_TOPIC_HX_INTERVAL_MS,   0, rs485_publish_hx   },
     { "gas",     WOMO_TOPIC_GAS_INTERVAL_MS,  0, rs485_publish_gas     },
-    { "bme_in",  WOMO_TOPIC_BME_INTERVAL_MS,  0, rs485_publish_bme_in  },
-    { "bme_out", WOMO_TOPIC_BME_INTERVAL_MS,  0, rs485_publish_bme_out },
-    { "elec",    WOMO_TOPIC_ELEC_INTERVAL_MS,    0, rs485_publish_elec  },
+    { "bme_in",  WOMO_TOPIC_BME_INTERVAL_MS,   0, rs485_publish_bme_in  },
+    { "bme_out", WOMO_TOPIC_BME_INTERVAL_MS,   0, rs485_publish_bme_out },
+    { "elec",    WOMO_TOPIC_ELEC_INTERVAL_MS,  0, rs485_publish_elec    },
 };
 #define RS485_TOPIC_COUNT (sizeof(s_topics) / sizeof(s_topics[0]))
 static size_t s_topic_rr = 0;

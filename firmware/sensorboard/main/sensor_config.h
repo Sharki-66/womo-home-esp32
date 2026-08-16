@@ -287,6 +287,17 @@
 #define SENSOR_NTP_SERVER           "pool.ntp.org"
 
 // ====================================================================================
+// Ruuvi BLE Scanner
+// Routing ausschließlich per MAC – leerer String deaktiviert den Slot vollständig.
+// (Verhindert, dass Tags aus Nachbarfahrzeugen akzeptiert werden.)
+// Innen-Tag: z. B. RuuviTag 4in1 oder Standard
+// Außen-Tag: z. B. RuuviTag Pro 3in1 (kein Druck) oder Pro 4in1 (mit Druck)
+// Bei Außen-Tag ohne Drucksensor: Druck automatisch vom Innensensor übernommen.
+// ====================================================================================
+#define SENSOR_RUUVI_INDOOR_MAC   "CE:F1:47:5C:CC:C9"
+#define SENSOR_RUUVI_OUTDOOR_MAC  ""
+
+// ====================================================================================
 // Log-Level Konfiguration (ESP_LOG_NONE/ERROR/WARN/INFO/DEBUG/VERBOSE)
 // Hier zentral je Modul einstellen, ohne Code zu ändern.
 // ====================================================================================
@@ -299,7 +310,9 @@
 #define LOG_LEVEL_BME260         ESP_LOG_WARN    // bme260_app (falls separate Implementierung)
 #define LOG_LEVEL_HX711          ESP_LOG_WARN
 #define LOG_LEVEL_INA226         ESP_LOG_WARN    // ina226 Strom-/Leistungsmessung (DEBUG)
+#define LOG_LEVEL_BLE_MANAGER    ESP_LOG_WARN
 #define LOG_LEVEL_GASBEE_BLE     ESP_LOG_WARN
+#define LOG_LEVEL_RUUVI_BLE      ESP_LOG_WARN
 #define LOG_LEVEL_I2C_BUS        ESP_LOG_INFO    // temporär INFO für I2C-Scan Diagnose
 #define LOG_LEVEL_PCF8523        ESP_LOG_WARN
 #define LOG_LEVEL_TIME_SYNC      ESP_LOG_WARN

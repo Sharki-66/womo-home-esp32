@@ -329,7 +329,7 @@ static void bno055_task(void *arg)
                      esp_err_to_name(err_mag),
                      esp_err_to_name(err_tmp));
         }
-        uint32_t interval_ms = 5000;
+        uint32_t interval_ms = 1000;
         int64_t now_us = esp_timer_get_time();
         portENTER_CRITICAL(&s_fast_mux);
         int64_t fast_until = s_fast_until_us;
