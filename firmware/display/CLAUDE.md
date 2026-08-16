@@ -23,15 +23,15 @@
 - `hello`: `type="hello"`, Felder `fw`, `uptime` (s), optional `rx_seq`, `last_ack`.
 - `hb`: `type="hb"`, Felder `uptime`, optional `rx_seq`, `last_ack`.
 - **Topic-Pakete** (ersetzt das alte monolithische `full`-Paket): Jedes Topic wird als eigenständiges kleines JSON-Paket gesendet. Round-Robin-Scheduler, max. 1 Topic pro 100 ms-Zyklus.
-- Topic-Intervalle:
+- Topic-Intervalle (definiert in `firmware/shared/womo_config.h`):
 - `ctrl` (2 s): `{ type:"ctrl", pwr_on, radio_on, ac_present }` – Steuer-/Power-Zustände. WiFi/LTE-Zustand kommt **nicht** vom Sensorboard – Display pollt Router direkt.
-- `imu` (5 s): `{ type:"imu", yaw_deg, pitch_deg, roll_deg, hdg, cal:{sys,gyro,acc,mag}, calibrated }` – BNO055
-- `bat` (10 s): `{ type:"bat", b1, b2, nc1, nc2 }` – Batterien (Board/Kfz in Volt, kein SoC)
+- `imu` (1 s): `{ type:"imu", yaw_deg, pitch_deg, roll_deg, hdg, cal:{sys,gyro,acc,mag}, calibrated }` – BNO055
+- `bat` (1 s): `{ type:"bat", b1, b2, nc1, nc2 }` – Batterien (Board/Kfz in Volt, kein SoC)
 - `tank` (10 s): `{ type:"tank", t1, t2, nc1, nc2 }` – Tanksensoren (Prozent)
 - `hx` (10 s): `{ type:"hx", a, b, sum, nc }` – HX711 Wägezellen (kg)
 - `gas` (10 s): `{ type:"gas", active, net, rate1h, rate2h, rest_h, net_a, net_b, cap_kg, pct, pct_a, pct_b }` – Gaslogik
-- `bme` (15 s): `{ type:"bme", "0x76":{chip,addr,temp_c,rh_pct,press_hpa,gas_kohm?,iaq?,iaq_acc?,eco2_ppm?,bvoc_ppm?,ts}, "0x77":{chip,addr,temp_c,rh_pct,press_hpa,press_trend_state?,press_trend_hpa_h?,ts} }` – 0x76=BME680 innen (IAQ optional), 0x77=BME280 außen (kein IAQ, mit Drucktrend)
-- `elec` (5 s): `{ type:"elec", nc:bool, v_bus, i_a, p_w, v_shunt_mv }` – INA226 Strom-/Leistungsmessung Hauptleitung. `nc:true` wenn Sensor nicht eingebaut. Display zeigt Titel "Strom" + Spannung/Strom + Leistung zwischen den beiden Batterie-Widgets.
+- `bme` (10 s): `{ type:"bme", "0x76":{chip,addr,temp_c,rh_pct,press_hpa,gas_kohm?,iaq?,iaq_acc?,eco2_ppm?,bvoc_ppm?,ts}, "0x77":{chip,addr,temp_c,rh_pct,press_hpa,press_trend_state?,press_trend_hpa_h?,ts} }` – 0x76=BME680 innen (IAQ optional), 0x77=BME280 außen (kein IAQ, mit Drucktrend)
+- `elec` (1 s): `{ type:"elec", nc:bool, v_bus, i_a, p_w, v_shunt_mv }` – INA226 Strom-/Leistungsmessung Hauptleitung. `nc:true` wenn Sensor nicht eingebaut. Display zeigt Spannung/Strom(mA)/Leistung als graues Panel rechts mitte (Long Press zum Ein-/Ausblenden).
 - Sofort-Ctrl: Nach Ausführung von `pwr_12v_on/off` oder `radio_on/off` wird `ctrl`-Topic sofort gesendet (`s_ctrl_immediate`-Flag), damit Display den neuen Zustand schnell anzeigt.
 - GPS/LTE: Werden **nicht** über RS485 übertragen. Display pollt den Router direkt (HTTP/SSH).
 - Display → Sensorboard (Kommandos): `cmd` Feld mit JSON-Objekt. Unterstützt: `display_ready`, `level_start|level_stop`, `tare_a|tare_b`, `gas_bottle_replace` (optional `slot`, `channel`), `pwr_12v_on|pwr_12v_off` (12V Bordnetz), `radio_on|radio_off` (Multimedia, nur wenn 12V aktiv). Sensorboard quittiert per ACK.

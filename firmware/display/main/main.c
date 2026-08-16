@@ -105,9 +105,7 @@ static lv_obj_t *shore_caption_label = NULL;
 static lv_obj_t *shore_icon_label = NULL;  // Bolt-Icon auf Landstrom-Anzeige
 static lv_obj_t *battery_board_label = NULL;
 static lv_obj_t *battery_kfz_label = NULL;
-static lv_obj_t *elec_title_label = NULL;
 static lv_obj_t *elec_vi_label    = NULL;
-static lv_obj_t *elec_power_label = NULL;
 static lv_obj_t *elec_container   = NULL;
 static lv_obj_t *fresh_water_caption_label = NULL;
 static lv_obj_t *grey_water_caption_label = NULL;
@@ -453,7 +451,11 @@ static void apply_text_theme_colors(void)
     if (air_title_label_in) lv_obj_set_style_text_color(air_title_label_in, text_color, 0);
     if (humid_label_in) lv_obj_set_style_text_color(humid_label_in, text_color, 0);
     if (temp_label_in) lv_obj_set_style_text_color(temp_label_in, text_color, 0);
-    // IAQ, CO2, bVOC bleiben immer schwarz (dynamisch eingefärbt je Wert)
+    // IAQ/CO2/bVOC: mit theme_color vorbelegen; Render-Tick überschreibt mit grün/orange/rot
+    // wenn echte Werte vorliegen. Bei Placeholder (Ruuvi-Fallback oder kein Sensor) bleibt text_color.
+    if (gas_label_in)   lv_obj_set_style_text_color(gas_label_in,   text_color, 0);
+    if (press_label_in) lv_obj_set_style_text_color(press_label_in, text_color, 0);
+    if (voc_label_in)   lv_obj_set_style_text_color(voc_label_in,   text_color, 0);
     if (sensor_debug_label) lv_obj_set_style_text_color(sensor_debug_label, text_color, 0);
     if (imu_pitch_label) lv_obj_set_style_text_color(imu_pitch_label, lv_color_black(), 0);
     if (imu_roll_label) lv_obj_set_style_text_color(imu_roll_label, lv_color_black(), 0);
@@ -474,9 +476,7 @@ static void apply_text_theme_colors(void)
     if (grey_water_caption_label) lv_obj_set_style_text_color(grey_water_caption_label, lv_color_black(), 0);
     if (gas_label_front) lv_obj_set_style_text_color(gas_label_front, lv_color_black(), 0);
     if (gas_label_rear) lv_obj_set_style_text_color(gas_label_rear, lv_color_black(), 0);
-    if (elec_title_label) lv_obj_set_style_text_color(elec_title_label, text_color, 0);
-    if (elec_vi_label)    lv_obj_set_style_text_color(elec_vi_label,    text_color, 0);
-    if (elec_power_label) lv_obj_set_style_text_color(elec_power_label, text_color, 0);
+    if (elec_vi_label) lv_obj_set_style_text_color(elec_vi_label, lv_color_white(), 0);
     if (classic_btn) {
         update_classic_icon(classic_color, classic_on);
     }
@@ -1657,55 +1657,76 @@ static void ui_update_timer_cb(lv_timer_t *timer)
 
         if (snapshot.bme680_indoor.valid) {
             if (gas_label_in) {
-                char buf[40];
-                snprintf(buf, sizeof(buf), "IAQ %u", (unsigned)snapshot.bme680_indoor.iaq);
-                if (strcmp(buf, last_iaq_text_in) != 0) {
-                    lv_label_set_text(gas_label_in, buf);
-                    strncpy(last_iaq_text_in, buf, sizeof(last_iaq_text_in) - 1);
+                if (snapshot.bme680_indoor.iaq_valid) {
+                    char buf[40];
+                    snprintf(buf, sizeof(buf), "IAQ %u", (unsigned)snapshot.bme680_indoor.iaq);
+                    if (strcmp(buf, last_iaq_text_in) != 0) {
+                        lv_label_set_text(gas_label_in, buf);
+                        strncpy(last_iaq_text_in, buf, sizeof(last_iaq_text_in) - 1);
+                        last_iaq_text_in[sizeof(last_iaq_text_in) - 1] = '\0';
+                    }
+                    uint16_t iaq = snapshot.bme680_indoor.iaq;
+                    // Entprellung: Rot erst nach 3 aufeinanderfolgenden Messungen > 200
+                    // (~45 s bei 15-s-BME-Intervall). Kurze Kochduft-Spitzen loesen kein Rot aus.
+                    static uint8_t s_iaq_alarm_count = 0;
+                    if (iaq > 200) {
+                        if (s_iaq_alarm_count < 3) s_iaq_alarm_count++;
+                    } else {
+                        s_iaq_alarm_count = 0;
+                    }
+                    lv_color_t c;
+                    if (iaq <= 100) {
+                        c = lv_color_make(0, 180, 0);
+                    } else if (iaq <= 200 || s_iaq_alarm_count < 3) {
+                        c = lv_color_make(255, 165, 0);  // orange: erhoehte Belastung
+                    } else {
+                        c = lv_color_make(192, 0, 0);     // rot: anhaltend schlechte Luft
+                    }
+                    lv_obj_set_style_text_color(gas_label_in, c, 0);
+                } else if (strcmp(PLACEHOLDER_IAQ, last_iaq_text_in) != 0) {
+                    lv_label_set_text(gas_label_in, PLACEHOLDER_IAQ);
+                    strncpy(last_iaq_text_in, PLACEHOLDER_IAQ, sizeof(last_iaq_text_in) - 1);
                     last_iaq_text_in[sizeof(last_iaq_text_in) - 1] = '\0';
+                    lv_obj_set_style_text_color(gas_label_in, womo_theme_is_daytime() ? lv_color_black() : lv_color_white(), 0);
                 }
-                uint16_t iaq = snapshot.bme680_indoor.iaq;
-                // Entprellung: Rot erst nach 3 aufeinanderfolgenden Messungen > 200
-                // (~45 s bei 15-s-BME-Intervall). Kurze Kochduft-Spitzen loesen kein Rot aus.
-                static uint8_t s_iaq_alarm_count = 0;
-                if (iaq > 200) {
-                    if (s_iaq_alarm_count < 3) s_iaq_alarm_count++;
-                } else {
-                    s_iaq_alarm_count = 0;
-                }
-                lv_color_t c;
-                if (iaq <= 100) {
-                    c = lv_color_make(0, 180, 0);
-                } else if (iaq <= 200 || s_iaq_alarm_count < 3) {
-                    c = lv_color_make(255, 165, 0);  // orange: erhoehte Belastung
-                } else {
-                    c = lv_color_make(192, 0, 0);     // rot: anhaltend schlechte Luft
-                }
-                lv_obj_set_style_text_color(gas_label_in, c, 0);
             }
             if (press_label_in) {
-                char buf[40];
-                int co2_value = (int)roundf(snapshot.bme680_indoor.eco2_ppm);
-                snprintf(buf, sizeof(buf), "CO2 %d ppm", co2_value);
-                if (strcmp(buf, last_co2_text_in) != 0) {
-                    lv_label_set_text(press_label_in, buf);
-                    strncpy(last_co2_text_in, buf, sizeof(last_co2_text_in) - 1);
+                if (snapshot.bme680_indoor.iaq_valid) {
+                    char buf[40];
+                    int co2_value = (int)roundf(snapshot.bme680_indoor.eco2_ppm);
+                    snprintf(buf, sizeof(buf), "CO2 %d ppm", co2_value);
+                    if (strcmp(buf, last_co2_text_in) != 0) {
+                        lv_label_set_text(press_label_in, buf);
+                        strncpy(last_co2_text_in, buf, sizeof(last_co2_text_in) - 1);
+                        last_co2_text_in[sizeof(last_co2_text_in) - 1] = '\0';
+                    }
+                    lv_color_t c = co2_value <= 800 ? lv_color_make(0, 180, 0) : (co2_value <= 1200 ? lv_color_make(255, 165, 0) : lv_color_make(192, 0, 0));
+                    lv_obj_set_style_text_color(press_label_in, c, 0);
+                } else if (strcmp(PLACEHOLDER_CO2, last_co2_text_in) != 0) {
+                    lv_label_set_text(press_label_in, PLACEHOLDER_CO2);
+                    strncpy(last_co2_text_in, PLACEHOLDER_CO2, sizeof(last_co2_text_in) - 1);
                     last_co2_text_in[sizeof(last_co2_text_in) - 1] = '\0';
+                    lv_obj_set_style_text_color(press_label_in, womo_theme_is_daytime() ? lv_color_black() : lv_color_white(), 0);
                 }
-                lv_color_t c = co2_value <= 800 ? lv_color_make(0, 180, 0) : (co2_value <= 1200 ? lv_color_make(255, 165, 0) : lv_color_make(192, 0, 0));
-                lv_obj_set_style_text_color(press_label_in, c, 0);
             }
             if (voc_label_in) {
-                char buf[40];
-                snprintf(buf, sizeof(buf), "bVOC %.2f ppm", snapshot.bme680_indoor.bvoc_ppm);
-                if (strcmp(buf, last_voc_text_in) != 0) {
-                    lv_label_set_text(voc_label_in, buf);
-                    strncpy(last_voc_text_in, buf, sizeof(last_voc_text_in) - 1);
+                if (snapshot.bme680_indoor.iaq_valid) {
+                    char buf[40];
+                    snprintf(buf, sizeof(buf), "bVOC %.2f ppm", snapshot.bme680_indoor.bvoc_ppm);
+                    if (strcmp(buf, last_voc_text_in) != 0) {
+                        lv_label_set_text(voc_label_in, buf);
+                        strncpy(last_voc_text_in, buf, sizeof(last_voc_text_in) - 1);
+                        last_voc_text_in[sizeof(last_voc_text_in) - 1] = '\0';
+                    }
+                    float voc = snapshot.bme680_indoor.bvoc_ppm;
+                    lv_color_t c = (voc <= 0.5f) ? lv_color_make(0, 180, 0) : ((voc <= 1.5f) ? lv_color_make(255, 165, 0) : lv_color_make(192, 0, 0));
+                    lv_obj_set_style_text_color(voc_label_in, c, 0);
+                } else if (strcmp(PLACEHOLDER_BVOC, last_voc_text_in) != 0) {
+                    lv_label_set_text(voc_label_in, PLACEHOLDER_BVOC);
+                    strncpy(last_voc_text_in, PLACEHOLDER_BVOC, sizeof(last_voc_text_in) - 1);
                     last_voc_text_in[sizeof(last_voc_text_in) - 1] = '\0';
+                    lv_obj_set_style_text_color(voc_label_in, womo_theme_is_daytime() ? lv_color_black() : lv_color_white(), 0);
                 }
-                float voc = snapshot.bme680_indoor.bvoc_ppm;
-                lv_color_t c = (voc <= 0.5f) ? lv_color_make(0, 180, 0) : ((voc <= 1.5f) ? lv_color_make(255, 165, 0) : lv_color_make(192, 0, 0));
-                lv_obj_set_style_text_color(voc_label_in, c, 0);
             }
             if (humid_label_in) {
                 char buf[40];
@@ -1727,23 +1748,24 @@ static void ui_update_timer_cb(lv_timer_t *timer)
             }
             bme_in_has_data = true;
         } else if (!snapshot.bme680_indoor.valid && bme_in_has_data) {
+            lv_color_t ph_color = womo_theme_is_daytime() ? lv_color_black() : lv_color_white();
             if (gas_label_in && strcmp(PLACEHOLDER_IAQ, last_iaq_text_in) != 0) {
                 lv_label_set_text(gas_label_in, PLACEHOLDER_IAQ);
                 strncpy(last_iaq_text_in, PLACEHOLDER_IAQ, sizeof(last_iaq_text_in) - 1);
                 last_iaq_text_in[sizeof(last_iaq_text_in) - 1] = '\0';
-                lv_obj_set_style_text_color(gas_label_in, lv_color_black(), 0);
+                lv_obj_set_style_text_color(gas_label_in, ph_color, 0);
             }
             if (press_label_in && strcmp(PLACEHOLDER_CO2, last_co2_text_in) != 0) {
                 lv_label_set_text(press_label_in, PLACEHOLDER_CO2);
                 strncpy(last_co2_text_in, PLACEHOLDER_CO2, sizeof(last_co2_text_in) - 1);
                 last_co2_text_in[sizeof(last_co2_text_in) - 1] = '\0';
-                lv_obj_set_style_text_color(press_label_in, lv_color_black(), 0);
+                lv_obj_set_style_text_color(press_label_in, ph_color, 0);
             }
             if (voc_label_in && strcmp(PLACEHOLDER_BVOC, last_voc_text_in) != 0) {
                 lv_label_set_text(voc_label_in, PLACEHOLDER_BVOC);
                 strncpy(last_voc_text_in, PLACEHOLDER_BVOC, sizeof(last_voc_text_in) - 1);
                 last_voc_text_in[sizeof(last_voc_text_in) - 1] = '\0';
-                lv_obj_set_style_text_color(voc_label_in, lv_color_black(), 0);
+                lv_obj_set_style_text_color(voc_label_in, ph_color, 0);
             }
             if (humid_label_in && strcmp(PLACEHOLDER_HUMIDITY, last_humid_text_in) != 0) {
                 lv_label_set_text(humid_label_in, PLACEHOLDER_HUMIDITY);
@@ -3647,8 +3669,7 @@ static void elec_toggle_event_cb(lv_event_t *e)
     if (!e || lv_event_get_code(e) != LV_EVENT_LONG_PRESSED) return;
     elec_visible = !elec_visible;
     if (elec_container) {
-        if (elec_visible) lv_obj_clear_flag(elec_container, LV_OBJ_FLAG_HIDDEN);
-        else              lv_obj_add_flag(elec_container,   LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_opa(elec_container, elec_visible ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
     }
     ESP_LOGI(TAG, "INA-Widget %s", elec_visible ? "eingeblendet" : "ausgeblendet");
 }
@@ -3904,17 +3925,10 @@ static void log_runtime_heap_stats(void)
 {
     /* Nur internen SRAM abfragen – PSRAM-Traversierung (MALLOC_CAP_SPIRAM/8BIT)
      * blockiert den QSPI-Bus und stört den RGB-Bounce-Buffer-DMA → Display-Flackern. */
-    size_t internal_free    = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    size_t dma_free         = heap_caps_get_free_size(MALLOC_CAP_DMA);
-    size_t dma_largest      = heap_caps_get_largest_free_block(MALLOC_CAP_DMA);
-
-    ESP_LOGI(TAG,
-             "Heap: internal_free=%u internal_largest=%u dma_free=%u dma_largest=%u",
-             (unsigned)internal_free,
-             (unsigned)internal_largest,
-             (unsigned)dma_free,
-             (unsigned)dma_largest);
+    (void)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    (void)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    (void)heap_caps_get_free_size(MALLOC_CAP_DMA);
+    (void)heap_caps_get_largest_free_block(MALLOC_CAP_DMA);
 }
 
 // Timer-Callbacks für asynchronen RS485-Send (blockiert nicht den LVGL-Thread)
@@ -4746,10 +4760,10 @@ void app_main()
     // Elec-Labels (INA226) zwischen den beiden Batterien
     if (!elec_container) {
         elec_container = lv_obj_create(screen);
-        lv_obj_set_size(elec_container, 110, 56);
-        lv_obj_align(elec_container, LV_ALIGN_RIGHT_MID, -5, -120);
-        lv_obj_set_style_bg_color(elec_container, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
-        lv_obj_set_style_bg_opa(elec_container, LV_OPA_80, 0);
+        lv_obj_set_size(elec_container, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_align(elec_container, LV_ALIGN_RIGHT_MID, -5, -70);
+        lv_obj_set_style_bg_color(elec_container, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(elec_container, LV_OPA_50, 0);
         lv_obj_set_style_border_width(elec_container, 0, 0);
         lv_obj_set_style_pad_all(elec_container, 4, 0);
         lv_obj_set_style_radius(elec_container, 4, 0);
@@ -4759,7 +4773,7 @@ void app_main()
         elec_vi_label = lv_label_create(elec_container);
         lv_label_set_text(elec_vi_label, "---\n---\n---");
         lv_obj_set_style_text_font(elec_vi_label, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(elec_vi_label, lv_color_black(), 0);
+        lv_obj_set_style_text_color(elec_vi_label, lv_color_white(), 0);
         lv_obj_set_style_text_align(elec_vi_label, LV_TEXT_ALIGN_LEFT, 0);
         lv_obj_align(elec_vi_label, LV_ALIGN_TOP_LEFT, 0, 0);
     }

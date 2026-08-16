@@ -79,6 +79,7 @@ typedef struct {
     // BME680 Environmental (indoor, addr 0x76)
     struct {
         bool valid;
+        bool iaq_valid;    // true nur wenn BME680 IAQ-Daten liefert (nicht bei Ruuvi-Fallback)
         float temperature_c;
         float humidity_percent;
         float pressure_hpa;

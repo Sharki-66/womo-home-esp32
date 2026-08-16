@@ -988,7 +988,8 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             cJSON *trend_st  = cJSON_GetObjectItem(root, "press_trend_state");
             cJSON *trend_hpa = cJSON_GetObjectItem(root, "press_trend_hpa_h");
             if (temp_c || rh_pct || press_hpa) {
-                s_latest_data.bme680_indoor.valid = true;
+                s_latest_data.bme680_indoor.valid     = true;
+                s_latest_data.bme680_indoor.iaq_valid = (iaq_val != NULL);
                 if (temp_c)    s_latest_data.bme680_indoor.temperature_c   = (float)temp_c->valuedouble;
                 if (rh_pct)    s_latest_data.bme680_indoor.humidity_percent = (float)rh_pct->valuedouble;
                 if (press_hpa) s_latest_data.bme680_indoor.pressure_hpa    = (float)press_hpa->valuedouble;
