@@ -32,7 +32,8 @@ Topics (Round-Robin, max. 1 pro 100 ms):
 | `tank` | 10 s | `t1`, `t2` (%), `t1_l`, `t2_l` (L), Rate-Felder |
 | `hx` | 10 s | `a`, `b` (kg), `sum`, `nc` |
 | `gas` | 10 s | `active`, `net`, `rate1h`, `rate2h`, `rest_h`, … |
-| `bme` | 15 s | `"0x76"` (BME680 indoor), `"0x77"` (BME280 outdoor) |
+| `bme_in` | 15 s | `chip`, `temp_c`, `rh_pct`, `press_hpa`; Ruuvi-Fallback zusätzlich `batt_mv` |
+| `bme_out` | 15 s | `chip`, `temp_c`, `rh_pct`, `press_hpa`; Ruuvi-Fallback zusätzlich `batt_mv` |
 
 Display → Sensorboard (Kommandos per `cmd`): `display_ready`, `pwr_12v_on/off`, `radio_on/off`, `tare_a/b`, `gas_bottle_replace`, `level_start/stop`.
 

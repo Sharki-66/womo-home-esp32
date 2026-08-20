@@ -32,14 +32,16 @@ extern "C" {
 #endif
 
 typedef struct {
-    float   temp_c;
-    float   humidity_pct;
-    float   pressure_hpa;   // nur gültig wenn has_pressure = true
-    bool    has_pressure;   // false = IP68-Außentag ohne Drucksensor
-    int8_t  rssi;
-    uint8_t mac[6];         // BLE-Adresse (LSB-first, wie vom Stack geliefert)
-    bool    valid;          // true sobald mind. ein gültiges Paket empfangen
-    int64_t timestamp_us;
+    float    temp_c;
+    float    humidity_pct;
+    float    pressure_hpa;   // nur gültig wenn has_pressure = true
+    bool     has_pressure;   // false = IP68-Außentag ohne Drucksensor
+    uint16_t battery_mv;     // nur gültig wenn battery_valid = true
+    bool     battery_valid;  // false = Power-Info fehlt oder 0x7FF (invalid)
+    int8_t   rssi;
+    uint8_t  mac[6];         // BLE-Adresse (LSB-first, wie vom Stack geliefert)
+    bool     valid;          // true sobald mind. ein gültiges Paket empfangen
+    int64_t  timestamp_us;
 } ruuvi_snapshot_t;
 
 /**

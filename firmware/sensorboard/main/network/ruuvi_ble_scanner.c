@@ -21,7 +21,10 @@
  *   [3–4]  Temperatur   int16 BE × 0.005 °C        (0x8000 = invalid)
  *   [5–6]  Luftfeuchte  uint16 BE × 0.0025 %RH     (0xFFFF = invalid)
  *   [7–8]  Luftdruck    uint16 BE + 50000 Pa / 100  (0xFFFF = kein Sensor)
- *   [9–20] Beschleunigung, Spannung, Sequenz (nicht ausgewertet)
+ *   [9–14] Beschleunigung X/Y/Z (nicht ausgewertet)
+ *   [15–16] Power Info: Bit 15-5 Batteriespannung (mV, +1600 Offset),
+ *           Bit 4-0 TX-Power (nicht ausgewertet); 0x7FF = invalid
+ *   [17–20] Movement Counter, Measurement Sequence (nicht ausgewertet)
  */
 
 #include "ruuvi_ble_scanner.h"
@@ -42,6 +45,8 @@ static const char *TAG = "ruuvi_ble";
 #define RUUVI_MFG_B1        0x04   // Company ID 0x0499, Byte 1 (LE)
 #define RUUVI_DF5           0x05
 #define RUUVI_PRESS_INVALID 0xFFFF // kein Drucksensor
+#define RUUVI_BATT_INVALID  0x7FF  // 11-Bit Batteriespannung ungültig
+#define RUUVI_BATT_OFFSET_MV 1600  // Basiswert der 11-Bit-Skala
 
 // ── Snapshots ─────────────────────────────────────────────────────────────
 
@@ -90,6 +95,7 @@ static bool mac_matches(const uint8_t val[6], const mac_filter_t *filter)
 
 static void update_slot(ruuvi_snapshot_t *slot, float temp_c, float hum_pct,
                         float press_hpa, bool has_pressure,
+                        uint16_t battery_mv, bool battery_valid,
                         int8_t rssi, const uint8_t mac[6])
 {
     if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(10)) != pdTRUE) return;
@@ -97,6 +103,8 @@ static void update_slot(ruuvi_snapshot_t *slot, float temp_c, float hum_pct,
     slot->humidity_pct  = hum_pct;
     slot->pressure_hpa  = press_hpa;
     slot->has_pressure  = has_pressure;
+    slot->battery_mv    = battery_mv;
+    slot->battery_valid = battery_valid;
     slot->rssi          = rssi;
     memcpy(slot->mac, mac, 6);
     slot->valid         = true;
@@ -128,6 +136,18 @@ static void ruuvi_on_adv(const struct ble_gap_disc_desc *disc)
     bool has_pressure = (raw_press != RUUVI_PRESS_INVALID);
     float press_hpa = has_pressure ? (raw_press + 50000U) / 100.0f : 0.0f;
 
+    // Batteriespannung: Byte [15-16], obere 11 Bit des Power-Info-Felds
+    uint16_t battery_mv   = 0;
+    bool     battery_valid = false;
+    if (fields.mfg_data_len >= 17) {
+        uint16_t raw_power = ((uint16_t)fields.mfg_data[15] << 8) | fields.mfg_data[16];
+        uint16_t raw_batt  = raw_power >> 5;
+        if (raw_batt != RUUVI_BATT_INVALID) {
+            battery_mv   = raw_batt + RUUVI_BATT_OFFSET_MV;
+            battery_valid = true;
+        }
+    }
+
     const uint8_t *addr = disc->addr.val;
 
     // Routing ausschließlich per MAC – leerer Slot = deaktiviert
@@ -135,19 +155,25 @@ static void ruuvi_on_adv(const struct ble_gap_disc_desc *disc)
     bool is_outdoor = mac_matches(addr, &s_filter_outdoor);
     if (!is_indoor && !is_outdoor) return;
 
+    char batt_str[16];
+    if (battery_valid) snprintf(batt_str, sizeof(batt_str), "Batt=%umV", battery_mv);
+    else                strcpy(batt_str, "Batt=n/a");
+
     if (is_indoor) {
-        update_slot(&s_indoor, temp_c, hum_pct, press_hpa, has_pressure, disc->rssi, addr);
-        ESP_LOGI(TAG, "[Innen ] %.2f °C  %.1f %%RH  %s  RSSI=%d",
+        update_slot(&s_indoor, temp_c, hum_pct, press_hpa, has_pressure,
+                    battery_mv, battery_valid, disc->rssi, addr);
+        ESP_LOGI(TAG, "[Innen ] %.2f °C  %.1f %%RH  %s  %s  RSSI=%d",
                  temp_c, hum_pct,
                  has_pressure ? "mit Druck" : "kein Druck",
-                 disc->rssi);
+                 batt_str, disc->rssi);
     }
     if (is_outdoor) {
-        update_slot(&s_outdoor, temp_c, hum_pct, press_hpa, has_pressure, disc->rssi, addr);
-        ESP_LOGI(TAG, "[Außen ] %.2f °C  %.1f %%RH  %s  RSSI=%d",
+        update_slot(&s_outdoor, temp_c, hum_pct, press_hpa, has_pressure,
+                    battery_mv, battery_valid, disc->rssi, addr);
+        ESP_LOGI(TAG, "[Außen ] %.2f °C  %.1f %%RH  %s  %s  RSSI=%d",
                  temp_c, hum_pct,
                  has_pressure ? "mit Druck" : "kein Druck",
-                 disc->rssi);
+                 batt_str, disc->rssi);
     }
 }
 

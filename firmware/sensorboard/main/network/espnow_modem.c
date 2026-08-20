@@ -610,6 +610,8 @@ static void rs485_publish_bme_in(void)
             cJSON_AddNumberToObject(root, "temp_c",    round2(ruuvi.temp_c));
             cJSON_AddNumberToObject(root, "rh_pct",    round2(ruuvi.humidity_pct));
             cJSON_AddNumberToObject(root, "press_hpa", round2(ruuvi.pressure_hpa));
+            if (ruuvi.battery_valid)
+                cJSON_AddNumberToObject(root, "batt_mv", ruuvi.battery_mv);
             cJSON_AddNumberToObject(root, "ts",        ts_us_to_epoch_ms(ruuvi.timestamp_us));
         } else {
             cJSON_AddNumberToObject(root, "temp_c",    0.0);
@@ -698,6 +700,8 @@ static void rs485_publish_bme_out(void)
                         cJSON_AddNumberToObject(root, "press_hpa", round2(ruuvi_in.pressure_hpa));
                 }
             }
+            if (ruuvi.battery_valid)
+                cJSON_AddNumberToObject(root, "batt_mv", ruuvi.battery_mv);
             cJSON_AddNumberToObject(root, "ts", ts_us_to_epoch_ms(ruuvi.timestamp_us));
         } else {
             cJSON_AddNumberToObject(root, "temp_c",    0.0);

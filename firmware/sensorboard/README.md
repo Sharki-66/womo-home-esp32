@@ -50,7 +50,8 @@ CRLF-terminierte ASCII-JSON-Zeilen. Round-Robin, max. 1 Topic pro 100 ms. Nach `
 | `tank` | 10 s | `t1`, `t2` (%), `nc1`, `nc2`, `t1_l`, `t2_l` (Liter), `t1_rate1h`, `t1_rate2h`, `t1_rest_h`, `t2_rate1h`, `t2_rate2h`, `t2_rest_h` |
 | `hx` | 10 s | `a`, `b` (kg, optional), `sum` (optional), `nc`, `ts` |
 | `gas` | 10 s | `active`, `net`, `rate1h`, `rate2h`, `rest_h`, `net_a`, `net_b`, `cap_kg`, `pct`, `pct_a`, `pct_b` |
-| `bme` | 15 s | Objekte `"0x76"` (Indoor) und `"0x77"` (Outdoor), je mit `chip`, `addr`, `temp_c`, `rh_pct`, `press_hpa`, `ts`; Indoor zusätzlich: `gas_kohm`?, `iaq`, `iaq_acc`, `eco2_ppm`, `bvoc_ppm`; Outdoor zusätzlich: `press_trend_state`, `press_trend_hpa_h` |
+| `bme_in` | 15 s | `chip` (`bme680`/`bme280`/`bme260`/`ruuvi`), `addr`?, `temp_c`, `rh_pct`, `press_hpa`, `ts`; BME680 zusätzlich: `gas_kohm`?, `iaq`, `iaq_acc`, `eco2_ppm`, `bvoc_ppm`; bei Ruuvi-Fallback zusätzlich `batt_mv`? |
+| `bme_out` | 15 s | `chip`, `addr`?, `temp_c`, `rh_pct`, `press_hpa`, `ts`, `press_trend_state`?, `press_trend_hpa_h`?, `gas_kohm`?; bei Ruuvi-Fallback zusätzlich `batt_mv`? |
 | `elec` | 5 s | `v_bus` (V), `i_a` (A), `p_w` (W), `v_shunt_mv` (mV), `ts`; `nc=true` wenn INA226 nicht gefunden |
 
 **`press_trend_state`-Werte:** `fall_fast` / `fall_slow` / `steady` / `rise_slow` / `rise_fast`

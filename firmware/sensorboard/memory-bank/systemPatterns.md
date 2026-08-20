@@ -63,7 +63,8 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 | `tank` | 10 s | `t1`, `t2` (%), `t1_l`, `t2_l` (L), Rate-Felder |
 | `hx` | 10 s | `a`, `b` (kg), `sum`, `nc` |
 | `gas` | 10 s | `active`, `net`, `rate1h`, `rate2h`, `rest_h`, ... |
-| `bme` | 15 s | `"0x76"` (Indoor BME680), `"0x77"` (Outdoor BME280) |
+| `bme_in` | 15 s | `chip` (`bme680`/`bme280`/`bme260`/`ruuvi`), `temp_c`, `rh_pct`, `press_hpa`; Ruuvi-Fallback zusätzlich `batt_mv` |
+| `bme_out` | 15 s | `chip`, `temp_c`, `rh_pct`, `press_hpa`; Ruuvi-Fallback zusätzlich `batt_mv` |
 | `elec` | 5 s | `v_bus`, `i_a`, `p_w`, `v_shunt_mv`; `nc=true` wenn INA226 fehlt |
 
 ## Sensor-Muster
@@ -89,6 +90,12 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 - Library: `k0i05/esp_ina226` v1.2.7
 - Snapshot thread-safe via `ina226_app_get_snapshot()`
 - Shunt: TODO → `SENSOR_INA226_SHUNT_MOHM` nach Hardwareeinbau setzen
+
+### Ruuvi BLE Scanner (ruuvi_ble_scanner.c)
+- Dekodiert Ruuvi Data Format 5 (RAWv2) aus Advertisement-Manufacturer-Data, registriert als Handler beim zentralen `ble_manager` (kein eigenes NimBLE)
+- Zwei Slots (Indoor/Outdoor), Routing ausschließlich per MAC-Filter (`SENSOR_RUUVI_INDOOR_MAC`/`SENSOR_RUUVI_OUTDOOR_MAC`)
+- Kabel-Sensor (BME680/BME280) hat Vorrang; Ruuvi wird in `espnow_modem.c` (`rs485_publish_bme_in/out`) nur als Fallback genutzt
+- Felder: `temp_c`, `humidity_pct`, `pressure_hpa` (nur wenn `has_pressure`), `battery_mv` (nur wenn `battery_valid`, Byte 15-16 des DF5-Payloads, 11-Bit + 1600mV Offset)
 
 ### BNO055 (bno055_sensor.c)
 - Achsen-Remapping für Fahrzeugeinbaulage (sensor_config.h)
