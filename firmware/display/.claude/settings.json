@@ -1,5 +1,9 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(grep -rn \"INTERVAL\\\\|interval\\\\|5000\\\\|15000\\\\|10000\\\\|topic_interval\\\\|TOPIC\" /home/hajo/womo-home-esp32/firmware/shared/womo_config.h /home/hajo/womo-home-esp32/firmware/sensorboard/main/network/rs485_modem.c 2>/dev/null | head -50)",
+      "Read(//home/hajo/womo-home-esp32/firmware/shared/**)"
+    ],
     "additionalDirectories": [
       "/home/hajo/womo-home-esp32/tools/router-webui"
     ]
