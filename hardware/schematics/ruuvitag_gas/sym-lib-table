@@ -1,0 +1,9 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "nrf52832")(type "Legacy")(uri "${KIPRJMOD}/ruuvitag_gas-cache.lib")(options "")(descr "RuuviTag Rev.B8 Cache (Migrationsquelle)"))
+  (lib (name "4pin_crystal")(type "Legacy")(uri "${KIPRJMOD}/ruuvitag_gas-cache.lib")(options "")(descr "RuuviTag Rev.B8 Cache"))
+  (lib (name "lis2dh12")(type "Legacy")(uri "${KIPRJMOD}/ruuvitag_gas-cache.lib")(options "")(descr "RuuviTag Rev.B8 Cache"))
+  (lib (name "tmp117")(type "Legacy")(uri "${KIPRJMOD}/ruuvitag_gas-cache.lib")(options "")(descr "RuuviTag Rev.B8 Cache"))
+  (lib (name "shtc3")(type "Legacy")(uri "${KIPRJMOD}/ruuvitag_gas-cache.lib")(options "")(descr "RuuviTag Rev.B8 Cache"))
+  (lib (name "bmxx80")(type "Legacy")(uri "${KIPRJMOD}/ruuvitag_gas-cache.lib")(options "")(descr "RuuviTag Rev.B8 Cache"))
+)
