@@ -1,0 +1,144 @@
+(footprint "LGA12_2X2MM"
+	(version 20241229)
+	(generator "pcbnew")
+	(generator_version "9.0")
+	(layer "F.Cu")
+	(property "Reference" "REF**"
+		(at 0 0 0)
+		(layer "F.SilkS")
+		(uuid "b584cbfc-e393-4e26-9949-780c3d85a1be")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.05)
+			)
+		)
+	)
+	(property "Value" "LIS2DH12"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(uuid "28733d62-98aa-4c3b-9ab2-1aa696b777ea")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.05)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "45931135-1c60-440d-9d36-d4beeb8a59ff")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "c3414860-51d6-48b5-a839-18370d06822f")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(pad "1" smd rect
+		(at -0.775 -0.75)
+		(size 0.375 0.35)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "8632cc88-98d6-4f23-ace9-3db9d20bfd08")
+	)
+	(pad "2" smd rect
+		(at -0.775 -0.25)
+		(size 0.375 0.35)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "20941991-4654-41d3-a90f-8ee35f86a34f")
+	)
+	(pad "3" smd rect
+		(at -0.775 0.25)
+		(size 0.375 0.35)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "533f02d3-4ef3-4ac7-81e9-116413fa1de4")
+	)
+	(pad "4" smd rect
+		(at -0.775 0.75)
+		(size 0.375 0.35)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "44ba2f15-8d52-4c27-b3ac-a9bece368da3")
+	)
+	(pad "5" smd rect
+		(at -0.25 0.75 90)
+		(size 0.375 0.35)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "b695680e-278f-4526-8d04-f775a05110e2")
+	)
+	(pad "6" smd rect
+		(at 0.25 0.75 90)
+		(size 0.375 0.35)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "9ad65fbb-8e4a-48e8-a850-d978ec2cd435")
+	)
+	(pad "7" smd rect
+		(at 0.775 0.75)
+		(size 0.375 0.35)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "81a9796e-7367-4d48-b89c-c94694478292")
+	)
+	(pad "8" smd rect
+		(at 0.775 0.25)
+		(size 0.375 0.35)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "76303962-460e-4c7a-b1b7-f73407a2d302")
+	)
+	(pad "9" smd rect
+		(at 0.775 -0.25)
+		(size 0.375 0.35)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "56bf1c92-a018-4ccf-a8f4-14aeefc3e735")
+	)
+	(pad "10" smd rect
+		(at 0.775 -0.75)
+		(size 0.375 0.35)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "9be80c5a-a515-4d12-b4d2-211a05eec9df")
+	)
+	(pad "11" smd rect
+		(at 0.25 -0.75 90)
+		(size 0.375 0.35)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "5b7b6a4e-8818-479e-b4d6-7f0791e088f6")
+	)
+	(pad "12" smd rect
+		(at -0.25 -0.75 90)
+		(size 0.375 0.35)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "ddc0a4f7-8e0e-43a8-8085-0ebede9d9c17")
+	)
+	(pad "~" smd trapezoid
+		(at -0.776 -1.209 180)
+		(size 0.2 0.2)
+		(rect_delta 0 0.199)
+		(layers "F.Cu" "F.Mask")
+		(uuid "72fa5c62-6f2e-477a-b523-c1431613b852")
+	)
+	(embedded_fonts no)
+	(model "${KISYS3DMOD}/Package_DFN_QFN.3dshapes/DFN-10_2x2mm_P0.4mm.wrl"
+		(offset
+			(xyz 0 0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 0)
+		)
+	)
+)

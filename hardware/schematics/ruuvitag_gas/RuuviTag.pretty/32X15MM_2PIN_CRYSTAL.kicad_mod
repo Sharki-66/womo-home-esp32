@@ -1,0 +1,117 @@
+(footprint "32X15MM_2PIN_CRYSTAL"
+	(version 20241229)
+	(generator "pcbnew")
+	(generator_version "9.0")
+	(layer "F.Cu")
+	(property "Reference" "REF**"
+		(at 0 0 0)
+		(layer "F.SilkS")
+		(uuid "ed650f2e-ef1d-43b5-8352-3a3d0921ffd6")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.05)
+			)
+		)
+	)
+	(property "Value" "FC-135 32.768KHZ ±20PPM,9.0PF"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(uuid "d81f6ea9-2d28-4da5-8c9d-d99c54050e1c")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.05)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "c3698696-2c11-42d2-a150-1257eaaa609f")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "cab9cfd9-f06c-45c6-85e2-5ef55271abf5")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_line
+		(start -1.6 -0.75)
+		(end -1.6 0.749999)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "eeb75f5f-f122-43cf-b9f6-2573bd52a70b")
+	)
+	(fp_line
+		(start -1.6 0.749999)
+		(end 1.6 0.75)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "8d44f935-96ed-4939-a684-9d4e465cc826")
+	)
+	(fp_line
+		(start 1.6 -0.749999)
+		(end -1.6 -0.75)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "ca5b4901-240a-461e-b4e9-3b87c210efe9")
+	)
+	(fp_line
+		(start 1.6 0.75)
+		(end 1.6 -0.749999)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "c1ffdfcf-d049-4f84-a43c-1274fdd2dbc1")
+	)
+	(pad "1" smd rect
+		(at -1.2 0)
+		(size 0.8 1.5)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "59d3f839-2fb7-46c4-9c4b-66799bbc7e4f")
+	)
+	(pad "2" smd rect
+		(at 1.2 0)
+		(size 0.8 1.5)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "aa28f186-347b-4943-9087-79d4c013c9b5")
+	)
+	(embedded_fonts no)
+	(model "Crystals.3dshapes/Crystal_SMD_SeikoEpson_MC405-2pin_9.6x4.1mm_HandSoldering.wrl"
+		(offset
+			(xyz 0 0 0)
+		)
+		(scale
+			(xyz 0.3 0.3 0.2)
+		)
+		(rotate
+			(xyz 0 0 0)
+		)
+	)
+)

@@ -22,6 +22,8 @@ DRC.rpt
 *-erc.rpt
 *-drc.rpt
 *.lck
+_autosave-*
+#auto_saved_files#
 hardware/schematics/*/gerber/
 hardware/schematics/*/production/
 hardware/schematics/*/bom/

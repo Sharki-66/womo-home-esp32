@@ -1,0 +1,118 @@
+(footprint "0603_LED"
+	(version 20241229)
+	(generator "pcbnew")
+	(generator_version "9.0")
+	(layer "F.Cu")
+	(tags "0603 LED")
+	(property "Reference" "REF**"
+		(at 0 0 0)
+		(layer "F.SilkS")
+		(uuid "16f91192-db8c-44cd-a6c7-04be923a5f61")
+		(effects
+			(font
+				(size 0.25 0.25)
+				(thickness 0.025)
+			)
+		)
+	)
+	(property "Value" "VLMG1300-GS08"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(uuid "29efd2bc-b5d9-45a1-92f9-b2eff17d54e0")
+		(effects
+			(font
+				(size 0.25 0.25)
+				(thickness 0.025)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "7f854db5-5019-418d-ba4d-7ad373983e1e")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "23a20f31-fef2-4c3d-b335-c97018f31dd2")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_line
+		(start -0.2 -0.25)
+		(end -0.2 0.25)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "fc0cc29e-f44d-4c4b-a3b5-698aa2e73793")
+	)
+	(fp_line
+		(start -0.2 -0.25)
+		(end 0.2 -0.45)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "d004f85e-fb72-4030-bbba-688027ca398d")
+	)
+	(fp_line
+		(start -0.2 0.25)
+		(end 0.200001 0.45)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "d94a6a0d-662f-4a5c-8bd7-171284483b31")
+	)
+	(fp_line
+		(start 0.2 -0.45)
+		(end 0.200001 0.45)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "c1813bcd-c3fd-4975-af98-36f90bc05972")
+	)
+	(pad "1" smd rect
+		(at -0.725 0)
+		(size 0.6 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "358c10d2-7c6b-4199-a241-536f0bd4b6f6")
+	)
+	(pad "2" smd rect
+		(at 0.725 0)
+		(size 0.6 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "602015a9-a643-4522-b74f-a6b52f4f5c24")
+	)
+	(embedded_fonts no)
+	(model "LEDs.3dshapes/LED_0603.wrl"
+		(offset
+			(xyz 0 0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 0)
+		)
+	)
+)

@@ -1,3 +1,7 @@
 (fp_lib_table
   (version 7)
+  (lib (name "RuuviTag")(type "KiCad")(uri "${KIPRJMOD}/RuuviTag.pretty")(options "")(descr "Aus RuuviTag Rev.B8 Board exportiert (Phase 1)"))
+  (lib (name "RuuviConnector")(type "KiCad")(uri "${KIPRJMOD}/RuuviTag.pretty")(options "")(descr "Alias auf RuuviTag.pretty"))
+  (lib (name "RuuviBrand")(type "KiCad")(uri "${KIPRJMOD}/RuuviTag.pretty")(options "")(descr "Alias auf RuuviTag.pretty (Logos)"))
+  (lib (name "Ruuvi")(type "KiCad")(uri "${KIPRJMOD}/RuuviTag.pretty")(options "")(descr "Alias auf RuuviTag.pretty (Logos)"))
 )

@@ -1,0 +1,149 @@
+(footprint "RUUVITAG-BAT-CONNECTOR"
+	(version 20241229)
+	(generator "pcbnew")
+	(generator_version "9.0")
+	(locked yes)
+	(layer "F.Cu")
+	(property "Reference" "REF**"
+		(at -0.799999 0 0)
+		(layer "F.SilkS")
+		(uuid "a9ce62fe-10b7-4605-b944-ae13287fab13")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.05)
+			)
+		)
+	)
+	(property "Value" "RUUVI_BATTERY_CLIP"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(uuid "3d73bf8a-e4e2-4b25-9e5b-5cbbbed6d9ab")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.05)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "700de85f-d4c1-417d-966d-d7d5b3b4dc2a")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "45633dca-ca2c-4d3d-ac39-96853af578e5")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_line
+		(start -7.8 -1.9)
+		(end -7.8 -0.7)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "d00af491-909d-46a7-a54e-93a6451ee072")
+	)
+	(fp_line
+		(start -7.8 -1.9)
+		(end -2.8 -1.9)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "38a558b7-e174-470a-b297-747d53cc2ce1")
+	)
+	(fp_line
+		(start -7.8 0.7)
+		(end -4.6 0.7)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "012631dc-f45b-4d44-be2d-92bf62f96947")
+	)
+	(fp_line
+		(start -7.8 1.9)
+		(end -7.8 0.7)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "4bcd03bd-4f87-4075-a67c-0549babf386e")
+	)
+	(fp_line
+		(start -4.6 -0.7)
+		(end -7.8 -0.7)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "1331d5f0-74cc-4dd8-b31d-e7bfa319d07e")
+	)
+	(fp_line
+		(start -4.6 0.7)
+		(end -4.6 -0.7)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "25832040-b773-4531-880a-a86e846903e6")
+	)
+	(fp_line
+		(start -2.8 -1.9)
+		(end -2.8 1.9)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "4c124540-8ff1-414e-a70b-6fd7a6b5d772")
+	)
+	(fp_line
+		(start -2.8 1.9)
+		(end -7.8 1.9)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "aa4a7857-5512-4614-a607-8741f012f3b2")
+	)
+	(pad "1" thru_hole circle
+		(at 0 0)
+		(size 1.3 1.3)
+		(drill 0.9)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "6b7c0d22-e738-469d-b012-dd5f9d3ead30")
+	)
+	(pad "1" smd rect
+		(at 0 0)
+		(size 5.4 4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "e479979c-e989-484d-a6f2-9985d45f2541")
+	)
+	(embedded_fonts no)
+)
