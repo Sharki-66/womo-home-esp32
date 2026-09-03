@@ -10,13 +10,13 @@
 | GUI-Migration KiCad 9: `.kicad_sch` + v9-`.kicad_pcb` | Commit `d9b0cf7`, Legacy-`.sch` entfernt |
 | ERC/DRC-Baseline | je 245 Legacy-Meldungen, **0 unverbundene Elemente** |
 | Phase 2 spezifiziert | `PHASE2_HX711.md` (Rückbau, Pinbelegung, Netzliste, BOM, PCB) |
+| HX711-Speisung festgelegt: **Option B** (Load-Switch, `HX711_EN`→P0.03) | 2026-09-03 |
 
 ## Offen
 | Schritt | Status |
 |---|---|
-| **Entscheidung HX711-Speisung A/B** | **Nutzer** (blockiert Phase 2) |
-| Phase 2: Rückbau U2/U4/U5 + HX711 + Wägezellen-Pads (KiCad-GUI) | wartet auf A/B |
-| Wägezellen-Brückenwiderstand messen → Strombudget | Nutzer |
+| Phase 2: Rückbau U2/U4/U5 + HX711 + Load-Switch + Wägezellen-Pads (KiCad-GUI) | Nutzer, Vorgabe steht |
+| Wägezellen-Brückenwiderstand messen → Strombudget / Q2-Wahl bestätigen | Nutzer |
 | Phase 3: BOM, Gerber, README-Feinschliff | — |
 | Firmware (nRF52, eigenständig) | nicht begonnen |
 

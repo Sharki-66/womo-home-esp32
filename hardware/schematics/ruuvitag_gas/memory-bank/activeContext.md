@@ -11,16 +11,16 @@ ERC/DRC-Baseline: je 245 Meldungen (Legacy-Artefakte), 0 unverbundene Elemente.
 (Rückbau, nRF-Pinbelegung aus Netzliste verifiziert, HX711-Netzliste, Bauteilliste,
 PCB-Hinweise).
 
-## Blockiert auf Nutzerentscheidung
-**HX711-Speisearchitektur A oder B** (Details in `PHASE2_HX711.md` §3):
-- A: HX711-interner Regler + NPN, kein Extra-GPIO, aber unteres Batterie-Ende fällt weg
-- B (empfohlen): AVDD=VDD + High-Side-Load-Switch, 1 GPIO (P0.03 frei), volle Genauigkeit
+## Speisung festgelegt: Option B (2026-09-03)
+AVDD=VFB=DVDD=VSUP an geschaltetem Rail `HX711_PWR`; High-Side P-MOSFET (Q2 DMG2301L)
+von VDD, Gate über NMOS (Q3 BSS138) an `HX711_EN` = nRF **P0.03** (Pin 5).
+Netzliste komplett in `PHASE2_HX711.md` §4.
 
-## Danach (Phase 2, KiCad-GUI)
+## Phase 2 (KiCad-GUI, Nutzer – Vorgabe: PHASE2_HX711.md)
 1. U2/U4/U5 + C2/C17/C18/C12 + P2/P3/P12 entfernen.
-2. HX711 (U6) + gewählte Speisung + INA-Filter + `J2` (4 Wägezellen-Pads) + `J3`
-   (2 DNP-Speisepads) einfügen.
-3. `HX711_SCK` → nRF P0.07 (Pin 9), `HX711_DOUT` → nRF P0.08 (Pin 10).
+2. HX711 (U6) + Load-Switch (Q2/Q3/R14/R15) + INA-Filter (R12/R13/C21–C27)
+   + `J2` (4 Wägezellen-Pads) + `J3` (2 DNP-Speisepads).
+3. Netze: `HX711_SCK`→P0.07 (9), `HX711_DOUT`→P0.08 (10), `HX711_EN`→P0.03 (5).
 4. Update PCB from Schematic, Platzierung im Ex-Sensorbereich, Routing, DRC.
 
 ## Notizen

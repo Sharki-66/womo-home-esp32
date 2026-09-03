@@ -15,7 +15,7 @@ BLE-Advertisement schreibt. Ersetzt mittelfristig das ESP32-C3-`GasBee`.
 |---|---|---|---|
 | MCU | nRF52832-QFAA | — | von B8 übernommen |
 | Klima | SHTC3 | I²C (`SDA`/`SCL`), Power über `SENSOR_PWR_1` | von B8 übernommen |
-| Wägung | HX711 | 2 GPIO (`DOUT`, `PD_SCK`) | **Phase 2 – geplant** |
+| Wägung | HX711 + High-Side-Load-Switch | 3 GPIO: `DOUT`=P0.08, `PD_SCK`=P0.07, `HX711_EN`=P0.03 | **Phase 2 – geplant** |
 | Wägezelle | Vollbrücke aus 4× 50 kg (extern vorkombiniert) | 4 SMD-Lötpads `E+ / E- / A+ / A-` | **Phase 2 – geplant** |
 | Speisung | CR2477-Knopfzelle (Clip von B8) + 2 DNP-Pads `VBAT`/`GND` für optionalen externen Pack | — | **Phase 2 – geplant** |
 
@@ -52,6 +52,6 @@ Separates Arbeitspaket, noch nicht begonnen.
 ## Status
 
 - [x] **Phase 1** – Migration von Rev.B8 nach `ruuvitag_gas` (KiCad 9, unverändert)
-- [ ] **Phase 2** – Sensor-Rückbau + HX711 + Wägezellen-Pads → Vorgabe in [`PHASE2_HX711.md`](PHASE2_HX711.md)
-      (offen: Entscheidung Speisearchitektur A/B)
+- [ ] **Phase 2** – Sensor-Rückbau + HX711 + Load-Switch + Wägezellen-Pads →
+      Vorgabe in [`PHASE2_HX711.md`](PHASE2_HX711.md) (Speisung: Option B festgelegt)
 - [ ] **Phase 3** – Doku, BOM, Gerber
