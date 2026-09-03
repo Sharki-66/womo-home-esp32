@@ -19,6 +19,8 @@ __pycache__/
 fp-info-cache
 ERC.rpt
 DRC.rpt
+*-erc.rpt
+*-drc.rpt
 *.lck
 hardware/schematics/*/gerber/
 hardware/schematics/*/production/
