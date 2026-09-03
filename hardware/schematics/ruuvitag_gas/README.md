@@ -51,6 +51,7 @@ Separates Arbeitspaket, noch nicht begonnen.
 
 ## Status
 
-- [x] **Phase 1** – Unveränderte Migration von Rev.B8 nach `ruuvitag_gas`
-- [ ] **Phase 2** – Sensor-Rückbau + HX711 + Wägezellen-Pads
+- [x] **Phase 1** – Migration von Rev.B8 nach `ruuvitag_gas` (KiCad 9, unverändert)
+- [ ] **Phase 2** – Sensor-Rückbau + HX711 + Wägezellen-Pads → Vorgabe in [`PHASE2_HX711.md`](PHASE2_HX711.md)
+      (offen: Entscheidung Speisearchitektur A/B)
 - [ ] **Phase 3** – Doku, BOM, Gerber

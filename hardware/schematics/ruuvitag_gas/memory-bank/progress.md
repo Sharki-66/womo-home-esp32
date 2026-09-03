@@ -1,22 +1,23 @@
 # Progress – RuuviTag Gas
 
-*Stand: 2026-09-02*
+*Stand: 2026-09-03*
 
 ## Fertig
 | Schritt | Anmerkung |
 |---|---|
-| Phase 1: Dateien aus `ruuvitag_revb8` kopiert/umbenannt | `.sch`, `.kicad_pcb`, `.kicad_pro`, `-cache.lib`, Lib-Tabellen |
-| `sym-lib-table` → alle 6 Legacy-Nicknames auf lokale `ruuvitag_gas-cache.lib` | |
-| `fp-lib-table` geleert | Footprints im PCB eingebettet |
-| Titelblöcke (`.sch`, `.kicad_pcb`) auf „RuuviTag Gas (WoMoHome)", Rev `GAS-A` | Herkunft/Lizenz vermerkt |
-| Bestätigt: KiCad 9 / kicad-cli lesen beide Legacy-Dateien fehlerfrei | Board ist 4-lagig |
+| Phase 1: Migration Rev.B8 → `ruuvitag_gas` | Commit `5d03337` |
+| Lib-Tabellen projektlokal, Titelblöcke, README, memory-bank | |
+| GUI-Migration KiCad 9: `.kicad_sch` + v9-`.kicad_pcb` | Commit `d9b0cf7`, Legacy-`.sch` entfernt |
+| ERC/DRC-Baseline | je 245 Legacy-Meldungen, **0 unverbundene Elemente** |
+| Phase 2 spezifiziert | `PHASE2_HX711.md` (Rückbau, Pinbelegung, Netzliste, BOM, PCB) |
 
 ## Offen
 | Schritt | Status |
 |---|---|
-| GUI-Migration nach KiCad 9 (`.kicad_sch`, PCB v9) + ERC/DRC-Baseline | Nutzer |
-| Phase 2: Sensor-Rückbau + HX711 + Pads | wartet auf Migration |
-| Phase 3: README-Feinschliff, BOM, Gerber | — |
+| **Entscheidung HX711-Speisung A/B** | **Nutzer** (blockiert Phase 2) |
+| Phase 2: Rückbau U2/U4/U5 + HX711 + Wägezellen-Pads (KiCad-GUI) | wartet auf A/B |
+| Wägezellen-Brückenwiderstand messen → Strombudget | Nutzer |
+| Phase 3: BOM, Gerber, README-Feinschliff | — |
 | Firmware (nRF52, eigenständig) | nicht begonnen |
 
 ## Bekannte Punkte
