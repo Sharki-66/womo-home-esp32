@@ -109,9 +109,11 @@ VDD ──S│ Q2 (P-MOSFET, DMG2301L) │D── HX711_PWR ──> U6.1/3/4/16 
 **Load-Switch:** Q2.S→VDD, Q2.D→`HX711_PWR`, Q2.G→`GATE_P`; R14 `GATE_P`↔VDD;
 Q3.D→`GATE_P`, Q3.S→GND, Q3.G→`HX711_EN`; R15 `HX711_EN`↔GND; `HX711_EN`→nRF P0.03.
 
-**INA-EMV-Filter** (lange Wägezellen-Leitung): `C25` 100n differentiell zwischen
-INA+ und INA− (nach R12/R13). `C26` / `C27` je 1n von INA+ bzw. INA− nach GND –
-als **DNP** vorsehen.
+**INA-Eingangsfilter:** `C25` 100n differentiell zwischen INA+ und INA− (nach
+R12/R13), bildet mit R12/R13 einen RC (~1,6 kHz). Zweck ist **nicht** die
+Leitungslänge (im Aufbau nur ~10 cm), sondern Gleichrichtung der bordeigenen
+2,4-GHz-BLE-HF am 24-Bit-ADC-Eingang. `C26` / `C27` je 1n von INA+ bzw. INA− nach
+GND (Common-Mode) – als **DNP**, nur Reserve.
 
 **Wägezellen-Pads `J2` (4×):** `E+`→`HX711_PWR`(AVDD-Knoten), `E−`→GND,
 `A+`→`LC_A+`, `A−`→`LC_A−`.
@@ -172,3 +174,45 @@ maßgeblich ist die Funktion, nicht der Bezeichner.
 - **Wäge-/Advertising-Intervall:** Firmware; bestimmt die reale Batterielaufzeit.
 - **Kalibrierung** (Offset/Scale): am fertigen Aufbau mit bekannten Gewichten – gehört
   zum Kalibrierungs-Todo des Gesamtprojekts.
+
+---
+
+## 8. Umsetzungsstand (as-built, 2026-09-05)
+
+Schaltplan `ruuvitag_gas.kicad_sch` umgesetzt und gegen §4 verifiziert.
+**ERC: 3 Meldungen, alle erwartet** – 2× `pin_to_pin` (PWR_FLAG an P0.12/P0.26,
+vorbestehend aus Rev.B8), 1× `unconnected_wire_endpoint` am Antennen-Übergang.
+Alle 73 Bauteile haben einen Footprint.
+
+### Bezeichner-Mapping (Spec-Vorschlag → real vergeben)
+
+| Spec | real | Funktion | Verdrahtung as-built |
+|---|---|---|---|
+| U6 | **U2** | HX711 | `SOIC-16_3.9x9.9mm` |
+| Q2 | **Q2** | P-MOSFET High-Side (`Q_PMOS_GSD`, SOT-23) | S→VDD, D→`HX711_PWR`, G→Gate-Knoten |
+| Q3 | **Q1** | N-MOSFET Gate-Treiber (`Q_NMOS_GSD`, SOT-23) | D→Gate-Knoten, S→GND, G→`HX711_EN` |
+| R14 | **R7** | 100k Gate-Pull-up | Gate-Knoten ↔ VDD |
+| R15 | **R8** | 100k Gate-Pull-down | `HX711_EN` ↔ GND |
+| R12 | **R5** | 1k INA-Serie | U2.8 (INA+) ↔ `LC_A+` |
+| R13 | **R6** | 1k INA-Serie | U2.7 (INA−) ↔ `LC_A−` |
+| C21 | **C5** | 10u AVDD-Puffer (0603) | `HX711_PWR` ↔ GND |
+| C22 | **C3** | 100n AVDD (0402) | `HX711_PWR` ↔ GND |
+| C23 | **C15** | 100n DVDD (0402) | `HX711_PWR` ↔ GND |
+| C24 | **C7** | 100n VBG (0402) | U2.6 ↔ GND |
+| C25 | **C6** | 100n INA differentiell (0402) | U2.8 ↔ U2.7 |
+| C26 | **C2** | 1n INA→GND, **DNP** | U2.8 ↔ GND |
+| C27 | **C4** | 1n INA→GND, **DNP** | U2.7 ↔ GND |
+| J2 (E+/E−/A+/A−) | **J1/J4/J2/J3** | Wägezellen-Pads `TestPoint_Pad_2.0x2.0mm` | E+→`HX711_PWR`, E−→GND, A+→`LC_A+`, A−→`LC_A−` |
+| J3 (VBAT/GND) | **J5/J6** | ext. Speise-Pads, **DNP** | J5→VDD, J6→GND |
+| – | **Y3** | 32-MHz-Quarz auf `Device:Crystal_GND24_Small` umgestellt (war lokales `4pin_crystal`-Symbol), FP `RuuviTag:20X16MM_4PIN_CRYSTAL` | 1→`XC1`, 3→`XC2`, 2&4→GND |
+
+nRF (U1) unverändert: `HX711_SCK`→P0.07 (Pin 9), `HX711_DOUT`→P0.08 (Pin 10),
+`HX711_EN`→P0.03/AIN1 (Pin 5). SHTC3 = U4, Symbol auf `Sensor_Humidity:SHTC3`.
+
+Auto-Netznamen im Schaltplan: Gate-Knoten = `Net-(Q1-D)`, INA-Knoten =
+`Net-(U2-INA+)` / `Net-(U2-INA-)`, VBG-Knoten = `Net-(U2-VBG)`.
+
+### Noch offen
+- Sichtprüfung Y3-Platzierung in KiCad
+- PCB: „Update PCB from Schematic" → Platzierung → Routing (4-lagig) → DRC
+- TODOs aus §7 (Brückenwiderstand messen, HX711-Package, Q2-Vgs(th))

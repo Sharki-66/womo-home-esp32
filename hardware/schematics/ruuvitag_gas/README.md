@@ -52,6 +52,8 @@ Separates Arbeitspaket, noch nicht begonnen.
 ## Status
 
 - [x] **Phase 1** – Migration von Rev.B8 nach `ruuvitag_gas` (KiCad 9, unverändert)
-- [ ] **Phase 2** – Sensor-Rückbau + HX711 + Load-Switch + Wägezellen-Pads →
-      Vorgabe in [`PHASE2_HX711.md`](PHASE2_HX711.md) (Speisung: Option B festgelegt)
+- [x] **Phase 2a – Schaltplan** – Sensor-Rückbau (TMP117/DPS310/LIS2DH12), HX711 + Load-Switch
+      (Option B), Wägezellen-Pads J1–J4, ext. Speise-Pads J5/J6 (DNP), Symbole/Footprints
+      auf KiCad-Standard. ERC = 3 (alle erwartet). Details: [`PHASE2_HX711.md`](PHASE2_HX711.md) §8
+- [ ] **Phase 2b – PCB** – „Update PCB from Schematic", Platzierung, 4-lagig routen, DRC
 - [ ] **Phase 3** – Doku, BOM, Gerber
