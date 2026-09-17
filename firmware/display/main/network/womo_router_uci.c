@@ -503,6 +503,11 @@ esp_err_t womo_router_uci_ensure_session(void)
     return err;
 }
 
+bool womo_router_is_reachable(void)
+{
+    return womo_router_uci_ensure_session() == ESP_OK;
+}
+
 void womo_router_uci_logout(void)
 {
     if (!s_ctx.initialised) return;
@@ -696,76 +701,48 @@ static void wifi_extract_info(womo_router_wifi_status_t *out, const cJSON *data)
 /* ── Helper: STA-Interface finden ────────────────────────── */
 
 /**
- * Lädt den kompletten wireless-UCI-Dump und sucht die Sektion
- * mit option "mode" == "sta" / "client".
- * Der gefundene Name wird gecacht (einmalige Suche pro Boot).
+ * Zwei feste STA-Sektionen für Dual-Radio-Uplink (siehe womo_router_wifi_set_sta):
+ *   - 5GHz-Ziele:   radio1, eigenständig, kein Kanal-Konflikt mit dem AP
+ *   - 2,4GHz-Ziele: radio0, Kombi-Betrieb mit dem AP (gleicher Kanal,
+ *                   vom Chip als "managed<=1, AP<=16, #channels<=1" unterstützt)
+ */
+#define WOMO_STA_SECTION_5GHZ   "default_radio1"
+#define WOMO_STA_SECTION_24GHZ  "sta_radio0"
+
+/**
+ * Prüft, welche der beiden STA-Sektionen aktuell aktiv ist
+ * (UCI-Feld "disabled" fehlt oder ist != "1"). Es kann immer nur eine
+ * der beiden aktiv sein (womo_router_wifi_set_sta hält das sicher).
+ * Keine Zwischenspeicherung – der Zustand kann sich durch Connect/
+ * Disconnect jederzeit ändern.
  *
- * Router-Antwort auf uci get {"config":"wireless"} (ohne section/option):
- *   {"result":[0,{"values":{"wifi_iface_0":{".type":"wifi-iface","mode":"ap",...},
- *                           "wifi_iface_1":{".type":"wifi-iface","mode":"sta",...}}}]}
- *
- * @return Sektionsname (z.B. "wifi_iface_1") oder NULL wenn nicht gefunden
+ * @return Sektionsname oder NULL, wenn keine der beiden aktiv ist
  */
 static const char *find_sta_interface(void)
 {
-    static char   s_sta_iface[32] = "";
-    static bool   s_searched      = false;
+    static const char *candidates[] = { WOMO_STA_SECTION_5GHZ, WOMO_STA_SECTION_24GHZ };
 
-    if (s_searched && s_sta_iface[0]) {
-        return s_sta_iface;
-    }
-
-    /* Kompletten wireless-Dump holen */
-    cJSON *dump = NULL;
-    esp_err_t err = womo_router_uci_get("wireless", NULL, NULL, (void **)&dump);
-    if (err != ESP_OK || !dump) {
-        ESP_LOGW(TAG, "find_sta_interface: uci get wireless fehlgeschlagen");
-        s_searched = true;
-        return NULL;
-    }
-
-    /* Antwortstruktur: {"values": {"<name>": {".type":"wifi-iface","mode":"sta",...}}} */
-    cJSON *values = cJSON_GetObjectItem(dump, "values");
-    if (!cJSON_IsObject(values)) {
-        ESP_LOGW(TAG, "find_sta_interface: kein 'values'-Objekt in Antwort");
-        cJSON_Delete(dump);
-        s_searched = true;
-        return NULL;
-    }
-
-    cJSON *sec = NULL;
-    cJSON_ArrayForEach(sec, values) {
-        if (!cJSON_IsObject(sec)) continue;
-
-        /* Nur wifi-iface Sektionen prüfen */
-        cJSON *type = cJSON_GetObjectItem(sec, ".type");
-        if (!type || !cJSON_IsString(type)) continue;
-        if (strcmp(type->valuestring, "wifi-iface") != 0) continue;
-
-        /* mode == "sta" oder "Client" (Teltonika) */
-        cJSON *mode = cJSON_GetObjectItem(sec, "mode");
-        if (!mode || !cJSON_IsString(mode)) continue;
-        if (strcasecmp(mode->valuestring, "sta")    != 0 &&
-            strcasecmp(mode->valuestring, "client") != 0) {
+    for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {
+        cJSON *uci_dis = NULL;
+        esp_err_t err = womo_router_uci_get("wireless", candidates[i], "disabled",
+                                             (void **)&uci_dis);
+        if (err != ESP_OK || !uci_dis) {
+            /* Sektion existiert evtl. nicht (noch) – nächster Kandidat */
             continue;
         }
 
-        /* Sektionsname: cJSON Array-Key */
-        const char *name = sec->string;
-        if (!name || name[0] == '\0') continue;
+        cJSON *val = cJSON_GetObjectItem(uci_dis, "value");
+        bool disabled = (val && cJSON_IsString(val) && strcmp(val->valuestring, "1") == 0);
+        cJSON_Delete(uci_dis);
 
-        strncpy(s_sta_iface, name, sizeof(s_sta_iface) - 1);
-        s_sta_iface[sizeof(s_sta_iface) - 1] = '\0';
-        s_searched = true;
-        ESP_LOGI(TAG, "STA-Interface gefunden: wireless.%s (mode=%s)",
-                 s_sta_iface, mode->valuestring);
-        cJSON_Delete(dump);
-        return s_sta_iface;
+        if (!disabled) {
+            ESP_LOGD(TAG, "Aktive STA-Sektion: wireless.%s", candidates[i]);
+            return candidates[i];
+        }
     }
 
-    cJSON_Delete(dump);
-    s_searched = true;
-    ESP_LOGW(TAG, "Kein STA-Interface (mode=sta/client) in wireless-Config gefunden");
+    ESP_LOGD(TAG, "Keine STA-Sektion aktiv (weder %s noch %s)",
+             WOMO_STA_SECTION_5GHZ, WOMO_STA_SECTION_24GHZ);
     return NULL;
 }
 
@@ -776,30 +753,18 @@ esp_err_t womo_router_get_wifi_status(womo_router_wifi_status_t *out)
     if (!out) return ESP_ERR_INVALID_ARG;
     memset(out, 0, sizeof(*out));
 
-    /* ── UCI disabled-Flag vorab prüfen ───────────────────────
-     * Wenn STA-Interface per UCI deaktiviert wurde (disabled=1), melden
-     * wir sofort „nicht verbunden".  iwinfo liefert sonst noch Restdaten
-     * vom gerade herunterfahrenden Interface, und der Switch springt
-     * fälschlicherweise wieder auf „an".
+    /* ── Aktive STA-Sektion ermitteln ─────────────────────────
+     * find_sta_interface() prüft beide Band-Sektionen (5GHz/2,4GHz) und
+     * liefert nur eine, wenn sie aktiv ist (disabled != "1"). Ist keine
+     * aktiv, melden wir sofort „nicht verbunden" – iwinfo liefert sonst
+     * noch Restdaten vom gerade herunterfahrenden Interface, und der
+     * Switch springt fälschlicherweise wieder auf „an".
      */
     const char *sta_iface = find_sta_interface();
-    if (sta_iface) {
-        cJSON *uci_dis = NULL;
-        esp_err_t de = womo_router_uci_get("wireless", sta_iface,
-                                            "disabled", (void **)&uci_dis);
-        if (de == ESP_OK && uci_dis) {
-            cJSON *val = cJSON_GetObjectItem(uci_dis, "value");
-            if (val && cJSON_IsString(val) && strcmp(val->valuestring, "1") == 0) {
-                ESP_LOGD(TAG, "WiFi STA UCI disabled=1 → enabled=false, connected=false");
-                cJSON_Delete(uci_dis);
-                /* out ist bereits memset(0) → enabled=false, connected=false */
-                return ESP_OK;
-            }
-            cJSON_Delete(uci_dis);
-        }
+    if (!sta_iface) {
+        /* out ist bereits memset(0) → enabled=false, connected=false */
+        return ESP_OK;
     }
-
-    /* Ab hier ist das Interface enabled (disabled != 1 oder unbekannt) */
     out->enabled = true;
 
     /*
@@ -1107,96 +1072,59 @@ esp_err_t womo_router_get_gps(womo_router_gps_t *out)
 
 /* ── High-Level: WiFi-Scan ───────────────────────────────── */
 
-esp_err_t womo_router_wifi_scan(womo_router_scan_result_t *results,
-                                 size_t max_results,
-                                 size_t *out_count)
+/**
+ * Prüft, ob ein Scan auf diesem Interface die aktive Verbindung stören würde.
+ *
+ * Ein `iwinfo scan` auf einem Interface, das gerade als Uplink-Client MIT
+ * einem fremden Netz verbunden ist, zwingt den Funk-Chip zum kanal-
+ * übergreifenden Scannen und kann die aktive Verbindung einfrieren
+ * (beobachtet am 2026-08-30 – erst ein manueller Netzwechsel hat den
+ * Router wiederbelebt). Ein Client-Interface OHNE aktive Assoziation
+ * (noch nicht verbunden, z. B. radio1 vor dem ersten 5GHz-Connect) ist
+ * dagegen unkritisch – das ist der normale Weg, wie ein STA nach
+ * Netzen sucht, bevor er sich verbindet.
+ *
+ * Kriterium: mode=="Client" UND eine echte (nicht-leere, nicht-Null-)
+ * BSSID vorhanden → aktiv verbunden → Scan hier vermeiden.
+ */
+static bool device_scan_would_disrupt(const char *dev_name)
 {
-    if (!results || !out_count || max_results == 0) return ESP_ERR_INVALID_ARG;
-    *out_count = 0;
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddStringToObject(args, "device", dev_name);
+    cJSON *info = NULL;
+    esp_err_t err = ubus_call("iwinfo", "info", args, NULL, &info);
+    cJSON_Delete(args);
 
-    /*
-     * iwinfo scan liefert ein Array von Objekten:
-     * [{"ssid":"Test","bssid":"AA:BB:...", "channel":6, "signal":-45, ...}]
-     *
-     * Scan auf einem aktiven WLAN-Interface.
-     * Interfacename wird dynamisch per 'iwinfo devices' ermittelt,
-     * da der RUTX11 verschiedene Namen vergeben kann.
-     */
-
-    /* Schritt 1: verfügbare WLAN-Interfaces ermitteln */
-    const char *scan_device = NULL;
-    static const char *scan_fallbacks[] = {"wlan0-2", "wifi0", "wlan0", "wlan1", NULL};
-
-    cJSON *dev_args = cJSON_CreateObject();
-    cJSON *dev_data = NULL;
-    esp_err_t derr = ubus_call("iwinfo", "devices", dev_args, NULL, &dev_data);
-    cJSON_Delete(dev_args);
-
-    char discovered_device[16] = "";
-    if (derr == ESP_OK && dev_data) {
-        cJSON *devices = cJSON_GetObjectItem(dev_data, "devices");
-        if (cJSON_IsArray(devices)) {
-            /* Erstes verfügbares Interface nehmen (typischerweise AP = immer up) */
-            cJSON *first = cJSON_GetArrayItem(devices, 0);
-            if (first && cJSON_IsString(first)) {
-                strncpy(discovered_device, first->valuestring, sizeof(discovered_device) - 1);
-                scan_device = discovered_device;
+    bool disrupt = false;
+    if (err == ESP_OK && info) {
+        cJSON *mode = cJSON_GetObjectItem(info, "mode");
+        if (mode && cJSON_IsString(mode) && strcasecmp(mode->valuestring, "Client") == 0) {
+            cJSON *bssid = cJSON_GetObjectItem(info, "bssid");
+            if (bssid && cJSON_IsString(bssid) && bssid->valuestring[0] != '\0' &&
+                strcasecmp(bssid->valuestring, "00:00:00:00:00:00") != 0) {
+                disrupt = true;
             }
-            ESP_LOGI(TAG, "iwinfo devices: %d Interfaces, Scan auf '%s'",
-                     cJSON_GetArraySize(devices),
-                     scan_device ? scan_device : "?");
         }
-        cJSON_Delete(dev_data);
-    } else {
-        if (dev_data) cJSON_Delete(dev_data);
-        ESP_LOGW(TAG, "iwinfo devices fehlgeschlagen – versuche Fallback-Interfaces");
+        cJSON_Delete(info);
     }
+    return disrupt;
+}
 
-    /* Schritt 2: Scan durchführen (entdecktes Device oder Fallbacks) */
-    cJSON *data = NULL;
-    esp_err_t err = ESP_FAIL;
-
-    if (scan_device) {
-        cJSON *args = cJSON_CreateObject();
-        cJSON_AddStringToObject(args, "device", scan_device);
-        err = ubus_call("iwinfo", "scan", args, NULL, &data);
-        cJSON_Delete(args);
-    }
-
-    /* Fallbacks durchprobieren wenn nötig */
-    for (int i = 0; (err != ESP_OK || !data) && scan_fallbacks[i]; i++) {
-        if (data) { cJSON_Delete(data); data = NULL; }
-        cJSON *args = cJSON_CreateObject();
-        cJSON_AddStringToObject(args, "device", scan_fallbacks[i]);
-        err = ubus_call("iwinfo", "scan", args, NULL, &data);
-        cJSON_Delete(args);
-        if (err == ESP_OK && data) {
-            ESP_LOGI(TAG, "WiFi-Scan erfolgreich auf Fallback '%s'", scan_fallbacks[i]);
-            break;
-        }
-    }
-
-    if (err != ESP_OK || !data) {
-        ESP_LOGW(TAG, "WiFi-Scan auf keinem Interface erfolgreich");
-        if (data) cJSON_Delete(data);
-        return err != ESP_OK ? err : ESP_FAIL;
-    }
-
-    /* data sollte ein Object mit "results" Array sein */
+/** Parst eine iwinfo-scan-Antwort und hängt Treffer an results[] an (bis max_results). */
+static void wifi_scan_append_results(cJSON *data,
+                                      womo_router_scan_result_t *results,
+                                      size_t max_results,
+                                      size_t *count)
+{
     cJSON *arr = cJSON_GetObjectItem(data, "results");
     if (!arr) arr = data; /* Fallback: data selbst ist Array */
+    if (!cJSON_IsArray(arr)) return;
 
-    if (!cJSON_IsArray(arr)) {
-        cJSON_Delete(data);
-        return ESP_FAIL;
-    }
-
-    size_t count = 0;
     cJSON *item = NULL;
     cJSON_ArrayForEach(item, arr) {
-        if (count >= max_results) break;
+        if (*count >= max_results) break;
 
-        womo_router_scan_result_t *r = &results[count];
+        womo_router_scan_result_t *r = &results[*count];
         memset(r, 0, sizeof(*r));
 
         json_strcpy(r->ssid, sizeof(r->ssid), item, "ssid");
@@ -1210,15 +1138,84 @@ esp_err_t womo_router_wifi_scan(womo_router_scan_result_t *results,
         if (ch && cJSON_IsNumber(ch)) r->channel = (uint8_t)ch->valueint;
 
         /* Nur Einträge mit SSID zählen */
-        if (r->ssid[0] != '\0') count++;
+        if (r->ssid[0] != '\0') (*count)++;
+    }
+}
+
+esp_err_t womo_router_wifi_scan(womo_router_scan_result_t *results,
+                                 size_t max_results,
+                                 size_t *out_count)
+{
+    if (!results || !out_count || max_results == 0) return ESP_ERR_INVALID_ARG;
+    *out_count = 0;
+
+    /*
+     * Scannt auf ALLEN aktuell vorhandenen WLAN-Interfaces (beide Radios,
+     * 2,4 GHz + 5 GHz), damit die Ergebnisliste Netze aus beiden Bändern
+     * enthält (siehe womo_router_wifi_set_sta für die Band-Auswahl beim
+     * Verbinden). Nur ein aktiv verbundenes STA-Interface wird dabei
+     * ausgeschlossen (siehe device_scan_would_disrupt).
+     */
+    cJSON *dev_args = cJSON_CreateObject();
+    cJSON *dev_data = NULL;
+    esp_err_t derr = ubus_call("iwinfo", "devices", dev_args, NULL, &dev_data);
+    cJSON_Delete(dev_args);
+
+    if (derr != ESP_OK || !dev_data) {
+        if (dev_data) cJSON_Delete(dev_data);
+        ESP_LOGW(TAG, "iwinfo devices fehlgeschlagen – kein WiFi-Scan möglich");
+        return derr != ESP_OK ? derr : ESP_FAIL;
     }
 
+    cJSON *devices = cJSON_GetObjectItem(dev_data, "devices");
+    if (!cJSON_IsArray(devices)) {
+        cJSON_Delete(dev_data);
+        ESP_LOGW(TAG, "iwinfo devices: keine Geräteliste in Antwort");
+        return ESP_FAIL;
+    }
+
+    size_t count = 0;
+    int scanned_devices = 0;
+    cJSON *dev = NULL;
+    cJSON_ArrayForEach(dev, devices) {
+        if (!cJSON_IsString(dev)) continue;
+        if (device_scan_would_disrupt(dev->valuestring)) {
+            ESP_LOGD(TAG, "Interface '%s' aktiv verbunden → für Scan übersprungen",
+                     dev->valuestring);
+            continue;
+        }
+
+        cJSON *args = cJSON_CreateObject();
+        cJSON_AddStringToObject(args, "device", dev->valuestring);
+        cJSON *scan_data = NULL;
+        esp_err_t serr = ubus_call("iwinfo", "scan", args, NULL, &scan_data);
+        cJSON_Delete(args);
+
+        if (serr == ESP_OK && scan_data) {
+            wifi_scan_append_results(scan_data, results, max_results, &count);
+            scanned_devices++;
+        } else {
+            ESP_LOGW(TAG, "iwinfo scan auf '%s' fehlgeschlagen: %s",
+                     dev->valuestring, esp_err_to_name(serr));
+        }
+        if (scan_data) cJSON_Delete(scan_data);
+    }
+    cJSON_Delete(dev_data);
+
+    if (scanned_devices == 0) {
+        ESP_LOGW(TAG, "WiFi-Scan auf keinem Interface erfolgreich");
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "WiFi-Scan auf %d Interface(n) erfolgreich, %u Treffer",
+             scanned_devices, (unsigned)count);
+
     *out_count = count;
-    cJSON_Delete(data);
 
     /* ── Deduplizierung: pro SSID nur den stärksten AP behalten ──────
-     * Mehrere APs (Repeater, Mesh) mit gleicher SSID liefern separate
-     * Einträge.  Für den Nutzer ist nur der stärkste relevant.
+     * Mehrere APs (Repeater, Mesh, oder dieselbe SSID auf beiden
+     * Bändern) liefern separate Einträge. Für den Nutzer ist nur der
+     * stärkste relevant – Band-Wahl beim Connect hängt ohnehin am
+     * Kanal des behaltenen Eintrags.
      */
     for (size_t i = 0; i < *out_count; i++) {
         for (size_t j = i + 1; j < *out_count; ) {
@@ -1247,26 +1244,24 @@ esp_err_t womo_router_wifi_scan(womo_router_scan_result_t *results,
 
 esp_err_t womo_router_wifi_set_sta(const char *ssid,
                                     const char *password,
-                                    const char *encryption)
+                                    const char *encryption,
+                                    uint8_t channel)
 {
-    if (!ssid) return ESP_ERR_INVALID_ARG;
+    if (!ssid || !ssid[0]) return ESP_ERR_INVALID_ARG;
 
-    ESP_LOGI(TAG, "WiFi STA konfigurieren: SSID='%s', Passwort: %s, Encryption: %s",
-             ssid, password ? "ja" : "nein",
-             (encryption && encryption[0]) ? encryption : "psk2");
+    bool is_5ghz = womo_router_channel_is_5ghz(channel);
+    const char *target = is_5ghz ? WOMO_STA_SECTION_5GHZ  : WOMO_STA_SECTION_24GHZ;
+    const char *other   = is_5ghz ? WOMO_STA_SECTION_24GHZ : WOMO_STA_SECTION_5GHZ;
 
-    /* STA-Interface automatisch finden */
-    const char *sta_iface = find_sta_interface();
-    if (!sta_iface) {
-        ESP_LOGE(TAG, "WiFi set_sta: Kein STA-Interface im Router-UCI gefunden");
-        return ESP_ERR_NOT_FOUND;
-    }
+    ESP_LOGI(TAG, "WiFi STA konfigurieren: SSID='%s' Kanal=%u (%s) → Sektion '%s'",
+             ssid, channel, is_5ghz ? "5GHz" : "2,4GHz", target);
 
     /*
      * Wir setzen:
-     *   wireless.<sta_iface>.ssid = <ssid>
-     *   wireless.<sta_iface>.key  = <password>
-     *   wireless.<sta_iface>.encryption = <encryption | "psk2">
+     *   wireless.<target>.ssid = <ssid>
+     *   wireless.<target>.key  = <password>
+     *   wireless.<target>.encryption = <encryption | "psk2">
+     *   wireless.<target>.disabled = "0"
      */
     cJSON *values = cJSON_CreateObject();
     cJSON_AddStringToObject(values, "ssid", ssid);
@@ -1275,16 +1270,27 @@ esp_err_t womo_router_wifi_set_sta(const char *ssid,
     }
     cJSON_AddStringToObject(values, "encryption",
                              (encryption && encryption[0]) ? encryption : "psk2");
-    /* Interface explizit aktivieren (disabled=0), falls es vorher
-     * per enable_sta(false) deaktiviert wurde.  */
     cJSON_AddStringToObject(values, "disabled", "0");
 
-    esp_err_t err = womo_router_uci_set("wireless", sta_iface, values);
+    esp_err_t err = womo_router_uci_set("wireless", target, values);
     cJSON_Delete(values);
 
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "UCI set für STA '%s' fehlgeschlagen: %s", sta_iface, esp_err_to_name(err));
+        ESP_LOGE(TAG, "UCI set für STA '%s' fehlgeschlagen: %s", target, esp_err_to_name(err));
         return err;
+    }
+
+    /* Die jeweils andere Band-Sektion deaktivieren, damit nie beide
+     * gleichzeitig aktiv sind (z.B. radio0 gleichzeitig für AP+STA
+     * UND eine zweite 5GHz-STA-Konfiguration). Nicht fatal, falls das
+     * fehlschlägt – die Zielsektion oben ist bereits korrekt gesetzt. */
+    cJSON *other_values = cJSON_CreateObject();
+    cJSON_AddStringToObject(other_values, "disabled", "1");
+    esp_err_t other_err = womo_router_uci_set("wireless", other, other_values);
+    cJSON_Delete(other_values);
+    if (other_err != ESP_OK) {
+        ESP_LOGW(TAG, "Deaktivieren der anderen STA-Sektion '%s' fehlgeschlagen: %s",
+                 other, esp_err_to_name(other_err));
     }
 
     ESP_LOGI(TAG, "UCI set OK, committing...");
@@ -1305,7 +1311,7 @@ esp_err_t womo_router_wifi_set_sta(const char *ssid,
         ESP_LOGW(TAG, "wifi reload Warnung: %s", esp_err_to_name(err));
     }
 
-    ESP_LOGI(TAG, "WiFi STA → SSID='%s' konfiguriert auf '%s'", ssid, sta_iface);
+    ESP_LOGI(TAG, "WiFi STA → SSID='%s' konfiguriert auf '%s'", ssid, target);
     return ESP_OK;
 }
 
@@ -1313,10 +1319,16 @@ esp_err_t womo_router_wifi_set_sta(const char *ssid,
 
 esp_err_t womo_router_wifi_enable_sta(bool enable)
 {
-    const char *sta_iface = find_sta_interface();
+    /* enable=false (Disconnect): deaktiviert, welche der beiden Band-
+     * Sektionen auch immer gerade aktiv ist.
+     * enable=true: aktuell ungenutzt (Verbindungsaufbau läuft über
+     * womo_router_wifi_set_sta() mit Band-Auswahl über den Kanal) –
+     * find_sta_interface() findet dann naturgemäß nichts (noch keine
+     * Sektion aktiv), daher Fallback auf die 5GHz-Sektion. */
+    const char *sta_iface = enable ? WOMO_STA_SECTION_5GHZ : find_sta_interface();
     if (!sta_iface) {
-        ESP_LOGE(TAG, "WiFi enable_sta: Kein STA-Interface gefunden");
-        return ESP_ERR_NOT_FOUND;
+        ESP_LOGI(TAG, "WiFi enable_sta(false): keine STA-Sektion aktiv – nichts zu tun");
+        return ESP_OK;
     }
     cJSON *values = cJSON_CreateObject();
     cJSON_AddStringToObject(values, "disabled", enable ? "0" : "1");

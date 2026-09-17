@@ -82,6 +82,17 @@ typedef struct {
     char   encryption[32];
 } womo_router_scan_result_t;
 
+/**
+ * @brief Liegt ein WLAN-Kanal im 5-GHz-Band? (2,4-GHz-Kanäle: 1-14,
+ *        5-GHz-Kanäle beginnen bei 36). Entscheidet, welche der beiden
+ *        RUTX11-STA-Sektionen (radio0 2,4GHz-Kombi / radio1 5GHz) beim
+ *        Verbinden genutzt wird.
+ */
+static inline bool womo_router_channel_is_5ghz(uint8_t channel)
+{
+    return channel >= 36;
+}
+
 /* ── Initialisierung & Session ────────────────────────────── */
 
 /**
@@ -96,6 +107,16 @@ esp_err_t womo_router_uci_init(void);
  * @return ESP_OK wenn Session gültig
  */
 esp_err_t womo_router_uci_ensure_session(void);
+
+/**
+ * @brief Prüft nur, ob der Router selbst erreichbar ist (ubus-Session/Login),
+ *        unabhängig vom WLAN-STA-Uplink-Status. Anders als
+ *        womo_router_get_wifi_status() schlägt dies NICHT fehl, nur weil
+ *        der WLAN-Uplink gerade nicht verbunden ist (z. B. reiner
+ *        LTE-Betrieb oder "Verbindung wird gesucht").
+ * @return true wenn Login/Session erfolgreich war
+ */
+bool womo_router_is_reachable(void);
 
 /**
  * @brief Aktive Session explizit beenden.
@@ -181,13 +202,23 @@ esp_err_t womo_router_wifi_scan(womo_router_scan_result_t *results,
  * @brief SSID + Passwort des Router WiFi-Clients (STA) setzen.
  *        Ruft UCI set + commit + reload_config auf.
  *
+ *        Der RUTX11 hat zwei feste STA-Sektionen für Dual-Radio-Uplink:
+ *        5-GHz-Ziele laufen auf radio1 (eigenständig, kein Konflikt mit
+ *        dem AP), 2,4-GHz-Ziele auf radio0 im Kombi-Betrieb mit dem AP
+ *        (beide auf demselben Kanal, vom Chip unterstützt). Anhand des
+ *        Kanals der Zielauswahl wird automatisch die passende Sektion
+ *        aktiviert und die jeweils andere deaktiviert.
+ *
  * @param ssid       Ziel-SSID
  * @param password   WPA-Passwort (NULL = offen)
  * @param encryption Verschlüsselungstyp (z.B. "psk2") oder NULL für auto
+ * @param channel    Kanal der Zielauswahl (aus dem Scan-Ergebnis) –
+ *                    entscheidet 2,4-GHz- vs. 5-GHz-Sektion
  */
 esp_err_t womo_router_wifi_set_sta(const char *ssid,
                                     const char *password,
-                                    const char *encryption);
+                                    const char *encryption,
+                                    uint8_t channel);
 
 /**
  * @brief Router WiFi-Client (STA) ein-/ausschalten.

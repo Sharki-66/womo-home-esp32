@@ -845,6 +845,7 @@ static void connectivity_snapshot_fill(womo_connectivity_snapshot_t *snapshot)
     snapshot->wifi_connected = rw.connected;
     snapshot->wifi_status = rw.connected ? WOMO_WIFI_CONNECTED : WOMO_WIFI_DISCONNECTED;
     snapshot->wifi_signal_percent = rw.signal_percent;
+    snapshot->wifi_channel = rw.channel;
     if (rw.ssid[0]) {
         strncpy(snapshot->wifi_ssid, rw.ssid, sizeof(snapshot->wifi_ssid) - 1);
         snapshot->wifi_ssid[sizeof(snapshot->wifi_ssid) - 1] = '\0';
@@ -3017,9 +3018,11 @@ static void router_poll_task(void *arg)
             if (a_err == ESP_OK) s_router_ap   = ap_tmp;
             xSemaphoreGive(s_router_mutex);
         }
-        /* Router gilt als erreichbar nur wenn HTTP/UCI WiFi-Abfrage erfolgreich war.
-         * LTE- und AP-Abfragen geben auch ohne RUTX11 ESP_OK zurück (leere Daten). */
-        s_router_reachable = (w_err == ESP_OK);
+        /* Router gilt als erreichbar, wenn die ubus-Session (Login) funktioniert –
+         * unabhängig vom WLAN-STA-Uplink-Status. WiFi-/LTE-/AP-Abfragen können auch
+         * ohne echten RUTX11 ESP_OK liefern (leere Daten) bzw. legitim fehlschlagen,
+         * wenn der WLAN-Uplink gerade nicht verbunden ist ("Verbindung wird gesucht"). */
+        s_router_reachable = womo_router_is_reachable();
 
         /* ── GPS vom Router (GNSS-Antenne am RUTX11) ──────────── */
         womo_router_gps_t gps_tmp = {0};

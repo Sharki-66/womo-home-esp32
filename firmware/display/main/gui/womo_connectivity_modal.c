@@ -77,6 +77,7 @@ typedef struct {
     /* ── Zustand ── */
     bool      scan_in_progress;
     char      selected_ssid[33];
+    uint8_t   selected_channel;
     char      entered_password[65];
     char      softap_ssid[33];
     womo_router_scan_result_t scan_results[MAX_SCAN_RESULTS];
@@ -92,6 +93,7 @@ typedef struct {
 typedef struct {
     char ssid[33];
     char password[65];
+    uint8_t channel;
 } wifi_connect_params_t;
 
 static connectivity_modal_ctx_t s_ctx = {0};
@@ -1071,6 +1073,7 @@ static void scan_list_btn_event_cb(lv_event_t *e)
             s_ctx.scan_results[idx].ssid,
             sizeof(s_ctx.selected_ssid) - 1);
     s_ctx.selected_ssid[sizeof(s_ctx.selected_ssid) - 1] = '\0';
+    s_ctx.selected_channel = s_ctx.scan_results[idx].channel;
 
     close_scan_popup();
 
@@ -1164,9 +1167,11 @@ static void show_scan_popup(void)
         const char *ssid = s_ctx.scan_results[i].ssid[0]
                                ? s_ctx.scan_results[i].ssid : "<hidden>";
         uint8_t percent = wifi_rssi_to_percent(s_ctx.scan_results[i].rssi);
-        char text[96];
-        snprintf(text, sizeof(text), "%s  (%d dBm / %u%%)",
-                 ssid, s_ctx.scan_results[i].rssi, percent);
+        const char *band = womo_router_channel_is_5ghz(s_ctx.scan_results[i].channel)
+                               ? "5 GHz" : "2,4 GHz";
+        char text[112];
+        snprintf(text, sizeof(text), "%s (%s)  (%d dBm / %u%%)",
+                 ssid, band, s_ctx.scan_results[i].rssi, percent);
         lv_obj_t *btn = lv_list_add_btn(s_ctx.wifi_scan_list,
                                          LV_SYMBOL_WIFI, text);
         lv_obj_add_event_cb(btn, scan_list_btn_event_cb,
@@ -1353,6 +1358,7 @@ static void ensure_selected_ssid_from_snapshot(void)
                 s_latest_snapshot.wifi_ssid,
                 sizeof(s_ctx.selected_ssid) - 1);
         s_ctx.selected_ssid[sizeof(s_ctx.selected_ssid) - 1] = '\0';
+        s_ctx.selected_channel = s_latest_snapshot.wifi_channel;
     }
 }
 
@@ -1374,6 +1380,7 @@ static void start_wifi_connect_task(const char *ssid, const char *password)
     if (password) {
         strncpy(params->password, password, sizeof(params->password) - 1);
     }
+    params->channel = s_ctx.selected_channel;
 
     BaseType_t created = xTaskCreate(wifi_connect_task,
                                      "wifi_cfg_conn",
@@ -1430,10 +1437,12 @@ static void wifi_connect_task(void *arg)
 
     ESP_LOGI(TAG, "Router WiFi STA → SSID='%s'", params.ssid);
 
-    /* Router WAN-Client per UCI konfigurieren + aktivieren */
+    /* Router WAN-Client per UCI konfigurieren + aktivieren.
+     * Kanal entscheidet 2,4GHz- vs. 5GHz-STA-Sektion (siehe womo_router_wifi_set_sta). */
     esp_err_t err = womo_router_wifi_set_sta(params.ssid,
                                               params.password[0] ? params.password : NULL,
-                                              NULL);  /* encryption = auto (psk2) */
+                                              NULL,   /* encryption = auto (psk2) */
+                                              params.channel);
 
     /* Bei Erfolg Zugangsdaten in NVS speichern */
     if (err == ESP_OK && params.password[0]) {

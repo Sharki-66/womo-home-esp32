@@ -26,6 +26,7 @@ typedef struct {
     womo_wifi_status_t wifi_status;
     uint8_t wifi_signal_percent;
     char wifi_ssid[33];
+    uint8_t wifi_channel;         /**< Für Band-Auswahl beim Reconnect ohne neuen Scan */
     /* LTE */
     bool lte_valid;
     bool lte_registered;

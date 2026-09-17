@@ -1,5 +1,61 @@
 # Active Context — WoMoHome Display
 
+## RUTX11 Dual-Radio-WLAN-Uplink: 2,4GHz + 5GHz (2026-09-17)
+
+Ausgangsproblem: WLAN-STA-Uplink (Ziel „Solaris-Gast", 5 GHz) konnte am
+RUTX11 nicht verbinden ("Verbindung wird gesucht"), obwohl der Router über
+den AP erreichbar war. Root Cause: `default_radio1` (STA-Sektion) war auf
+`device: radio0` konfiguriert — dieselbe physische 2,4-GHz-Funkeinheit wie
+der AP „Malibu-622" (`default_radio0`). `iwinfo devices` zeigte deshalb nur
+ein aktives Interface (den AP); für die STA-Sektion wurde nie ein eigenes
+Interface hochgefahren.
+
+Hardware-Fakt (per `iw phy phy0 info` verifiziert): radio0 (2,4 GHz)
+unterstützt AP+STA gleichzeitig auf einem Chip, aber nur auf **demselben
+Kanal** (`#channels <= 1`). radio1 (5 GHz, Kanal 36+, VHT80) ist komplett
+eigenständig.
+
+Architekturentscheidung (Option A, siehe Konversation): Zwei feste
+STA-UCI-Sektionen für Dual-Radio-Uplink, beide auf `network: wan1` (mwan3
+unverändert, kennt nur die logische Schnittstelle):
+- `default_radio1` → `device: radio1` (5 GHz, eigenständig)
+- `sta_radio0` (neu angelegt) → `device: radio0` (2,4 GHz, Kombi-Betrieb
+  mit dem AP, gleicher Kanal)
+
+Nur eine der beiden ist je `disabled=0`; welche, entscheidet der Kanal des
+vom Nutzer gewählten Scan-Ergebnisses (≥36 → 5GHz-Sektion, sonst 2,4GHz).
+
+**Code-Änderungen:**
+- `womo_router_uci.h`: `womo_router_channel_is_5ghz()` (Band aus Kanal),
+  `womo_router_wifi_set_sta()` um `channel`-Parameter erweitert.
+- `womo_router_uci.c`: `find_sta_interface()` komplett umgebaut (prüft nur
+  noch die zwei festen Sektionen, kein UCI-Full-Dump-Scan mehr, kein
+  Caching mehr — Zustand kann sich durch Connect/Disconnect jederzeit
+  ändern). `womo_router_wifi_set_sta()` wählt Ziel-Sektion nach Band,
+  deaktiviert die jeweils andere. `womo_router_wifi_scan()` scannt jetzt
+  **alle** vorhandenen Interfaces (beide Radios) statt nur eines;
+  `device_is_sta()` → `device_scan_would_disrupt()` (schließt nur noch
+  aktiv assoziierte STA-Interfaces aus, nicht mehr jedes im Client-Modus —
+  ein noch unverbundenes STA-Interface darf gescannt werden).
+- `womo_connectivity_modal.c`: Scan-Liste zeigt Band hinter der SSID
+  („SSID (2,4 GHz) / (dBm / %)"). Ausgewählter Kanal wird durch den
+  gesamten Connect-Flow gereicht (`selected_channel` im Modal-Context,
+  `wifi_connect_params_t.channel`, Snapshot-Feld `wifi_channel` als
+  Fallback beim Reconnect ohne neuen Scan).
+
+**Router-seitig bereits live umgesetzt** (nicht im Git-Repo, reine
+Config): `sta_radio0`-Sektion angelegt, `default_radio1.device` auf
+`radio1` korrigiert, committed.
+
+**Vorsicht bei künftigen `wifi reload`-Aufrufen an diesem Router:** Ein
+`wifi reload` mit einer STA-Sektion mit leerer `ssid` hat den Router
+einmal temporär komplett unresponsive gemacht (Reboot nötig). Sektionen
+vor einem Reload immer mit gültiger SSID oder `disabled=1` belassen.
+
+**Noch nicht getestet:** Echter Verbindungsaufbau zu einem 2,4-GHz-Netz
+über die neue `sta_radio0`-Kombi-Sektion (AP+STA gleichzeitig auf
+radio0) — nur die 5-GHz-Seite (Solaris-Gast) ist live verifiziert.
+
 ## RUTX11-LAN-Subnetz geändert: 192.168.10.1 → 192.168.55.1 (2026-09-17)
 
 Ursache: Subnetz-Kollision zwischen dem Wohnmobil-RUTX11-LAN (`192.168.10.0/24`)
