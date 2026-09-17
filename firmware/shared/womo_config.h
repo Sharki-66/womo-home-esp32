@@ -57,7 +57,7 @@
 // womo_credentials.h eingebunden (siehe oben).
 
 /** IP-Adresse des RUTX11 Routers im internen Netz. */
-#define WOMO_ROUTER_IP                      "192.168.10.1"
+#define WOMO_ROUTER_IP                      "192.168.55.1"
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Kategorie 4: ESP-NOW Transport (ersetzt RS485)
