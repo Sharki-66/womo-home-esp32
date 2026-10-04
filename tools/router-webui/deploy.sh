@@ -10,12 +10,12 @@
 #   JFFS2-Overlay persistent beschreibbar.
 #
 # Verwendung:
-#   ./deploy.sh [router-ip]             Standard: 192.168.10.1
-#   ./deploy.sh 192.168.10.1 root       (anderer SSH-User)
+#   ./deploy.sh [router-ip]             Standard: 192.168.55.1
+#   ./deploy.sh 192.168.55.1 root       (anderer SSH-User)
 # ============================================================
 set -e
 
-ROUTER_IP="${1:-192.168.10.1}"
+ROUTER_IP="${1:-192.168.55.1}"
 ROUTER_USER="${2:-root}"
 WOMO_PORT="8080"
 SSH_CTL="$(mktemp -u /tmp/womo_ssh_XXXXXX)"
@@ -321,6 +321,54 @@ printf '{"ok":true,"msg":"Wechsel zu %s ausgelöst"}\n' "$NEXT"
 CGISCRIPT
 echo "  → /etc/womo/cgi-bin/simswitch (SIM-Switch)"
 
+# datapass.sh: fragt pass.telekom.de über die LTE-Schnittstelle ab (IP-Erkennung,
+# kein Login nötig, laut Congstar-Support "verbraucht kein Datenvolumen").
+# --interface qmimux0 erzwingt den Weg über die Mobilfunk-IP der SIM (nicht WLAN-STA).
+# Schreibt (wie poll.sh → status.json) atomar nach /etc/womo/datapass.json, damit
+# Cron + Boot-Aufruf unabhängig vom CGI/Button laufen können.
+$SSH 'cat > /etc/womo/datapass.sh && chmod +x /etc/womo/datapass.sh' << 'POLLSCRIPT'
+#!/bin/sh
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH
+TMP=$(mktemp /tmp/womo_datapass_XXXXXX)
+trap 'rm -f "$TMP"' EXIT
+
+HTML=$(curl -s -L --max-time 8 --interface qmimux0 \
+  -A "Mozilla/5.0 (Linux; Android 10) Mobile" -H "Range:" \
+  https://pass.telekom.de 2>/dev/null)
+
+# "remaining-volume-value" = Restvolumen (Guthaben), "start-volume" = urspruengliche
+# Pass-Groesse. Verifiziert gegen die Congstar-App: 29,37/30 GB = 29,37 GB UEBRIG,
+# nicht verbraucht (Balkenfuellung 97% = Tankanzeige-Logik, voll = viel uebrig).
+REMAINING=$(echo "$HTML" | grep -o 'remaining-volume-value">[^<]*' | head -1 | sed 's/.*">//' | tr -d '[:space:]')
+TOTAL=$(echo "$HTML" | grep -o 'start-volume">[^<]*'           | head -1 | sed 's/.*">//' | tr -d '[:space:]')
+UNIT=$(echo "$HTML"  | grep -o 'volume-unit">[^<]*'            | head -1 | sed 's/.*">//' | tr -d '[:space:]')
+SPEED=$(echo "$HTML" | grep -o 'Download-Speed:[^<]*'          | head -1 | sed 's/Download-Speed: *//' | tr -d '\r\n')
+VALID=$(echo "$HTML" | grep -o 'Gültig bis:[^<]*'              | head -1 | sed 's/Gültig bis: *//'     | tr -d '\r\n')
+
+if [ -z "$REMAINING" ]; then
+  printf '{"error":"parse_failed","ts":%s}\n' "$(date +%s)" > "$TMP"
+else
+  printf '{"remaining":"%s","total":"%s","unit":"%s","speed":"%s","valid_until":"%s","ts":%s}\n' \
+    "$REMAINING" "$TOTAL" "$UNIT" "$SPEED" "$VALID" "$(date +%s)" > "$TMP"
+fi
+mv "$TMP" /etc/womo/datapass.json
+chmod 644 /etc/womo/datapass.json
+POLLSCRIPT
+echo "  → /etc/womo/datapass.sh"
+
+# CGI-datapass: stößt datapass.sh an (frischer Wert für den manuellen Button)
+# und liefert das Ergebnis zurück – analog zu cgi-bin/poll → status.json.
+$SSH 'cat > /etc/womo/cgi-bin/datapass && chmod +x /etc/womo/cgi-bin/datapass' << 'CGISCRIPT'
+#!/bin/sh
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH
+/etc/womo/datapass.sh
+printf "Content-Type: application/json\r\n\r\n"
+cat /etc/womo/datapass.json 2>/dev/null || printf '{"error":"not ready"}\n'
+CGISCRIPT
+echo "  → /etc/womo/cgi-bin/datapass"
+
 # cgi-bin/poll: führt poll.sh aus und liefert status.json zurück
 $SSH 'cat > /etc/womo/cgi-bin/poll && chmod +x /etc/womo/cgi-bin/poll' << 'CGISCRIPT'
 #!/bin/sh
@@ -332,22 +380,46 @@ cat /etc/womo/status.json 2>/dev/null || printf '{"error":"not ready"}\n'
 CGISCRIPT
 echo "  → /etc/womo/cgi-bin/poll"
 
-# Cron: poll.sh alle 15 s (4× pro Minute)
+# Cron: poll.sh alle 15 s (4× pro Minute) + datapass.sh alle 30 Min
 $SSH '
-  crontab -l 2>/dev/null | grep -v "/etc/womo/poll" > /tmp/womo_cron || true
+  crontab -l 2>/dev/null | grep -v "/etc/womo/poll\|/etc/womo/datapass" > /tmp/womo_cron || true
   echo "* * * * * /etc/womo/poll.sh" >> /tmp/womo_cron
   echo "* * * * * sleep 15; /etc/womo/poll.sh" >> /tmp/womo_cron
   echo "* * * * * sleep 30; /etc/womo/poll.sh" >> /tmp/womo_cron
   echo "* * * * * sleep 45; /etc/womo/poll.sh" >> /tmp/womo_cron
+  echo "*/30 * * * * /etc/womo/datapass.sh" >> /tmp/womo_cron
   crontab /tmp/womo_cron
   /etc/init.d/cron restart 2>/dev/null || true
   rm -f /tmp/womo_cron
 '
-echo "  → Cron: poll.sh alle 15 s"
+echo "  → Cron: poll.sh alle 15 s, datapass.sh alle 30 min"
 
-# Erstes poll.sh sofort ausführen damit status.json existiert
-$SSH '/etc/womo/poll.sh'
-echo "  → Erster Poll ausgeführt"
+# Erstes poll.sh + datapass.sh sofort ausführen, damit beide JSON-Dateien existieren
+$SSH '/etc/womo/poll.sh; /etc/womo/datapass.sh'
+echo "  → Erster Poll + Datenvolumen-Abfrage ausgeführt"
+
+# Boot-Aufruf: datapass.sh einmal nach dem Systemstart, mit Verzögerung, damit die
+# LTE-Verbindung erst steht (rc.local läuft bereits ganz am Ende des Boot-Vorgangs,
+# aber die PDP-Session/DHCP braucht nach dem Hochfahren des Modems noch ein paar
+# Sekunden). Läuft im Hintergrund, damit rc.local nicht blockiert.
+$SSH '
+  if ! grep -qF "/etc/womo/datapass.sh" /etc/rc.local 2>/dev/null; then
+    if grep -qx "exit 0" /etc/rc.local 2>/dev/null; then
+      sed -i "/^exit 0\$/i (sleep 60; /etc/womo/datapass.sh) \&" /etc/rc.local
+    else
+      echo "(sleep 60; /etc/womo/datapass.sh) &" >> /etc/rc.local
+    fi
+  fi
+'
+echo "  → rc.local: datapass.sh läuft 60s nach Boot einmalig"
+
+# /etc/womo/ vor Verlust bei Firmware-Updates schützen: RutOS' "Keep
+# settings" sichert bei sysupgrade nur /etc/config/* + die Standard-
+# Paketliste, keine frei angelegten Verzeichnisse. /etc/sysupgrade.conf
+# ist der Standard-OpenWrt-Mechanismus für zusätzliche Pfade.
+echo "[3b/5] /etc/womo/ in /etc/sysupgrade.conf eintragen (übersteht Firmware-Updates)…"
+$SSH "grep -qxF '/etc/womo/' /etc/sysupgrade.conf 2>/dev/null || echo '/etc/womo/' >> /etc/sysupgrade.conf"
+echo "  → sysupgrade.conf aktualisiert"
 
 # 3. Zweite uhttpd-Instanz auf Port 8080 konfigurieren
 echo "[4/5] uhttpd-Instanz auf Port ${WOMO_PORT} einrichten…"

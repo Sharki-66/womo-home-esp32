@@ -173,6 +173,18 @@ input:checked+.sw-slider:before{transform:translateX(20px)}
       <div class="irow"><span>Aktiver Slot</span><b id="lte-simslot">–</b></div>
       <button id="sim-switch-btn" class="btn-sec" style="width:100%;margin-top:10px" onclick="switchSim()">🔄 SIM wechseln</button>
       <div id="sim-switch-msg" style="font-size:.75rem;color:var(--muted);margin-top:5px;text-align:center"></div>
+
+      <div style="border-top:1px solid var(--border,#333);margin-top:12px;padding-top:12px">
+        <div class="irow">
+          <span><button id="dp-btn" onclick="refreshDataPass()" title="Jetzt aktualisieren"
+                  style="background:none;border:none;padding:0;margin-right:4px;cursor:pointer;font-size:1em;vertical-align:middle">🔄</button>Verbleibend</span>
+          <b id="dp-vol">–</b>
+        </div>
+        <div class="sig-bar"><div class="sig-fill" id="dp-bar" style="width:0%"></div></div>
+        <div class="irow"><span>Speed</span><b id="dp-speed">–</b></div>
+        <div class="irow"><span>Gültig bis</span><b id="dp-valid">–</b></div>
+        <div id="dp-msg" style="font-size:.75rem;color:var(--muted);margin-top:5px;text-align:center"></div>
+      </div>
     </div>
 
     <!-- ── GPS ── -->
@@ -759,6 +771,58 @@ async function switchSim() {
 }
 
 /* ══════════════════════════════════════════════
+   Datenvolumen (pass.telekom.de, über LTE-Interface)
+   Bewusst nur manuell abrufbar (externer HTTPS-Request,
+   nicht Teil des 15s-Polls) – laut Congstar "zero-rated".
+══════════════════════════════════════════════ */
+function applyDataPass(d, tsLabel) {
+  if (d.error) throw new Error(d.error);
+  document.getElementById('dp-vol').textContent   = `${d.remaining} / ${d.total} ${d.unit}`;
+  document.getElementById('dp-speed').textContent = d.speed || '–';
+  document.getElementById('dp-valid').textContent = d.valid_until || '–';
+  const remaining = parseFloat((d.remaining || '0').replace(',', '.'));
+  const total     = parseFloat((d.total     || '0').replace(',', '.'));
+  // Balken = Restvolumen in % (Tankanzeige-Logik: voll = viel übrig)
+  const pct = total > 0 ? Math.min(100, Math.max(0, Math.round(remaining / total * 100))) : 0;
+  const bar = document.getElementById('dp-bar');
+  bar.style.width = pct + '%';
+  bar.style.background = sigColor(pct);
+  if (tsLabel && d.ts) {
+    const ageMin = Math.round((Date.now() / 1000 - d.ts) / 60);
+    document.getElementById('dp-msg').textContent = `Stand: vor ${ageMin} min (Cron/Boot)`;
+    document.getElementById('dp-msg').style.color = 'var(--muted)';
+  }
+}
+
+// Gecachten Stand sofort beim Laden zeigen (kein Live-Request an Telekom nötig –
+// wird per Cron alle 30 min + einmalig nach Boot aktualisiert, siehe deploy.sh)
+async function loadCachedDataPass() {
+  try {
+    const r = await fetch('/datapass.json?_=' + Date.now());
+    if (!r.ok) return;
+    applyDataPass(await r.json(), true);
+  } catch (_) { /* noch kein Cache vorhanden, ignorieren */ }
+}
+
+async function refreshDataPass() {
+  const btn = document.getElementById('dp-btn');
+  const msg = document.getElementById('dp-msg');
+  btn.disabled = true;
+  msg.style.color = 'var(--muted)';
+  msg.textContent = '⏳ Frage pass.telekom.de ab…';
+  try {
+    const r = await fetch('/cgi-bin/datapass');
+    applyDataPass(await r.json());
+    msg.style.color = 'var(--green)';
+    msg.textContent = '✓ aktualisiert';
+  } catch (e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = '✗ ' + e.message;
+  }
+  btn.disabled = false;
+}
+
+/* ══════════════════════════════════════════════
    Auto-Start beim Seitenaufruf
 ══════════════════════════════════════════════ */
 (async () => {
@@ -768,6 +832,7 @@ async function switchSim() {
   } catch (e) {
     document.getElementById('stat-txt').textContent = '⚠ ' + e.message;
   }
+  loadCachedDataPass();
 })();
 </script>
 </body>

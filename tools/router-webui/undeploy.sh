@@ -5,7 +5,7 @@
 # ============================================================
 set -e
 
-ROUTER_IP="${1:-192.168.10.1}"
+ROUTER_IP="${1:-192.168.55.1}"
 ROUTER_USER="${2:-root}"
 SSH_CTL="$(mktemp -u /tmp/womo_ssh_XXXXXX)"
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=8 -o ControlMaster=auto -o ControlPath=${SSH_CTL} -o ControlPersist=30"
