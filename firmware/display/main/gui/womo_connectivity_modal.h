@@ -32,6 +32,12 @@ typedef struct {
     bool lte_registered;
     uint8_t lte_signal_percent;
     char lte_operator[32];
+    /* Datenvolumen (pass.telekom.de über Router-WebUI-Tool, alle 30 min) */
+    bool datapass_valid;
+    char datapass_remaining[16];
+    char datapass_total[16];
+    char datapass_unit[8];
+    char datapass_valid_until[32];
 } womo_connectivity_snapshot_t;
 
 void womo_connectivity_modal_show(lv_obj_t *parent, const womo_connectivity_snapshot_t *snapshot);

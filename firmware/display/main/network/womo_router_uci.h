@@ -255,6 +255,27 @@ esp_err_t womo_router_get_ap_status(womo_router_ap_status_t *out);
  */
 esp_err_t womo_router_lte_enable(bool enable);
 
+/** Datenvolumen-Status des aktuellen Mobilfunk-Passes (pass.telekom.de) */
+typedef struct {
+    bool  valid;                  /**< Daten vorhanden (CGI erreichbar)   */
+    char  remaining[16];          /**< Restvolumen, z.B. "29,37"          */
+    char  total[16];              /**< Pass-Gesamtvolumen, z.B. "30"      */
+    char  unit[8];                /**< Einheit, z.B. "GB"                 */
+    char  speed[32];              /**< Download-Speed-Text                */
+    char  valid_until[32];        /**< Gültig bis, z.B. "13. Oktober 2026"*/
+    uint32_t ts;                  /**< Unix-Timestamp der Abfrage (Router)*/
+} womo_router_datapass_t;
+
+/**
+ * @brief Gecachtes Datenvolumen vom Router-WebUI-Tool abfragen.
+ *        Liest /datapass.json von der dedizierten uhttpd-Instanz auf
+ *        Port 8080 (kein ubus/Login nötig, reine statische Datei, von
+ *        dort per Cron alle 30 min + einmalig nach Boot aktualisiert –
+ *        siehe tools/router-webui/deploy.sh). Setzt also voraus, dass
+ *        das Router-WebUI-Tool dort deployed ist.
+ */
+esp_err_t womo_router_get_data_pass(womo_router_datapass_t *out);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,5 +1,35 @@
 # Active Context — WoMoHome Display
 
+## Datenvolumen-Anzeige im LTE-Panel (2026-10-04)
+
+Neue Funktion `womo_router_get_data_pass()` in `womo_router_uci.c/h`: liest
+`http://<ROUTER_IP>:8080/datapass.json` (statische Datei der dedizierten
+Router-WebUI-uhttpd-Instanz, kein ubus/Login nötig — siehe
+`tools/router-webui/deploy.sh`, dort per Cron alle 30 min + einmalig nach
+Boot aktualisiert). Liefert Restvolumen/Gesamtvolumen/Einheit/Gültigkeit
+des aktuellen Congstar-Datenpasses (Quelle: pass.telekom.de).
+
+Wichtig: Die Telekom-Seite nennt das Feld irreführend
+"remaining-volume-value", zeigt aber tatsächlich das **Restvolumen**
+(verifiziert gegen die Congstar-App) — NICHT den Verbrauch. In `main.c`
+und `womo_connectivity_modal.c` entsprechend als "remaining" (nicht
+"used") benannt.
+
+Poll-Rhythmus in `router_poll_task` (main.c): eigener, viel selteneren
+Zähler (`ROUTER_DATAPASS_POLL_CYCLES` = 30 min) statt der normalen 15s,
+da sich der Wert serverseitig eh nur alle 30 min ändert — plus einmal
+sofort nach Verbindungsaufbau (`poll_count == 1`).
+
+Anzeige: zweite Zeile im LTE-Status-Label des Connectivity-Modals
+(`update_lte_status_label()`), Format `"<Betreiber> (<Signal>%)\n<Rest>/<Gesamt>
+<Einheit> - bis <Datum>"`. Noch nicht auf echtem Display geprüft, ob
+zwei Zeilen im `LV_LABEL_LONG_DOT`-Modus sauber dargestellt werden.
+
+**Voraussetzung:** Setzt voraus, dass `tools/router-webui/deploy.sh`
+auf dem RUTX11 ausgeführt wurde (Port-8080-Instanz + `/etc/womo/`).
+Ohne das liefert `womo_router_get_data_pass()` einfach ESP_FAIL,
+Datenvolumen-Zeile bleibt im Display unsichtbar (kein harter Fehler).
+
 ## RUTX11 Dual-Radio-WLAN-Uplink: 2,4GHz + 5GHz (2026-09-17)
 
 Ausgangsproblem: WLAN-STA-Uplink (Ziel „Solaris-Gast", 5 GHz) konnte am

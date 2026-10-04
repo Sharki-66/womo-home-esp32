@@ -185,10 +185,15 @@ static womo_lte_status_t lte_status = {0};
 static womo_router_wifi_status_t  s_router_wifi = {0};
 static womo_router_lte_status_t   s_router_lte  = {0};
 static womo_router_ap_status_t    s_router_ap   = {0};
+static womo_router_datapass_t     s_router_datapass = {0};
 static SemaphoreHandle_t          s_router_mutex = NULL;
 static bool                       s_router_reachable = false;
 static TaskHandle_t              s_router_poll_handle = NULL;
 #define ROUTER_POLL_INTERVAL_MS  15000
+/* Datenvolumen ändert sich serverseitig nur alle 30 min (Router-Cron) –
+ * entsprechend selten abfragen (120 × 15s = 30 min), plus einmal sofort
+ * nach Verbindungsaufbau. */
+#define ROUTER_DATAPASS_POLL_CYCLES (30 * 60 * 1000 / ROUTER_POLL_INTERVAL_MS)
 
 // Gas bottle widgets
 static womo_gas_bottle_t *gas_bottle_a = NULL; // Gas bottle A (HX711 channel A)
@@ -832,11 +837,13 @@ static void connectivity_snapshot_fill(womo_connectivity_snapshot_t *snapshot)
     /* Router-Daten unter Mutex kopieren */
     womo_router_wifi_status_t rw = {0};
     womo_router_lte_status_t  rl = {0};
+    womo_router_datapass_t    rd = {0};
     snapshot->router_reachable = s_router_reachable;
     if (s_router_mutex) {
         xSemaphoreTake(s_router_mutex, portMAX_DELAY);
         rw = s_router_wifi;
         rl = s_router_lte;
+        rd = s_router_datapass;
         xSemaphoreGive(s_router_mutex);
     }
 
@@ -859,6 +866,15 @@ static void connectivity_snapshot_fill(womo_connectivity_snapshot_t *snapshot)
         strncpy(snapshot->lte_operator, rl.operator_name,
                 sizeof(snapshot->lte_operator) - 1);
         snapshot->lte_operator[sizeof(snapshot->lte_operator) - 1] = '\0';
+    }
+
+    /* Datenvolumen (pass.telekom.de über Router-WebUI-Tool, alle 30 min) */
+    snapshot->datapass_valid = rd.valid;
+    if (rd.valid) {
+        strncpy(snapshot->datapass_remaining, rd.remaining, sizeof(snapshot->datapass_remaining) - 1);
+        strncpy(snapshot->datapass_total,     rd.total,     sizeof(snapshot->datapass_total) - 1);
+        strncpy(snapshot->datapass_unit,      rd.unit,      sizeof(snapshot->datapass_unit) - 1);
+        strncpy(snapshot->datapass_valid_until, rd.valid_until, sizeof(snapshot->datapass_valid_until) - 1);
     }
 }
 
@@ -3004,6 +3020,24 @@ static void router_poll_task(void *arg)
             ESP_LOGI(TAG, "Router AP: '%s' %s ch%d, 2.4GHz=%d 5GHz=%d",
                      ap_tmp.ssid, ap_tmp.enabled ? "aktiv" : "aus", ap_tmp.channel,
                      ap_tmp.band_2_4ghz_active, ap_tmp.band_5ghz_active);
+        }
+
+        /* Datenvolumen: selten pollen (ändert sich serverseitig nur alle 30 min),
+         * aber einmal sofort nach Verbindungsaufbau (poll_count == 1). */
+        if (poll_count == 1 || (poll_count % ROUTER_DATAPASS_POLL_CYCLES) == 0) {
+            womo_router_datapass_t dp_tmp = {0};
+            esp_err_t dp_err = womo_router_get_data_pass(&dp_tmp);
+            if (dp_err == ESP_OK) {
+                ESP_LOGI(TAG, "Datenvolumen: %s/%s %s, gültig bis %s",
+                         dp_tmp.remaining, dp_tmp.total, dp_tmp.unit, dp_tmp.valid_until);
+                if (s_router_mutex) {
+                    xSemaphoreTake(s_router_mutex, portMAX_DELAY);
+                    s_router_datapass = dp_tmp;
+                    xSemaphoreGive(s_router_mutex);
+                }
+            } else {
+                ESP_LOGD(TAG, "Datenvolumen-Abfrage fehlgeschlagen: %s", esp_err_to_name(dp_err));
+            }
         }
 
         /* Auch bei Teilfehlern aktualisieren – was da ist wird angezeigt */

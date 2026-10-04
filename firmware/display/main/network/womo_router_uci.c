@@ -207,6 +207,58 @@ static esp_err_t router_http_post(const char *body,
     return (err == ESP_OK && response->last_error == ESP_OK) ? ESP_OK : ESP_FAIL;
 }
 
+/* ── HTTP GET Helper (für statische Dateien, kein ubus/Login) ────────── */
+
+/**
+ * Einfacher GET auf eine beliebige URL (z.B. Port-8080-WebUI-Tool).
+ * Nutzt denselben Event-Handler/Response-Puffer wie router_http_post.
+ */
+static esp_err_t router_http_get(const char *url, router_http_response_t *response)
+{
+    response->buffer     = NULL;
+    response->capacity   = 0;
+    response->length     = 0;
+    response->truncated  = false;
+    response->last_error = ESP_OK;
+    response->truncate_ok = false;
+
+    esp_http_client_config_t cfg = {
+        .url            = url,
+        .method         = HTTP_METHOD_GET,
+        .timeout_ms     = HTTP_TIMEOUT_MS,
+        .event_handler  = router_http_event,
+        .user_data      = response,
+        .disable_auto_redirect = true,
+        .buffer_size    = 1024,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (!client) {
+        ESP_LOGE(TAG, "HTTP-GET-Client init fehlgeschlagen");
+        return ESP_FAIL;
+    }
+
+    esp_err_t err = esp_http_client_perform(client);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "HTTP GET fehlgeschlagen (%s): %s", url, esp_err_to_name(err));
+    } else {
+        int status = esp_http_client_get_status_code(client);
+        if (status != 200) {
+            ESP_LOGW(TAG, "HTTP GET %s → Status %d", url, status);
+            err = ESP_ERR_INVALID_RESPONSE;
+        }
+    }
+
+    if (response->buffer && response->length < response->capacity) {
+        response->buffer[response->length] = '\0';
+    } else if (response->buffer) {
+        response->buffer[response->capacity - 1] = '\0';
+    }
+
+    esp_http_client_cleanup(client);
+    return (err == ESP_OK && response->last_error == ESP_OK) ? ESP_OK : ESP_FAIL;
+}
+
 /* ── JSON-RPC Request bauen ──────────────────────────────── */
 
 /**
@@ -1593,4 +1645,46 @@ esp_err_t womo_router_lte_enable(bool enable)
 
     ESP_LOGI(TAG, "LTE %s", enable ? "aktiviert" : "deaktiviert");
     return ESP_OK;
+}
+
+/* ── High-Level: Datenvolumen (Router-WebUI-Tool, Port 8080) ─────────── */
+
+esp_err_t womo_router_get_data_pass(womo_router_datapass_t *out)
+{
+    if (!out) return ESP_ERR_INVALID_ARG;
+    memset(out, 0, sizeof(*out));
+
+    char url[96];
+    snprintf(url, sizeof(url), "http://%s:8080/datapass.json", CONFIG_WOMO_ROUTER_IP);
+
+    router_http_response_t resp = {0};
+    esp_err_t err = router_http_get(url, &resp);
+    if (err != ESP_OK || !resp.buffer) {
+        free(resp.buffer);
+        return err != ESP_OK ? err : ESP_FAIL;
+    }
+
+    cJSON *root = cJSON_Parse(resp.buffer);
+    free(resp.buffer);
+    if (!root) return ESP_FAIL;
+
+    cJSON *err_field = cJSON_GetObjectItem(root, "error");
+    if (err_field && cJSON_IsString(err_field)) {
+        ESP_LOGW(TAG, "Datenvolumen-Abfrage: %s", err_field->valuestring);
+        cJSON_Delete(root);
+        return ESP_FAIL;
+    }
+
+    json_strcpy(out->remaining,   sizeof(out->remaining),   root, "remaining");
+    json_strcpy(out->total,       sizeof(out->total),       root, "total");
+    json_strcpy(out->unit,        sizeof(out->unit),        root, "unit");
+    json_strcpy(out->speed,       sizeof(out->speed),       root, "speed");
+    json_strcpy(out->valid_until, sizeof(out->valid_until), root, "valid_until");
+
+    cJSON *ts = cJSON_GetObjectItem(root, "ts");
+    if (ts && cJSON_IsNumber(ts)) out->ts = (uint32_t)ts->valuedouble;
+
+    out->valid = (out->remaining[0] != '\0');
+    cJSON_Delete(root);
+    return out->valid ? ESP_OK : ESP_FAIL;
 }

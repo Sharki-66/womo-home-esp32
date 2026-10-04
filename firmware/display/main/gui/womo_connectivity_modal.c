@@ -944,13 +944,19 @@ static void update_lte_status_label(void)
     if (s_ctx.lte_toggle_task) return;
     if (s_ctx.lte_cooldown_until > esp_timer_get_time()) return;
 
-    char buffer[96];
+    char buffer[160];
 
     if (s_latest_snapshot.lte_valid && s_latest_snapshot.lte_registered) {
         const char *op = s_latest_snapshot.lte_operator[0]
                              ? s_latest_snapshot.lte_operator : "LTE";
-        snprintf(buffer, sizeof(buffer), "%s (%u%%)",
-                 op, s_latest_snapshot.lte_signal_percent);
+        int n = snprintf(buffer, sizeof(buffer), "%s (%u%%)",
+                          op, s_latest_snapshot.lte_signal_percent);
+        /* Datenvolumen (pass.telekom.de, alle 30 min aktualisiert) als 2. Zeile */
+        if (s_latest_snapshot.datapass_valid && n > 0 && (size_t)n < sizeof(buffer)) {
+            snprintf(buffer + n, sizeof(buffer) - n, "\n%s/%s %s - bis %s",
+                     s_latest_snapshot.datapass_remaining, s_latest_snapshot.datapass_total,
+                     s_latest_snapshot.datapass_unit, s_latest_snapshot.datapass_valid_until);
+        }
         if (s_ctx.lte_led) set_led_active(s_ctx.lte_led, true);
         s_ctx.lte_switch_internal = true;
         lv_obj_add_state(s_ctx.lte_switch, LV_STATE_CHECKED);
