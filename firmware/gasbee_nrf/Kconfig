@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Hajo Harms
+# SPDX-License-Identifier: MIT
+#
+# GasBee nRF – projekteigene Kconfig-Optionen
+
+menu "GasBee"
+
+config GASBEE_STATUS_LED
+	bool "RGB-Status-LED (Testmodus)"
+	default n
+	help
+	  Zeigt den Betriebszustand auf der RGB-LED des XIAO:
+	  Blau blinkt = Advertising, Blau an = verbunden,
+	  Rot an = HX711 nicht bereit, Grün Blitz = Messung gesendet,
+	  Grün 3 Blitze = Tare übernommen.
+	  Einschalten mit -DEXTRA_CONF_FILE=debug.conf.
+
+config GASBEE_MEASURE_INTERVAL_S
+	int "Messintervall in Sekunden"
+	default 300
+	range 15 3600
+	help
+	  Abstand zwischen zwei Messzyklen (HX711 + Akku). Nach jeder Messung
+	  folgt ein Advertising-Burst, danach schlafen HX711 und nRF.
+	  Testmodus (debug.conf): 60 s.
+
+endmenu
+
+source "Kconfig.zephyr"

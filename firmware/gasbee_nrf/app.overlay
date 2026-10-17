@@ -1,0 +1,66 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Hajo Harms
+ * SPDX-License-Identifier: MIT
+ *
+ * GasBee nRF – HX711-Pins am XIAO-Connector
+ *   DOUT   → D2 (P0.28), Pull-Up: offener Pin = "nicht bereit"
+ *   PD_SCK → D3 (P0.29), High > 60 µs = HX711 Power-Down zwischen den Messungen
+ * HX711 an 3V3 versorgen (nRF52840-GPIOs sind nicht 5-V-tolerant).
+ *
+ * Akkumessung laut Seeed-Schaltplan XIAO nRF52840 Sense:
+ *   VBAT ─ R16 1 MΩ ─┬─ R17 510 kΩ ─ P0.14 (READ_BAT, "output sink only")
+ *                    └─ P0.31 / AIN7
+ * P0.14 bleibt per gpio-hog dauerhaft Low (Seeed-Empfehlung, sonst kann
+ * P0.31 über 3,6 V kommen). Dauerstrom über den Teiler ca. 3 µA.
+ */
+
+#include <zephyr/dt-bindings/adc/nrf-saadc.h>
+
+/ {
+	zephyr,user {
+		hx711-dout-gpios = <&xiao_d 2 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
+		hx711-sck-gpios = <&xiao_d 3 GPIO_ACTIVE_HIGH>;
+		/* BQ25101 ~CHG (Schaltplan: P0.17_~{CHG}, Open-Drain mit Lade-LED 2,2 kΩ).
+		 * Aktiv = lädt. Ohne USB ist der Lader stromlos → Pull-Up liest "lädt nicht". */
+		chg-gpios = <&gpio0 17 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+	};
+
+	vbatt: vbatt {
+		compatible = "voltage-divider";
+		io-channels = <&adc 7>;
+		output-ohms = <510000>;
+		full-ohms = <(1000000 + 510000)>;
+	};
+};
+
+&gpio0 {
+	read_bat_en: read-bat-en {
+		gpio-hog;
+		gpios = <14 GPIO_ACTIVE_HIGH>;
+		output-low;
+		line-name = "READ_BAT";
+	};
+};
+
+/* Das Boardfile legt pwm0 auf P0.17. Der Pin ist hier der Ladestatus-Eingang. */
+&pwm0 {
+	status = "disabled";
+};
+
+&adc {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	/* AIN7 = P0.31. Teiler-Ausgang max. 4,2 V × 510k/1510k ≈ 1,42 V,
+	 * Gain 1/3 mit 0,6-V-Referenz ergibt 1,8 V Messbereich.
+	 * Quellimpedanz ca. 340 kΩ → 40 µs Erfassungszeit (nRF-SAADC bis 800 kΩ). */
+	channel@7 {
+		reg = <7>;
+		zephyr,gain = "ADC_GAIN_1_3";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 40)>;
+		zephyr,input-positive = <NRF_SAADC_AIN7>;
+		zephyr,resolution = <12>;
+		zephyr,oversampling = <4>;
+	};
+};
