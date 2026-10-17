@@ -24,6 +24,14 @@
     "version": "2.0.0",
     "tasks": [
       {
+        "label": "Monitor GasBee nRF (XIAO, Auswahl)",
+        "type": "shell",
+        "command": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}/../../tools/gasbee-monitor.sh",
+        "problemMatcher": [],
+        "isBackground": true,
+        "presentation": { "reveal": "always", "panel": "dedicated", "focus": true, "clear": true }
+      },
+      {
         "label": "Build GasBee",
         "type": "shell",
         "command": "idf.py",

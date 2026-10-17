@@ -28,8 +28,14 @@ ATTRS{serial}=="50:78:7D:14:E3:CC", SYMLINK+="ttyESP_DISPLAY"
 # SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", \
 #   ATTRS{serial}=="XX:XX:XX:XX:XX:XX", SYMLINK+="ttyESP_GASBEE"
 
-# GasBee nRF: Seeed XIAO nRF52840 (Log-/Konsolen-Port)
-# TODO: idVendor, idProduct und serial eintragen – Werte mit udevadm (s. o.) auslesen,
-# nicht raten. Wird per J-Link geflasht, betrifft das nur den Monitor-Port.
-# SUBSYSTEM=="tty", ATTRS{idVendor}=="xxxx", ATTRS{idProduct}=="xxxx", \
-#   ATTRS{serial}=="XXXXXXXXXXXXXXXX", SYMLINK+="ttyGASBEE_NRF"
+# GasBee nRF: Seeed XIAO nRF52840 (USB-CDC-Log, firmware/gasbee_nrf) – beliebig viele
+# Allgemeine Regel, kein Eintrag pro Gerät: jede GasBee bekommt automatisch
+#   /dev/ttyGASBEE_<USB-Seriennummer>   (Seriennummer = Chip-ID über CONFIG_HWINFO)
+# VID/PID 2fe3:0004 aus build/gasbee_nrf/zephyr/.config (CONFIG_CDC_ACM_SERIAL_VID/PID).
+# Das ist die Zephyr-Standard-ID – andere Zephyr-Geräte würden ebenfalls erfasst.
+# TODO: Sobald gasbee_nrf CONFIG_CDC_ACM_SERIAL_PRODUCT_STRING="GasBee" setzt, hier
+#   zusätzlich ATTRS{product}=="GasBee" prüfen.
+# Flashen läuft per UF2-Laufwerk (XIAO-SENSE), nicht über diesen Port.
+# Monitor mit Geräteauswahl: tools/gasbee-monitor.sh
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2fe3", ATTRS{idProduct}=="0004", \
+ATTRS{serial}=="?*", SYMLINK+="ttyGASBEE_$attr{serial}"
