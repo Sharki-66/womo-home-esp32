@@ -15,7 +15,8 @@ idf_component_register(
         "sensors/ina226_sensor.c"
         "time/time_sync.c"
         "network/ble_manager.c"
-        "network/gasbee_ble_client.c"
+        "network/gasbee_ble_scanner.c"
+        "sensors/gas_source.c"
         "network/ruuvi_ble_scanner.c"
     INCLUDE_DIRS
         "."

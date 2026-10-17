@@ -26,8 +26,8 @@
  *   (ADC1_CH6, RTC, GPIO7) Display 5V | I/O/T|  🟨 |    7 | 7          S         7 | 41   | 🟩  | I/O/T | MTDI, GPIO41
  *     (ADC2_CH4, RTC, GPIO15) I2C SCL | I/O/T|  🟨 |   15 | 8          3         8 | 40   | 🟩  | I/O/T | MTDO, GPIO40
  *     (ADC2_CH5, RTC, GPIO16) I2C SDA | I/O/T|  🟨 |   16 | 9          -         9 | 39   | 🟩  | I/O/T | MTCK, GPIO39
- * (ADC2_CH6, U1TXD, RTC, GPIO17) frei | I/O/T|  ⬜ |   17 | 10         W        10 | 38   | 🟨  | I/O/T | RGB_LED  (GPIO38)
- * (ADC2_CH7, U1RXD, RTC, GPIO18) frei | I/O/T|  ⬜ |   18 | 11         R        11 | 37   | 🟥  | I/O/T | ⚠ PSRAM (GPIO37, nicht nutzbar!)
+ *(ADC2_CH6, U1TXD, RTC, GPIO17) Licht | I/O/T|  🟨 |   17 | 10         W        10 | 38   | 🟨  | I/O/T | RGB_LED  (GPIO38)
+ *(ADC2_CH7, U1RXD, RTC, GPIO18) Pumpe | I/O/T|  🟨 |   18 | 11         R        11 | 37   | 🟥  | I/O/T | ⚠ PSRAM (GPIO37, nicht nutzbar!)
  *               (ADC1_CH7, RTC) GPIO8 | I/O/T|  ⬜ |    8 | 12         O        12 | 36   | 🟥  | I/O/T | ⚠ PSRAM (GPIO36, nicht nutzbar!)
  *                ADC1_CH2, RTC, GPIO3 | I/O/T|  ⬜ |    3 | 13         O        13 | 35   | 🟥  | I/O/T | ⚠ PSRAM (GPIO35, nicht nutzbar!)
  *                   GPIO46, STRAP/LOG | I/O/T|  🟩 |   46 | 14         M        14 | 0    | 🟩  | I/O/T | BOOT/STRAP, GPIO0
@@ -179,8 +179,9 @@
 // Die Schalter schließen kumulativ (bei 75% sind 25%+50%+75% alle geschlossen).
 //
 // Geplante Lösung: 1 ADC-Pin pro Tank über ein Widerstandsnetzwerk
-//   Vorgeschlagene Pins: GPIO17 (ADC2_CH6) für Tank1, GPIO18 (ADC2_CH7) für Tank2
-//   Beide Pins sind aktuell frei (⬜).
+//   KONFLIKT (2026-08-30): GPIO17/18 sind NICHT mehr frei – auf der Hardware
+//   bereits für Licht (17) und Pumpe (18) verdrahtet (SENSOR_LIGHT_GPIO /
+//   SENSOR_PUMP_GPIO oben). Vor Umsetzung dieses TODOs andere freie Pins wählen.
 //
 // Schaltung (Beispielbelegung, R-Werte noch zu verifizieren):
 //   3.3V ─── R_pull(10kΩ) ─── ADC-Pin
@@ -212,6 +213,46 @@
 #define SENSOR_PWR_12V_SENSE_GPIO 14   // Eingang: LBE Spannungsfeedback
 #define SENSOR_AC_SENSE_GPIO 21        // Eingang: 230V Netzkontrolle
 #define SENSOR_MULTIMEDIA_PWR_GPIO 13  // Schaltausgang: Multimedia Power
+
+// Pulslänge für das bistabile LBE-Relais (EIN/AUS). Gilt für Boot-EIN-Puls
+// (app_main.c), Laufzeit-Puls (espnow_modem.c) und Deep-Sleep-AUS-Puls
+// (deep_sleep.c). 100 ms reichten dem Relais nicht zum sicheren Umschalten.
+// Ein längerer Puls schadet der Stabrelais-Spule nicht, solange der Pin danach
+// wieder auf LOW geht (macht der Code).
+// TODO(hardware): Mindestpulslänge des konkreten EBL-Relais aus Messung/Datenblatt
+// bestätigen und ggf. reduzieren.
+#define SENSOR_PWR_12V_PULSE_MS 500
+
+// 12V-Sense (GPIO14): echte Rückmeldung des Bordnetz-Relais.
+// 1 = ctrl-Topic-Feld `pwr_on` meldet den an GPIO14 GEMESSENEN Zustand (Display-
+//     Button zeigt Realität statt nur des kommandierten Zustands).
+// 0 = reines Soft-Flag (nur der zuletzt kommandierte Zustand).
+#define SENSOR_PWR_12V_SENSE_ENABLE      1
+// Aktiver Pegel des Sense-Eingangs. Annahme analog AC-Sense: 12V vorhanden -> HIGH.
+// TODO(hardware): per Messung an GPIO14 verifizieren; bei invertierter Beschaltung 0.
+#define SENSOR_PWR_12V_SENSE_ACTIVE_HIGH 1
+// Nach einem Relais-Puls braucht die 12V-Schiene Zeit zum Auf-/Abbau. Solange wird
+// weiter der kommandierte Zustand gemeldet, nicht der Sense-Pin.
+#define SENSOR_PWR_12V_SENSE_GRACE_MS    2500
+// GPIO13-Defekt (2026-08-30) geklärt: echter Hardware-Schaden durch Verpolung
+// an Steckverbinder J7 ("LT452 Malibu", 10-pol. Molex Micro-Fit) – Multimedia-
+// Leitung lag dabei auf GND, ESP32-Ausgang wurde bei HIGH hart kurzgeschlossen
+// (Ausgangstreiber vermutlich durchlegiert). Kein Software-Fix möglich.
+// Ebenfalls betroffen: GPIO17/Licht (lag auf vertauschtem 12V-Kontroll-Signal).
+// GPIO18/Pumpe unbeschädigt trotz gleichem Vorfall.
+// Entscheidung: Kein Pin-Remapping auf dieser Platine – neue Platinenrevision
+// wird bestellt (korrekter J7, RS485-Transceiver entfernt, Q5 richtig gepolt).
+// Diese Config gilt für die NEUE Platine mit unbeschädigten GPIOs 13/17/18.
+
+// Licht/Pumpe: auf der Hardware bereits verdrahtet, Firmware-Ansteuerung noch
+// nicht implementiert. Gleiches Schaltprinzip wie Multimedia (N-MOSFET,
+// HIGH=ein/LOW=aus, kein Hold nötig – siehe deep_sleep.c).
+// KONFLIKT: GPIO17/18 waren im Tanksensor-TODO weiter unten (Zeile ~174) als
+// "frei" für die geplanten Original-WoMo-Tanksensoren (Tank1/Tank2) vorgesehen
+// – das stimmt nicht mehr, Pins sind belegt. Tanksensor-Planung muss auf
+// andere Pins ausweichen, bevor sie umgesetzt wird.
+#define SENSOR_LIGHT_GPIO 17           // Schaltausgang: Licht (Hardware fertig, Firmware TODO)
+#define SENSOR_PUMP_GPIO 18            // Schaltausgang: Pumpe (Hardware fertig, Firmware TODO)
 
 // ====================================================================================
 // Display-Versorgung (neue Platine: N-Kanal Treiber Q5/2N7002 vor P-Kanal Q4/AO3401A)
@@ -288,14 +329,60 @@
 
 // ====================================================================================
 // Ruuvi BLE Scanner
-// Routing ausschließlich per MAC – leerer String deaktiviert den Slot vollständig.
-// (Verhindert, dass Tags aus Nachbarfahrzeugen akzeptiert werden.)
+// Routing ausschließlich per MAC – konfiguriert über Display (Einstellungen > RTC / Ruuvi),
+// per RS485 cmd "ruuvi_config" übertragen und hier in NVS persistiert.
+// Kein Compile-Time-Default: unkonfigurierter Slot ist deaktiviert (kein fremder Tag
+// aus Nachbarfahrzeugen wird akzeptiert), bis der Nutzer eine MAC im Display einträgt.
 // Innen-Tag: z. B. RuuviTag 4in1 oder Standard
 // Außen-Tag: z. B. RuuviTag Pro 3in1 (kein Druck) oder Pro 4in1 (mit Druck)
 // Bei Außen-Tag ohne Drucksensor: Druck automatisch vom Innensensor übernommen.
 // ====================================================================================
-#define SENSOR_RUUVI_INDOOR_MAC   "CE:F1:47:5C:CC:C9"
-#define SENSOR_RUUVI_OUTDOOR_MAC  ""
+#define SENSOR_RUUVI_NVS_NAMESPACE   "ruuvi_cfg"
+#define SENSOR_RUUVI_NVS_KEY_INDOOR  "indoor_mac"
+#define SENSOR_RUUVI_NVS_KEY_OUTDOOR "outdoor_mac"
+#define SENSOR_RUUVI_SCAN_MAX_TAGS   8     // Max. Einträge in der Scan-Liste ans Display
+#define SENSOR_RUUVI_SCAN_MAX_AGE_S  60    // Tags älter als das fliegen aus der Scan-Liste
+
+// ====================================================================================
+// BLE-Scan (ble_manager, gemeinsam für Ruuvi + GasBee)
+// Passiv: Ruuvi und GasBee senden alle Daten im Advertising, keine Scan-Response nötig.
+// Tastverhältnis 30/50 ms (60 %): GasBee sendet 10 Pakete/Zyklus im 1-s-Abstand →
+// rechnerisch Verlust aller 10 bei 0,4^10 ≈ 0,01 %. Pakete pro seq werden geloggt
+// (gasbee_ble); fällt das dauerhaft unter 2–3, Window auf Intervall anheben.
+// Einheit: 0,625 ms.
+// ====================================================================================
+#define SENSOR_BLE_SCAN_ITVL         0x0050  // 80 × 0,625 ms = 50 ms
+#define SENSOR_BLE_SCAN_WINDOW       0x0030  // 48 × 0,625 ms = 30 ms
+
+// ====================================================================================
+// GasBee BLE (Gaswaage, firmware/gasbee_nrf) – Advertising-Format v1
+// Kein Verbindungsaufbau: Daten kommen ausschließlich aus dem Advertising
+// (Name "GasBee" + Manufacturer Data, Company-ID 0xFFFF). Format siehe README.
+// Zuordnung Flasche A/B per MAC – konfiguriert über Display (Einstellungen >
+// RTC / Temp / Gas), per cmd "gasbee_config" übertragen und hier in NVS persistiert.
+// Vorrang: Ist das HX711-Modul am Kabel vorhanden, liefert es A+B, GasBee wird ignoriert.
+// ====================================================================================
+#define SENSOR_GASBEE_NVS_NAMESPACE  "gasbee_cfg"
+#define SENSOR_GASBEE_NVS_KEY_A      "bottle_a_mac"
+#define SENSOR_GASBEE_NVS_KEY_B      "bottle_b_mac"
+#define SENSOR_GASBEE_COMPANY_ID     0xFFFF  // SIG-reserviert für Tests/interne Nutzung
+#define SENSOR_GASBEE_FORMAT_VERSION 1
+#define SENSOR_GASBEE_CYCLE_S        300     // Messzyklus GasBee (5 min; Testmodus GasBee: 60)
+#define SENSOR_GASBEE_BURST_S        10      // Sendefenster pro Zyklus (10 Pakete × 1 s)
+// Ohne neue seq für > 2 Zyklen (+ Sendefenster) gilt die Flasche als nicht verbunden
+#define SENSOR_GASBEE_STALE_MS       ((2 * SENSOR_GASBEE_CYCLE_S + SENSOR_GASBEE_BURST_S) * 1000LL)
+#define SENSOR_GASBEE_SCAN_MAX_TAGS  8       // Max. Einträge in der Scan-Liste ans Display
+#define SENSOR_GASBEE_SCAN_MAX_AGE_S (SENSOR_GASBEE_CYCLE_S + 60) // Scan-Liste: mind. 1 Zyklus halten
+
+// LiPo-Kennlinie (1 Zelle, 4,2 V voll): Stützpunkte {mV, %}, absteigend, linear interpoliert.
+// Quelle: verbreitete 1S-LiPo-Ruhespannungstabelle (RC-/Maker-Community), NICHT gemessen.
+// TODO(kalibrierung): Am echten GasBee-Akku verifizieren – Akku vollladen, unter
+// Normalbetrieb entladen und mV-Werte gegen entnommene Kapazität aufzeichnen.
+#define SENSOR_GASBEE_LIPO_CURVE { \
+    {4200, 100}, {4150, 95}, {4110, 90}, {4080, 85}, {4020, 80}, {3980, 75}, \
+    {3950,  70}, {3910, 65}, {3870, 60}, {3850, 55}, {3840, 50}, {3820, 45}, \
+    {3800,  40}, {3790, 35}, {3770, 30}, {3750, 25}, {3730, 20}, {3710, 15}, \
+    {3690,  10}, {3610,  5}, {3270,  0} }
 
 // ====================================================================================
 // Log-Level Konfiguration (ESP_LOG_NONE/ERROR/WARN/INFO/DEBUG/VERBOSE)
@@ -303,16 +390,17 @@
 // ====================================================================================
 #define LOG_LEVEL_SENSOR_MAIN    ESP_LOG_INFO
 #define LOG_LEVEL_DEEP_SLEEP     ESP_LOG_WARN
-#define LOG_LEVEL_SENSORBOARD    ESP_LOG_WARN
+#define LOG_LEVEL_SENSORBOARD    ESP_LOG_INFO    // temporär INFO für ESP-NOW-ACK-Fehlersuche
 #define LOG_LEVEL_ANALOG         ESP_LOG_WARN
 #define LOG_LEVEL_BNO055         ESP_LOG_WARN    // bno055_app + BNO055-Komponente
 #define LOG_LEVEL_BME680         ESP_LOG_WARN    // bme680_app + bme680-Komponente
 #define LOG_LEVEL_BME260         ESP_LOG_WARN    // bme260_app (falls separate Implementierung)
 #define LOG_LEVEL_HX711          ESP_LOG_WARN
 #define LOG_LEVEL_INA226         ESP_LOG_WARN    // ina226 Strom-/Leistungsmessung (DEBUG)
-#define LOG_LEVEL_BLE_MANAGER    ESP_LOG_WARN
-#define LOG_LEVEL_GASBEE_BLE     ESP_LOG_WARN
-#define LOG_LEVEL_RUUVI_BLE      ESP_LOG_WARN
+#define LOG_LEVEL_BLE_MANAGER    ESP_LOG_INFO    // temporär INFO für Ruuvi-Scan-Fehlersuche
+#define LOG_LEVEL_GASBEE_BLE     ESP_LOG_INFO    // temporär INFO: Erkennung GasBee nRF (XIAO) prüfen
+#define LOG_LEVEL_GAS_SOURCE     ESP_LOG_INFO    // Wechsel der Gas-Quelle (HX711/GasBee) – selten
+#define LOG_LEVEL_RUUVI_BLE      ESP_LOG_INFO    // temporär INFO für Außensensor-Fehlersuche
 #define LOG_LEVEL_I2C_BUS        ESP_LOG_INFO    // temporär INFO für I2C-Scan Diagnose
 #define LOG_LEVEL_PCF8523        ESP_LOG_WARN
 #define LOG_LEVEL_TIME_SYNC      ESP_LOG_WARN

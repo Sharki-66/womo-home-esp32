@@ -9,13 +9,14 @@
  *
  * Zentraler NimBLE-Stack-Eigentümer:
  *  - Initialisiert NimBLE einmalig
- *  - Verwaltet BLE-Scan (filter_duplicates=0 für periodische Ruuvi-Updates)
+ *  - Verwaltet BLE-Scan (passiv, filter_duplicates=0 für periodische Ruuvi-/GasBee-Updates)
  *  - Dispatcht Advertisement-Events an alle registrierten Handler
  *  - Leitet Connection-Events an den registrierten Connection-Handler weiter
  *  - Startet Scan nach Connect und Disconnect automatisch neu
  */
 
 #include "ble_manager.h"
+#include "sensor_config.h"
 
 #include <nimble/nimble_port.h>
 #include <nimble/nimble_port_freertos.h>
@@ -35,6 +36,7 @@ static int                      s_adv_handler_count = 0;
 static ble_conn_event_handler_t s_conn_handler      = NULL;
 static void                    *s_conn_handler_arg  = NULL;
 static TimerHandle_t            s_scan_retry_timer  = NULL;
+static volatile bool            s_ready             = false;
 
 // ── Vorwärts-Deklaration ──────────────────────────────────────────────────
 
@@ -57,12 +59,20 @@ void ble_manager_set_conn_handler(ble_conn_event_handler_t fn, void *arg)
 
 void ble_manager_start_scan(void)
 {
+    if (!s_ready) {
+        // NimBLE noch nicht initialisiert (z. B. Aufruf durch hx711_task vor
+        // ble_manager_init() in app_main) – gefahrlos ignorieren, on_sync()
+        // startet den Scan selbst sobald der Host bereit ist.
+        return;
+    }
+
     struct ble_gap_disc_params p = {
-        .passive           = 0,
-        // 0 = Wiederholungen erlaubt → Ruuvi-Tags senden periodisch neue Messwerte
+        // Passiv: Ruuvi + GasBee senden alles im Advertising, keine Scan-Response nötig
+        .passive           = 1,
+        // 0 = Wiederholungen erlaubt → Ruuvi/GasBee senden periodisch neue Messwerte
         .filter_duplicates = 0,
-        .itvl              = 0x0050,  // ~50 ms
-        .window            = 0x0030,  // ~30 ms
+        .itvl              = SENSOR_BLE_SCAN_ITVL,
+        .window            = SENSOR_BLE_SCAN_WINDOW,
     };
     int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &p, gap_cb, NULL);
     if (rc == 0) {
@@ -141,6 +151,9 @@ static void scan_retry_cb(TimerHandle_t t)
 
 static void on_sync(void)
 {
+    // TODO(debug, Ruuvi-Scan-Fehlersuche 2026-08): Nach Abschluss entfernen.
+    // Bestätigt ob der NimBLE-Host-Sync überhaupt abgeschlossen wird.
+    ESP_LOGI(TAG, "NimBLE Host sync abgeschlossen → starte Scan");
     ble_hs_util_ensure_addr(0);
     ble_manager_start_scan();
 }
@@ -167,6 +180,11 @@ esp_err_t ble_manager_init(void)
     ble_hs_cfg.sync_cb  = on_sync;
     ble_hs_cfg.reset_cb = on_reset;
 
+    // s_ready MUSS vor dem Start des Host-Tasks gesetzt werden: Der Host-Task
+    // kann bei schnellem Sync sofort on_sync() → ble_manager_start_scan()
+    // aufrufen, dessen Not-Ready-Guard sonst den allerersten (und oft einzigen)
+    // Scan-Start-Versuch lautlos verwirft (Race Condition, kein Log).
+    s_ready = true;
     nimble_port_freertos_init(nimble_host_task);
 
     ESP_LOGI(TAG, "BLE Manager initialisiert");

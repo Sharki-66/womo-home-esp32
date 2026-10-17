@@ -36,9 +36,17 @@ HIGH (OUTPUT) → VERBOTEN! Vgs = 3,3−5 = −1,7V → FET leitet → ~300mA Qu
 Nach Deep-Sleep: `rtc_gpio_hold_dis()` + `rtc_gpio_deinit()` + `gpio_config(INPUT)` aufrufen.
 
 ### 12V Bordnetz (bistabiles Relais)
-- EIN: 100ms-Puls auf GPIO11, dann LOW
-- AUS: 100ms-Puls auf GPIO12, dann LOW
-- Beide Pins **immer** LOW im Ruhezustand!
+- EIN: Puls `SENSOR_PWR_12V_PULSE_MS` (500 ms) auf GPIO11, dann LOW
+- AUS: Puls `SENSOR_PWR_12V_PULSE_MS` auf GPIO12, dann LOW
+- Beide Pins **immer** LOW im Ruhezustand! Eine Konstante für alle 3 Puls-Stellen
+  (app_main.c Boot, espnow_modem.c Laufzeit, deep_sleep.c AUS).
+- **12V-Sense GPIO14** (`SENSOR_PWR_12V_SENSE_*`): `ctrl.pwr_on` meldet den gemessenen
+  Bordnetzzustand (Display-Button = Realität), Grace `SENSOR_PWR_12V_SENSE_GRACE_MS`
+  nach Puls. Polarität `SENSOR_PWR_12V_SENSE_ACTIVE_HIGH` — TODO(hardware): messen.
+- ⚠️ **Bekannter Hardware-Bug (2026-09), siehe `progress.md`:** Treiber Q1/Q2 für J7
+  „12V EIN"/„12V AUS" sind IRLML2244 (P-Kanal, High-Side, schaltet +12V), der EBL
+  erwartet aber Pull-to-GND (Low-Side). Relais schaltet dadurch nicht — unabhängig
+  von Pulslänge/Sense. Fix: Q1/Q2 → IRLML6244 (N-Kanal, gleiches Pinout).
 
 ### Multimedia (GPIO13, N-Kanal MOSFET)
 - HIGH = EIN, LOW = AUS
@@ -65,6 +73,8 @@ Nach Deep-Sleep: `rtc_gpio_hold_dis()` + `rtc_gpio_deinit()` + `gpio_config(INPU
 | `gas_state` | `gas` | Gasverbrauch (Raten, Tare, Flaschentausch) |
 | `tank_state` | `tank1`, `tank2` | Tank-Verbrauchsraten |
 | `wifi_cfg` | `ssid`, `pass` | WLAN-Zugangsdaten (RUTX11) |
+| `ruuvi_cfg` | `indoor_mac`, `outdoor_mac` | MAC-Filter Ruuvi |
+| `gasbee_cfg` | `bottle_a_mac`, `bottle_b_mac` | Zuordnung GasBee → Flasche A/B |
 
 ## Log-Level
 Zentral in `sensor_config.h` (`LOG_LEVEL_*` Defines), kein Recompile der Module nötig.

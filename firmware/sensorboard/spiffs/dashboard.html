@@ -633,7 +633,8 @@ function updateAll(d){
     updateGas('ga-body','ga-fill','ga-pct',gas.pct_a!=null?gas.pct_a:-1);
     updateGas('gb-body','gb-fill','gb-pct',gas.pct_b!=null?gas.pct_b:-1);
     const sl=gas.active,lb=sl===0?'V':sl===1?'H':'-',rG=(gas.rate2h||0)*1000;
-    $('gas-info').innerHTML='Gas ('+lb+'):<br>'+(gas.net||0).toFixed(2)+' kg<br>'+(rG>0?rG.toFixed(0)+' g/h':'-- g/h')+'<br>'+fmtH(gas.rest_h);
+    const ble=(d.hx||{}).src==='ble'?' BLE':''; // Quelle: GasBee statt Kabelwaage
+    $('gas-info').innerHTML='Gas ('+lb+ble+'):<br>'+(gas.net||0).toFixed(2)+' kg<br>'+(rG>0?rG.toFixed(0)+' g/h':'-- g/h')+'<br>'+fmtH(gas.rest_h);
     $('gas-a-lbl').style.fontWeight=sl===0?'bold':'normal';
   } else {
     updateGas('ga-body','ga-fill','ga-pct',-1);updateGas('gb-body','gb-fill','gb-pct',-1);

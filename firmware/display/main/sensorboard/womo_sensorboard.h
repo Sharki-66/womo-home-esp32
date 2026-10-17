@@ -8,6 +8,7 @@
 
 #include "esp_err.h"
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -39,6 +40,16 @@ typedef struct {
         float weight_a_kg;
         float weight_b_kg;
         float weight_sum_kg;
+        bool is_wired;      // src "hx": Kabel-HX711 aktiv (Vorrang vor GasBee)
+        bool is_gasbee;     // src "ble": Gewichte kommen von GasBee-Waagen (BLE)
+        struct {
+            bool present;      // GasBee dieser Flasche aktuell (Statusfelder empfangen)
+            bool batt_valid;
+            uint16_t batt_mv;
+            uint8_t batt_pct;  // LiPo-Kennlinie, auf dem Sensorboard berechnet
+            bool charging;     // Akku lädt (USB)
+            bool calibrated;   // false: GasBee nutzt Firmware-Default-Kalibrierung
+        } bee[2];           // 0 = Flasche A, 1 = Flasche B (nur bei is_gasbee)
     } hx711;
 
     // Gas summary (Sensorboard)
@@ -62,6 +73,9 @@ typedef struct {
     // BME680 Environmental (outdoor/default)
     struct {
         bool valid;
+        bool is_ruuvi;     // true: Ruuvi-BLE-Fallback statt verkabeltem BME280/680
+        bool batt_valid;   // true: Ruuvi-Batteriespannung vorhanden
+        uint16_t batt_mv;  // Ruuvi-Batteriespannung (mV, nur wenn batt_valid)
         float temperature_c;
         float humidity_percent;
         float pressure_hpa;
@@ -80,6 +94,9 @@ typedef struct {
     struct {
         bool valid;
         bool iaq_valid;    // true nur wenn BME680 IAQ-Daten liefert (nicht bei Ruuvi-Fallback)
+        bool is_ruuvi;     // true: Ruuvi-BLE-Fallback statt verkabeltem BME280/680
+        bool batt_valid;   // true: Ruuvi-Batteriespannung vorhanden
+        uint16_t batt_mv;  // Ruuvi-Batteriespannung (mV, nur wenn batt_valid)
         float temperature_c;
         float humidity_percent;
         float pressure_hpa;
@@ -173,8 +190,41 @@ typedef struct {
     int64_t elec_topic_rx_us;
 } womo_sensor_data_t;
 
+// Ruuvi-Scan-Ergebnis (Auswahlliste für Konfiguration, RS485-Frame "ruuvi_scan")
+#define WOMO_RUUVI_SCAN_MAX_TAGS 8
+
+typedef struct {
+    char     mac[18];       // "AA:BB:CC:DD:EE:FF"
+    int8_t   rssi;
+    float    temp_c;
+    bool     has_pressure;
+    uint32_t age_s;
+} womo_ruuvi_scan_entry_t;
+
+// GasBee-Scan-Ergebnis (Auswahlliste für Konfiguration, Frame "gasbee_scan")
+#define WOMO_GASBEE_SCAN_MAX_TAGS 8
+
+typedef struct {
+    char     mac[18];       // "AA:BB:CC:DD:EE:FF"
+    int8_t   rssi;
+    bool     weight_valid;
+    float    weight_kg;     // Bruttogewicht (nur wenn weight_valid)
+    bool     batt_valid;
+    uint16_t batt_mv;
+    uint8_t  batt_pct;
+    bool     charging;
+    bool     calibrated;
+    uint32_t age_s;
+} womo_gasbee_scan_entry_t;
+
 // Callback für empfangene Sensordaten
 typedef void (*womo_sensorboard_data_cb_t)(const womo_sensor_data_t *data, void *user_data);
+
+// Callback für eine per ruuvi_scan_request angeforderte Ruuvi-Scan-Liste
+typedef void (*womo_ruuvi_scan_cb_t)(const womo_ruuvi_scan_entry_t *entries, size_t count, void *user_data);
+
+// Callback für eine per gasbee_scan_request angeforderte GasBee-Scan-Liste
+typedef void (*womo_gasbee_scan_cb_t)(const womo_gasbee_scan_entry_t *entries, size_t count, void *user_data);
 
 typedef enum {
     WOMO_SENSORBOARD_EVENT_HELLO = 0,
@@ -193,6 +243,12 @@ void womo_sensorboard_set_data_callback(womo_sensorboard_data_cb_t callback, voi
 // Optionaler Event-Callback (Handshake, Heartbeat, Parse-Fehler)
 void womo_sensorboard_set_event_callback(womo_sensorboard_event_cb_t callback, void *user_data);
 
+// Callback für Ruuvi-Scan-Ergebnisse (Antwort auf womo_sensorboard_send_ruuvi_scan_request)
+void womo_sensorboard_set_ruuvi_scan_callback(womo_ruuvi_scan_cb_t callback, void *user_data);
+
+// Callback für GasBee-Scan-Ergebnisse (Antwort auf womo_sensorboard_send_gasbee_scan_request)
+void womo_sensorboard_set_gasbee_scan_callback(womo_gasbee_scan_cb_t callback, void *user_data);
+
 // Kommandos an Sensorboard senden
 esp_err_t womo_sensorboard_send_level_start(void);
 esp_err_t womo_sensorboard_send_level_stop(void);
@@ -201,6 +257,10 @@ esp_err_t womo_sensorboard_send_tare_b(void);
 esp_err_t womo_sensorboard_send_wifi_control(bool enable, const char *ssid, const char *password);
 esp_err_t womo_sensorboard_send_lte_control(bool enable);
 esp_err_t womo_sensorboard_send_wifi_credentials(const char *ssid, const char *pass);
+esp_err_t womo_sensorboard_send_ruuvi_config(const char *indoor_mac, const char *outdoor_mac);
+esp_err_t womo_sensorboard_send_ruuvi_scan_request(void);
+esp_err_t womo_sensorboard_send_gasbee_config(const char *bottle_a_mac, const char *bottle_b_mac);
+esp_err_t womo_sensorboard_send_gasbee_scan_request(void);
 esp_err_t womo_sensorboard_send_gas_bottle_replace(uint8_t slot, const char *channel);
 esp_err_t womo_sensorboard_send_pwr_12v(bool enable);
 esp_err_t womo_sensorboard_send_radio(bool enable);

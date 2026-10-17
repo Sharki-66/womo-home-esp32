@@ -20,7 +20,7 @@
 15. bme680_app_start()        – BME680 + BME280 + BSEC
 16. hx711_app_start()         – Wägezellen (Gas)
 17. ina226_app_start()        – Strom-/Leistungsmessung
-18. gasbee_ble_client_start() – NimBLE Central (BLE-Gaswaage)
+18. ble_manager_init() + gasbee_ble_scanner_init() + ruuvi_ble_scanner_init() – passiver BLE-Scan
 19. vTaskDelay(1000ms)        – BNO055 braucht kurze Pause
 20. bno055_app_start()        – IMU
 21. rs485_modem_init()        – RS485 TX+RX Tasks starten
@@ -57,15 +57,17 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 |---|---|---|
 | `hello` | bis display_ready | `fw`, `board`, `uptime`, `ts` |
 | `hb` | 30 s | `uptime`, `ts`, `heap` |
-| `ctrl` | 2 s | `pwr_on`, `radio_on`, `ac_present` |
+| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. Abschnitt „12V Bordnetz"), `radio_on`, `ac_present` |
 | `imu` | 5 s | `yaw_deg`, `pitch_deg`, `roll_deg`, `hdg`, `cal`, `calibrated` |
 | `bat` | 10 s | `b1`, `b2` (V), `nc1`, `nc2` |
 | `tank` | 10 s | `t1`, `t2` (%), `t1_l`, `t2_l` (L), Rate-Felder |
-| `hx` | 10 s | `a`, `b` (kg), `sum`, `nc` |
-| `gas` | 10 s | `active`, `net`, `rate1h`, `rate2h`, `rest_h`, ... |
-| `bme_in` | 15 s | `chip` (`bme680`/`bme280`/`bme260`/`ruuvi`), `temp_c`, `rh_pct`, `press_hpa`; Ruuvi-Fallback zusätzlich `batt_mv` |
-| `bme_out` | 15 s | `chip`, `temp_c`, `rh_pct`, `press_hpa`; Ruuvi-Fallback zusätzlich `batt_mv` |
+| `hx` | 10 s | `src` (`hx`/`ble`/`none`), `a`, `b` (kg), `sum`, `nc`; bei `src:"ble"` `batt_a_mv`, `batt_a_pct`, `chg_a`, `cal_a` (analog `_b`) |
+| `gas` | 10 s | `src`, `active`, `net`, `rate1h`, `rate2h`, `rest_h`, ... |
+| `bme_in` | 15 s | `chip` (`bme680`/`bme280`/`bme260`/`ruuvi`), `addr`, `temp_c`, `rh_pct`, `press_hpa`, `ts`; nur BME680: `gas_kohm` (wenn Gas gültig) sowie – erst wenn BSEC einen IAQ-Wert liefert (nach Burn-in) – `iaq`, `iaq_acc` (0–3), `eco2_ppm`, `bvoc_ppm`; Ruuvi-Fallback zusätzlich `batt_mv` |
+| `bme_out` | 15 s | `chip`, `addr`, `temp_c`, `rh_pct`, `press_hpa`, `ts`; bei Trenddaten `press_trend_state` (`fall_fast`/`fall_slow`/`steady`/`rise_slow`/`rise_fast`) + `press_trend_hpa_h`; nur BME680: `gas_kohm` (wenn Gas gültig); **kein IAQ/BSEC** für den Außensensor; Ruuvi-Fallback zusätzlich `batt_mv` |
 | `elec` | 5 s | `v_bus`, `i_a`, `p_w`, `v_shunt_mv`; `nc=true` wenn INA226 fehlt |
+| `ruuvi_scan` | nur auf Anfrage | `tags:[{mac, rssi, temp_c, has_pressure, age_s}, …]` – alle gesehenen Ruuvi-Tags (ungefiltert), Antwort auf `cmd:"ruuvi_scan_request"` |
+| `gasbee_scan` | nur auf Anfrage | `tags:[{mac, rssi, weight_kg, batt_mv, batt_pct, chg, cal, seq, age_s}, …]` – alle gesehenen GasBees (ungefiltert), Antwort auf `cmd:"gasbee_scan_request"` |
 
 ## Sensor-Muster
 
@@ -85,6 +87,11 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 - Temperatur-Offset: 4,0°C (Board-Eigenerwärmung, konfigurierbar)
 - BSEC State: in NVS als `state_in_76_v<N>` gespeichert
 - State-Version: Bei Sensortausch `SENSOR_BME680_BSEC_STATE_VERSION` hochzählen
+- IAQ-Burn-in: `iaq`/`eco2`/`bvoc` erst gültig nach Stabilisierung (~5 min, fabrikneu 20–30 min);
+  `iaq_acc` 0→3 (0 = nicht stabilisiert, 1 = unsicher, 2 = mittel, 3 = kalibriert), Stufe 3 typ.
+  nach Stunden, Auto-Kalibrierung voll eingeschwungen nach ~4 Tagen Dauerbetrieb (4d-Config).
+  Nach erstem Erreichen von Accuracy ≥ 3 wird der State gespeichert → nächster Boot startet fast dort.
+- Display wertet IAQ erst ab `iaq_acc >= 2` für den Fehlerstapel aus (`main.c`)
 
 ### INA226 (ina226_sensor.c)
 - Library: `k0i05/esp_ina226` v1.2.7
@@ -93,9 +100,21 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 
 ### Ruuvi BLE Scanner (ruuvi_ble_scanner.c)
 - Dekodiert Ruuvi Data Format 5 (RAWv2) aus Advertisement-Manufacturer-Data, registriert als Handler beim zentralen `ble_manager` (kein eigenes NimBLE)
-- Zwei Slots (Indoor/Outdoor), Routing ausschließlich per MAC-Filter (`SENSOR_RUUVI_INDOOR_MAC`/`SENSOR_RUUVI_OUTDOOR_MAC`)
+- Zwei Slots (Indoor/Outdoor), Routing ausschließlich per MAC-Filter
+- **MAC-Filter vom Display konfigurierbar** (seit MAC-Config-Umbau): kein Compile-Time-Default mehr, sondern per RS485 `cmd:"ruuvi_config"` (`indoor_mac`, `outdoor_mac`) gesetzt und in NVS (`SENSOR_RUUVI_NVS_NAMESPACE`/`_KEY_INDOOR`/`_KEY_OUTDOOR` in `sensor_config.h`) persistiert; `ruuvi_ble_scanner_set_macs()` aktualisiert den Filter zur Laufzeit ohne Reboot. Leer/unkonfiguriert = Slot deaktiviert.
+- Scan-Liste (`ruuvi_ble_scanner_get_scan_list()`): sammelt bis zu `SENSOR_RUUVI_SCAN_MAX_TAGS` zuletzt gesehene Tags unabhängig vom Filter (MAC, RSSI, Temp, Alter), für die Auswahlliste im Display; wird auf `cmd:"ruuvi_scan_request"` als `ruuvi_scan`-Topic gesendet
 - Kabel-Sensor (BME680/BME280) hat Vorrang; Ruuvi wird in `espnow_modem.c` (`rs485_publish_bme_in/out`) nur als Fallback genutzt
 - Felder: `temp_c`, `humidity_pct`, `pressure_hpa` (nur wenn `has_pressure`), `battery_mv` (nur wenn `battery_valid`, Byte 15-16 des DF5-Payloads, 11-Bit + 1600mV Offset)
+
+### GasBee BLE Scanner (gasbee_ble_scanner.c) + Gas-Quelle (gas_source.c)
+- Advertising-Format v1 der GasBee (`firmware/gasbee_nrf`), Spezifikation in `README.md`: Name „GasBee“, Company-ID 0xFFFF, Version 1, Bruttogewicht (10 g), Akku-mV, `seq`, Flags
+- Kein Connect, kein GATT; Scan passiv (`ble_manager`, `SENSOR_BLE_SCAN_ITVL/WINDOW`), `filter_duplicates=0`
+- Pro Messzyklus 10 Pakete mit gleicher `seq` → nur erstes Paket einer neuen `seq` übernommen; Paketzahl pro `seq` wird als Koexistenz-Diagnose geloggt
+- Zwei Slots (Flasche A/B) per MAC, `cmd:"gasbee_config"`, NVS `gasbee_cfg`, leer = deaktiviert (Muster wie Ruuvi)
+- Veraltet nach `SENSOR_GASBEE_STALE_MS` (2 Zyklen + Sendefenster) ohne neue `seq`
+- Akku-% per LiPo-Tabelle `SENSOR_GASBEE_LIPO_CURVE` (linear interpoliert, noch nicht am Akku verifiziert)
+- `gas_source_get_snapshot()`: HX711-Modul vorhanden (`valid_a || valid_b`) → HX711 (Vorrang); sonst GasBee A→Kanal A, B→Kanal B; sonst nc. Alle Gas-Publisher (`hx`, `gas`, Web-Snapshot) nutzen nur noch diese Funktion. Fehlende Wägezelle bei vorhandenem Modul ist nicht erkennbar (Mischbetrieb nicht vorgesehen).
+- Wechsel HX711 ↔ GasBee setzt die Rate-Basis zurück (`last_ts_us = 0`), Voll-Referenzen bleiben
 
 ### BNO055 (bno055_sensor.c)
 - Achsen-Remapping für Fahrzeugeinbaulage (sensor_config.h)

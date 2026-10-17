@@ -17,6 +17,7 @@
 
 #include "network/espnow_transport.h"
 #include "network/ruuvi_ble_scanner.h"
+#include "network/gasbee_ble_scanner.h"
 #include "sensors/bno055_sensor.h"
 #include "network/wifi/sensor_wifi.h"
 
@@ -31,7 +32,7 @@
 #include "sensor_config.h"
 #include "hal/deep_sleep.h"
 #include "sensors/bme680_sensor.h"
-#include "sensors/hx711_sensor.h"
+#include "sensors/gas_source.h"
 #include "sensors/ina226_sensor.h"
 #include "sensors/analog_sensor.h"
 #include "time/time_sync.h"
@@ -347,7 +348,8 @@ static void rs485_handle_display_ready(void)
 // ── Power / GPIO ────────────────────────────────────────────────────────
 
 static bool s_radio_on = false;
-static bool s_pwr_on_state = true;   /* Soft-Flag: beim Boot=true, kein GPIO14-Sense nötig */
+static bool s_pwr_on_state = true;   /* kommandierter 12V-Zustand; Boot=EIN (pwr_12v_on_early) */
+static int64_t s_pwr_pulse_us = 0;  /* Zeitpunkt des letzten Relais-Pulses (Grace für 12V-Sense) */
 static bool s_power_gpio_inited = false;
 static volatile bool s_shutdown_pending = false;
 
@@ -468,9 +470,40 @@ static bool rs485_read_gpio_level(gpio_num_t gpio, bool fallback)
     return (level < 0) ? fallback : (level != 0);
 }
 
+// 12V-Sense (GPIO14) lesen und Polarität anwenden.
+static bool rs485_read_12v_sense(void)
+{
+    bool pin_high = rs485_read_gpio_level(SENSOR_PWR_12V_SENSE_GPIO, false);
+#if SENSOR_PWR_12V_SENSE_ACTIVE_HIGH
+    return pin_high;
+#else
+    return !pin_high;
+#endif
+}
+
+// Quelle für das ctrl-Feld `pwr_on`:
+//  - 12V-Sense aktiv: meldet den an GPIO14 GEMESSENEN Bordnetzzustand, damit der
+//    Display-Button die Realität zeigt. In der Grace-Zeit direkt nach einem
+//    Relais-Puls wird noch der kommandierte Zustand gemeldet, bis die 12V-Schiene
+//    eingeschwungen ist.
+//  - 12V-Sense deaktiviert: reines Soft-Flag (nur der zuletzt kommandierte Zustand).
 static bool rs485_board_power_on(void)
 {
+#if SENSOR_PWR_12V_SENSE_ENABLE
+    int64_t since_pulse = esp_timer_get_time() - s_pwr_pulse_us;
+    if (s_pwr_pulse_us != 0 && since_pulse < (int64_t)SENSOR_PWR_12V_SENSE_GRACE_MS * 1000) {
+        return s_pwr_on_state;
+    }
+    bool sense = rs485_read_12v_sense();
+    if (sense != s_pwr_on_state) {
+        ESP_LOGW(TAG, "12V-Sense: kommandiert=%d, gemessen=%d (GPIO%d) -> uebernehme Messung",
+                 (int)s_pwr_on_state, (int)sense, SENSOR_PWR_12V_SENSE_GPIO);
+        s_pwr_on_state = sense;  // Realität übernehmen (auch für Radio-Gate)
+    }
+    return sense;
+#else
     return s_pwr_on_state;
+#endif
 }
 
 static bool rs485_ac_present(void)
@@ -478,14 +511,15 @@ static bool rs485_ac_present(void)
     return rs485_read_gpio_level(SENSOR_AC_SENSE_GPIO, false);
 }
 
-// 12V Bordnetz ein-/ausschalten per GPIO-Puls (bistabiles Relais, 2 s Puls)
+// 12V Bordnetz ein-/ausschalten per GPIO-Puls (bistabiles Relais)
 static esp_err_t rs485_set_12v_power(bool enable)
 {
     if (!s_power_gpio_inited) rs485_power_gpio_init();
     gpio_num_t pin = enable ? SENSOR_PWR_12V_ON_GPIO : SENSOR_PWR_12V_OFF_GPIO;
     gpio_set_level(pin, 1);
-    vTaskDelay(pdMS_TO_TICKS(100));  // 100 ms Puls für bistabiles Relais
+    vTaskDelay(pdMS_TO_TICKS(SENSOR_PWR_12V_PULSE_MS));  // Puls für bistabiles Relais
     gpio_set_level(pin, 0);
+    s_pwr_pulse_us = esp_timer_get_time();  // Grace-Zeit für 12V-Sense beginnt jetzt
 
     // Bei 12V AUS wird Radio zwangsläufig abgeschaltet
     if (!enable && s_radio_on) {
@@ -513,6 +547,8 @@ static esp_err_t rs485_set_radio(bool enable)
 // ── Topic Publishers ────────────────────────────────────────────────────
 
 static volatile bool s_ctrl_immediate = false;
+static volatile bool s_ruuvi_scan_requested = false;
+static volatile bool s_gasbee_scan_requested = false;
 
 static void rs485_publish_ctrl(void)
 {
@@ -533,7 +569,14 @@ static void rs485_publish_ctrl(void)
     // Diagnose-Felder (ehemals hb-Topic)
     int64_t now_us = esp_timer_get_time();
     cJSON_AddNumberToObject(root, "uptime", round2((double)now_us / 1000000.0));
-    cJSON_AddNumberToObject(root, "heap",   (double)esp_get_free_heap_size());
+    uint32_t heap_free = esp_get_free_heap_size();
+    cJSON_AddNumberToObject(root, "heap",   (double)heap_free);
+
+    // TODO(debug, Ruuvi-Fehlersuche 2026-08): Nach Abschluss entfernen.
+    // Prüft ob "irgendwann gar keine RUUVIs mehr" auf ein Speicherleck
+    // zurückgeht (min_free_heap fällt nur, zeigt ein Leck sofort).
+    ESP_LOGI(TAG, "Heap: frei=%lu Byte  min_je_frei=%lu Byte",
+             (unsigned long)heap_free, (unsigned long)esp_get_minimum_free_heap_size());
 
     rs485_send_frame("ctrl", root, false);
     cJSON_Delete(root);
@@ -736,14 +779,40 @@ static void rs485_publish_bat(void)
     cJSON_Delete(root);
 }
 
+// GasBee-Zusatzinfos (Akku, Lade-/Kalibrierstatus) je Flasche – nur bei src "ble"
+static void add_gas_bee_info(cJSON *obj, const gas_source_snapshot_t *gs)
+{
+    if (gs->src != GAS_SRC_GASBEE) return;
+    const gas_bee_info_t *bee[2] = { &gs->bee_a, &gs->bee_b };
+    const char suffix[2] = { 'a', 'b' };
+    char key[16];
+    for (int i = 0; i < 2; i++) {
+        if (!bee[i]->present) continue;
+        if (bee[i]->battery_valid) {
+            snprintf(key, sizeof(key), "batt_%c_mv", suffix[i]);
+            cJSON_AddNumberToObject(obj, key, bee[i]->battery_mv);
+            snprintf(key, sizeof(key), "batt_%c_pct", suffix[i]);
+            cJSON_AddNumberToObject(obj, key, bee[i]->battery_pct);
+        }
+        snprintf(key, sizeof(key), "chg_%c", suffix[i]);
+        cJSON_AddBoolToObject(obj, key, bee[i]->charging);
+        snprintf(key, sizeof(key), "cal_%c", suffix[i]);
+        cJSON_AddBoolToObject(obj, key, bee[i]->calibrated);
+    }
+}
+
 static void rs485_publish_hx(void)
 {
-    hx711_snapshot_t hx = {0};
+    gas_source_snapshot_t gs;
+    gas_source_get_snapshot(&gs);
+    const hx711_snapshot_t hx = gs.w;
+
     cJSON *root = cJSON_CreateObject();
     if (!root) return;
     cJSON_AddStringToObject(root, "type", "hx");
+    cJSON_AddStringToObject(root, "src", gas_source_name(gs.src));
 
-    if (hx711_app_get_snapshot(&hx) == ESP_OK && (hx.valid_a || hx.valid_b)) {
+    if (hx.valid_a || hx.valid_b) {
         if (hx.valid_a) cJSON_AddNumberToObject(root, "a", round2(hx.kg_a));
         if (hx.valid_b) cJSON_AddNumberToObject(root, "b", round2(hx.kg_b));
         if (hx.valid_a && hx.valid_b)
@@ -752,6 +821,7 @@ static void rs485_publish_hx(void)
     } else {
         cJSON_AddBoolToObject(root, "nc", true);
     }
+    add_gas_bee_info(root, &gs);
     rs485_send_frame("hx", root, false);
     cJSON_Delete(root);
 }
@@ -764,8 +834,21 @@ static void rs485_publish_gas(void)
         s_gas_nvs_loaded = true;
     }
 
-    hx711_snapshot_t hx = {0};
-    hx711_app_get_snapshot(&hx);
+    gas_source_snapshot_t gs;
+    gas_source_get_snapshot(&gs);
+    const hx711_snapshot_t hx = gs.w;
+
+    // Quellenwechsel HX711 <-> GasBee: Rate-Basis neu aufsetzen, sonst entsteht
+    // aus dem Sprung zwischen zwei Waagen ein falscher Verbrauch. Voll-Referenzen bleiben.
+    static gas_src_t s_rate_src = GAS_SRC_NONE;
+    if (gs.src != GAS_SRC_NONE) {
+        if (s_rate_src != GAS_SRC_NONE && s_rate_src != gs.src) {
+            ESP_LOGI(TAG, "Gas-Quelle gewechselt (%s → %s): Rate-Basis zurückgesetzt",
+                     gas_source_name(s_rate_src), gas_source_name(gs.src));
+            s_gas_state.last_ts_us = 0;
+        }
+        s_rate_src = gs.src;
+    }
 
     const double fill_kg = SENSOR_GAS_FILL_KG;
     const double tare_kg = SENSOR_GAS_TARE_KG;  // Fallback wenn keine Voll-Referenz gesetzt
@@ -872,6 +955,7 @@ static void rs485_publish_gas(void)
     cJSON *root = cJSON_CreateObject();
     if (!root) return;
     cJSON_AddStringToObject(root, "type", "gas");
+    cJSON_AddStringToObject(root, "src", gas_source_name(gs.src));
     cJSON_AddNumberToObject(root, "active", active);
     cJSON_AddNumberToObject(root, "net", round2(net));
     cJSON_AddNumberToObject(root, "rate1h", round2(rate1h));
@@ -1026,6 +1110,77 @@ static void rs485_publish_elec(void)
     cJSON_Delete(root);
 }
 
+// Nur auf Anfrage (cmd "ruuvi_scan_request") gesendet – kein periodisches Topic.
+static void rs485_publish_ruuvi_scan(void)
+{
+    ruuvi_scan_entry_t entries[SENSOR_RUUVI_SCAN_MAX_TAGS];
+    size_t count = ruuvi_ble_scanner_get_scan_list(entries, SENSOR_RUUVI_SCAN_MAX_TAGS);
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return;
+    cJSON_AddStringToObject(root, "type", "ruuvi_scan");
+
+    cJSON *tags = cJSON_AddArrayToObject(root, "tags");
+    int64_t now = esp_timer_get_time();
+    for (size_t i = 0; i < count; i++) {
+        cJSON *t = cJSON_CreateObject();
+        if (!t) continue;
+        // MSB-first-Notation wie bei der MAC-Filterkonfiguration (addr.val ist LSB-first)
+        char mac_str[18];
+        snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 entries[i].mac[5], entries[i].mac[4], entries[i].mac[3],
+                 entries[i].mac[2], entries[i].mac[1], entries[i].mac[0]);
+        cJSON_AddStringToObject(t, "mac", mac_str);
+        cJSON_AddNumberToObject(t, "rssi", entries[i].rssi);
+        cJSON_AddNumberToObject(t, "temp_c", round2(entries[i].temp_c));
+        cJSON_AddBoolToObject(t, "has_pressure", entries[i].has_pressure);
+        cJSON_AddNumberToObject(t, "age_s", (double)((now - entries[i].last_seen_us) / 1000000));
+        cJSON_AddItemToArray(tags, t);
+    }
+
+    rs485_send_frame("ruuvi_scan", root, false);
+    cJSON_Delete(root);
+}
+
+// Nur auf Anfrage (cmd "gasbee_scan_request") gesendet – kein periodisches Topic.
+static void rs485_publish_gasbee_scan(void)
+{
+    gasbee_scan_entry_t entries[SENSOR_GASBEE_SCAN_MAX_TAGS];
+    size_t count = gasbee_ble_scanner_get_scan_list(entries, SENSOR_GASBEE_SCAN_MAX_TAGS);
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return;
+    cJSON_AddStringToObject(root, "type", "gasbee_scan");
+
+    cJSON *tags = cJSON_AddArrayToObject(root, "tags");
+    int64_t now = esp_timer_get_time();
+    for (size_t i = 0; i < count; i++) {
+        cJSON *t = cJSON_CreateObject();
+        if (!t) continue;
+        // MSB-first-Notation wie bei der MAC-Filterkonfiguration (addr.val ist LSB-first)
+        char mac_str[18];
+        snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 entries[i].mac[5], entries[i].mac[4], entries[i].mac[3],
+                 entries[i].mac[2], entries[i].mac[1], entries[i].mac[0]);
+        cJSON_AddStringToObject(t, "mac", mac_str);
+        cJSON_AddNumberToObject(t, "rssi", entries[i].rssi);
+        if (entries[i].weight_valid)
+            cJSON_AddNumberToObject(t, "weight_kg", round2(entries[i].weight_kg));
+        if (entries[i].battery_valid) {
+            cJSON_AddNumberToObject(t, "batt_mv", entries[i].battery_mv);
+            cJSON_AddNumberToObject(t, "batt_pct", gasbee_battery_pct(entries[i].battery_mv));
+        }
+        cJSON_AddBoolToObject(t, "chg", entries[i].charging);
+        cJSON_AddBoolToObject(t, "cal", entries[i].calibrated);
+        cJSON_AddNumberToObject(t, "seq", entries[i].seq);
+        cJSON_AddNumberToObject(t, "age_s", (double)((now - entries[i].last_seen_us) / 1000000));
+        cJSON_AddItemToArray(tags, t);
+    }
+
+    rs485_send_frame("gasbee_scan", root, false);
+    cJSON_Delete(root);
+}
+
 static rs485_topic_t s_topics[] = {
     { "ctrl",  WOMO_TOPIC_CTRL_INTERVAL_MS, 0, rs485_publish_ctrl },
     { "imu",   WOMO_TOPIC_IMU_INTERVAL_MS,  0, rs485_publish_imu  },
@@ -1068,6 +1223,24 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
             ESP_LOGW(TAG, "wifi_config: kein 'ssid' Feld");
             cmd_err = ESP_ERR_INVALID_ARG;
         }
+    } else if (strcmp(cmd_str, "ruuvi_config") == 0) {
+        const cJSON *j_in  = cJSON_GetObjectItem(root, "indoor_mac");
+        const cJSON *j_out = cJSON_GetObjectItem(root, "outdoor_mac");
+        const char *indoor  = (cJSON_IsString(j_in)  && j_in->valuestring)  ? j_in->valuestring  : "";
+        const char *outdoor = (cJSON_IsString(j_out) && j_out->valuestring) ? j_out->valuestring : "";
+        cmd_err = ruuvi_ble_scanner_set_macs(indoor, outdoor);
+        ESP_LOGI(TAG, "Ruuvi-Config aktualisiert: Innen=%s Außen=%s", indoor, outdoor);
+    } else if (strcmp(cmd_str, "ruuvi_scan_request") == 0) {
+        s_ruuvi_scan_requested = true;
+    } else if (strcmp(cmd_str, "gasbee_config") == 0) {
+        const cJSON *j_a = cJSON_GetObjectItem(root, "bottle_a_mac");
+        const cJSON *j_b = cJSON_GetObjectItem(root, "bottle_b_mac");
+        const char *mac_a = (cJSON_IsString(j_a) && j_a->valuestring) ? j_a->valuestring : "";
+        const char *mac_b = (cJSON_IsString(j_b) && j_b->valuestring) ? j_b->valuestring : "";
+        cmd_err = gasbee_ble_scanner_set_macs(mac_a, mac_b);
+        ESP_LOGI(TAG, "GasBee-Config aktualisiert: A=%s B=%s", mac_a, mac_b);
+    } else if (strcmp(cmd_str, "gasbee_scan_request") == 0) {
+        s_gasbee_scan_requested = true;
     } else if (strcmp(cmd_str, "tare_a") == 0 || strcmp(cmd_str, "tare_b") == 0) {
         ESP_LOGI(TAG, "Tare command: %s", cmd_str);
         s_gas_state = (gas_state_t){0};
@@ -1272,6 +1445,18 @@ static void rs485_tx_task(void *arg)
             s_topics[0].last_sent = now;  // ctrl-Timer zurücksetzen
         }
 
+        // Ruuvi-Scan-Liste auf Anfrage (Display-Konfigurationsdialog)
+        if (s_display_ready && s_ruuvi_scan_requested) {
+            s_ruuvi_scan_requested = false;
+            rs485_publish_ruuvi_scan();
+        }
+
+        // GasBee-Scan-Liste auf Anfrage (Display-Konfigurationsdialog)
+        if (s_display_ready && s_gasbee_scan_requested) {
+            s_gasbee_scan_requested = false;
+            rs485_publish_gasbee_scan();
+        }
+
         // Round-Robin: pro Loop maximal 1 Topic senden
         if (s_display_ready) {
             for (size_t i = 0; i < RS485_TOPIC_COUNT; ++i) {
@@ -1331,7 +1516,7 @@ esp_err_t espnow_modem_get_snapshot(char **json_out)
     // ctrl ──────────────────────────────────────────────────────────────
     {
         cJSON *j = cJSON_AddObjectToObject(root, "ctrl");
-        cJSON_AddBoolToObject(j, "pwr_on",    s_pwr_on_state);
+        cJSON_AddBoolToObject(j, "pwr_on",    rs485_board_power_on());
         cJSON_AddBoolToObject(j, "radio_on",  s_radio_on);
         cJSON_AddBoolToObject(j, "ac_present", rs485_ac_present());
     }
@@ -1444,12 +1629,15 @@ esp_err_t espnow_modem_get_snapshot(char **json_out)
 
     // hx + gas ──────────────────────────────────────────────────────────
     {
-        hx711_snapshot_t hx = {0};
-        hx711_app_get_snapshot(&hx);
+        gas_source_snapshot_t gs;
+        gas_source_get_snapshot(&gs);
+        const hx711_snapshot_t hx = gs.w;
         bool nc = !(hx.valid_a || hx.valid_b);
 
         cJSON *jh = cJSON_AddObjectToObject(root, "hx");
+        cJSON_AddStringToObject(jh, "src", gas_source_name(gs.src));
         cJSON_AddBoolToObject(jh, "nc", nc);
+        add_gas_bee_info(jh, &gs);
         if (hx.valid_a) cJSON_AddNumberToObject(jh, "a", round2(hx.kg_a));
         if (hx.valid_b) cJSON_AddNumberToObject(jh, "b", round2(hx.kg_b));
 

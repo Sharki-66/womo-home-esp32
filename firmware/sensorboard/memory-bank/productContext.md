@@ -46,7 +46,14 @@ Das Fahrzeug ist ein **Fiat Ducato** (Reisemobil). Das System ist dauerhaft im F
 ## Steuerlogik
 
 ### 12V Bordnetz (LBE)
-Bistabiles Relais: Ein-Puls (GPIO11, 100ms) schaltet alles ein, Aus-Puls (GPIO12, 100ms) schaltet alles aus. Display sendet `pwr_12v_on`/`pwr_12v_off` per RS485-Kommando.
+Bistabiles Relais: Ein-Puls (GPIO11) / Aus-Puls (GPIO12), Pulslänge `SENSOR_PWR_12V_PULSE_MS`
+(500 ms). Display sendet `pwr_12v_on`/`pwr_12v_off` per RS485-Kommando. `ctrl.pwr_on` meldet
+den an GPIO14 gemessenen Ist-Zustand (12V-Sense) → Display-Button zeigt Realität.
+
+⚠️ **Bekannter Hardware-Bug (2026-09):** Treiber Q1/Q2 (J7 „12V EIN"/„AUS") sind mit
+IRLML2244 (P-Kanal, High-Side) bestückt statt IRLML6244 (N-Kanal, Low-Side). Der EBL
+erwartet Pull-to-GND an diesen Pins — das Relais schaltet dadurch bisher nicht. Details:
+`techContext.md` und `progress.md`.
 
 ### Multimedia
 N-Kanal MOSFET (GPIO13): HIGH = EIN, nur wenn 12V aktiv. Display sendet `radio_on`/`radio_off`.

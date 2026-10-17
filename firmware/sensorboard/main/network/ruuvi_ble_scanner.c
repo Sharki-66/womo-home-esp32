@@ -10,10 +10,11 @@
  * Dekodiert Ruuvi Data Format 5 (RAWv2) aus BLE-Advertisements.
  * Registriert sich beim BLE-Manager – kein eigenes NimBLE.
  *
- * Slot-Routing ausschließlich per MAC-Adresse (sensor_config.h):
- *   SENSOR_RUUVI_INDOOR_MAC  → Indoor-Slot
- *   SENSOR_RUUVI_OUTDOOR_MAC → Outdoor-Slot
- *   Leerer MAC = Slot deaktiviert (kein fremder Tag wird akzeptiert).
+ * Slot-Routing ausschließlich per MAC-Adresse, konfiguriert vom Display
+ * (RS485 cmd "ruuvi_config") und in NVS persistiert (sensor_config.h: SENSOR_RUUVI_NVS_*).
+ * Leerer/unkonfigurierter MAC = Slot deaktiviert (kein fremder Tag wird akzeptiert).
+ * Zusätzlich wird eine Scan-Liste aller gesehenen Ruuvi-Tags (unabhängig vom Filter)
+ * geführt, damit das Display eine Auswahlliste zur Konfiguration anbieten kann.
  *
  * Ruuvi DF5 Struktur (Manufacturer Specific Data):
  *   [0–1]  Company ID 0x0499 (LE: 0x99, 0x04)
@@ -36,6 +37,7 @@
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
+#include <nvs.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -89,6 +91,84 @@ static bool mac_matches(const uint8_t val[6], const mac_filter_t *filter)
     return (val[5] == filter->mac[0] && val[4] == filter->mac[1] &&
             val[3] == filter->mac[2] && val[2] == filter->mac[3] &&
             val[1] == filter->mac[4] && val[0] == filter->mac[5]);
+}
+
+// ── MAC-Konfiguration in NVS ──────────────────────────────────────────────
+
+static void ruuvi_load_macs_from_nvs(char *indoor, size_t indoor_sz, char *outdoor, size_t outdoor_sz)
+{
+    indoor[0]  = '\0';
+    outdoor[0] = '\0';
+
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open(SENSOR_RUUVI_NVS_NAMESPACE, NVS_READONLY, &nvs);
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "NVS: keine Ruuvi-Config gespeichert, Slots deaktiviert");
+        return;
+    }
+    size_t len = indoor_sz;
+    nvs_get_str(nvs, SENSOR_RUUVI_NVS_KEY_INDOOR, indoor, &len);
+    len = outdoor_sz;
+    nvs_get_str(nvs, SENSOR_RUUVI_NVS_KEY_OUTDOOR, outdoor, &len);
+    nvs_close(nvs);
+}
+
+static esp_err_t ruuvi_save_macs_to_nvs(const char *indoor, const char *outdoor)
+{
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open(SENSOR_RUUVI_NVS_NAMESPACE, NVS_READWRITE, &nvs);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "NVS open failed: %s", esp_err_to_name(err));
+        return err;
+    }
+    nvs_set_str(nvs, SENSOR_RUUVI_NVS_KEY_INDOOR, indoor);
+    nvs_set_str(nvs, SENSOR_RUUVI_NVS_KEY_OUTDOOR, outdoor);
+    err = nvs_commit(nvs);
+    nvs_close(nvs);
+    ESP_LOGI(TAG, "NVS: Ruuvi-MACs gespeichert");
+    return err;
+}
+
+// ── Scan-Liste (alle gesehenen Tags, unabhängig vom Filter) ─────────────────
+
+static ruuvi_scan_entry_t s_scan_list[SENSOR_RUUVI_SCAN_MAX_TAGS];
+static size_t             s_scan_list_count = 0;
+
+static void scan_list_update(const uint8_t mac[6], int8_t rssi, float temp_c, bool has_pressure)
+{
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(10)) != pdTRUE) return;
+
+    int64_t now = esp_timer_get_time();
+
+    for (size_t i = 0; i < s_scan_list_count; i++) {
+        if (memcmp(s_scan_list[i].mac, mac, 6) == 0) {
+            s_scan_list[i].rssi         = rssi;
+            s_scan_list[i].temp_c       = temp_c;
+            s_scan_list[i].has_pressure = has_pressure;
+            s_scan_list[i].last_seen_us = now;
+            xSemaphoreGive(s_mutex);
+            return;
+        }
+    }
+
+    size_t idx;
+    if (s_scan_list_count < SENSOR_RUUVI_SCAN_MAX_TAGS) {
+        idx = s_scan_list_count++;
+    } else {
+        // Voll: ältesten Eintrag verdrängen
+        idx = 0;
+        for (size_t i = 1; i < s_scan_list_count; i++) {
+            if (s_scan_list[i].last_seen_us < s_scan_list[idx].last_seen_us) idx = i;
+        }
+    }
+
+    memcpy(s_scan_list[idx].mac, mac, 6);
+    s_scan_list[idx].rssi         = rssi;
+    s_scan_list[idx].temp_c       = temp_c;
+    s_scan_list[idx].has_pressure = has_pressure;
+    s_scan_list[idx].last_seen_us = now;
+
+    xSemaphoreGive(s_mutex);
 }
 
 // ── Snapshot aktualisieren ────────────────────────────────────────────────
@@ -150,9 +230,26 @@ static void ruuvi_on_adv(const struct ble_gap_disc_desc *disc)
 
     const uint8_t *addr = disc->addr.val;
 
+    // Scan-Liste: jeder gültige Ruuvi-Tag wird erfasst (unabhängig vom Filter),
+    // damit das Display eine Auswahlliste zur Konfiguration anbieten kann.
+    scan_list_update(addr, disc->rssi, temp_c, has_pressure);
+
+    // TODO(debug, Außensensor-Fehlersuche 2026-08): Nach Abschluss entfernen.
+    // Loggt JEDEN erkannten Ruuvi-Tag unabhängig vom MAC-Filter, um zu prüfen
+    // ob der Außensensor überhaupt per Funk ankommt.
+    ESP_LOGI(TAG, "[Scan  ] MAC=%02X:%02X:%02X:%02X:%02X:%02X  %.2f °C  RSSI=%d  %s",
+             addr[5], addr[4], addr[3], addr[2], addr[1], addr[0],
+             temp_c, disc->rssi, has_pressure ? "mit Druck" : "kein Druck");
+
     // Routing ausschließlich per MAC – leerer Slot = deaktiviert
-    bool is_indoor  = mac_matches(addr, &s_filter_indoor);
-    bool is_outdoor = mac_matches(addr, &s_filter_outdoor);
+    mac_filter_t filt_indoor, filt_outdoor;
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(10)) != pdTRUE) return;
+    filt_indoor  = s_filter_indoor;
+    filt_outdoor = s_filter_outdoor;
+    xSemaphoreGive(s_mutex);
+
+    bool is_indoor  = mac_matches(addr, &filt_indoor);
+    bool is_outdoor = mac_matches(addr, &filt_outdoor);
     if (!is_indoor && !is_outdoor) return;
 
     char batt_str[16];
@@ -201,18 +298,74 @@ void ruuvi_ble_scanner_get_outdoor(ruuvi_snapshot_t *out)
     }
 }
 
+esp_err_t ruuvi_ble_scanner_set_macs(const char *indoor_mac, const char *outdoor_mac)
+{
+    const char *indoor  = indoor_mac  ? indoor_mac  : "";
+    const char *outdoor = outdoor_mac ? outdoor_mac : "";
+
+    esp_err_t err = ruuvi_save_macs_to_nvs(indoor, outdoor);
+    if (err != ESP_OK) return err;
+
+    mac_filter_t new_indoor = {0}, new_outdoor = {0};
+    parse_mac_filter(indoor, &new_indoor);
+    parse_mac_filter(outdoor, &new_outdoor);
+
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        // Bei Filteränderung alten Snapshot verwerfen – sonst bleibt "valid"
+        // dauerhaft gesetzt und veraltete Werte werden weiter gemeldet, auch
+        // wenn der Slot gerade deaktiviert oder auf einen anderen Tag
+        // umkonfiguriert wurde (valid wird sonst nirgends zurückgesetzt).
+        if (memcmp(&new_indoor, &s_filter_indoor, sizeof(mac_filter_t)) != 0) {
+            memset(&s_indoor, 0, sizeof(s_indoor));
+        }
+        if (memcmp(&new_outdoor, &s_filter_outdoor, sizeof(mac_filter_t)) != 0) {
+            memset(&s_outdoor, 0, sizeof(s_outdoor));
+        }
+        s_filter_indoor  = new_indoor;
+        s_filter_outdoor = new_outdoor;
+        xSemaphoreGive(s_mutex);
+    }
+
+    ESP_LOGI(TAG, "Ruuvi-MACs aktualisiert  Innen: %s  Außen: %s",
+             new_indoor.active  ? indoor  : "deaktiviert",
+             new_outdoor.active ? outdoor : "deaktiviert");
+    return ESP_OK;
+}
+
+size_t ruuvi_ble_scanner_get_scan_list(ruuvi_scan_entry_t *out, size_t max_entries)
+{
+    if (!out || max_entries == 0) return 0;
+
+    size_t n = 0;
+    int64_t now = esp_timer_get_time();
+    int64_t max_age_us = (int64_t)SENSOR_RUUVI_SCAN_MAX_AGE_S * 1000000LL;
+
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+        for (size_t i = 0; i < s_scan_list_count && n < max_entries; i++) {
+            if ((now - s_scan_list[i].last_seen_us) <= max_age_us) {
+                out[n++] = s_scan_list[i];
+            }
+        }
+        xSemaphoreGive(s_mutex);
+    }
+    return n;
+}
+
 esp_err_t ruuvi_ble_scanner_init(void)
 {
     s_mutex = xSemaphoreCreateMutex();
     if (!s_mutex) return ESP_ERR_NO_MEM;
 
-    parse_mac_filter(SENSOR_RUUVI_INDOOR_MAC,  &s_filter_indoor);
-    parse_mac_filter(SENSOR_RUUVI_OUTDOOR_MAC, &s_filter_outdoor);
+    char indoor_mac[18]  = "";
+    char outdoor_mac[18] = "";
+    ruuvi_load_macs_from_nvs(indoor_mac, sizeof(indoor_mac), outdoor_mac, sizeof(outdoor_mac));
+    parse_mac_filter(indoor_mac,  &s_filter_indoor);
+    parse_mac_filter(outdoor_mac, &s_filter_outdoor);
 
     ble_manager_register_adv_handler(ruuvi_on_adv);
 
     ESP_LOGI(TAG, "Ruuvi Scanner aktiv  Innen: %s  Außen: %s",
-             s_filter_indoor.active  ? SENSOR_RUUVI_INDOOR_MAC  : "deaktiviert",
-             s_filter_outdoor.active ? SENSOR_RUUVI_OUTDOOR_MAC : "deaktiviert");
+             s_filter_indoor.active  ? indoor_mac  : "deaktiviert (nicht konfiguriert)",
+             s_filter_outdoor.active ? outdoor_mac : "deaktiviert (nicht konfiguriert)");
     return ESP_OK;
 }

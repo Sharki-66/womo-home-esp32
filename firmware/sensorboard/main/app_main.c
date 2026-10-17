@@ -24,7 +24,7 @@
 #include "network/wifi/sensor_wifi.h"
 #include "network/wifi/sensor_http.h"
 #include "network/ble_manager.h"
-#include "network/gasbee_ble_client.h"
+#include "network/gasbee_ble_scanner.h"
 #include "network/ruuvi_ble_scanner.h"
 #include "hal/deep_sleep.h"
 #include "led_strip.h"
@@ -49,6 +49,7 @@ static void sensor_log_init(void)
     esp_log_level_set("ina226",       LOG_LEVEL_INA226);
     esp_log_level_set("ble_manager",   LOG_LEVEL_BLE_MANAGER);
     esp_log_level_set("gasbee_ble",   LOG_LEVEL_GASBEE_BLE);
+    esp_log_level_set("gas_src",      LOG_LEVEL_GAS_SOURCE);
     esp_log_level_set("ruuvi_ble",    LOG_LEVEL_RUUVI_BLE);
     esp_log_level_set("i2c_bus",      LOG_LEVEL_I2C_BUS);
     esp_log_level_set("pcf8523_app",  LOG_LEVEL_PCF8523);
@@ -104,7 +105,7 @@ static void pwr_12v_on_early(void)
     gpio_set_level(SENSOR_DISPLAY_PWR_GPIO, 1);  /* HIGH → Q5 leitet → Display EIN */
     ESP_LOGI(TAG, "Display 5V EIN (GPIO%d HIGH, Q5→Q4 leitet)", SENSOR_DISPLAY_PWR_GPIO);
 
-    /* LBE 12V-Relais EIN: bistabiles Relais benötigt Puls 1-3 s auf GPIO11.
+    /* LBE 12V-Relais EIN: bistabiles Relais, Puls SENSOR_PWR_12V_PULSE_MS auf GPIO11.
      * GPIO11 (EIN) und GPIO12 (AUS) müssen im Ruhezustand LOW sein! */
     gpio_config_t cfg2 = {
         .pin_bit_mask   = BIT64(SENSOR_PWR_12V_ON_GPIO) | BIT64(SENSOR_PWR_12V_OFF_GPIO),
@@ -117,9 +118,10 @@ static void pwr_12v_on_early(void)
     gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  0);   /* sicher LOW vor Puls */
     gpio_set_level(SENSOR_PWR_12V_OFF_GPIO, 0);
     gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  1);   /* EIN-Puls starten */
-    vTaskDelay(pdMS_TO_TICKS(100));              /* 100 ms Puls (bistabiles Relais) */
+    vTaskDelay(pdMS_TO_TICKS(SENSOR_PWR_12V_PULSE_MS));  /* Puls (bistabiles Relais) */
     gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  0);   /* Puls beenden → LOW */
-    ESP_LOGI(TAG, "LBE 12V EIN (GPIO%d 100ms-Puls abgeschlossen)", SENSOR_PWR_12V_ON_GPIO);
+    ESP_LOGI(TAG, "LBE 12V EIN (GPIO%d Puls %d ms abgeschlossen)",
+             SENSOR_PWR_12V_ON_GPIO, SENSOR_PWR_12V_PULSE_MS);
 }
 
 void app_main(void)
@@ -130,6 +132,20 @@ void app_main(void)
      * Nach Deep Sleep: RTC-Hold aufheben, dann normalen GPIO-Modus zurücksetzen. */
     rtc_gpio_hold_dis(SENSOR_DISPLAY_PWR_GPIO);
     rtc_gpio_deinit(SENSOR_DISPLAY_PWR_GPIO);
+
+    /* GPIO11/12 (12V EIN/AUS) werden in deep_sleep.c per gpio_hold_en() ein-
+     * gefroren (sowohl beim Touch- als auch beim Cold-Sleep-Pfad).
+     * gpio_config()/gpio_set_level() heben diese RTC-Hold-Sperre NICHT
+     * automatisch auf – ohne diesen Aufruf bleiben die Pins nach dem Aufwachen
+     * dauerhaft auf ihrem Vor-Schlaf-Pegel eingefroren, unabhängig von späteren
+     * gpio_set_level()-Aufrufen (an GPIO17/Multimedia per Multimeter bestätigt,
+     * bevor der Hold dort entfernt wurde). Unconditional wie beim Display, da
+     * Hold in beiden Sleep-Pfaden gesetzt wird.
+     * GPIO17 (Multimedia) und GPIO8 (Legacy-DE) haben in deep_sleep.c keinen
+     * Hold mehr (nicht sicherheitskritisch), brauchen daher hier auch keine
+     * Freigabe mehr. */
+    gpio_hold_dis(SENSOR_PWR_12V_ON_GPIO);
+    gpio_hold_dis(SENSOR_PWR_12V_OFF_GPIO);
     gpio_config_t disp_cfg = {
         .pin_bit_mask = BIT64(SENSOR_DISPLAY_PWR_GPIO),
         .mode         = GPIO_MODE_OUTPUT,
@@ -150,14 +166,26 @@ void app_main(void)
     gpio_config(&mm_cfg);
     gpio_set_level(SENSOR_MULTIMEDIA_PWR_GPIO, 0); /* N-MOSFET: LOW = AUS (Radio aus beim Boot) */
 
+    /* Licht/Pumpe: Pin-Reservierung, Firmware-Ansteuerung noch nicht
+     * implementiert. Sicherer Ruhezustand (OUTPUT LOW) schon beim Boot. */
+    gpio_config_t light_pump_cfg = {
+        .pin_bit_mask = BIT64(SENSOR_LIGHT_GPIO) | BIT64(SENSOR_PUMP_GPIO),
+        .mode         = GPIO_MODE_OUTPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&light_pump_cfg);
+    gpio_set_level(SENSOR_LIGHT_GPIO, 0);
+    gpio_set_level(SENSOR_PUMP_GPIO, 0);
+
     // ── Touch initialisieren (immer zuerst) ──────────────────────────
     deep_sleep_init();
 
     // ── Wakeup-Behandlung ────────────────────────────────────────────
     bool is_touch_wakeup = deep_sleep_wakeup_by_touch();
     if (is_touch_wakeup) {
-        ESP_LOGI(TAG, "Touch-Wakeup erkannt → Hold aufheben");
-        gpio_hold_dis(SENSOR_ESPNOW_DE_LEGACY_GPIO);
+        ESP_LOGI(TAG, "Touch-Wakeup erkannt");
     } else {
         deep_sleep_enter_cold();
         /* Kehrt nicht zurück */
@@ -236,10 +264,10 @@ void app_main(void)
         ESP_LOGW(TAG, "BLE Manager nicht gestartet (err=%s)", esp_err_to_name(ble_err));
     }
 
-    // GasBee BLE Client (registriert sich beim BLE-Manager)
-    esp_err_t gasbee_err = gasbee_ble_client_start();
+    // GasBee BLE Scanner (passiv, Advertising-Format v1 – registriert sich beim BLE-Manager)
+    esp_err_t gasbee_err = gasbee_ble_scanner_init();
     if (gasbee_err != ESP_OK) {
-        ESP_LOGW(TAG, "GasBee BLE Client nicht gestartet (err=%s)", esp_err_to_name(gasbee_err));
+        ESP_LOGW(TAG, "GasBee Scanner nicht gestartet (err=%s)", esp_err_to_name(gasbee_err));
     }
 
     // Ruuvi BLE Scanner (registriert sich beim BLE-Manager, unabhängig von GasBee)

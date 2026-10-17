@@ -28,13 +28,16 @@
 - `imu` (1 s): `{ type:"imu", yaw_deg, pitch_deg, roll_deg, hdg, cal:{sys,gyro,acc,mag}, calibrated }` – BNO055
 - `bat` (1 s): `{ type:"bat", b1, b2, nc1, nc2 }` – Batterien (Board/Kfz in Volt, kein SoC)
 - `tank` (10 s): `{ type:"tank", t1, t2, nc1, nc2 }` – Tanksensoren (Prozent)
-- `hx` (10 s): `{ type:"hx", a, b, sum, nc }` – HX711 Wägezellen (kg)
-- `gas` (10 s): `{ type:"gas", active, net, rate1h, rate2h, rest_h, net_a, net_b, cap_kg, pct, pct_a, pct_b }` – Gaslogik
-- `bme` (10 s): `{ type:"bme", "0x76":{chip,addr,temp_c,rh_pct,press_hpa,gas_kohm?,iaq?,iaq_acc?,eco2_ppm?,bvoc_ppm?,ts}, "0x77":{chip,addr,temp_c,rh_pct,press_hpa,press_trend_state?,press_trend_hpa_h?,ts} }` – 0x76=BME680 innen (IAQ optional), 0x77=BME280 außen (kein IAQ, mit Drucktrend)
+- `hx` (10 s): `{ type:"hx", src, a, b, sum, nc }` – Flaschengewichte (kg). `src`: `"hx"` = Kabel-HX711 (Vorrang), `"ble"` = GasBee-Waagen, `"none"`. Bei `"ble"` zusätzlich je Flasche `batt_a_mv`, `batt_a_pct`, `chg_a`, `cal_a` (analog `_b`) → `hx711.is_gasbee`/`bee[0..1]`.
+- `gas` (10 s): `{ type:"gas", src, active, net, rate1h, rate2h, rest_h, net_a, net_b, cap_kg, pct, pct_a, pct_b }` – Gaslogik
+- `bme_in` (10 s): `{ type:"bme_in", temp_c, rh_pct, press_hpa, gas_kohm?, iaq?, iaq_acc?, eco2_ppm?, bvoc_ppm?, press_trend_state?, press_trend_hpa_h?, chip?, batt_mv? }` – Innensensor. Entweder verkabeltes BME680 (mit IAQ) **oder** Ruuvi-BLE-Tag als Ersatz, je nachdem was verbaut ist – nie beides gleichzeitig. Bei Ruuvi: `chip:"ruuvi"` und `batt_mv` (Batteriespannung in mV) gesetzt, IAQ-Felder entfallen.
+- `bme_out` (10 s): `{ type:"bme_out", temp_c, rh_pct, press_hpa, gas_kohm?, press_trend_state?, press_trend_hpa_h?, chip?, batt_mv? }` – Außensensor. Analog: verkabeltes BME280 **oder** Ruuvi-BLE-Tag (`chip:"ruuvi"`, `batt_mv`).
 - `elec` (1 s): `{ type:"elec", nc:bool, v_bus, i_a, p_w, v_shunt_mv }` – INA226 Strom-/Leistungsmessung Hauptleitung. `nc:true` wenn Sensor nicht eingebaut. Display zeigt Spannung/Strom(mA)/Leistung als graues Panel rechts mitte (Long Press zum Ein-/Ausblenden).
 - Sofort-Ctrl: Nach Ausführung von `pwr_12v_on/off` oder `radio_on/off` wird `ctrl`-Topic sofort gesendet (`s_ctrl_immediate`-Flag), damit Display den neuen Zustand schnell anzeigt.
 - GPS/LTE: Werden **nicht** über RS485 übertragen. Display pollt den Router direkt (HTTP/SSH).
-- Display → Sensorboard (Kommandos): `cmd` Feld mit JSON-Objekt. Unterstützt: `display_ready`, `level_start|level_stop`, `tare_a|tare_b`, `gas_bottle_replace` (optional `slot`, `channel`), `pwr_12v_on|pwr_12v_off` (12V Bordnetz), `radio_on|radio_off` (Multimedia, nur wenn 12V aktiv). Sensorboard quittiert per ACK.
+- Display → Sensorboard (Kommandos): `cmd` Feld mit JSON-Objekt. Unterstützt: `display_ready`, `level_start|level_stop`, `tare_a|tare_b`, `gas_bottle_replace` (optional `slot`, `channel`), `pwr_12v_on|pwr_12v_off` (12V Bordnetz), `radio_on|radio_off` (Multimedia, nur wenn 12V aktiv), `ruuvi_config` (`indoor_mac`, `outdoor_mac` – MAC-Filter für den Ruuvi-BLE-Scanner, in Sensorboard-NVS persistiert, leer = Slot deaktiviert), `ruuvi_scan_request` (fordert einmalig das `ruuvi_scan`-Antwort-Topic an), `gasbee_config` (`bottle_a_mac`, `bottle_b_mac` – Zuordnung GasBee → Flasche, Sensorboard-NVS), `gasbee_scan_request` (fordert `gasbee_scan` an). Sensorboard quittiert per ACK.
+- `ruuvi_scan` (nur auf Anfrage, kein periodisches Topic): `{ type:"ruuvi_scan", tags:[{mac, rssi, temp_c, has_pressure, age_s}, ...] }` – alle zuletzt gesehenen Ruuvi-Tags (unabhängig vom konfigurierten Filter), für die Auswahlliste im Display (Einstellungen > RTC / Temp / Gas).
+- `gasbee_scan` (nur auf Anfrage): `{ type:"gasbee_scan", tags:[{mac, rssi, weight_kg?, batt_mv?, batt_pct?, chg, cal, seq, age_s}, ...] }` – alle zuletzt gesehenen GasBees. GasBee sendet nur alle 5 min (10 s lang) → Liste kann kurz nach Boot leer sein.
 - Display-Merge: Jedes empfangene Topic aktualisiert nur seinen Teil in `s_latest_data`; alle anderen Felder bleiben erhalten. Callback an main.c liefert vollständigen Merge-Snapshot. Fehlende/unbekannte Felder tolerant ignorieren.
 >- Keine Zusatz-Protokolländerungen ohne diese Datei zu aktualisieren.
 
@@ -44,11 +47,18 @@
 - WLAN-/LTE-Spalte: Titel + farbige Status-LED (grün=aktiv, rot=inaktiv), Verbindungsname (SSID/Provider + Signal%), Switch zum Ein-/Ausschalten.
 - AP-Spalte: Rein informativ (kein Switch!). Zeigt SSID, Anzahl verbundener Clients und Geräte-Liste (Hostname aus DHCP-Lease, Fallback MAC). AP darf **niemals** per Software deaktiviert werden, da er der einzige Kommunikationskanal zwischen ESP32 und Router ist.
 - WLAN-Spalte: Status + Switch + Scan-Button + Dropdown + Passwortfeld (erst nach Netzwerkauswahl sichtbar). Switch steuert `womo_router_wifi_set_sta()` / `womo_router_wifi_enable_sta()`. QWERTZ-Tastatur für Passwort.
+  - `womo_router_wifi_scan()` scannt gezielt nur AP/Master-Interfaces des Routers (per `iwinfo info`-Moduscheck), niemals das aktive STA/Client-Uplink-Interface: Ein Scan auf dem verbundenen Uplink-Radio kann dessen Verbindung einfrieren (beobachtet 2026-08-30 bei RUTX11, Radio0/wlan0=AP, Radio1/wlan1=STA).
 - LTE-Spalte: Provider + Signalstärke + Switch. Switch steuert `womo_router_lte_enable()`.
 - WLAN und LTE werden über UCI JSON-RPC am RUTX11 gesteuert (nicht über RS485).
 - Router-WiFi-Zugangsdaten werden im NVS gespeichert (Namespace `rtr_wifi`, max. 20 Einträge, MRU-Reihenfolge). Bei Netzwerkauswahl aus Dropdown wird gespeichertes Passwort vorausgefüllt.
 - Router-Poll-Task (`router_poll_task` in main.c) aktualisiert AP/WiFi/LTE/GPS alle 15 s und füllt `womo_connectivity_snapshot_t` mit AP-Feldern (ap_enabled, ap_ssid, ap_clients, ap_client_list).
 - **ESP32-WLAN-Konfiguration**: Die AP-Spalte enthält einen "WLAN konfigurieren"-Button, der einen ESP32-eigenen WiFi-Scan (`womo_wifi_scan_async`) startet. Nach Auswahl + Passwort-Eingabe verbindet der ESP32 sich mit dem gewählten Netzwerk (`womo_wifi_connect`). Credentials werden in NVS (`wifi_cfg` / `known_list`) gespeichert und per RS485 `cmd:"wifi_config"` ans Sensorboard weitergeleitet. Der WiFi-Autoretry (`wifi_autoretry_task`) bevorzugt `womo_wifi_connect_best_known()` mit Fallback auf Kconfig-SSID.
+
+## Einstellungen-Modal (Display)
+
+- Tabs: Sprache | RTC / Temp / Gas | Grenzwerte | System | AP, 640×420 px Panel (`womo_settings_modal.c`).
+- **RTC / Temp / Gas**: Wie unten für Ruuvi beschrieben, zusätzlich Abschnitt „Gaswaage (GasBee)“ mit Zeilen Flasche A/B: MAC + Akku-% (rot < 20 % ohne Laden, „unkal.“ wenn GasBee unkalibriert), Scan-Popup per `gasbee_scan_request`, Speichern in Display-NVS `womo_gasbee_cfg` + `cmd:"gasbee_config"`. Bei `hx711.is_wired` (Kabelwaage aktiv) sind die Scan-Buttons gesperrt. Gemeinsame Statuszeile für Ruuvi und GasBee.
+- RTC-Teil (früher Tab „RTC / Ruuvi“): RTC-Zeitquelle/Sync/Batteriestatus (Knopfzelle des Display-RTC) sowie Ruuvi-Tag-Konfiguration. Pro Slot (Innen/Außen): MAC-Anzeige + Batteriespannung (falls Ruuvi statt verkabeltem BME aktiv, Warnung < 2,5 V), "Scan"-Button fordert per `ruuvi_scan_request` die aktuelle Tag-Liste vom Sensorboard an und zeigt sie zur Auswahl in einem Popup (analog zum WLAN-Scan im AP-Tab). Auswahl/Löschen speichert sofort in Display-NVS (`womo_ruuvi_cfg`) und sendet `cmd:"ruuvi_config"` ans Sensorboard.
 
 ## Display-Stack (LVGL)
 

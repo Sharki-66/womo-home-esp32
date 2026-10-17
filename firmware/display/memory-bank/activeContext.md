@@ -1,5 +1,15 @@
 # Active Context — WoMoHome Display
 
+## GasBee-Zuordnung im Einstellungs-Tab (2026-10-17, auf Hardware getestet)
+
+Tab „RTC / Ruuvi“ → „RTC / Temp / Gas“. Neuer Abschnitt „Gaswaage (GasBee)“
+(Flasche A/B, Scan-Popup, NVS `womo_gasbee_cfg`, `cmd:"gasbee_config"`), Layout
+des Tabs verdichtet (gemeinsame Zeilenfunktion `make_cfg_row()`, gemeinsame
+Statuszeile `rtc_tab_set_status()`). `womo_sensorboard.c/h`: Parser für `hx.src`
++ Akku/Flags je Flasche, Topic `gasbee_scan`, Kommandos `gasbee_config`/
+`gasbee_scan_request`. Gegenstück im Sensorboard: `gasbee_ble_scanner.c`,
+`gas_source.c`. Scan + Zuordnung Flasche A funktioniert.
+
 ## Datenvolumen-Anzeige im LTE-Panel (2026-10-04)
 
 Neue Funktion `womo_router_get_data_pass()` in `womo_router_uci.c/h`: liest

@@ -38,6 +38,10 @@ static womo_sensorboard_data_cb_t s_data_callback = NULL;
 static void *s_callback_user_data = NULL;
 static womo_sensorboard_event_cb_t s_event_callback = NULL;
 static void *s_event_user_data = NULL;
+static womo_ruuvi_scan_cb_t s_ruuvi_scan_callback = NULL;
+static void *s_ruuvi_scan_user_data = NULL;
+static womo_gasbee_scan_cb_t s_gasbee_scan_callback = NULL;
+static void *s_gasbee_scan_user_data = NULL;
 static TaskHandle_t s_heartbeat_task = NULL;
 
 typedef struct {
@@ -447,6 +451,18 @@ void womo_sensorboard_set_event_callback(womo_sensorboard_event_cb_t callback, v
     s_event_user_data = user_data;
 }
 
+void womo_sensorboard_set_ruuvi_scan_callback(womo_ruuvi_scan_cb_t callback, void *user_data)
+{
+    s_ruuvi_scan_callback = callback;
+    s_ruuvi_scan_user_data = user_data;
+}
+
+void womo_sensorboard_set_gasbee_scan_callback(womo_gasbee_scan_cb_t callback, void *user_data)
+{
+    s_gasbee_scan_callback = callback;
+    s_gasbee_scan_user_data = user_data;
+}
+
 bool womo_sensorboard_get_latest_data(womo_sensor_data_t *data)
 {
     if (!data || !s_initialized) {
@@ -566,6 +582,64 @@ esp_err_t womo_sensorboard_send_wifi_credentials(const char *ssid, const char *p
     return err;
 }
 
+
+esp_err_t womo_sensorboard_send_ruuvi_config(const char *indoor_mac, const char *outdoor_mac)
+{
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+
+    cJSON_AddStringToObject(root, "cmd", "ruuvi_config");
+    cJSON_AddStringToObject(root, "indoor_mac", indoor_mac ? indoor_mac : "");
+    cJSON_AddStringToObject(root, "outdoor_mac", outdoor_mac ? outdoor_mac : "");
+
+    esp_err_t err = sb_send_frame(root, "ruuvi_config");
+    cJSON_Delete(root);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Ruuvi-Config an Sensor gesendet: Innen='%s' Aussen='%s'",
+                 indoor_mac ? indoor_mac : "", outdoor_mac ? outdoor_mac : "");
+    } else {
+        ESP_LOGW(TAG, "Ruuvi-Config senden fehlgeschlagen: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t womo_sensorboard_send_ruuvi_scan_request(void)
+{
+    esp_err_t err = sb_send_simple_command("ruuvi_scan_request");
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "ruuvi_scan_request senden fehlgeschlagen: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t womo_sensorboard_send_gasbee_config(const char *bottle_a_mac, const char *bottle_b_mac)
+{
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+
+    cJSON_AddStringToObject(root, "cmd", "gasbee_config");
+    cJSON_AddStringToObject(root, "bottle_a_mac", bottle_a_mac ? bottle_a_mac : "");
+    cJSON_AddStringToObject(root, "bottle_b_mac", bottle_b_mac ? bottle_b_mac : "");
+
+    esp_err_t err = sb_send_frame(root, "gasbee_config");
+    cJSON_Delete(root);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "GasBee-Config an Sensor gesendet: A='%s' B='%s'",
+                 bottle_a_mac ? bottle_a_mac : "", bottle_b_mac ? bottle_b_mac : "");
+    } else {
+        ESP_LOGW(TAG, "GasBee-Config senden fehlgeschlagen: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t womo_sensorboard_send_gasbee_scan_request(void)
+{
+    esp_err_t err = sb_send_simple_command("gasbee_scan_request");
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "gasbee_scan_request senden fehlgeschlagen: %s", esp_err_to_name(err));
+    }
+    return err;
+}
 
 esp_err_t womo_sensorboard_send_lte_control(bool enable)
 {
@@ -910,71 +984,6 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             ack_success = true;
         }
     }
-    else if (strcmp(frame_kind, "bme") == 0) {
-        if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-            // 0x76 = indoor, 0x77 = outdoor
-            for (cJSON *sensor = root->child; sensor != NULL; sensor = sensor->next) {
-                if (!cJSON_IsObject(sensor) || !sensor->string) continue;
-                bool is_indoor = (strcasecmp(sensor->string, "0x76") == 0);
-                bool is_outdoor = (strcasecmp(sensor->string, "0x77") == 0);
-                if (!is_indoor && !is_outdoor) continue;
-
-                cJSON *temp_c    = cJSON_GetObjectItem(sensor, "temp_c");
-                cJSON *rh_pct    = cJSON_GetObjectItem(sensor, "rh_pct");
-                cJSON *press_hpa = cJSON_GetObjectItem(sensor, "press_hpa");
-                cJSON *gas_kohm  = cJSON_GetObjectItem(sensor, "gas_kohm");
-                cJSON *iaq_val   = cJSON_GetObjectItem(sensor, "iaq");
-                cJSON *iaq_acc   = cJSON_GetObjectItem(sensor, "iaq_acc");
-                cJSON *eco2      = cJSON_GetObjectItem(sensor, "eco2_ppm");
-                cJSON *bvoc      = cJSON_GetObjectItem(sensor, "bvoc_ppm");
-                cJSON *trend_st  = cJSON_GetObjectItem(sensor, "press_trend_state");
-                cJSON *trend_hpa = cJSON_GetObjectItem(sensor, "press_trend_hpa_h");
-
-                if (is_indoor) {
-                    s_latest_data.bme680_indoor.valid = true;
-                    if (temp_c)    s_latest_data.bme680_indoor.temperature_c     = (float)temp_c->valuedouble;
-                    if (rh_pct)    s_latest_data.bme680_indoor.humidity_percent   = (float)rh_pct->valuedouble;
-                    if (press_hpa) s_latest_data.bme680_indoor.pressure_hpa       = (float)press_hpa->valuedouble;
-                    if (gas_kohm)  s_latest_data.bme680_indoor.gas_kohm           = (float)gas_kohm->valuedouble;
-                    if (iaq_val)   s_latest_data.bme680_indoor.iaq                = (uint16_t)iaq_val->valueint;
-                    if (iaq_acc)   s_latest_data.bme680_indoor.iaq_accuracy       = (uint8_t)iaq_acc->valueint;
-                    if (eco2)      s_latest_data.bme680_indoor.eco2_ppm           = (float)eco2->valuedouble;
-                    if (bvoc)      s_latest_data.bme680_indoor.bvoc_ppm           = (float)bvoc->valuedouble;
-                    if (cJSON_IsString(trend_st) && trend_st->valuestring) {
-                        strncpy(s_latest_data.bme680_indoor.press_trend_state, trend_st->valuestring,
-                                sizeof(s_latest_data.bme680_indoor.press_trend_state) - 1);
-                    } else {
-                        strncpy(s_latest_data.bme680_indoor.press_trend_state, "steady",
-                                sizeof(s_latest_data.bme680_indoor.press_trend_state) - 1);
-                    }
-                    if (trend_hpa) s_latest_data.bme680_indoor.press_trend_slope_hpa_h = (float)trend_hpa->valuedouble;
-                } else {
-                    s_latest_data.bme680.valid = true;
-                    if (temp_c)    s_latest_data.bme680.temperature_c     = (float)temp_c->valuedouble;
-                    if (rh_pct)    s_latest_data.bme680.humidity_percent   = (float)rh_pct->valuedouble;
-                    if (press_hpa) s_latest_data.bme680.pressure_hpa       = (float)press_hpa->valuedouble;
-                    if (gas_kohm)  s_latest_data.bme680.gas_kohm           = (float)gas_kohm->valuedouble;
-                    if (iaq_val)   s_latest_data.bme680.iaq                = (uint16_t)iaq_val->valueint;
-                    if (iaq_acc)   s_latest_data.bme680.iaq_accuracy       = (uint8_t)iaq_acc->valueint;
-                    if (eco2)      s_latest_data.bme680.eco2_ppm           = (float)eco2->valuedouble;
-                    if (bvoc)      s_latest_data.bme680.bvoc_ppm           = (float)bvoc->valuedouble;
-                    if (cJSON_IsString(trend_st) && trend_st->valuestring) {
-                        strncpy(s_latest_data.bme680.press_trend_state, trend_st->valuestring,
-                                sizeof(s_latest_data.bme680.press_trend_state) - 1);
-                    } else {
-                        strncpy(s_latest_data.bme680.press_trend_state, "steady",
-                                sizeof(s_latest_data.bme680.press_trend_state) - 1);
-                    }
-                    if (trend_hpa) s_latest_data.bme680.press_trend_slope_hpa_h = (float)trend_hpa->valuedouble;
-                }
-            }
-            s_latest_data.bme_topic_rx_us = esp_timer_get_time();
-            notify_snapshot = s_latest_data;
-            xSemaphoreGive(s_data_mutex);
-            topic_handled = true;
-            ack_success = true;
-        }
-    }
     else if (strcmp(frame_kind, "bme_in") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             cJSON *temp_c    = cJSON_GetObjectItem(root, "temp_c");
@@ -987,9 +996,20 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             cJSON *bvoc      = cJSON_GetObjectItem(root, "bvoc_ppm");
             cJSON *trend_st  = cJSON_GetObjectItem(root, "press_trend_state");
             cJSON *trend_hpa = cJSON_GetObjectItem(root, "press_trend_hpa_h");
-            if (temp_c || rh_pct || press_hpa) {
+            cJSON *chip      = cJSON_GetObjectItem(root, "chip");
+            cJSON *batt_mv   = cJSON_GetObjectItem(root, "batt_mv");
+            bool is_ruuvi = (cJSON_IsString(chip) && chip->valuestring &&
+                              strcmp(chip->valuestring, "ruuvi") == 0);
+            if (cJSON_IsString(chip)) {
                 s_latest_data.bme680_indoor.valid     = true;
                 s_latest_data.bme680_indoor.iaq_valid = (iaq_val != NULL);
+                s_latest_data.bme680_indoor.is_ruuvi  = is_ruuvi;
+                if (is_ruuvi && batt_mv) {
+                    s_latest_data.bme680_indoor.batt_valid = true;
+                    s_latest_data.bme680_indoor.batt_mv    = (uint16_t)batt_mv->valueint;
+                } else if (!is_ruuvi) {
+                    s_latest_data.bme680_indoor.batt_valid = false;
+                }
                 if (temp_c)    s_latest_data.bme680_indoor.temperature_c   = (float)temp_c->valuedouble;
                 if (rh_pct)    s_latest_data.bme680_indoor.humidity_percent = (float)rh_pct->valuedouble;
                 if (press_hpa) s_latest_data.bme680_indoor.pressure_hpa    = (float)press_hpa->valuedouble;
@@ -1018,8 +1038,19 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             cJSON *gas_kohm  = cJSON_GetObjectItem(root, "gas_kohm");
             cJSON *trend_st  = cJSON_GetObjectItem(root, "press_trend_state");
             cJSON *trend_hpa = cJSON_GetObjectItem(root, "press_trend_hpa_h");
-            if (temp_c || rh_pct || press_hpa) {
-                s_latest_data.bme680.valid = true;
+            cJSON *chip      = cJSON_GetObjectItem(root, "chip");
+            cJSON *batt_mv   = cJSON_GetObjectItem(root, "batt_mv");
+            bool is_ruuvi = (cJSON_IsString(chip) && chip->valuestring &&
+                              strcmp(chip->valuestring, "ruuvi") == 0);
+            if (cJSON_IsString(chip)) {
+                s_latest_data.bme680.valid    = true;
+                s_latest_data.bme680.is_ruuvi = is_ruuvi;
+                if (is_ruuvi && batt_mv) {
+                    s_latest_data.bme680.batt_valid = true;
+                    s_latest_data.bme680.batt_mv    = (uint16_t)batt_mv->valueint;
+                } else if (!is_ruuvi) {
+                    s_latest_data.bme680.batt_valid = false;
+                }
                 if (temp_c)    s_latest_data.bme680.temperature_c   = (float)temp_c->valuedouble;
                 if (rh_pct)    s_latest_data.bme680.humidity_percent = (float)rh_pct->valuedouble;
                 if (press_hpa) s_latest_data.bme680.pressure_hpa    = (float)press_hpa->valuedouble;
@@ -1088,6 +1119,32 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             if (b) s_latest_data.hx711.weight_b_kg = (float)b->valuedouble;
             if (sum) s_latest_data.hx711.weight_sum_kg = (float)sum->valuedouble;
             if (cJSON_IsBool(nc)) s_latest_data.hx711.nc = cJSON_IsTrue(nc);
+            cJSON *src = cJSON_GetObjectItem(root, "src");
+            const char *src_str = (cJSON_IsString(src) && src->valuestring) ? src->valuestring : "";
+            s_latest_data.hx711.is_wired  = (strcmp(src_str, "hx") == 0);
+            s_latest_data.hx711.is_gasbee = (strcmp(src_str, "ble") == 0);
+            // GasBee-Statusfelder je Flasche (batt_a_mv, batt_a_pct, chg_a, cal_a, …)
+            for (int i = 0; i < 2; i++) {
+                char key[16];
+                const char sfx = (i == 0) ? 'a' : 'b';
+                memset(&s_latest_data.hx711.bee[i], 0, sizeof(s_latest_data.hx711.bee[i]));
+                snprintf(key, sizeof(key), "cal_%c", sfx);
+                cJSON *cal = cJSON_GetObjectItem(root, key);
+                if (!s_latest_data.hx711.is_gasbee || !cJSON_IsBool(cal)) continue;
+                s_latest_data.hx711.bee[i].present    = true;
+                s_latest_data.hx711.bee[i].calibrated = cJSON_IsTrue(cal);
+                snprintf(key, sizeof(key), "chg_%c", sfx);
+                s_latest_data.hx711.bee[i].charging = cJSON_IsTrue(cJSON_GetObjectItem(root, key));
+                snprintf(key, sizeof(key), "batt_%c_mv", sfx);
+                cJSON *mv = cJSON_GetObjectItem(root, key);
+                snprintf(key, sizeof(key), "batt_%c_pct", sfx);
+                cJSON *pct = cJSON_GetObjectItem(root, key);
+                if (cJSON_IsNumber(mv)) {
+                    s_latest_data.hx711.bee[i].batt_valid = true;
+                    s_latest_data.hx711.bee[i].batt_mv    = (uint16_t)mv->valueint;
+                    s_latest_data.hx711.bee[i].batt_pct   = cJSON_IsNumber(pct) ? (uint8_t)pct->valueint : 0;
+                }
+            }
             notify_snapshot = s_latest_data;
             xSemaphoreGive(s_data_mutex);
             topic_handled = true;
@@ -1143,6 +1200,80 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             xSemaphoreGive(s_data_mutex);
             topic_handled = true;
             ack_success = true;
+        }
+    }
+    else if (strcmp(frame_kind, "ruuvi_scan") == 0) {
+        womo_ruuvi_scan_entry_t entries[WOMO_RUUVI_SCAN_MAX_TAGS];
+        size_t entry_count = 0;
+        cJSON *tags = cJSON_GetObjectItem(root, "tags");
+        if (cJSON_IsArray(tags)) {
+            cJSON *tag;
+            cJSON_ArrayForEach(tag, tags) {
+                if (entry_count >= WOMO_RUUVI_SCAN_MAX_TAGS || !cJSON_IsObject(tag)) continue;
+                cJSON *mac       = cJSON_GetObjectItem(tag, "mac");
+                if (!cJSON_IsString(mac) || !mac->valuestring) continue;
+                cJSON *rssi      = cJSON_GetObjectItem(tag, "rssi");
+                cJSON *temp_c    = cJSON_GetObjectItem(tag, "temp_c");
+                cJSON *has_press = cJSON_GetObjectItem(tag, "has_pressure");
+                cJSON *age_s     = cJSON_GetObjectItem(tag, "age_s");
+
+                womo_ruuvi_scan_entry_t *e = &entries[entry_count++];
+                memset(e, 0, sizeof(*e));
+                snprintf(e->mac, sizeof(e->mac), "%s", mac->valuestring);
+                e->rssi         = cJSON_IsNumber(rssi)   ? (int8_t)rssi->valueint     : 0;
+                e->temp_c       = cJSON_IsNumber(temp_c) ? (float)temp_c->valuedouble : 0.0f;
+                e->has_pressure = cJSON_IsTrue(has_press);
+                e->age_s        = cJSON_IsNumber(age_s)  ? (uint32_t)age_s->valueint  : 0;
+            }
+        }
+        if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            notify_snapshot = s_latest_data;
+            xSemaphoreGive(s_data_mutex);
+        }
+        topic_handled = true;
+        ack_success = true;
+        if (s_ruuvi_scan_callback) {
+            s_ruuvi_scan_callback(entries, entry_count, s_ruuvi_scan_user_data);
+        }
+    }
+    else if (strcmp(frame_kind, "gasbee_scan") == 0) {
+        womo_gasbee_scan_entry_t entries[WOMO_GASBEE_SCAN_MAX_TAGS];
+        size_t entry_count = 0;
+        cJSON *tags = cJSON_GetObjectItem(root, "tags");
+        if (cJSON_IsArray(tags)) {
+            cJSON *tag;
+            cJSON_ArrayForEach(tag, tags) {
+                if (entry_count >= WOMO_GASBEE_SCAN_MAX_TAGS || !cJSON_IsObject(tag)) continue;
+                cJSON *mac = cJSON_GetObjectItem(tag, "mac");
+                if (!cJSON_IsString(mac) || !mac->valuestring) continue;
+                cJSON *rssi     = cJSON_GetObjectItem(tag, "rssi");
+                cJSON *weight   = cJSON_GetObjectItem(tag, "weight_kg");
+                cJSON *batt_mv  = cJSON_GetObjectItem(tag, "batt_mv");
+                cJSON *batt_pct = cJSON_GetObjectItem(tag, "batt_pct");
+                cJSON *age_s    = cJSON_GetObjectItem(tag, "age_s");
+
+                womo_gasbee_scan_entry_t *e = &entries[entry_count++];
+                memset(e, 0, sizeof(*e));
+                snprintf(e->mac, sizeof(e->mac), "%s", mac->valuestring);
+                e->rssi         = cJSON_IsNumber(rssi) ? (int8_t)rssi->valueint : 0;
+                e->weight_valid = cJSON_IsNumber(weight);
+                e->weight_kg    = e->weight_valid ? (float)weight->valuedouble : 0.0f;
+                e->batt_valid   = cJSON_IsNumber(batt_mv);
+                e->batt_mv      = e->batt_valid ? (uint16_t)batt_mv->valueint : 0;
+                e->batt_pct     = cJSON_IsNumber(batt_pct) ? (uint8_t)batt_pct->valueint : 0;
+                e->charging     = cJSON_IsTrue(cJSON_GetObjectItem(tag, "chg"));
+                e->calibrated   = cJSON_IsTrue(cJSON_GetObjectItem(tag, "cal"));
+                e->age_s        = cJSON_IsNumber(age_s) ? (uint32_t)age_s->valueint : 0;
+            }
+        }
+        if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            notify_snapshot = s_latest_data;
+            xSemaphoreGive(s_data_mutex);
+        }
+        topic_handled = true;
+        ack_success = true;
+        if (s_gasbee_scan_callback) {
+            s_gasbee_scan_callback(entries, entry_count, s_gasbee_scan_user_data);
         }
     }
     else if (strcmp(frame_kind, "tank") == 0) {

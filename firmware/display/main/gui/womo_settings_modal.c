@@ -7,7 +7,7 @@
 /*
  * womo_settings_modal.c – Einstellungs-Modal mit 5 Tabs
  *
- * Tabs: Sprache | RTC | Grenzwerte | System | AP
+ * Tabs: Sprache | RTC / Temp / Gas | Grenzwerte | System | AP
  * Größe: 640×420 px, Header 48 px, Tabview 372 px (Tabbar 38 px, Inhalt 334 px).
  */
 
@@ -37,6 +37,8 @@ static const char *TAG = "settings_modal";
 #define TAB_BAR_H     38
 #define PAD           16
 #define NVS_AP_NS    "womo_ap_cfg"
+#define NVS_RUUVI_NS "womo_ruuvi_cfg"
+#define NVS_GASBEE_NS "womo_gasbee_cfg"
 #define MAX_AP_SCAN   16
 #define AP_TASK_STACK 4096
 #define AP_TASK_PRIO  5
@@ -73,6 +75,37 @@ static char      s_ap_selected_ssid[33];
 static womo_wifi_scan_result_t s_ap_scan_results[MAX_AP_SCAN];
 static size_t    s_ap_scan_result_count = 0;
 static TaskHandle_t s_ap_connect_task  = NULL;
+
+/* ── Ruuvi-Tag: MAC-Konfiguration ───────────────────────────── */
+static lv_obj_t   *s_ruuvi_indoor_lbl    = NULL;
+static lv_obj_t   *s_ruuvi_outdoor_lbl   = NULL;
+static lv_obj_t   *s_ruuvi_status_lbl    = NULL;
+static lv_obj_t   *s_ruuvi_scan_btn_in   = NULL;
+static lv_obj_t   *s_ruuvi_scan_btn_out  = NULL;
+static lv_obj_t   *s_ruuvi_scan_popup    = NULL;
+static lv_obj_t   *s_ruuvi_scan_list     = NULL;
+static lv_timer_t *s_ruuvi_scan_timeout_timer = NULL;
+static bool        s_ruuvi_scan_in_progress   = false;
+static int         s_ruuvi_scan_target        = 0;  /* 0=Innen, 1=Aussen */
+#define RUUVI_SCAN_MAX_RETRY 2
+static int         s_ruuvi_scan_retry         = 0;  /* Wiederholungen bei ausbleibender Antwort */
+static char        s_ruuvi_indoor_mac[18]     = "";
+static char        s_ruuvi_outdoor_mac[18]    = "";
+static womo_ruuvi_scan_entry_t s_ruuvi_scan_results[WOMO_RUUVI_SCAN_MAX_TAGS];
+static size_t       s_ruuvi_scan_result_count = 0;
+
+/* ── GasBee (BLE-Gaswaage): MAC-Konfiguration Flasche A/B ───── */
+#define GASBEE_SCAN_MAX_RETRY 2
+static lv_obj_t   *s_gasbee_lbl[2]       = {NULL, NULL};  /* 0=A, 1=B */
+static lv_obj_t   *s_gasbee_scan_btn[2]  = {NULL, NULL};
+static lv_obj_t   *s_gasbee_scan_popup   = NULL;
+static lv_timer_t *s_gasbee_scan_timeout_timer = NULL;
+static bool        s_gasbee_scan_in_progress   = false;
+static int         s_gasbee_scan_target        = 0;  /* 0=A, 1=B */
+static int         s_gasbee_scan_retry         = 0;
+static char        s_gasbee_mac[2][18]         = {"", ""};
+static womo_gasbee_scan_entry_t s_gasbee_scan_results[WOMO_GASBEE_SCAN_MAX_TAGS];
+static size_t       s_gasbee_scan_result_count = 0;
 
 /* ── thresh_ud_t ────────────────────────────────────────────── */
 typedef struct {
@@ -176,6 +209,60 @@ static esp_err_t ap_cfg_save(const char *ssid, const char *pass)
     if (err != ESP_OK) return err;
     nvs_set_str(h, "ssid", ssid ? ssid : "");
     nvs_set_str(h, "pass", pass ? pass : "");
+    nvs_commit(h);
+    nvs_close(h);
+    return ESP_OK;
+}
+
+static void ruuvi_cfg_load(char *indoor, size_t indoor_sz, char *outdoor, size_t outdoor_sz)
+{
+    indoor[0] = '\0';
+    outdoor[0] = '\0';
+
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_RUUVI_NS, NVS_READONLY, &h);
+    if (err != ESP_OK) return;
+    size_t len = indoor_sz;
+    nvs_get_str(h, "indoor_mac", indoor, &len);
+    len = outdoor_sz;
+    nvs_get_str(h, "outdoor_mac", outdoor, &len);
+    nvs_close(h);
+}
+
+static esp_err_t ruuvi_cfg_save(const char *indoor, const char *outdoor)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_RUUVI_NS, NVS_READWRITE, &h);
+    if (err != ESP_OK) return err;
+    nvs_set_str(h, "indoor_mac", indoor ? indoor : "");
+    nvs_set_str(h, "outdoor_mac", outdoor ? outdoor : "");
+    nvs_commit(h);
+    nvs_close(h);
+    return ESP_OK;
+}
+
+static void gasbee_cfg_load(char *mac_a, size_t a_sz, char *mac_b, size_t b_sz)
+{
+    mac_a[0] = '\0';
+    mac_b[0] = '\0';
+
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_GASBEE_NS, NVS_READONLY, &h);
+    if (err != ESP_OK) return;
+    size_t len = a_sz;
+    nvs_get_str(h, "bottle_a_mac", mac_a, &len);
+    len = b_sz;
+    nvs_get_str(h, "bottle_b_mac", mac_b, &len);
+    nvs_close(h);
+}
+
+static esp_err_t gasbee_cfg_save(const char *mac_a, const char *mac_b)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_GASBEE_NS, NVS_READWRITE, &h);
+    if (err != ESP_OK) return err;
+    nvs_set_str(h, "bottle_a_mac", mac_a ? mac_a : "");
+    nvs_set_str(h, "bottle_b_mac", mac_b ? mac_b : "");
     nvs_commit(h);
     nvs_close(h);
     return ESP_OK;
@@ -410,6 +497,32 @@ static void close_modal(void)
     s_ap_scan_popup    = NULL;
     s_ap_scan_list     = NULL;
     s_ap_scan_in_progress = false;
+
+    if (s_ruuvi_scan_timeout_timer) {
+        lv_timer_del(s_ruuvi_scan_timeout_timer);
+        s_ruuvi_scan_timeout_timer = NULL;
+    }
+    womo_sensorboard_set_ruuvi_scan_callback(NULL, NULL);
+    s_ruuvi_indoor_lbl    = NULL;
+    s_ruuvi_outdoor_lbl   = NULL;
+    s_ruuvi_status_lbl    = NULL;
+    s_ruuvi_scan_btn_in   = NULL;
+    s_ruuvi_scan_btn_out  = NULL;
+    s_ruuvi_scan_popup    = NULL;
+    s_ruuvi_scan_list     = NULL;
+    s_ruuvi_scan_in_progress = false;
+
+    if (s_gasbee_scan_timeout_timer) {
+        lv_timer_del(s_gasbee_scan_timeout_timer);
+        s_gasbee_scan_timeout_timer = NULL;
+    }
+    womo_sensorboard_set_gasbee_scan_callback(NULL, NULL);
+    s_gasbee_lbl[0]      = NULL;
+    s_gasbee_lbl[1]      = NULL;
+    s_gasbee_scan_btn[0] = NULL;
+    s_gasbee_scan_btn[1] = NULL;
+    s_gasbee_scan_popup  = NULL;
+    s_gasbee_scan_in_progress = false;
 }
 
 static void close_btn_cb(lv_event_t *e)
@@ -852,6 +965,616 @@ static void build_tab_sprache(lv_obj_t *tab)
     lv_obj_add_event_cb(btn_en, lang_en_cb, LV_EVENT_CLICKED, btn_de);
 }
 
+/* ── Ruuvi-Tag: Hilfsfunktionen ─────────────────────────────── */
+
+static void rtc_tab_set_status(const char *text)
+{
+    if (s_ruuvi_status_lbl) lv_label_set_text(s_ruuvi_status_lbl, text ? text : "");
+}
+
+/* Verkabelter Bus-Sensor (BME680/280) hat immer Vorrang vor dem Ruuvi-Fallback
+ * (siehe womo_sensorboard.h: is_ruuvi/batt_valid) – Scan/Config ist dann sinnlos. */
+static bool ruuvi_wired_active(bool indoor, const womo_sensor_data_t *sd, bool have_sd)
+{
+    if (!have_sd) return false;
+    return indoor
+        ? (sd->bme680_indoor.valid && !sd->bme680_indoor.is_ruuvi)
+        : (sd->bme680.valid && !sd->bme680.is_ruuvi);
+}
+
+static void ruuvi_refresh_labels(void)
+{
+    womo_sensor_data_t sd = {0};
+    bool have_sd = womo_sensorboard_get_latest_data(&sd);
+    bool wired_in  = ruuvi_wired_active(true, &sd, have_sd);
+    bool wired_out = ruuvi_wired_active(false, &sd, have_sd);
+
+    if (s_ruuvi_indoor_lbl) {
+        char buf[64];
+        if (wired_in) {
+            snprintf(buf, sizeof(buf), "Bus-Sensor aktiv (Vorrang)");
+            lv_obj_set_style_text_color(s_ruuvi_indoor_lbl, lv_color_hex(0x888888), 0);
+        } else if (s_ruuvi_indoor_mac[0] == '\0') {
+            snprintf(buf, sizeof(buf), "nicht konfiguriert");
+            lv_obj_set_style_text_color(s_ruuvi_indoor_lbl, lv_color_hex(0x888888), 0);
+        } else if (have_sd && sd.bme680_indoor.is_ruuvi && sd.bme680_indoor.batt_valid) {
+            float v = sd.bme680_indoor.batt_mv / 1000.0f;
+            snprintf(buf, sizeof(buf), "%s  %.2fV%s", s_ruuvi_indoor_mac, v, v < 2.5f ? " !" : "");
+            lv_obj_set_style_text_color(s_ruuvi_indoor_lbl,
+                v < 2.5f ? lv_color_hex(0xC62828) : lv_color_hex(0x2E7D32), 0);
+        } else {
+            snprintf(buf, sizeof(buf), "%s", s_ruuvi_indoor_mac);
+            lv_obj_set_style_text_color(s_ruuvi_indoor_lbl, lv_color_hex(0x333333), 0);
+        }
+        lv_label_set_text(s_ruuvi_indoor_lbl, buf);
+    }
+
+    if (s_ruuvi_outdoor_lbl) {
+        char buf[64];
+        if (wired_out) {
+            snprintf(buf, sizeof(buf), "Bus-Sensor aktiv (Vorrang)");
+            lv_obj_set_style_text_color(s_ruuvi_outdoor_lbl, lv_color_hex(0x888888), 0);
+        } else if (s_ruuvi_outdoor_mac[0] == '\0') {
+            snprintf(buf, sizeof(buf), "nicht konfiguriert");
+            lv_obj_set_style_text_color(s_ruuvi_outdoor_lbl, lv_color_hex(0x888888), 0);
+        } else if (have_sd && sd.bme680.is_ruuvi && sd.bme680.batt_valid) {
+            float v = sd.bme680.batt_mv / 1000.0f;
+            snprintf(buf, sizeof(buf), "%s  %.2fV%s", s_ruuvi_outdoor_mac, v, v < 2.5f ? " !" : "");
+            lv_obj_set_style_text_color(s_ruuvi_outdoor_lbl,
+                v < 2.5f ? lv_color_hex(0xC62828) : lv_color_hex(0x2E7D32), 0);
+        } else {
+            snprintf(buf, sizeof(buf), "%s", s_ruuvi_outdoor_mac);
+            lv_obj_set_style_text_color(s_ruuvi_outdoor_lbl, lv_color_hex(0x333333), 0);
+        }
+        lv_label_set_text(s_ruuvi_outdoor_lbl, buf);
+    }
+
+    if (s_ruuvi_scan_btn_in) {
+        if (wired_in) lv_obj_add_state(s_ruuvi_scan_btn_in, LV_STATE_DISABLED);
+        else          lv_obj_clear_state(s_ruuvi_scan_btn_in, LV_STATE_DISABLED);
+    }
+    if (s_ruuvi_scan_btn_out) {
+        if (wired_out) lv_obj_add_state(s_ruuvi_scan_btn_out, LV_STATE_DISABLED);
+        else           lv_obj_clear_state(s_ruuvi_scan_btn_out, LV_STATE_DISABLED);
+    }
+}
+
+static void ruuvi_apply_config(void)
+{
+    ruuvi_cfg_save(s_ruuvi_indoor_mac, s_ruuvi_outdoor_mac);
+    womo_sensorboard_send_ruuvi_config(s_ruuvi_indoor_mac, s_ruuvi_outdoor_mac);
+    ruuvi_refresh_labels();
+    rtc_tab_set_status("Ruuvi-Konfiguration gespeichert");
+}
+
+static void ruuvi_clear_indoor_cb(lv_event_t *e)
+{
+    (void)e;
+    s_ruuvi_indoor_mac[0] = '\0';
+    ruuvi_apply_config();
+}
+
+static void ruuvi_clear_outdoor_cb(lv_event_t *e)
+{
+    (void)e;
+    s_ruuvi_outdoor_mac[0] = '\0';
+    ruuvi_apply_config();
+}
+
+static void close_ruuvi_scan_popup(void)
+{
+    if (s_ruuvi_scan_popup) {
+        lv_obj_del(s_ruuvi_scan_popup);
+        s_ruuvi_scan_popup = NULL;
+        s_ruuvi_scan_list  = NULL;
+    }
+}
+
+static void ruuvi_scan_popup_close_cb(lv_event_t *e)
+{
+    (void)e;
+    close_ruuvi_scan_popup();
+}
+
+static void ruuvi_scan_list_btn_cb(lv_event_t *e)
+{
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+
+    lv_obj_t *btn = lv_event_get_target(e);
+    uint32_t idx = lv_obj_get_index(btn);
+    if (idx >= s_ruuvi_scan_result_count) {
+        close_ruuvi_scan_popup();
+        return;
+    }
+
+    const char *mac = s_ruuvi_scan_results[idx].mac;
+    if (s_ruuvi_scan_target == 0) {
+        strncpy(s_ruuvi_indoor_mac, mac, sizeof(s_ruuvi_indoor_mac) - 1);
+        s_ruuvi_indoor_mac[sizeof(s_ruuvi_indoor_mac) - 1] = '\0';
+    } else {
+        strncpy(s_ruuvi_outdoor_mac, mac, sizeof(s_ruuvi_outdoor_mac) - 1);
+        s_ruuvi_outdoor_mac[sizeof(s_ruuvi_outdoor_mac) - 1] = '\0';
+    }
+
+    close_ruuvi_scan_popup();
+    ruuvi_apply_config();
+}
+
+static void show_ruuvi_scan_popup(void)
+{
+    close_ruuvi_scan_popup();
+    if (s_ruuvi_scan_result_count == 0 || !s_overlay) return;
+
+    s_ruuvi_scan_popup = lv_obj_create(s_overlay);
+    lv_obj_set_size(s_ruuvi_scan_popup, 420, 320);
+    lv_obj_center(s_ruuvi_scan_popup);
+    lv_obj_set_style_bg_color(s_ruuvi_scan_popup, lv_color_white(), 0);
+    lv_obj_set_style_radius(s_ruuvi_scan_popup, 8, 0);
+    lv_obj_set_style_pad_all(s_ruuvi_scan_popup, 12, 0);
+    lv_obj_set_flex_flow(s_ruuvi_scan_popup, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_shadow_width(s_ruuvi_scan_popup, 20, 0);
+    lv_obj_set_style_shadow_opa(s_ruuvi_scan_popup, LV_OPA_30, 0);
+    lv_obj_move_foreground(s_ruuvi_scan_popup);
+
+    lv_obj_t *popup_hdr = lv_obj_create(s_ruuvi_scan_popup);
+    lv_obj_remove_style_all(popup_hdr);
+    lv_obj_set_size(popup_hdr, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(popup_hdr, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(popup_hdr,
+                          LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_bottom(popup_hdr, 8, 0);
+
+    lv_obj_t *popup_title = lv_label_create(popup_hdr);
+    lv_label_set_text(popup_title,
+        s_ruuvi_scan_target == 0 ? "Ruuvi-Tag waehlen (Innen)" : "Ruuvi-Tag waehlen (Aussen)");
+    lv_obj_set_style_text_font(popup_title, &lv_font_montserrat_16, 0);
+    lv_obj_set_flex_grow(popup_title, 1);
+
+    lv_obj_t *popup_close = lv_btn_create(popup_hdr);
+    lv_obj_set_style_pad_all(popup_close, 6, 0);
+    lv_obj_add_event_cb(popup_close, ruuvi_scan_popup_close_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *close_lbl = lv_label_create(popup_close);
+    lv_label_set_text(close_lbl, LV_SYMBOL_CLOSE);
+
+    s_ruuvi_scan_list = lv_list_create(s_ruuvi_scan_popup);
+    lv_obj_set_width(s_ruuvi_scan_list, LV_PCT(100));
+    lv_obj_set_flex_grow(s_ruuvi_scan_list, 1);
+
+    for (size_t i = 0; i < s_ruuvi_scan_result_count; i++) {
+        char text[160];
+        snprintf(text, sizeof(text), "%.17s  %.1f\xC2\xB0" "C  %d dBm%s",
+                 s_ruuvi_scan_results[i].mac, (double)s_ruuvi_scan_results[i].temp_c,
+                 (int)s_ruuvi_scan_results[i].rssi,
+                 s_ruuvi_scan_results[i].has_pressure ? "" : "  (kein Druck)");
+        lv_obj_t *btn = lv_list_add_btn(s_ruuvi_scan_list, LV_SYMBOL_BLUETOOTH, text);
+        lv_obj_add_event_cb(btn, ruuvi_scan_list_btn_cb, LV_EVENT_CLICKED, NULL);
+    }
+}
+
+static void ruuvi_scan_timeout_cb(lv_timer_t *t)
+{
+    (void)t;
+    s_ruuvi_scan_timeout_timer = NULL;
+    if (!s_ruuvi_scan_in_progress) return;
+
+    if (s_ruuvi_scan_retry < RUUVI_SCAN_MAX_RETRY) {
+        s_ruuvi_scan_retry++;
+        char buf[48];
+        snprintf(buf, sizeof(buf), "Keine Antwort - Versuch %d/%d", s_ruuvi_scan_retry + 1, RUUVI_SCAN_MAX_RETRY + 1);
+        rtc_tab_set_status(buf);
+
+        s_ruuvi_scan_timeout_timer = lv_timer_create(ruuvi_scan_timeout_cb, 4000, NULL);
+        if (!s_ruuvi_scan_timeout_timer) {
+            s_ruuvi_scan_in_progress = false;
+            rtc_tab_set_status("Scan-Timer konnte nicht angelegt werden");
+            return;
+        }
+        lv_timer_set_repeat_count(s_ruuvi_scan_timeout_timer, 1);
+
+        esp_err_t err = womo_sensorboard_send_ruuvi_scan_request();
+        if (err != ESP_OK) {
+            s_ruuvi_scan_in_progress = false;
+            if (s_ruuvi_scan_timeout_timer) {
+                lv_timer_del(s_ruuvi_scan_timeout_timer);
+                s_ruuvi_scan_timeout_timer = NULL;
+            }
+            rtc_tab_set_status("Sensorboard nicht erreichbar");
+        }
+        return;
+    }
+
+    s_ruuvi_scan_in_progress = false;
+    rtc_tab_set_status("Keine Antwort vom Sensorboard");
+}
+
+/* Läuft im ESP-NOW-RX-Task – kein LVGL-Kontext, daher lvgl_port_lock() nötig. */
+static void ruuvi_scan_result_cb(const womo_ruuvi_scan_entry_t *entries, size_t count, void *user_data)
+{
+    (void)user_data;
+
+    size_t stored = 0;
+    for (size_t i = 0; i < count && stored < WOMO_RUUVI_SCAN_MAX_TAGS; i++) {
+        s_ruuvi_scan_results[stored++] = entries[i];
+    }
+    s_ruuvi_scan_result_count = stored;
+
+    if (!lvgl_port_lock(-1)) {
+        s_ruuvi_scan_in_progress = false;
+        return;
+    }
+
+    s_ruuvi_scan_in_progress = false;
+    if (s_ruuvi_scan_timeout_timer) {
+        lv_timer_del(s_ruuvi_scan_timeout_timer);
+        s_ruuvi_scan_timeout_timer = NULL;
+    }
+
+    if (!s_overlay) {
+        lvgl_port_unlock();
+        return;
+    }
+
+    if (stored == 0) {
+        rtc_tab_set_status("Keine Ruuvi-Tags gefunden");
+    } else {
+        char buf[48];
+        snprintf(buf, sizeof(buf), "%zu Tag%s gefunden", stored, stored == 1 ? "" : "s");
+        rtc_tab_set_status(buf);
+        show_ruuvi_scan_popup();
+    }
+
+    lvgl_port_unlock();
+}
+
+static void ruuvi_scan_btn_cb(lv_event_t *e)
+{
+    if (s_ruuvi_scan_in_progress) {
+        rtc_tab_set_status("Scan läuft bereits - bitte warten");
+        return;
+    }
+
+    int target = (int)(intptr_t)lv_event_get_user_data(e);
+
+    womo_sensor_data_t sd = {0};
+    bool have_sd = womo_sensorboard_get_latest_data(&sd);
+    if (ruuvi_wired_active(target == 0, &sd, have_sd)) {
+        rtc_tab_set_status("Bus-Sensor hat Vorrang - kein Scan noetig");
+        return;
+    }
+
+    s_ruuvi_scan_target = target;
+    s_ruuvi_scan_in_progress = true;
+    s_ruuvi_scan_result_count = 0;
+    s_ruuvi_scan_retry = 0;
+    rtc_tab_set_status("Suche Ruuvi-Tags...");
+
+    if (s_ruuvi_scan_timeout_timer) {
+        lv_timer_del(s_ruuvi_scan_timeout_timer);
+        s_ruuvi_scan_timeout_timer = NULL;
+    }
+    s_ruuvi_scan_timeout_timer = lv_timer_create(ruuvi_scan_timeout_cb, 4000, NULL);
+    if (!s_ruuvi_scan_timeout_timer) {
+        // Absicherung: ohne Timer bliebe s_ruuvi_scan_in_progress für immer
+        // haengen (Button reagiert dann dauerhaft nicht mehr, bis das Modal
+        // neu geoeffnet wird). Lieber sofort mit Fehler abbrechen.
+        s_ruuvi_scan_in_progress = false;
+        rtc_tab_set_status("Scan-Timer konnte nicht angelegt werden");
+        return;
+    }
+    lv_timer_set_repeat_count(s_ruuvi_scan_timeout_timer, 1);
+
+    esp_err_t err = womo_sensorboard_send_ruuvi_scan_request();
+    if (err != ESP_OK) {
+        s_ruuvi_scan_in_progress = false;
+        if (s_ruuvi_scan_timeout_timer) {
+            lv_timer_del(s_ruuvi_scan_timeout_timer);
+            s_ruuvi_scan_timeout_timer = NULL;
+        }
+        rtc_tab_set_status("Sensorboard nicht erreichbar");
+    }
+}
+
+/* ── GasBee (BLE-Gaswaage): Hilfsfunktionen ─────────────────── */
+
+/* Kabel-HX711 hat Vorrang vor den GasBees (Sensorboard meldet src "hx") –
+ * Scan/Config ist dann wirkungslos. */
+static bool gasbee_wired_active(const womo_sensor_data_t *sd, bool have_sd)
+{
+    return have_sd && sd->hx711.valid && sd->hx711.is_wired;
+}
+
+static void gasbee_refresh_labels(void)
+{
+    womo_sensor_data_t sd = {0};
+    bool have_sd = womo_sensorboard_get_latest_data(&sd);
+    bool wired = gasbee_wired_active(&sd, have_sd);
+
+    for (int i = 0; i < 2; i++) {
+        if (s_gasbee_lbl[i]) {
+            char buf[80];
+            lv_color_t col = lv_color_hex(0x333333);
+            if (wired) {
+                snprintf(buf, sizeof(buf), "Kabelwaage aktiv (Vorrang)");
+                col = lv_color_hex(0x888888);
+            } else if (s_gasbee_mac[i][0] == '\0') {
+                snprintf(buf, sizeof(buf), "nicht konfiguriert");
+                col = lv_color_hex(0x888888);
+            } else if (have_sd && sd.hx711.is_gasbee && sd.hx711.bee[i].present) {
+                const __typeof__(sd.hx711.bee[0]) *b = &sd.hx711.bee[i];
+                char batt[32] = "Akku ?";
+                if (b->batt_valid) {
+                    snprintf(batt, sizeof(batt), "Akku %u%%%s", b->batt_pct, b->charging ? " (laedt)" : "");
+                }
+                snprintf(buf, sizeof(buf), "%s  %s%s", s_gasbee_mac[i], batt,
+                         b->calibrated ? "" : "  unkal.");
+                col = (b->batt_valid && b->batt_pct < 20 && !b->charging)
+                      ? lv_color_hex(0xC62828) : lv_color_hex(0x2E7D32);
+            } else {
+                snprintf(buf, sizeof(buf), "%s  (keine Daten)", s_gasbee_mac[i]);
+            }
+            lv_obj_set_style_text_color(s_gasbee_lbl[i], col, 0);
+            lv_label_set_text(s_gasbee_lbl[i], buf);
+        }
+        if (s_gasbee_scan_btn[i]) {
+            if (wired) lv_obj_add_state(s_gasbee_scan_btn[i], LV_STATE_DISABLED);
+            else       lv_obj_clear_state(s_gasbee_scan_btn[i], LV_STATE_DISABLED);
+        }
+    }
+}
+
+static void gasbee_apply_config(void)
+{
+    gasbee_cfg_save(s_gasbee_mac[0], s_gasbee_mac[1]);
+    womo_sensorboard_send_gasbee_config(s_gasbee_mac[0], s_gasbee_mac[1]);
+    gasbee_refresh_labels();
+    rtc_tab_set_status("GasBee-Konfiguration gespeichert");
+}
+
+static void gasbee_clear_cb(lv_event_t *e)
+{
+    int slot = (int)(intptr_t)lv_event_get_user_data(e);
+    s_gasbee_mac[slot][0] = '\0';
+    gasbee_apply_config();
+}
+
+static void close_gasbee_scan_popup(void)
+{
+    if (s_gasbee_scan_popup) {
+        lv_obj_del(s_gasbee_scan_popup);
+        s_gasbee_scan_popup = NULL;
+    }
+}
+
+static void gasbee_scan_popup_close_cb(lv_event_t *e)
+{
+    (void)e;
+    close_gasbee_scan_popup();
+}
+
+static void gasbee_scan_list_btn_cb(lv_event_t *e)
+{
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+
+    uint32_t idx = lv_obj_get_index(lv_event_get_target(e));
+    if (idx < s_gasbee_scan_result_count) {
+        int other = 1 - s_gasbee_scan_target;
+        const char *mac = s_gasbee_scan_results[idx].mac;
+        /* Eine GasBee kann nur einer Flasche zugeordnet sein */
+        if (strcmp(s_gasbee_mac[other], mac) == 0) s_gasbee_mac[other][0] = '\0';
+        snprintf(s_gasbee_mac[s_gasbee_scan_target], sizeof(s_gasbee_mac[0]), "%s", mac);
+        close_gasbee_scan_popup();
+        gasbee_apply_config();
+        return;
+    }
+    close_gasbee_scan_popup();
+}
+
+static void show_gasbee_scan_popup(void)
+{
+    close_gasbee_scan_popup();
+    if (s_gasbee_scan_result_count == 0 || !s_overlay) return;
+
+    s_gasbee_scan_popup = lv_obj_create(s_overlay);
+    lv_obj_set_size(s_gasbee_scan_popup, 460, 320);
+    lv_obj_center(s_gasbee_scan_popup);
+    lv_obj_set_style_bg_color(s_gasbee_scan_popup, lv_color_white(), 0);
+    lv_obj_set_style_radius(s_gasbee_scan_popup, 8, 0);
+    lv_obj_set_style_pad_all(s_gasbee_scan_popup, 12, 0);
+    lv_obj_set_flex_flow(s_gasbee_scan_popup, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_shadow_width(s_gasbee_scan_popup, 20, 0);
+    lv_obj_set_style_shadow_opa(s_gasbee_scan_popup, LV_OPA_30, 0);
+    lv_obj_move_foreground(s_gasbee_scan_popup);
+
+    lv_obj_t *popup_hdr = lv_obj_create(s_gasbee_scan_popup);
+    lv_obj_remove_style_all(popup_hdr);
+    lv_obj_set_size(popup_hdr, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(popup_hdr, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(popup_hdr,
+                          LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_bottom(popup_hdr, 8, 0);
+
+    lv_obj_t *popup_title = lv_label_create(popup_hdr);
+    lv_label_set_text(popup_title,
+        s_gasbee_scan_target == 0 ? "GasBee waehlen (Flasche A)" : "GasBee waehlen (Flasche B)");
+    lv_obj_set_style_text_font(popup_title, &lv_font_montserrat_16, 0);
+    lv_obj_set_flex_grow(popup_title, 1);
+
+    lv_obj_t *popup_close = lv_btn_create(popup_hdr);
+    lv_obj_set_style_pad_all(popup_close, 6, 0);
+    lv_obj_add_event_cb(popup_close, gasbee_scan_popup_close_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *close_lbl = lv_label_create(popup_close);
+    lv_label_set_text(close_lbl, LV_SYMBOL_CLOSE);
+
+    lv_obj_t *list = lv_list_create(s_gasbee_scan_popup);
+    lv_obj_set_width(list, LV_PCT(100));
+    lv_obj_set_flex_grow(list, 1);
+
+    for (size_t i = 0; i < s_gasbee_scan_result_count; i++) {
+        const womo_gasbee_scan_entry_t *r = &s_gasbee_scan_results[i];
+        char weight[16] = "-- kg";
+        char batt[16]   = "Akku ?";
+        if (r->weight_valid) snprintf(weight, sizeof(weight), "%.1f kg", (double)r->weight_kg);
+        if (r->batt_valid)   snprintf(batt, sizeof(batt), "Akku %u%%", r->batt_pct);
+        char text[160];
+        snprintf(text, sizeof(text), "%.17s  %s  %s  %d dBm%s",
+                 r->mac, weight, batt, (int)r->rssi, r->calibrated ? "" : "  (unkal.)");
+        lv_obj_t *btn = lv_list_add_btn(list, LV_SYMBOL_BLUETOOTH, text);
+        lv_obj_add_event_cb(btn, gasbee_scan_list_btn_cb, LV_EVENT_CLICKED, NULL);
+    }
+}
+
+static void gasbee_scan_timeout_cb(lv_timer_t *t)
+{
+    (void)t;
+    s_gasbee_scan_timeout_timer = NULL;
+    if (!s_gasbee_scan_in_progress) return;
+
+    if (s_gasbee_scan_retry < GASBEE_SCAN_MAX_RETRY) {
+        s_gasbee_scan_retry++;
+        char buf[48];
+        snprintf(buf, sizeof(buf), "Keine Antwort - Versuch %d/%d",
+                 s_gasbee_scan_retry + 1, GASBEE_SCAN_MAX_RETRY + 1);
+        rtc_tab_set_status(buf);
+
+        s_gasbee_scan_timeout_timer = lv_timer_create(gasbee_scan_timeout_cb, 4000, NULL);
+        if (!s_gasbee_scan_timeout_timer) {
+            s_gasbee_scan_in_progress = false;
+            rtc_tab_set_status("Scan-Timer konnte nicht angelegt werden");
+            return;
+        }
+        lv_timer_set_repeat_count(s_gasbee_scan_timeout_timer, 1);
+
+        if (womo_sensorboard_send_gasbee_scan_request() != ESP_OK) {
+            s_gasbee_scan_in_progress = false;
+            lv_timer_del(s_gasbee_scan_timeout_timer);
+            s_gasbee_scan_timeout_timer = NULL;
+            rtc_tab_set_status("Sensorboard nicht erreichbar");
+        }
+        return;
+    }
+
+    s_gasbee_scan_in_progress = false;
+    rtc_tab_set_status("Keine Antwort vom Sensorboard");
+}
+
+/* Läuft im ESP-NOW-RX-Task – kein LVGL-Kontext, daher lvgl_port_lock() nötig. */
+static void gasbee_scan_result_cb(const womo_gasbee_scan_entry_t *entries, size_t count, void *user_data)
+{
+    (void)user_data;
+
+    size_t stored = 0;
+    for (size_t i = 0; i < count && stored < WOMO_GASBEE_SCAN_MAX_TAGS; i++) {
+        s_gasbee_scan_results[stored++] = entries[i];
+    }
+    s_gasbee_scan_result_count = stored;
+
+    if (!lvgl_port_lock(-1)) {
+        s_gasbee_scan_in_progress = false;
+        return;
+    }
+
+    s_gasbee_scan_in_progress = false;
+    if (s_gasbee_scan_timeout_timer) {
+        lv_timer_del(s_gasbee_scan_timeout_timer);
+        s_gasbee_scan_timeout_timer = NULL;
+    }
+
+    if (s_overlay) {
+        if (stored == 0) {
+            rtc_tab_set_status("Keine GasBee gefunden (sendet nur alle 5 min)");
+        } else {
+            char buf[48];
+            snprintf(buf, sizeof(buf), "%zu GasBee gefunden", stored);
+            rtc_tab_set_status(buf);
+            show_gasbee_scan_popup();
+        }
+    }
+
+    lvgl_port_unlock();
+}
+
+static void gasbee_scan_btn_cb(lv_event_t *e)
+{
+    if (s_gasbee_scan_in_progress) {
+        rtc_tab_set_status("Scan laeuft bereits - bitte warten");
+        return;
+    }
+
+    womo_sensor_data_t sd = {0};
+    bool have_sd = womo_sensorboard_get_latest_data(&sd);
+    if (gasbee_wired_active(&sd, have_sd)) {
+        rtc_tab_set_status("Kabelwaage hat Vorrang - kein Scan noetig");
+        return;
+    }
+
+    s_gasbee_scan_target = (int)(intptr_t)lv_event_get_user_data(e);
+    s_gasbee_scan_in_progress = true;
+    s_gasbee_scan_result_count = 0;
+    s_gasbee_scan_retry = 0;
+    rtc_tab_set_status("Suche GasBee...");
+
+    if (s_gasbee_scan_timeout_timer) {
+        lv_timer_del(s_gasbee_scan_timeout_timer);
+        s_gasbee_scan_timeout_timer = NULL;
+    }
+    s_gasbee_scan_timeout_timer = lv_timer_create(gasbee_scan_timeout_cb, 4000, NULL);
+    if (!s_gasbee_scan_timeout_timer) {
+        s_gasbee_scan_in_progress = false;
+        rtc_tab_set_status("Scan-Timer konnte nicht angelegt werden");
+        return;
+    }
+    lv_timer_set_repeat_count(s_gasbee_scan_timeout_timer, 1);
+
+    if (womo_sensorboard_send_gasbee_scan_request() != ESP_OK) {
+        s_gasbee_scan_in_progress = false;
+        lv_timer_del(s_gasbee_scan_timeout_timer);
+        s_gasbee_scan_timeout_timer = NULL;
+        rtc_tab_set_status("Sensorboard nicht erreichbar");
+    }
+}
+
+/* Eine Konfigurationszeile: Label, MAC/Status, Scan-Button, Löschen-Button */
+static lv_obj_t *make_cfg_row(lv_obj_t *tab, int y, const char *name, lv_obj_t **val_lbl,
+                              lv_event_cb_t scan_cb, lv_event_cb_t clear_cb, void *user_data)
+{
+    lv_obj_t *name_lbl = lv_label_create(tab);
+    lv_label_set_text(name_lbl, name);
+    lv_obj_set_style_text_font(name_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(name_lbl, lv_color_hex(0x333333), 0);
+    lv_obj_set_pos(name_lbl, 0, y);
+
+    *val_lbl = lv_label_create(tab);
+    lv_obj_set_style_text_font(*val_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_pos(*val_lbl, 64, y);
+    lv_obj_set_width(*val_lbl, 330);
+
+    lv_obj_t *scan_btn = lv_btn_create(tab);
+    lv_obj_set_size(scan_btn, 60, 26);
+    lv_obj_set_pos(scan_btn, 400, y - 6);
+    lv_obj_set_style_bg_color(scan_btn, lv_color_hex(0x1565C0), 0);
+    lv_obj_set_style_radius(scan_btn, 6, 0);
+    lv_obj_set_style_border_width(scan_btn, 0, 0);
+    lv_obj_add_event_cb(scan_btn, scan_cb, LV_EVENT_CLICKED, user_data);
+    lv_obj_t *scan_lbl = lv_label_create(scan_btn);
+    lv_label_set_text(scan_lbl, "Scan");
+    lv_obj_set_style_text_font(scan_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_center(scan_lbl);
+
+    lv_obj_t *clear_btn = lv_btn_create(tab);
+    lv_obj_set_size(clear_btn, 28, 26);
+    lv_obj_set_pos(clear_btn, 468, y - 6);
+    lv_obj_set_style_bg_color(clear_btn, lv_color_hex(0x757575), 0);
+    lv_obj_set_style_radius(clear_btn, 6, 0);
+    lv_obj_set_style_border_width(clear_btn, 0, 0);
+    lv_obj_add_event_cb(clear_btn, clear_cb, LV_EVENT_CLICKED, user_data);
+    lv_obj_t *clear_lbl = lv_label_create(clear_btn);
+    lv_label_set_text(clear_lbl, LV_SYMBOL_CLOSE);
+    lv_obj_set_style_text_font(clear_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_center(clear_lbl);
+
+    return scan_btn;
+}
+
 static void build_tab_rtc(lv_obj_t *tab)
 {
     make_tab_base(tab);
@@ -906,6 +1629,58 @@ static void build_tab_rtc(lv_obj_t *tab)
     lv_obj_set_style_text_font(info, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(info, lv_color_hex(0x444444), 0);
     lv_obj_set_pos(info, 0, 38);
+
+    /* Layout (Tab nicht scrollbar, ~300 px nutzbar): RTC-Info bis ~y 95,
+     * Ruuvi ab y 104, GasBee ab y 196, gemeinsame Statuszeile y 284. */
+
+    /* Ruuvi-Tag: MAC per Scan auswählen, Batteriespannung anzeigen (nur belegt,
+     * wenn statt eines verkabelten BME280/680 ein Ruuvi-BLE-Tag im Einsatz ist) */
+    ruuvi_cfg_load(s_ruuvi_indoor_mac, sizeof(s_ruuvi_indoor_mac),
+                   s_ruuvi_outdoor_mac, sizeof(s_ruuvi_outdoor_mac));
+
+    lv_obj_t *ruuvi_title = lv_label_create(tab);
+    lv_label_set_text(ruuvi_title, "Temperatur (Ruuvi-Tag)");
+    lv_obj_set_style_text_font(ruuvi_title, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(ruuvi_title, lv_color_hex(0x333333), 0);
+    lv_obj_set_pos(ruuvi_title, 0, 104);
+
+    make_section_sep(tab, 124, MODAL_W - 2 * PAD);
+
+    s_ruuvi_scan_btn_in  = make_cfg_row(tab, 136, "Innen:", &s_ruuvi_indoor_lbl,
+                                        ruuvi_scan_btn_cb, ruuvi_clear_indoor_cb, (void *)0);
+    s_ruuvi_scan_btn_out = make_cfg_row(tab, 166, "Aussen:", &s_ruuvi_outdoor_lbl,
+                                        ruuvi_scan_btn_cb, ruuvi_clear_outdoor_cb, (void *)1);
+
+    /* GasBee: BLE-Gaswaage je Flasche per Scan zuordnen, Akku anzeigen (nur belegt,
+     * wenn statt der Kabelwaage (HX711) GasBees im Einsatz sind) */
+    gasbee_cfg_load(s_gasbee_mac[0], sizeof(s_gasbee_mac[0]),
+                    s_gasbee_mac[1], sizeof(s_gasbee_mac[1]));
+
+    lv_obj_t *gas_title = lv_label_create(tab);
+    lv_label_set_text(gas_title, "Gaswaage (GasBee)");
+    lv_obj_set_style_text_font(gas_title, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(gas_title, lv_color_hex(0x333333), 0);
+    lv_obj_set_pos(gas_title, 0, 196);
+
+    make_section_sep(tab, 216, MODAL_W - 2 * PAD);
+
+    s_gasbee_scan_btn[0] = make_cfg_row(tab, 228, "Flasche A:", &s_gasbee_lbl[0],
+                                        gasbee_scan_btn_cb, gasbee_clear_cb, (void *)0);
+    s_gasbee_scan_btn[1] = make_cfg_row(tab, 258, "Flasche B:", &s_gasbee_lbl[1],
+                                        gasbee_scan_btn_cb, gasbee_clear_cb, (void *)1);
+
+    /* Status-/Scan-Feedback (gemeinsam für Ruuvi und GasBee) */
+    s_ruuvi_status_lbl = lv_label_create(tab);
+    lv_label_set_text(s_ruuvi_status_lbl, "");
+    lv_obj_set_style_text_font(s_ruuvi_status_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_ruuvi_status_lbl, lv_color_hex(0x1565C0), 0);
+    lv_obj_set_pos(s_ruuvi_status_lbl, 0, 284);
+    lv_obj_set_width(s_ruuvi_status_lbl, MODAL_W - 2 * PAD);
+
+    ruuvi_refresh_labels();
+    gasbee_refresh_labels();
+    womo_sensorboard_set_ruuvi_scan_callback(ruuvi_scan_result_cb, NULL);
+    womo_sensorboard_set_gasbee_scan_callback(gasbee_scan_result_cb, NULL);
 }
 
 static void build_tab_grenzwerte(lv_obj_t *tab)
@@ -1098,6 +1873,8 @@ void womo_settings_modal_show(lv_obj_t *parent)
     s_ap_selected_ssid[0] = '\0';
     s_ap_scan_in_progress = false;
     s_ap_connect_task = NULL;
+    s_ruuvi_scan_in_progress = false;
+    s_ruuvi_scan_result_count = 0;
 
     /* ── Overlay ──────────────────────────────────────────── */
     s_overlay = lv_obj_create(parent);
@@ -1171,7 +1948,7 @@ void womo_settings_modal_show(lv_obj_t *parent)
     lv_obj_set_style_text_font(tab_bar, &lv_font_montserrat_14, 0);
 
     lv_obj_t *tab_lang   = lv_tabview_add_tab(tabview, "Sprache");
-    lv_obj_t *tab_rtc    = lv_tabview_add_tab(tabview, "RTC");
+    lv_obj_t *tab_rtc    = lv_tabview_add_tab(tabview, "RTC / Temp / Gas");
     lv_obj_t *tab_thresh = lv_tabview_add_tab(tabview, "Grenzwerte");
     lv_obj_t *tab_sys    = lv_tabview_add_tab(tabview, "System");
     lv_obj_t *tab_ap     = lv_tabview_add_tab(tabview, "AP");

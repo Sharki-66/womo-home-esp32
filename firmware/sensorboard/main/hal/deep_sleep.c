@@ -122,15 +122,24 @@ void deep_sleep_enter_cold(void)
     gpio_hold_en(SENSOR_PWR_12V_ON_GPIO);
     gpio_hold_en(SENSOR_PWR_12V_OFF_GPIO);
 
-    /* Multimedia (Radio) AUS */
+    /* Multimedia (Radio) AUS. Kein Hold: einfaches N-MOSFET-Gate, kein
+     * bistabiles Relais – ein kurzer Floating-Glitch beim Schlafen hat keine
+     * dauerhafte Wirkung, wird beim nächsten Boot ohnehin neu auf LOW gesetzt. */
     gpio_set_direction(SENSOR_MULTIMEDIA_PWR_GPIO, GPIO_MODE_OUTPUT);
     gpio_set_level(SENSOR_MULTIMEDIA_PWR_GPIO, 0);
-    gpio_hold_en(SENSOR_MULTIMEDIA_PWR_GPIO);
 
-    /* RS485-DE / Legacy GPIO LOW */
+    /* Licht/Pumpe AUS. Firmware-Ansteuerung noch nicht implementiert (Pin-
+     * Reservierung), aber sicherer Ruhezustand schon beim Schlafen/Boot nötig.
+     * Gleiches Prinzip wie Multimedia: kein Hold nötig. */
+    gpio_set_direction(SENSOR_LIGHT_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(SENSOR_LIGHT_GPIO, 0);
+    gpio_set_direction(SENSOR_PUMP_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(SENSOR_PUMP_GPIO, 0);
+
+    /* RS485-DE / Legacy GPIO LOW. Kein Hold: seit ESP-NOW-Migration liest/
+     * schreibt niemand mehr auf diesem Bus, Floating hat keine Wirkung mehr. */
     gpio_set_direction(SENSOR_ESPNOW_DE_LEGACY_GPIO, GPIO_MODE_OUTPUT);
     gpio_set_level(SENSOR_ESPNOW_DE_LEGACY_GPIO, 0);
-    gpio_hold_en(SENSOR_ESPNOW_DE_LEGACY_GPIO);
 
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
     esp_sleep_enable_touchpad_wakeup();
@@ -161,27 +170,37 @@ void deep_sleep_enter(void)
     /* BNO055: Suspend-Modus (~0,2 µA statt 12,3 mA) */
     bno055_app_sleep();
 
-    /* 12V Bordnetz AUS: bistabiles Relais – 2s Puls auf GPIO12 (AUS), dann LOW */
+    /* 12V Bordnetz AUS: bistabiles Relais – Puls SENSOR_PWR_12V_PULSE_MS auf GPIO12, dann LOW */
     gpio_set_direction(SENSOR_PWR_12V_OFF_GPIO, GPIO_MODE_OUTPUT);
     gpio_set_direction(SENSOR_PWR_12V_ON_GPIO,  GPIO_MODE_OUTPUT);
     gpio_set_level(SENSOR_PWR_12V_ON_GPIO,  0);   /* sicher LOW */
     gpio_set_level(SENSOR_PWR_12V_OFF_GPIO, 1);   /* AUS-Puls starten */
-    vTaskDelay(pdMS_TO_TICKS(100));              /* 100 ms Puls */
+    vTaskDelay(pdMS_TO_TICKS(SENSOR_PWR_12V_PULSE_MS));  /* Puls */
     gpio_set_level(SENSOR_PWR_12V_OFF_GPIO, 0);   /* Puls beenden → LOW */
     gpio_hold_en(SENSOR_PWR_12V_ON_GPIO);         /* LOW einfrieren im Sleep */
     gpio_hold_en(SENSOR_PWR_12V_OFF_GPIO);
-    ESP_LOGI(TAG, "LBE 12V AUS (GPIO%d 100ms-Puls abgeschlossen)", SENSOR_PWR_12V_OFF_GPIO);
+    ESP_LOGI(TAG, "LBE 12V AUS (GPIO%d Puls %d ms abgeschlossen)",
+             SENSOR_PWR_12V_OFF_GPIO, SENSOR_PWR_12V_PULSE_MS);
 
-    /* Multimedia (Radio) abschalten */
+    /* Multimedia (Radio) abschalten. Kein Hold: einfaches N-MOSFET-Gate, kein
+     * bistabiles Relais – ein kurzer Floating-Glitch beim Schlafen hat keine
+     * dauerhafte Wirkung, wird beim nächsten Boot ohnehin neu auf LOW gesetzt. */
     gpio_set_direction(SENSOR_MULTIMEDIA_PWR_GPIO, GPIO_MODE_OUTPUT);
     gpio_set_level(SENSOR_MULTIMEDIA_PWR_GPIO, 0);
-    gpio_hold_en(SENSOR_MULTIMEDIA_PWR_GPIO);
 
-    /* Ehemaliger RS485-DE (GPIO8): im Deep-Sleep LOW halten (kein Empfangsstrom).
-     * gpio_hold_en() friert den Pegel ein, auch wenn UART im Sleep aus ist. */
+    /* Licht/Pumpe AUS. Firmware-Ansteuerung noch nicht implementiert (Pin-
+     * Reservierung), aber sicherer Ruhezustand schon beim Schlafen/Boot nötig.
+     * Gleiches Prinzip wie Multimedia: kein Hold nötig. */
+    gpio_set_direction(SENSOR_LIGHT_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(SENSOR_LIGHT_GPIO, 0);
+    gpio_set_direction(SENSOR_PUMP_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(SENSOR_PUMP_GPIO, 0);
+
+    /* Ehemaliger RS485-DE (GPIO8): weiterhin LOW setzen (kein Empfangsstrom),
+     * aber kein Hold mehr – seit ESP-NOW-Migration liest/schreibt niemand
+     * mehr auf diesem Bus, Floating im Sleep hat keine Wirkung mehr. */
     gpio_set_direction(SENSOR_ESPNOW_DE_LEGACY_GPIO, GPIO_MODE_OUTPUT);
     gpio_set_level(SENSOR_ESPNOW_DE_LEGACY_GPIO, 0);
-    gpio_hold_en(SENSOR_ESPNOW_DE_LEGACY_GPIO);
 
     /* ── Sleep einleiten ───────────────────────────────────────────── */
 

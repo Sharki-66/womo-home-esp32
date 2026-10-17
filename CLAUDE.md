@@ -38,6 +38,7 @@ Bei jeder Code-Änderung die betroffenen Dateien mitaktualisieren:
 | **Sensorboard** | ESP32-S3-WROOM-1 N16R8 | `firmware/sensorboard/` | Sensoren erfassen, RS485 → Display, Webdashboard |
 | **Display** | ESP32-S3-Touch-LCD-7 | `firmware/display/` | LVGL-GUI, Visualisierung, Steuerung |
 | **GasBee** | ESP32-C3 | `firmware/gasbee/` | BLE-Gaswaage (Flaschenwägung) |
+| **GasBee nRF** | Seeed XIAO nRF52840 | `firmware/gasbee_nrf/` | Ersatz für GasBee, BLE-Advertising-Format v1 (Spezifikation: `firmware/sensorboard/README.md`), nRF Connect SDK v3.4.1, siehe dortige README |
 | **Router** | Teltonika RUTX11 | — | WLAN/LTE/GNSS, OpenWRT |
 
 ## Build-System
@@ -48,12 +49,14 @@ cd firmware/<sensorboard|display|gasbee>
 idf.py build
 ```
 
+GasBee nRF (`firmware/gasbee_nrf/`) nutzt stattdessen das nRF Connect SDK (Zephyr). Build-Befehl siehe `firmware/gasbee_nrf/README.md`.
+
 Build, Flash und Monitor werden vom Nutzer über VS Code Tasks gestartet — Claude erklärt nur, führt keine Flash-Befehle aus.
 
 ## Kommunikation zwischen Teilprojekten
 
 - **RS485** (57600 8N1, Half-Duplex): Sensorboard → Display, JSON Topic-basiert
-- **BLE** (NimBLE): GasBee → Sensorboard (Gewichtsdaten)
+- **BLE** (NimBLE, passiver Scan): GasBee (bis zu 2, Flasche A/B) und Ruuvi-Tags → Sensorboard per Advertising, kein Connect. HX711 am Kabel hat Vorrang vor GasBee.
 - **HTTP/UCI**: Display → RUTX11 Router (WiFi/LTE/GPS)
 - **WiFi**: Sensorboard im RUTX11-Netz (NTP, Web-Dashboard)
 
