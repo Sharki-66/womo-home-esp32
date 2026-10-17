@@ -970,8 +970,8 @@ static void rs485_publish_gas(void)
     if (nc_a) cJSON_AddBoolToObject(root, "nc_a", true);
     if (nc_b) cJSON_AddBoolToObject(root, "nc_b", true);
 
-    ESP_LOGI(TAG, "GAS: active=%d, %.2f kg (%.0f%%), A=%.2f kg%s, B=%.2f kg%s, rate=%.3f/%.3f kg/h, rest=%.1f h",
-             active, fill_kg, pct, net_a, nc_a ? " (nc)" : "", net_b, nc_b ? " (nc)" : "",
+    ESP_LOGI(TAG, "GAS[%s]: active=%d, %.2f kg (%.0f%%), A=%.2f kg%s, B=%.2f kg%s, rate=%.3f/%.3f kg/h, rest=%.1f h",
+             gas_source_name(gs.src), active, net, pct, net_a, nc_a ? " (nc)" : "", net_b, nc_b ? " (nc)" : "",
              rate1h, rate2h, rest_h);
 
     rs485_send_frame("gas", root, false);

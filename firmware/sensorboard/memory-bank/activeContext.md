@@ -13,11 +13,14 @@ Zwei GasBees (Flasche A/B, `firmware/gasbee_nrf`) liefern per Advertising-Format
 (ersetzt den alten GATT-Client `gasbee_ble_client`, dessen Werte nie verwendet wurden),
 `sensors/gas_source.c` (HX711-Modul vorhanden → Vorrang, sonst GasBee, sonst nc).
 Kommandos `gasbee_config`/`gasbee_scan_request`, Topic `gasbee_scan`, Felder `src` +
-Akku/Flags in `hx`/`gas`. BLE-Scan jetzt passiv (`SENSOR_BLE_SCAN_ITVL/WINDOW`, 50/30 ms).
+Akku/Flags in `hx`/`gas`. BLE-Scan jetzt passiv (`SENSOR_BLE_SCAN_ITVL/WINDOW`, jetzt 50/50 ms).
 Display: Tab „RTC / Temp / Gas“ mit GasBee-Zuordnung.
 **Test 2026-10-17:** XIAO-GasBee `F7:8A:BE:C9:83:CB` als Flasche A, ohne HX711-Modul
 → Quelle `ble`, Gewicht/Akku/Flags kommen im Display an. Fix dabei: Veraltungsprüfung
 in `gas_source.c` verglich µs mit ms (Wert galt nach 0,61 s als veraltet).
+**Scan-Fenster (2026-10-17):** Bei 30/50 ms kamen konstant nur 2/10 Pakete pro seq an
+→ `SENSOR_BLE_SCAN_WINDOW` = Intervall (50/50 ms). Ergebnis noch prüfen.
+HX711 ohne Modul warnt jetzt nur einmal (Rest DEBUG).
 **Offen:** Pakete pro seq im Log (`[Flasche X] seq N: k/10 Pakete`) – fällt k dauerhaft
 unter 2–3, Scan-Window auf Intervall anheben. LiPo-Kennlinie am echten Akku prüfen.
 `LOG_LEVEL_GASBEE_BLE` temporär INFO – nach Test zurück auf WARN.
@@ -65,6 +68,8 @@ Board, fehlt der Symlink → Flash schlägt fehl statt falsches Board zu treffen
 Sensorboard-Seriennummer in der Regel war noch die der alten Platine
 (`1C:DB:D4:74:8D:E4`) → korrigiert auf `44:1B:F6:CF:04:1C` (neue Platine, per
 `udevadm` ausgelesen). Bei Platinentausch Regel nachziehen.
+GasBee nRF (XIAO, beliebig viele): allgemeine Regel `ttyGASBEE_<Seriennummer>`
+(VID/PID 2fe3:0004), Monitor mit Auswahl `tools/gasbee-monitor.sh`.
 
 ### Ruuvi-Außensensor-Debug (offen, 2026-08-25)
 Außensensor wird nicht erkannt ("Keine Ruuvi-Tags gefunden!"). Bereits geklärt:

@@ -78,7 +78,8 @@ static void hx711_read_channel(hx711_gain_t gain, const char *label,
 
     esp_err_t err = hx711_apply_gain(gain);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "%s: gain switch fehlgeschlagen (%s)", label, esp_err_to_name(err));
+        // DEBUG: tritt ohne Modul bei jedem Zyklus auf, Zusammenfassung loggt hx711_task
+        ESP_LOGD(TAG, "%s: gain switch fehlgeschlagen (%s)", label, esp_err_to_name(err));
         return;
     }
 
@@ -125,6 +126,7 @@ static void hx711_read_channel(hx711_gain_t gain, const char *label,
 
 static void hx711_task(void *arg)
 {
+    bool fail_reported = false;
     const TickType_t delay_ticks = pdMS_TO_TICKS(HX711_LOG_INTERVAL_MS);
     while (1) {
         int32_t raw_a = 0;
@@ -154,12 +156,21 @@ static void hx711_task(void *arg)
             xSemaphoreGive(s_mutex);
         }
 
+        // Ausfall nur einmal als WARN melden (ohne Modul, z. B. GasBee-Betrieb,
+        // sonst alle 10 s), Wiederkehr als INFO
         if (ok_a || ok_b) {
+            if (fail_reported) {
+                ESP_LOGI(TAG, "HX711 wieder verfügbar");
+                fail_reported = false;
+            }
             ESP_LOGI(TAG, "HX711 A=%ld (%.2f kg) %s | B=%ld (%.2f kg) %s",
                      (long)raw_a, kg_a, ok_a ? "ok" : "fail",
                      (long)raw_b, kg_b, ok_b ? "ok" : "fail");
+        } else if (!fail_reported) {
+            ESP_LOGW(TAG, "HX711 read failed – Modul fehlt? (Wiederholungen nur noch DEBUG)");
+            fail_reported = true;
         } else {
-            ESP_LOGW(TAG, "HX711 read failed");
+            ESP_LOGD(TAG, "HX711 read failed");
         }
 
         vTaskDelay(delay_ticks);

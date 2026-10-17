@@ -346,13 +346,13 @@
 // ====================================================================================
 // BLE-Scan (ble_manager, gemeinsam für Ruuvi + GasBee)
 // Passiv: Ruuvi und GasBee senden alle Daten im Advertising, keine Scan-Response nötig.
-// Tastverhältnis 30/50 ms (60 %): GasBee sendet 10 Pakete/Zyklus im 1-s-Abstand →
-// rechnerisch Verlust aller 10 bei 0,4^10 ≈ 0,01 %. Pakete pro seq werden geloggt
-// (gasbee_ble); fällt das dauerhaft unter 2–3, Window auf Intervall anheben.
+// Tastverhältnis 100 % (Window = Intervall, Empfehlung der GasBee-Vorgabe). Mit 30/50 ms
+// kamen im Test (2026-10-17, WLAN/ESP-NOW aktiv) nur 2/10 GasBee-Pakete pro seq an –
+// den Rest nimmt sich der Coex-Arbiter. Pakete pro seq werden geloggt (gasbee_ble).
 // Einheit: 0,625 ms.
 // ====================================================================================
 #define SENSOR_BLE_SCAN_ITVL         0x0050  // 80 × 0,625 ms = 50 ms
-#define SENSOR_BLE_SCAN_WINDOW       0x0030  // 48 × 0,625 ms = 30 ms
+#define SENSOR_BLE_SCAN_WINDOW       0x0050  // 80 × 0,625 ms = 50 ms (= Intervall)
 
 // ====================================================================================
 // GasBee BLE (Gaswaage, firmware/gasbee_nrf) – Advertising-Format v1
