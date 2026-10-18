@@ -34,6 +34,17 @@
 };
 
 &gpio0 {
+	/* Ladestrom BQ25101 (Schaltplan: ISET – R18 2,7 kΩ – GND, ISET – R12 2,7 kΩ – P0.13_HICHG).
+	 * P0.13 Low → R12 parallel → 1,35 kΩ ≈ 100 mA; hochohmig ≈ 50 mA.
+	 * Nicht High setzen: dann speisen 3,3 V über R12 in ISET.
+	 * Akku 1000 mAh → 0,1C. */
+	hichg: hichg {
+		gpio-hog;
+		gpios = <13 GPIO_ACTIVE_HIGH>;
+		output-low;
+		line-name = "HICHG";
+	};
+
 	read_bat_en: read-bat-en {
 		gpio-hog;
 		gpios = <14 GPIO_ACTIVE_HIGH>;

@@ -29,6 +29,7 @@ GATT (Kompatibilität mit dem heutigen `firmware/sensorboard/main/network/gasbee
 - **Akkumessung:** Zephyr-Treiber `voltage-divider` (Knoten `vbatt`, AIN7, 1 MΩ/510 kΩ laut Seeed-Schaltplan) **ohne** `power-gpios`. P0.14 wird per `gpio-hog` fest auf Low gesetzt. Mit `power-gpios` würde der Treiber P0.14 beim Init kurz und im PM-Suspend dauerhaft auf High setzen, und genau davor warnt Seeed (P0.31 kann dann über 3,6 V kommen). Gemessen wird im Messzyklus in `main.c`.
 - **Messzyklus und Funk:** Intervall `CONFIG_GASBEE_MEASURE_INTERVAL_S` (300 s, `debug.conf` 60 s), feste Taktung ab Zyklusbeginn. Der Burst läuft über `bt_le_ext_adv_start()` mit `num_events = 10` (`CONFIG_BT_EXT_ADV`, Legacy-PDU, verbindbar). Bei bestehender Verbindung gibt es keinen Burst (`CONFIG_BT_MAX_CONN=1`). Der HX711 geht zwischen den Zyklen in den Power-Down, nach dem Aufwachen werden 4 Wandlungen verworfen.
 - **Advertising-Gewicht = Brutto ohne Tara.** Tara und Gas rechnet das Sensorboard. Die GasBee-Tara (`gasbee/tare`) wirkt nur auf GATT 0x2B01..0x2B03.
+- **Ladestrom 100 mA:** P0.13 per `gpio-hog` `output-low` (Schaltplan: R12 2,7 kΩ von ISET nach P0.13 parallel zu R18 2,7 kΩ nach GND). P0.13 nie High setzen. Für Akkus unter 100 mAh den Hog entfernen, dann sind es 50 mA.
 - **Ladestatus:** P0.17 (`~CHG`) über `zephyr,user chg-gpios` mit Pull-Up. `&pwm0` ist im Overlay deaktiviert, weil das Boardfile dort PWM auflegt.
 - **Persistenz:** Zephyr Settings auf NVS, `storage_partition` @ 0xEC000. Schlüssel: `gasbee/offset`, `gasbee/scale`, `gasbee/tare`.
 

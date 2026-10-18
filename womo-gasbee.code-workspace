@@ -1,94 +1,69 @@
 {
   "folders": [
     {
-      "name": "🔵 GasBee (firmware/gasbee) - ESP32-C3",
+      "name": "GasBee nRF (XIAO nRF52840) - MAIN",
+      "path": "firmware/gasbee_nrf"
+    },
+    {
+      "name": "GasBee (ESP32-C3) - REF",
       "path": "firmware/gasbee"
     }
   ],
   "settings": {
-    "idf.flashBaudRate": "460800",
-    "idf.port": "/dev/ttyUSB0",
-    "idf.flashType": "UART",
-    "idf.adapterTargetName": "esp32c3",
-    "idf.openOcdConfigs": ["board/esp32c3-builtin.cfg"],
-    "files.associations": { "*.h": "c", "*.c": "c" },
-    "C_Cpp.default.compilerPath": "${config:idf.toolsPath}/tools/riscv32-esp-elf/esp-13.2.0_20240530/riscv32-esp-elf/bin/riscv32-esp-elf-gcc",
-    "C_Cpp.default.compileCommands": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}/build/compile_commands.json",
+    "files.associations": { "*.h": "c", "*.c": "c", "*.overlay": "dts", "*.conf": "properties" },
+    "C_Cpp.default.compileCommands": "${workspaceFolder:GasBee nRF (XIAO nRF52840) - MAIN}/build/gasbee_nrf/compile_commands.json",
     "files.defaultLanguage": "c",
     "explorer.sortOrder": "foldersNestsFiles",
     "idf.showOnboardingOnInit": false,
-    "idf.enableStatusBar": true,
     "chat.agent.maxRequests": 50
   },
   "tasks": {
     "version": "2.0.0",
     "tasks": [
       {
-        "label": "Monitor GasBee nRF (XIAO, Auswahl)",
+        "label": "Build GasBee nRF (Testmodus)",
+        "detail": "Status-LED an, Messintervall 60 s (debug.conf)",
         "type": "shell",
-        "command": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}/../../tools/gasbee-monitor.sh",
-        "problemMatcher": [],
-        "isBackground": true,
-        "presentation": { "reveal": "always", "panel": "dedicated", "focus": true, "clear": true }
-      },
-      {
-        "label": "Build GasBee",
-        "type": "shell",
-        "command": "idf.py",
-        "args": ["build"],
-        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "command": "~/.vscode/extensions/nordic-semiconductor.nrf-connect-*/platform/nrfutil/bin/nrfutil-sdk-manager toolchain launch --ncs-version v3.4.1 -- env ZEPHYR_BASE=$HOME/ncs/v3.4.1/zephyr west build -p always -b xiao_ble -d build . -- -DEXTRA_CONF_FILE=debug.conf",
+        "options": { "cwd": "${workspaceFolder:GasBee nRF (XIAO nRF52840) - MAIN}" },
         "group": { "kind": "build", "isDefault": true },
-        "problemMatcher": ["$gcc"],
+        "problemMatcher": { "base": "$gcc", "fileLocation": "absolute" },
         "presentation": { "reveal": "always", "panel": "shared", "clear": true }
       },
       {
-        "label": "Flash GasBee (/dev/ttyUSB0)",
+        "label": "Build GasBee nRF (Normalbetrieb)",
+        "detail": "Status-LED aus, Messintervall 300 s",
         "type": "shell",
-        "command": "idf.py",
-        "args": ["-p", "/dev/ttyUSB0", "flash"],
-        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "command": "~/.vscode/extensions/nordic-semiconductor.nrf-connect-*/platform/nrfutil/bin/nrfutil-sdk-manager toolchain launch --ncs-version v3.4.1 -- env ZEPHYR_BASE=$HOME/ncs/v3.4.1/zephyr west build -p always -b xiao_ble -d build .",
+        "options": { "cwd": "${workspaceFolder:GasBee nRF (XIAO nRF52840) - MAIN}" },
+        "group": "build",
+        "problemMatcher": { "base": "$gcc", "fileLocation": "absolute" },
+        "presentation": { "reveal": "always", "panel": "shared", "clear": true }
+      },
+      {
+        "label": "Flash GasBee nRF (UF2)",
+        "detail": "Vorher Reset 2x drücken, dann erscheint das Laufwerk XIAO-SENSE",
+        "type": "shell",
+        "command": "uf2=build/gasbee_nrf/zephyr/zephyr.uf2; drv=/media/$USER/XIAO-SENSE; [ -f \"$uf2\" ] || { echo \"$uf2 fehlt – erst bauen.\"; exit 1; }; [ -d \"$drv\" ] || { echo \"$drv nicht gefunden – Reset am XIAO 2x schnell drücken und Task erneut starten.\"; exit 1; }; cp -v \"$uf2\" \"$drv/\" && sync && echo 'Fertig. Der XIAO startet neu, das Laufwerk verschwindet (normal).'",
+        "options": { "cwd": "${workspaceFolder:GasBee nRF (XIAO nRF52840) - MAIN}" },
         "group": "build",
         "problemMatcher": [],
         "presentation": { "reveal": "always", "panel": "shared", "clear": false }
       },
       {
-        "label": "Monitor GasBee (/dev/ttyUSB0)",
+        "label": "Monitor GasBee nRF",
+        "detail": "tools/gasbee-monitor.sh, Beenden mit Strg+]",
         "type": "shell",
-        "command": "idf.py",
-        "args": ["-p", "/dev/ttyUSB0", "monitor"],
-        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
-        "group": "build",
-        "isBackground": true,
+        "command": "${workspaceFolder:GasBee nRF (XIAO nRF52840) - MAIN}/../../tools/gasbee-monitor.sh",
         "problemMatcher": [],
-        "presentation": { "reveal": "always", "panel": "dedicated", "focus": true, "clear": false }
-      },
-      {
-        "label": "Build + Flash + Monitor GasBee",
-        "type": "shell",
-        "command": "idf.py",
-        "args": ["-p", "/dev/ttyUSB0", "build", "flash", "monitor"],
-        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
-        "group": "build",
         "isBackground": true,
-        "problemMatcher": ["$gcc"],
         "presentation": { "reveal": "always", "panel": "dedicated", "focus": true, "clear": true }
       },
       {
-        "label": "Set Target esp32c3",
+        "label": "Clean GasBee nRF",
         "type": "shell",
-        "command": "idf.py",
-        "args": ["set-target", "esp32c3"],
-        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
-        "group": "build",
-        "problemMatcher": [],
-        "presentation": { "reveal": "always", "panel": "shared", "clear": true }
-      },
-      {
-        "label": "Clean GasBee Build",
-        "type": "shell",
-        "command": "idf.py",
-        "args": ["fullclean"],
-        "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
+        "command": "rm -rf build",
+        "options": { "cwd": "${workspaceFolder:GasBee nRF (XIAO nRF52840) - MAIN}" },
         "group": "build",
         "problemMatcher": [],
         "presentation": { "reveal": "always", "panel": "shared", "clear": true }
@@ -97,7 +72,7 @@
   },
   "extensions": {
     "recommendations": [
-      "espressif.esp-idf-extension",
+      "nordic-semiconductor.nrf-connect-extension-pack",
       "ms-vscode.cpptools"
     ]
   }

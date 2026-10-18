@@ -12,6 +12,7 @@ Ersatz für [firmware/gasbee](../gasbee/) (ESP32-C3). Wiegt die Gasflasche mit e
 | Versorgung HX711 | **3V3 vom XIAO**. Die GPIOs des nRF52840 sind nicht 5-V-tolerant. |
 | Programmierung | USB, UF2-Bootloader (Adafruit), kein SWD nötig |
 | Akku | LiPo 1 Zelle 3,7 V / 1000 mAh an den Pads BAT+/BAT− (Unterseite). Geladen wird über USB-C vom Laderegler BQ25101 auf dem Board, ohne externe Beschaltung. |
+| Ladestrom | ca. **100 mA** (0,1C): P0.13 (`HICHG`) per `gpio-hog` fest Low, damit liegen R12 und R18 (je 2,7 kΩ) parallel an ISET. Hochohmig wären es ca. 50 mA. **Nicht High setzen.** Nachgemessen ist der Wert noch nicht. |
 | Ladestatus | P0.17 = BQ25101 `~CHG`, Low = lädt (Seeed-Schaltplan). Das Boardfile legt dort `pwm0` auf, das ist im Overlay deaktiviert. |
 | Akkumessung | Laut Seeed-Schaltplan: VBAT – R16 1 MΩ – P0.31 (AIN7) – R17 510 kΩ – P0.14 (READ_BAT). P0.14 bleibt per `gpio-hog` dauerhaft Low, wie Seeed empfiehlt. Bei High kann P0.31 über 3,6 V kommen. |
 
@@ -101,6 +102,15 @@ Die GATT-Werte werden im Messzyklus aktualisiert. 0x2B01 bis 0x2B03 rechnen wie 
 Voraussetzung: nRF Connect SDK **v3.4.1** mit passender Toolchain, installiert über die VS-Code-Extension „nRF Connect" nach `~/ncs`.
 
 **VS Code:** Im nRF-Connect-Panel „Open an existing application" wählen, diesen Ordner öffnen und eine Build-Konfiguration mit Board **`xiao_ble`** anlegen.
+
+**VS Code mit Workspace-Datei:** [`womo-gasbee.code-workspace`](../../womo-gasbee.code-workspace) im Repo-Wurzelverzeichnis öffnen. Darin sind diese Tasks:
+- Build Testmodus (Standard, Strg+Shift+B)
+- Build Normalbetrieb
+- Flash per UF2-Kopie auf `XIAO-SENSE`
+- Monitor über `tools/gasbee-monitor.sh`
+- Clean
+
+Der ESP32-C3-GasBee ist dort nur als Referenzordner eingebunden.
 
 **Kommandozeile:**
 
