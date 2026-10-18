@@ -78,6 +78,8 @@ Tara, Voll-Referenz, Netto, Füllstand und Verbrauchsrate berechnet das Sensorbo
 
 **Quellenwahl (`sensors/gas_source.c`):** HX711-Modul am Kabel vorhanden (DOUT antwortet) → HX711 liefert A+B (Vorrang). Sonst GasBee A/B, sofern aktuell. Sonst `nc`. Eine fehlende Wägezelle bei vorhandenem HX711-Modul ist nicht erkennbar – dieser Mischbetrieb ist nicht vorgesehen. Beim Wechsel HX711 ↔ GasBee wird die Basis der Verbrauchsrate neu gesetzt.
 
+**Verbrauch über Ausschalt-Lücken:** Ausschalt-Lücke: `gas_state` speichert Netto A/B mit Uhrzeit (RTC/NTP) und Quelle; beim ersten Messwert nach dem Boot wird der mittlere Verbrauch über die Lücke direkt als `rate1h`/`rate2h` übernommen (gleiche Quelle, Lücke ≤ `SENSOR_GAS_GAP_MAX_S` = 1 Tag, Abnahme ≥ `SENSOR_GAS_ACTIVE_EPS_KG`), sonst Raten auf 0 und neue Basis.
+
 **GasBee-MAC-Konfiguration:** Display → Sensorboard `cmd:"gasbee_config"` (`bottle_a_mac`, `bottle_b_mac`), NVS `gasbee_cfg`; leer = Slot deaktiviert. `cmd:"gasbee_scan_request"` → Antwort-Topic `gasbee_scan`.
 
 **`press_trend_state`-Werte:** `fall_fast` / `fall_slow` / `steady` / `rise_slow` / `rise_fast`
@@ -128,7 +130,7 @@ Statische Dateien (HTML, PNG, favicon) werden aus der SPIFFS-Partition `storage`
 | `bno055` | `calib`, `pr_zero` | Kalibrierungsoffsets, Pressure-Zero |
 | `bme680` | `press_hist` | Luftdruck-Historie (96 Samples / 24h) |
 | `bsec` | `state_in_<addr>_v<n>` | BSEC IAQ State (sensorspezifisch, z.B. `state_in_76_v3`) |
-| `gas_state` | `gas` | Gasverbrauch (Raten, Tare, Flaschentausch) |
+| `gas_state` | `gas` | Gasverbrauch (Raten, Voll-Referenzen, letzter Wert mit Uhrzeit + Quelle) |
 | `tank_state` | `tank1`, `tank2` | Tank-Verbrauchsraten |
 | `wifi_cfg` | `ssid`, `pass` | WLAN-Zugangsdaten (RUTX11) |
 | `ruuvi_cfg` | `indoor_mac`, `outdoor_mac` | MAC-Filter Ruuvi-BLE-Scanner (vom Display konfiguriert) |

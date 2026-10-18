@@ -1,11 +1,17 @@
 # Active Context – WoMoHome Sensorboard
 
-*Stand: 2026-10-17*
+*Stand: 2026-10-18*
 
 ## Aktueller Branch
 `feature/espnow-migration`
 
 ## Laufende Arbeiten
+
+### Gasverbrauch über Ausschalt-Lücke (2026-10-18, gebaut, nicht auf Hardware getestet)
+`espnow_modem.c`: `gas_state_t` um `last_epoch_s`/`last_src` erweitert (Migration altes Layout), `gas_bridge_gap()` beim ersten Messwert nach Boot. Behebt nebenbei: `last_ts_us` (Laufzeit) aus NVS war nach Neustart unbrauchbar → Rate fror ein. Entscheidungen: Lücken-Rate direkt übernehmen, >1 Tag/ungültige Uhrzeit → Raten 0, gilt für HX711 + GasBee.
+**Test:** Board über Nacht aus → Log `Gas-Lücke … überbrückt` bzw. `nicht überbrückt (Grund)`.
+Risiko: RTC-Batterie leer + kein NTP → falsche, aber „gültige“ Uhrzeit.
+
 
 ### GasBee per BLE-Advertising (2026-10-17, auf Hardware getestet)
 Zwei GasBees (Flasche A/B, `firmware/gasbee_nrf`) liefern per Advertising-Format v1

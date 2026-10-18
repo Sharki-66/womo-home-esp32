@@ -297,6 +297,7 @@
 #define SENSOR_GAS_RATE_ALPHA_2H    0.1f     // EMA-Glättungsfaktor (2h-Fenster)
 #define SENSOR_GAS_RATE_MIN_DT_SEC  30       // Minimaler Messpunkt-Abstand (Sek)
 #define SENSOR_GAS_ACTIVE_EPS_KG    0.05f    // Mindest-Änderung für Verbrauchserkennung
+#define SENSOR_GAS_GAP_MAX_S        86400    // Max. Ausschalt-Lücke, über die der Verbrauch gemittelt wird (1 Tag)
 
 // =============================================================================
 // Tank Rate Calculation (EMA-based, analog zu Gas)

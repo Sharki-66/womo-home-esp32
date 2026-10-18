@@ -28,6 +28,7 @@
 
 | Feature | Status | Nächste Schritte |
 |---|---|---|
+| Gasverbrauch über Ausschalt-Lücke (≤ 1 Tag) | Gebaut 2026-10-18 | Über Nacht testen, Log `Gas-Lücke …` prüfen |
 | GasBee BLE (Advertising v1, Flasche A/B) | Läuft auf Hardware (2026-10-17, Flasche A) | Empfangsquote pro seq beobachten, Quellenwechsel HX711 ↔ GasBee testen, Flasche B, LiPo-Kennlinie verifizieren, GasBee kalibrieren. Alter GATT-Client entfernt (lieferte Werte nur ins Log). |
 | INA226 Shunt-Kalibrierung | Hardware nicht eingebaut | Shunt messen → `SENSOR_INA226_SHUNT_MOHM` setzen |
 | Original WoMo-Tanksensoren | Planung | **Pin-Konflikt (2026-08-30):** GPIO17/18 waren hierfür vorgesehen, sind aber jetzt für Licht/Pumpe belegt (siehe unten) — andere freie Pins wählen, Widerstandsnetzwerk, 4-Stufen Reed |

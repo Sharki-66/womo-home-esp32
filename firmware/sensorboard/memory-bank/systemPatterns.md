@@ -80,7 +80,8 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 ### HX711 (hx711_sensor.c)
 - Dual-Channel (A + B), 3 Samples gemittelt
 - Kalibrierung: `Gewicht = (raw - OFFSET) * SCALE`
-- Gasverbrauch: EMA-basierte Rate (1h + 2h Fenster), in NVS persistiert
+- Gasverbrauch: EMA-basierte Rate (1h + 2h Fenster), in NVS persistiert (gilt für HX711 und GasBee)
+- Ausschalt-Lücke: `gas_state` speichert Netto A/B mit Uhrzeit (RTC/NTP) und Quelle; beim ersten Messwert nach dem Boot wird der mittlere Verbrauch über die Lücke direkt als `rate1h`/`rate2h` übernommen (gleiche Quelle, Lücke ≤ `SENSOR_GAS_GAP_MAX_S` = 1 Tag, Abnahme ≥ `SENSOR_GAS_ACTIVE_EPS_KG`), sonst Raten auf 0 und neue Basis.
 
 ### BME680 / BSEC (bme680_sensor.c)
 - Bosch BSEC Bibliothek (3.3V, 3s Sample Rate, 4d)

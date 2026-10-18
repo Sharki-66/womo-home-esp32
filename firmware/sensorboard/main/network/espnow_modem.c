@@ -357,14 +357,28 @@ static volatile bool s_shutdown_pending = false;
 typedef struct {
     double last_net_a;
     double last_net_b;
-    int64_t last_ts_us;
+    int64_t last_ts_us;     // Laufzeit (esp_timer) – nur innerhalb eines Boots gültig
     double rate1h;
     double rate2h;
     float ref_full_a;   // Gewicht bei Flaschenwechsel Kanal A (0 = nicht gesetzt → Fallback auf TARE)
     float ref_full_b;   // Gewicht bei Flaschenwechsel Kanal B (0 = nicht gesetzt → Fallback auf TARE)
+    int64_t last_epoch_s;   // Uhrzeit (UTC) von last_net_a/b, 0 = unbekannt – für Lücken über Neustarts
+    int32_t last_src;       // gas_src_t von last_net_a/b
 } gas_state_t;
 
+// Altes NVS-Layout (bis 2026-10) – wird beim Laden migriert
+typedef struct {
+    double last_net_a;
+    double last_net_b;
+    int64_t last_ts_us;
+    double rate1h;
+    double rate2h;
+    float ref_full_a;
+    float ref_full_b;
+} gas_state_v1_t;
+
 static gas_state_t s_gas_state = {0};
+static bool s_gas_gap_pending = false;  // erster Messwert nach Boot → Lücke seit NVS-Stand auswerten
 static int s_gas_active_override = SENSOR_GAS_ACTIVE_DEFAULT; // -1 = auto
 static bool s_ref_pending_a = false;  // nächste HX711-Messung als Voll-Referenz A speichern
 static bool s_ref_pending_b = false;  // nächste HX711-Messung als Voll-Referenz B speichern
@@ -376,9 +390,27 @@ static void gas_state_load_from_nvs(void)
 {
     nvs_handle_t handle;
     if (nvs_open(GAS_NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return;
-    size_t size = sizeof(gas_state_t);
-    nvs_get_blob(handle, GAS_NVS_KEY, &s_gas_state, &size);
+    size_t size = 0;
+    if (nvs_get_blob(handle, GAS_NVS_KEY, NULL, &size) == ESP_OK) {
+        if (size == sizeof(gas_state_t)) {
+            nvs_get_blob(handle, GAS_NVS_KEY, &s_gas_state, &size);
+        } else if (size == sizeof(gas_state_v1_t)) {
+            // Altes Layout ohne Uhrzeit: Raten + Voll-Referenzen übernehmen
+            gas_state_v1_t v1 = {0};
+            if (nvs_get_blob(handle, GAS_NVS_KEY, &v1, &size) == ESP_OK) {
+                s_gas_state = (gas_state_t){
+                    .last_net_a = v1.last_net_a, .last_net_b = v1.last_net_b,
+                    .rate1h = v1.rate1h, .rate2h = v1.rate2h,
+                    .ref_full_a = v1.ref_full_a, .ref_full_b = v1.ref_full_b,
+                };
+                ESP_LOGI(TAG, "Gas-State aus altem NVS-Layout migriert");
+            }
+        }
+    }
     nvs_close(handle);
+    // Laufzeit-Zeitstempel stammt aus dem vorigen Boot → unbrauchbar
+    s_gas_state.last_ts_us = 0;
+    s_gas_gap_pending = true;
 }
 
 static void gas_state_save_to_nvs(void)
@@ -388,6 +420,55 @@ static void gas_state_save_to_nvs(void)
     nvs_set_blob(handle, GAS_NVS_KEY, &s_gas_state, sizeof(gas_state_t));
     nvs_commit(handle);
     nvs_close(handle);
+}
+
+// Laufzeit-Zeitstempel → Uhrzeit (UTC, s); 0 wenn die Systemzeit (RTC/NTP) nicht gültig ist
+static int64_t gas_ts_to_epoch_s(int64_t ts_us)
+{
+    time_sync_status_t st;
+    if (ts_us <= 0 || time_sync_get_status(&st) != ESP_OK || !st.system_time_valid) return 0;
+    return (int64_t)(ts_us_to_epoch_ms(ts_us) / 1000.0);
+}
+
+// Erster Messwert nach dem Boot: mittleren Verbrauch über die Ausschalt-Lücke bilden.
+// Setzt in jedem Fall die neue Basis und speichert den State.
+static void gas_bridge_gap(gas_src_t src, int active, double net_a, double net_b,
+                           int64_t ts_us, int64_t epoch_s)
+{
+    const int64_t dt = epoch_s - s_gas_state.last_epoch_s;
+    const double d_a = net_a - s_gas_state.last_net_a;
+    const double d_b = net_b - s_gas_state.last_net_b;
+    const double d_active = (active == 0) ? d_a : (active == 1) ? d_b : (d_a + d_b);
+
+    const char *why = NULL;
+    if (s_gas_state.last_epoch_s <= 0)              why = "kein gespeicherter Zeitstempel";
+    else if (epoch_s <= 0)                          why = "Uhrzeit ungültig";
+    else if (s_gas_state.last_src != (int32_t)src)  why = "andere Gas-Quelle";
+    else if (dt < 0)                                why = "Uhrzeit inkonsistent";
+    else if (dt < SENSOR_GAS_RATE_MIN_DT_SEC)       why = NULL;  // kurzer Neustart: Raten behalten
+    else if (dt > SENSOR_GAS_GAP_MAX_S)             why = "Lücke zu lang";
+    else if (d_active > -SENSOR_GAS_ACTIVE_EPS_KG)  why = "kein Verbrauch / Gewicht gestiegen";
+
+    if (why) {
+        ESP_LOGI(TAG, "Gas-Lücke nicht überbrückt (%s, dt=%lld s): Raten zurückgesetzt",
+                 why, (long long)dt);
+        s_gas_state.rate1h = 0.0;
+        s_gas_state.rate2h = 0.0;
+    } else if (dt >= SENSOR_GAS_RATE_MIN_DT_SEC) {
+        // Mittelwert über Stunden → direkt als Rate übernehmen, nicht per EMA verdünnen
+        double rate = (-d_active) / (double)dt * 3600.0;
+        s_gas_state.rate1h = rate;
+        s_gas_state.rate2h = rate;
+        ESP_LOGI(TAG, "Gas-Lücke %.1f h überbrückt: %.2f kg → %.3f kg/h",
+                 (double)dt / 3600.0, -d_active, rate);
+    }
+
+    s_gas_state.last_net_a   = net_a;
+    s_gas_state.last_net_b   = net_b;
+    s_gas_state.last_ts_us   = ts_us;
+    s_gas_state.last_epoch_s = epoch_s;
+    s_gas_state.last_src     = (int32_t)src;
+    gas_state_save_to_nvs();
 }
 
 // Tank-Verbrauchsstate (mit NVS-Persistenz)
@@ -900,6 +981,11 @@ static void rs485_publish_gas(void)
     if (pct < 0.0) pct = 0.0; else if (pct > 100.0) pct = 100.0;
 
     // Verbrauchsraten berechnen (EMA-geglättet)
+    const int64_t epoch_s = gas_ts_to_epoch_s(hx.timestamp_us);
+    if (s_gas_gap_pending && gs.src != GAS_SRC_NONE && hx.timestamp_us > 0) {
+        s_gas_gap_pending = false;
+        gas_bridge_gap(gs.src, active, net_a, net_b, hx.timestamp_us, epoch_s);
+    }
     double rate1h = s_gas_state.rate1h;
     double rate2h = s_gas_state.rate2h;
     if (hx.timestamp_us > s_gas_state.last_ts_us) {
@@ -932,6 +1018,8 @@ static void rs485_publish_gas(void)
             s_gas_state.last_net_a  = net_a;
             s_gas_state.last_net_b  = net_b;
             s_gas_state.last_ts_us  = hx.timestamp_us;
+            s_gas_state.last_epoch_s = epoch_s;
+            s_gas_state.last_src    = (int32_t)gs.src;
             s_gas_state.rate1h      = rate1h;
             s_gas_state.rate2h      = rate2h;
             gas_state_save_to_nvs();
@@ -940,6 +1028,8 @@ static void rs485_publish_gas(void)
         s_gas_state.last_net_a = net_a;
         s_gas_state.last_net_b = net_b;
         s_gas_state.last_ts_us = hx.timestamp_us;
+        s_gas_state.last_epoch_s = epoch_s;
+        s_gas_state.last_src   = (int32_t)gs.src;
         rate1h = 0.0;
         rate2h = 0.0;
     }

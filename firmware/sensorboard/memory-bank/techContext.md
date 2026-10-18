@@ -70,7 +70,7 @@ Nach Deep-Sleep: `rtc_gpio_hold_dis()` + `rtc_gpio_deinit()` + `gpio_config(INPU
 | `bno055` | `calib`, `pr_zero` | IMU-Kalibrierung, Pressure-Zero |
 | `bme680` | `press_hist` | Luftdruckhistorie (96 Samples / 24h) |
 | `bsec` | `state_in_<addr>_v<n>` | BSEC IAQ State (z.B. `state_in_76_v3`) |
-| `gas_state` | `gas` | Gasverbrauch (Raten, Tare, Flaschentausch) |
+| `gas_state` | `gas` | Gasverbrauch (Raten, Voll-Referenzen, letzter Wert mit Uhrzeit + Quelle für Lücken-Überbrückung; altes 48-Byte-Layout wird migriert) |
 | `tank_state` | `tank1`, `tank2` | Tank-Verbrauchsraten |
 | `wifi_cfg` | `ssid`, `pass` | WLAN-Zugangsdaten (RUTX11) |
 | `ruuvi_cfg` | `indoor_mac`, `outdoor_mac` | MAC-Filter Ruuvi |
