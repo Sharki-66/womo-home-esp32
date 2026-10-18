@@ -1,5 +1,9 @@
 # Active Context — WoMoHome Display
 
+## Scan-Listen ein Frame pro Gerät (2026-10-18, gebaut, nicht getestet)
+
+`ruuvi_scan`/`gasbee_scan` kommen jetzt als ein Frame pro Gerät (`sid`, `idx`, `cnt`). `womo_sensorboard.c` setzt zusammen (`scan_asm_*`, esp_timer 1 s Timeout), GUI-Callbacks unverändert. Nur zusammen mit passender Sensorboard-Firmware lauffähig.
+
 ## GasBee-Zuordnung im Einstellungs-Tab (2026-10-17, auf Hardware getestet)
 
 Tab „RTC / Ruuvi“ → „RTC / Temp / Gas“. Neuer Abschnitt „Gaswaage (GasBee)“

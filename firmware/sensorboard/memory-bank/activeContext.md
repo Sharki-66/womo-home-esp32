@@ -13,6 +13,9 @@
 Risiko: RTC-Batterie leer + kein NTP → falsche, aber „gültige“ Uhrzeit.
 Gleicher Fehler bei den Tanks (Rate nach Neustart eingefroren, im Log 2026-10-18 gesehen) → `tank_state_load_from_nvs()` setzt `last_ts_us = 0`, erster Messwert = neue Basis, Raten bleiben.
 
+### Scan-Listen: ein Frame pro Gerät (2026-10-18, gebaut, nicht getestet)
+`gasbee_scan` mit 2 GasBees war 301 Byte > 250 → Frame verworfen, Display bekam keine Liste. Jetzt ein Frame pro Gerät (`sid`/`idx`/`cnt`) für `ruuvi_scan` und `gasbee_scan`, Display setzt zusammen. GasBee-Feld `seq` → `bee_seq` (Kollision mit Frame-`seq`). **Sensorboard und Display gemeinsam flashen.**
+
 ### GasBee: nc vs. leer (2026-10-18, gebaut, nicht getestet)
 GasBee < 1 kg → leer (0 %, Alarm) statt nc; nc nur ohne Werte oder unkalibriert (`gas_source.c`). HX711 am Kabel unverändert (< 1 kg = nc). Achtung: aktuelle XIAO-GasBee meldet „unkalibriert“ → Display zeigt jetzt nc, bis sie kalibriert ist.
 

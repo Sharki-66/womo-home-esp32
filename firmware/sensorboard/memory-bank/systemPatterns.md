@@ -66,8 +66,8 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 | `bme_in` | 15 s | `chip` (`bme680`/`bme280`/`bme260`/`ruuvi`), `addr`, `temp_c`, `rh_pct`, `press_hpa`, `ts`; nur BME680: `gas_kohm` (wenn Gas gültig) sowie – erst wenn BSEC einen IAQ-Wert liefert (nach Burn-in) – `iaq`, `iaq_acc` (0–3), `eco2_ppm`, `bvoc_ppm`; Ruuvi-Fallback zusätzlich `batt_mv` |
 | `bme_out` | 15 s | `chip`, `addr`, `temp_c`, `rh_pct`, `press_hpa`, `ts`; bei Trenddaten `press_trend_state` (`fall_fast`/`fall_slow`/`steady`/`rise_slow`/`rise_fast`) + `press_trend_hpa_h`; nur BME680: `gas_kohm` (wenn Gas gültig); **kein IAQ/BSEC** für den Außensensor; Ruuvi-Fallback zusätzlich `batt_mv` |
 | `elec` | 5 s | `v_bus`, `i_a`, `p_w`, `v_shunt_mv`; `nc=true` wenn INA226 fehlt |
-| `ruuvi_scan` | nur auf Anfrage | `tags:[{mac, rssi, temp_c, has_pressure, age_s}, …]` – alle gesehenen Ruuvi-Tags (ungefiltert), Antwort auf `cmd:"ruuvi_scan_request"` |
-| `gasbee_scan` | nur auf Anfrage | `tags:[{mac, rssi, weight_kg, batt_mv, batt_pct, chg, cal, seq, age_s}, …]` – alle gesehenen GasBees (ungefiltert), Antwort auf `cmd:"gasbee_scan_request"` |
+| `ruuvi_scan` | nur auf Anfrage | ein Frame pro Tag: `sid`, `idx`, `cnt` (0 = keiner) + `mac`, `rssi`, `temp_c`, `has_pressure`, `age_s` – alle gesehenen Ruuvi-Tags (ungefiltert), Antwort auf `cmd:"ruuvi_scan_request"` |
+| `gasbee_scan` | nur auf Anfrage | ein Frame pro GasBee: `sid`, `idx`, `cnt` (0 = keine) + `mac`, `rssi`, `weight_kg`, `batt_mv`, `batt_pct`, `chg`, `cal`, `bee_seq`, `age_s` – alle gesehenen GasBees (ungefiltert), Antwort auf `cmd:"gasbee_scan_request"` |
 
 ## Sensor-Muster
 
@@ -80,6 +80,7 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 ### HX711 (hx711_sensor.c)
 - Dual-Channel (A + B), 3 Samples gemittelt
 - Kalibrierung: `Gewicht = (raw - OFFSET) * SCALE`
+- **Scan-Listen (`ruuvi_scan`/`gasbee_scan`):** Ein Frame pro Gerät (`sid`/`idx`/`cnt`), ein Frame pro Durchlauf des TX-Tasks (100 ms, Round-Robin setzt dann aus). Grund: Die Liste als ein Frame überschritt mit 2 GasBees `WOMO_ESPNOW_MAX_PAYLOAD` (250 Byte). Die Liste zeigt bewusst **alle** Geräte (bis `SENSOR_*_SCAN_MAX_TAGS` = 8), die Zuordnung erfolgt explizit per MAC (Stellplatz mit Nachbarfahrzeugen).
 - Gasverbrauch: EMA-basierte Rate (1h + 2h Fenster), in NVS persistiert (gilt für HX711 und GasBee)
 - Ausschalt-Lücke: `gas_state` speichert Netto A/B mit Uhrzeit (RTC/NTP) und Quelle; beim ersten Messwert nach dem Boot wird der mittlere Verbrauch über die Lücke direkt als `rate1h`/`rate2h` übernommen (gleiche Quelle, Lücke ≤ `SENSOR_GAS_GAP_MAX_S` = 1 Tag, Abnahme ≥ `SENSOR_GAS_ACTIVE_EPS_KG`), sonst Raten auf 0 und neue Basis.
 

@@ -404,6 +404,114 @@ static esp_err_t sb_send_simple_command(const char *cmd)
     return err;
 }
 
+// ── Scan-Listen zusammensetzen ──────────────────────────────────────────
+// Das Sensorboard sendet ruuvi_scan / gasbee_scan als einen Frame pro Gerät
+// (sid = Scan-Nummer, idx, cnt; cnt 0 = nichts gefunden). Ausgeliefert wird, sobald
+// alle cnt Einträge da sind, spätestens SCAN_ASM_TIMEOUT_US nach dem letzten Frame
+// mit dem, was angekommen ist.
+#define SCAN_ASM_TIMEOUT_US (1000 * 1000)
+
+typedef struct {
+    int64_t            sid;    // -1 = keine Sammlung
+    uint8_t            cnt;
+    uint16_t           have;   // Bitmaske der empfangenen idx
+    bool               done;   // bereits ausgeliefert
+    esp_timer_handle_t timer;
+} scan_asm_t;
+
+static portMUX_TYPE s_scan_asm_lock = portMUX_INITIALIZER_UNLOCKED;
+static scan_asm_t s_ruuvi_asm  = { .sid = -1 };
+static scan_asm_t s_gasbee_asm = { .sid = -1 };
+static womo_ruuvi_scan_entry_t  s_ruuvi_asm_entries[WOMO_RUUVI_SCAN_MAX_TAGS];
+static womo_gasbee_scan_entry_t s_gasbee_asm_entries[WOMO_GASBEE_SCAN_MAX_TAGS];
+
+// Eintrag ablegen (entry = NULL bei cnt 0). Gibt true zurück, wenn die Liste jetzt vollständig ist.
+static bool scan_asm_store(scan_asm_t *a, void *entries, size_t entry_size, size_t max_entries,
+                           int64_t sid, int idx, int cnt, const void *entry)
+{
+    if (cnt < 0) cnt = 0;
+    if ((size_t)cnt > max_entries) cnt = (int)max_entries;
+
+    taskENTER_CRITICAL(&s_scan_asm_lock);
+    if (sid != a->sid) {
+        a->sid  = sid;
+        a->cnt  = (uint8_t)cnt;
+        a->have = 0;
+        a->done = false;
+    }
+    if (!a->done && entry && idx >= 0 && idx < a->cnt) {
+        memcpy((uint8_t *)entries + (size_t)idx * entry_size, entry, entry_size);
+        a->have |= (uint16_t)(1u << idx);
+    }
+    bool complete = !a->done && a->have == (uint16_t)((1u << a->cnt) - 1u);
+    taskEXIT_CRITICAL(&s_scan_asm_lock);
+    return complete;
+}
+
+// Empfangene Einträge in idx-Reihenfolge nach out kopieren und Sammlung abschließen.
+// false = nichts zu liefern (schon ausgeliefert oder keine Sammlung).
+static bool scan_asm_take(scan_asm_t *a, const void *entries, size_t entry_size,
+                          void *out, size_t *count)
+{
+    bool ok = false;
+    size_t n = 0;
+    taskENTER_CRITICAL(&s_scan_asm_lock);
+    if (a->sid >= 0 && !a->done) {
+        for (uint8_t i = 0; i < a->cnt; i++) {
+            if (a->have & (1u << i)) {
+                memcpy((uint8_t *)out + n * entry_size, (const uint8_t *)entries + i * entry_size, entry_size);
+                n++;
+            }
+        }
+        a->done = true;
+        ok = true;
+    }
+    taskEXIT_CRITICAL(&s_scan_asm_lock);
+    *count = n;
+    return ok;
+}
+
+static void ruuvi_scan_deliver(void)
+{
+    womo_ruuvi_scan_entry_t out[WOMO_RUUVI_SCAN_MAX_TAGS];
+    size_t n = 0;
+    if (scan_asm_take(&s_ruuvi_asm, s_ruuvi_asm_entries, sizeof(out[0]), out, &n) && s_ruuvi_scan_callback) {
+        s_ruuvi_scan_callback(out, n, s_ruuvi_scan_user_data);
+    }
+}
+
+static void gasbee_scan_deliver(void)
+{
+    womo_gasbee_scan_entry_t out[WOMO_GASBEE_SCAN_MAX_TAGS];
+    size_t n = 0;
+    if (scan_asm_take(&s_gasbee_asm, s_gasbee_asm_entries, sizeof(out[0]), out, &n) && s_gasbee_scan_callback) {
+        s_gasbee_scan_callback(out, n, s_gasbee_scan_user_data);
+    }
+}
+
+static void ruuvi_scan_timer_cb(void *arg)  { (void)arg; ruuvi_scan_deliver(); }
+static void gasbee_scan_timer_cb(void *arg) { (void)arg; gasbee_scan_deliver(); }
+
+// Nach dem Ablegen: vollständig → sofort ausliefern, sonst Timeout neu starten
+static void scan_asm_after_store(scan_asm_t *a, bool complete, void (*deliver)(void))
+{
+    if (a->timer) esp_timer_stop(a->timer);   // ESP_ERR_INVALID_STATE, wenn nicht aktiv – egal
+    if (complete) {
+        deliver();
+    } else if (a->timer) {
+        esp_timer_start_once(a->timer, SCAN_ASM_TIMEOUT_US);
+    }
+}
+
+static esp_err_t scan_asm_init(void)
+{
+    const esp_timer_create_args_t ruuvi_args  = { .callback = ruuvi_scan_timer_cb,  .name = "ruuvi_scan_asm" };
+    const esp_timer_create_args_t gasbee_args = { .callback = gasbee_scan_timer_cb, .name = "gasbee_scan_asm" };
+    esp_err_t err = esp_timer_create(&ruuvi_args, &s_ruuvi_asm.timer);
+    if (err == ESP_OK) err = esp_timer_create(&gasbee_args, &s_gasbee_asm.timer);
+    return err;
+}
+
 esp_err_t womo_sensorboard_init(void)
 {
     if (s_initialized) {
@@ -424,6 +532,12 @@ esp_err_t womo_sensorboard_init(void)
         return err;
     }
     womo_espnow_set_recv_cb(espnow_frame_received_cb);
+
+    err = scan_asm_init();
+    if (err != ESP_OK) {
+        // Ohne Timer werden nur vollständige Scan-Listen ausgeliefert
+        ESP_LOGW(TAG, "Scan-Timer: %s", esp_err_to_name(err));
+    }
 
     s_initialized = true;
     if (!s_heartbeat_task) {
@@ -1203,28 +1317,30 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         }
     }
     else if (strcmp(frame_kind, "ruuvi_scan") == 0) {
-        womo_ruuvi_scan_entry_t entries[WOMO_RUUVI_SCAN_MAX_TAGS];
-        size_t entry_count = 0;
-        cJSON *tags = cJSON_GetObjectItem(root, "tags");
-        if (cJSON_IsArray(tags)) {
-            cJSON *tag;
-            cJSON_ArrayForEach(tag, tags) {
-                if (entry_count >= WOMO_RUUVI_SCAN_MAX_TAGS || !cJSON_IsObject(tag)) continue;
-                cJSON *mac       = cJSON_GetObjectItem(tag, "mac");
-                if (!cJSON_IsString(mac) || !mac->valuestring) continue;
-                cJSON *rssi      = cJSON_GetObjectItem(tag, "rssi");
-                cJSON *temp_c    = cJSON_GetObjectItem(tag, "temp_c");
-                cJSON *has_press = cJSON_GetObjectItem(tag, "has_pressure");
-                cJSON *age_s     = cJSON_GetObjectItem(tag, "age_s");
-
-                womo_ruuvi_scan_entry_t *e = &entries[entry_count++];
-                memset(e, 0, sizeof(*e));
-                snprintf(e->mac, sizeof(e->mac), "%s", mac->valuestring);
-                e->rssi         = cJSON_IsNumber(rssi)   ? (int8_t)rssi->valueint     : 0;
-                e->temp_c       = cJSON_IsNumber(temp_c) ? (float)temp_c->valuedouble : 0.0f;
-                e->has_pressure = cJSON_IsTrue(has_press);
-                e->age_s        = cJSON_IsNumber(age_s)  ? (uint32_t)age_s->valueint  : 0;
+        // Ein Frame pro Tag: sid, idx, cnt + Felder des Eintrags
+        cJSON *sid = cJSON_GetObjectItem(root, "sid");
+        cJSON *idx = cJSON_GetObjectItem(root, "idx");
+        cJSON *cnt = cJSON_GetObjectItem(root, "cnt");
+        if (cJSON_IsNumber(sid) && cJSON_IsNumber(idx) && cJSON_IsNumber(cnt)) {
+            womo_ruuvi_scan_entry_t e = {0};
+            bool have_entry = false;
+            cJSON *mac = cJSON_GetObjectItem(root, "mac");
+            if (cJSON_IsString(mac) && mac->valuestring) {
+                cJSON *rssi      = cJSON_GetObjectItem(root, "rssi");
+                cJSON *temp_c    = cJSON_GetObjectItem(root, "temp_c");
+                cJSON *has_press = cJSON_GetObjectItem(root, "has_pressure");
+                cJSON *age_s     = cJSON_GetObjectItem(root, "age_s");
+                snprintf(e.mac, sizeof(e.mac), "%s", mac->valuestring);
+                e.rssi         = cJSON_IsNumber(rssi)   ? (int8_t)rssi->valueint     : 0;
+                e.temp_c       = cJSON_IsNumber(temp_c) ? (float)temp_c->valuedouble : 0.0f;
+                e.has_pressure = cJSON_IsTrue(has_press);
+                e.age_s        = cJSON_IsNumber(age_s)  ? (uint32_t)age_s->valueint  : 0;
+                have_entry = true;
             }
+            bool complete = scan_asm_store(&s_ruuvi_asm, s_ruuvi_asm_entries, sizeof(e),
+                                           WOMO_RUUVI_SCAN_MAX_TAGS, (int64_t)sid->valuedouble,
+                                           idx->valueint, cnt->valueint, have_entry ? &e : NULL);
+            scan_asm_after_store(&s_ruuvi_asm, complete, ruuvi_scan_deliver);
         }
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             notify_snapshot = s_latest_data;
@@ -1232,39 +1348,38 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         }
         topic_handled = true;
         ack_success = true;
-        if (s_ruuvi_scan_callback) {
-            s_ruuvi_scan_callback(entries, entry_count, s_ruuvi_scan_user_data);
-        }
     }
     else if (strcmp(frame_kind, "gasbee_scan") == 0) {
-        womo_gasbee_scan_entry_t entries[WOMO_GASBEE_SCAN_MAX_TAGS];
-        size_t entry_count = 0;
-        cJSON *tags = cJSON_GetObjectItem(root, "tags");
-        if (cJSON_IsArray(tags)) {
-            cJSON *tag;
-            cJSON_ArrayForEach(tag, tags) {
-                if (entry_count >= WOMO_GASBEE_SCAN_MAX_TAGS || !cJSON_IsObject(tag)) continue;
-                cJSON *mac = cJSON_GetObjectItem(tag, "mac");
-                if (!cJSON_IsString(mac) || !mac->valuestring) continue;
-                cJSON *rssi     = cJSON_GetObjectItem(tag, "rssi");
-                cJSON *weight   = cJSON_GetObjectItem(tag, "weight_kg");
-                cJSON *batt_mv  = cJSON_GetObjectItem(tag, "batt_mv");
-                cJSON *batt_pct = cJSON_GetObjectItem(tag, "batt_pct");
-                cJSON *age_s    = cJSON_GetObjectItem(tag, "age_s");
-
-                womo_gasbee_scan_entry_t *e = &entries[entry_count++];
-                memset(e, 0, sizeof(*e));
-                snprintf(e->mac, sizeof(e->mac), "%s", mac->valuestring);
-                e->rssi         = cJSON_IsNumber(rssi) ? (int8_t)rssi->valueint : 0;
-                e->weight_valid = cJSON_IsNumber(weight);
-                e->weight_kg    = e->weight_valid ? (float)weight->valuedouble : 0.0f;
-                e->batt_valid   = cJSON_IsNumber(batt_mv);
-                e->batt_mv      = e->batt_valid ? (uint16_t)batt_mv->valueint : 0;
-                e->batt_pct     = cJSON_IsNumber(batt_pct) ? (uint8_t)batt_pct->valueint : 0;
-                e->charging     = cJSON_IsTrue(cJSON_GetObjectItem(tag, "chg"));
-                e->calibrated   = cJSON_IsTrue(cJSON_GetObjectItem(tag, "cal"));
-                e->age_s        = cJSON_IsNumber(age_s) ? (uint32_t)age_s->valueint : 0;
+        // Ein Frame pro GasBee: sid, idx, cnt + Felder des Eintrags
+        cJSON *sid = cJSON_GetObjectItem(root, "sid");
+        cJSON *idx = cJSON_GetObjectItem(root, "idx");
+        cJSON *cnt = cJSON_GetObjectItem(root, "cnt");
+        if (cJSON_IsNumber(sid) && cJSON_IsNumber(idx) && cJSON_IsNumber(cnt)) {
+            womo_gasbee_scan_entry_t e = {0};
+            bool have_entry = false;
+            cJSON *mac = cJSON_GetObjectItem(root, "mac");
+            if (cJSON_IsString(mac) && mac->valuestring) {
+                cJSON *rssi     = cJSON_GetObjectItem(root, "rssi");
+                cJSON *weight   = cJSON_GetObjectItem(root, "weight_kg");
+                cJSON *batt_mv  = cJSON_GetObjectItem(root, "batt_mv");
+                cJSON *batt_pct = cJSON_GetObjectItem(root, "batt_pct");
+                cJSON *age_s    = cJSON_GetObjectItem(root, "age_s");
+                snprintf(e.mac, sizeof(e.mac), "%s", mac->valuestring);
+                e.rssi         = cJSON_IsNumber(rssi) ? (int8_t)rssi->valueint : 0;
+                e.weight_valid = cJSON_IsNumber(weight);
+                e.weight_kg    = e.weight_valid ? (float)weight->valuedouble : 0.0f;
+                e.batt_valid   = cJSON_IsNumber(batt_mv);
+                e.batt_mv      = e.batt_valid ? (uint16_t)batt_mv->valueint : 0;
+                e.batt_pct     = cJSON_IsNumber(batt_pct) ? (uint8_t)batt_pct->valueint : 0;
+                e.charging     = cJSON_IsTrue(cJSON_GetObjectItem(root, "chg"));
+                e.calibrated   = cJSON_IsTrue(cJSON_GetObjectItem(root, "cal"));
+                e.age_s        = cJSON_IsNumber(age_s) ? (uint32_t)age_s->valueint : 0;
+                have_entry = true;
             }
+            bool complete = scan_asm_store(&s_gasbee_asm, s_gasbee_asm_entries, sizeof(e),
+                                           WOMO_GASBEE_SCAN_MAX_TAGS, (int64_t)sid->valuedouble,
+                                           idx->valueint, cnt->valueint, have_entry ? &e : NULL);
+            scan_asm_after_store(&s_gasbee_asm, complete, gasbee_scan_deliver);
         }
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             notify_snapshot = s_latest_data;
@@ -1272,9 +1387,6 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         }
         topic_handled = true;
         ack_success = true;
-        if (s_gasbee_scan_callback) {
-            s_gasbee_scan_callback(entries, entry_count, s_gasbee_scan_user_data);
-        }
     }
     else if (strcmp(frame_kind, "tank") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {

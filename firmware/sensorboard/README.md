@@ -53,8 +53,8 @@ CRLF-terminierte ASCII-JSON-Zeilen. Round-Robin, max. 1 Topic pro 100 ms. Nach `
 | `bme_in` | 15 s | `chip` (`bme680`/`bme280`/`bme260`/`ruuvi`), `addr`?, `temp_c`, `rh_pct`, `press_hpa`, `ts`; BME680 zusätzlich: `gas_kohm`? (wenn Gas gültig) sowie `iaq`, `iaq_acc` (0–3), `eco2_ppm`, `bvoc_ppm` – erst nach BSEC-Burn-in (fehlen während der Stabilisierung); bei Ruuvi-Fallback zusätzlich `batt_mv`? |
 | `bme_out` | 15 s | `chip`, `addr`?, `temp_c`, `rh_pct`, `press_hpa`, `ts`, `press_trend_state`?, `press_trend_hpa_h`?, `gas_kohm`? (wenn Gas gültig); **kein `iaq`/`eco2`/`bvoc` für den Außensensor**; bei Ruuvi-Fallback zusätzlich `batt_mv`? |
 | `elec` | 5 s | `v_bus` (V), `i_a` (A), `p_w` (W), `v_shunt_mv` (mV), `ts`; `nc=true` wenn INA226 nicht gefunden |
-| `ruuvi_scan` | nur auf Anfrage | `tags:[{mac, rssi, temp_c, has_pressure, age_s}, …]` – alle gesehenen Ruuvi-Tags (ungefiltert), Antwort auf `cmd:"ruuvi_scan_request"` |
-| `gasbee_scan` | nur auf Anfrage | `tags:[{mac, rssi, weight_kg, batt_mv, batt_pct, chg, cal, seq, age_s}, …]` – alle gesehenen GasBees (ungefiltert), Antwort auf `cmd:"gasbee_scan_request"` |
+| `ruuvi_scan` | nur auf Anfrage | ein Frame pro Tag: `sid`, `idx`, `cnt` (0 = keiner) + `mac`, `rssi`, `temp_c`, `has_pressure`, `age_s` – alle gesehenen Ruuvi-Tags (ungefiltert), Antwort auf `cmd:"ruuvi_scan_request"` |
+| `gasbee_scan` | nur auf Anfrage | ein Frame pro GasBee: `sid`, `idx`, `cnt` (0 = keine) + `mac`, `rssi`, `weight_kg`, `batt_mv`, `batt_pct`, `chg`, `cal`, `bee_seq`, `age_s` – alle gesehenen GasBees (ungefiltert), Antwort auf `cmd:"gasbee_scan_request"` |
 
 **Ruuvi-MAC-Konfiguration:** Display → Sensorboard `cmd:"ruuvi_config"` (`indoor_mac`, `outdoor_mac`) setzt den MAC-Filter des Ruuvi-BLE-Scanners zur Laufzeit und persistiert ihn in NVS (`ruuvi_cfg`); leer = Slot deaktiviert. Kein Compile-Time-Default mehr.
 

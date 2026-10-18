@@ -1210,75 +1210,115 @@ static void rs485_publish_elec(void)
     cJSON_Delete(root);
 }
 
-// Nur auf Anfrage (cmd "ruuvi_scan_request") gesendet – kein periodisches Topic.
-static void rs485_publish_ruuvi_scan(void)
+// ── Scan-Listen (nur auf Anfrage, kein periodisches Topic) ──────────────
+// Ein Frame pro Gerät, damit auch volle Listen unter WOMO_ESPNOW_MAX_PAYLOAD bleiben.
+// Felder je Frame: sid (Scan-Nummer pro Anfrage), idx, cnt (0 = nichts gefunden).
+// Pro Durchlauf des TX-Tasks geht höchstens ein Scan-Frame raus.
+
+static uint32_t s_scan_sid = 0;
+
+static ruuvi_scan_entry_t s_ruuvi_tx[SENSOR_RUUVI_SCAN_MAX_TAGS];
+static size_t s_ruuvi_tx_cnt = 0;
+static size_t s_ruuvi_tx_idx = 0;
+static uint32_t s_ruuvi_tx_sid = 0;
+static bool s_ruuvi_tx_active = false;
+
+static gasbee_scan_entry_t s_gasbee_tx[SENSOR_GASBEE_SCAN_MAX_TAGS];
+static size_t s_gasbee_tx_cnt = 0;
+static size_t s_gasbee_tx_idx = 0;
+static uint32_t s_gasbee_tx_sid = 0;
+static bool s_gasbee_tx_active = false;
+
+// MSB-first-Notation wie bei der MAC-Filterkonfiguration (addr.val ist LSB-first)
+static void scan_mac_to_str(const uint8_t mac[6], char out[18])
 {
-    ruuvi_scan_entry_t entries[SENSOR_RUUVI_SCAN_MAX_TAGS];
-    size_t count = ruuvi_ble_scanner_get_scan_list(entries, SENSOR_RUUVI_SCAN_MAX_TAGS);
-
-    cJSON *root = cJSON_CreateObject();
-    if (!root) return;
-    cJSON_AddStringToObject(root, "type", "ruuvi_scan");
-
-    cJSON *tags = cJSON_AddArrayToObject(root, "tags");
-    int64_t now = esp_timer_get_time();
-    for (size_t i = 0; i < count; i++) {
-        cJSON *t = cJSON_CreateObject();
-        if (!t) continue;
-        // MSB-first-Notation wie bei der MAC-Filterkonfiguration (addr.val ist LSB-first)
-        char mac_str[18];
-        snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
-                 entries[i].mac[5], entries[i].mac[4], entries[i].mac[3],
-                 entries[i].mac[2], entries[i].mac[1], entries[i].mac[0]);
-        cJSON_AddStringToObject(t, "mac", mac_str);
-        cJSON_AddNumberToObject(t, "rssi", entries[i].rssi);
-        cJSON_AddNumberToObject(t, "temp_c", round2(entries[i].temp_c));
-        cJSON_AddBoolToObject(t, "has_pressure", entries[i].has_pressure);
-        cJSON_AddNumberToObject(t, "age_s", (double)((now - entries[i].last_seen_us) / 1000000));
-        cJSON_AddItemToArray(tags, t);
-    }
-
-    rs485_send_frame("ruuvi_scan", root, false);
-    cJSON_Delete(root);
+    snprintf(out, 18, "%02X:%02X:%02X:%02X:%02X:%02X",
+             mac[5], mac[4], mac[3], mac[2], mac[1], mac[0]);
 }
 
-// Nur auf Anfrage (cmd "gasbee_scan_request") gesendet – kein periodisches Topic.
-static void rs485_publish_gasbee_scan(void)
+static cJSON *scan_frame_create(const char *type, uint32_t sid, size_t idx, size_t cnt)
 {
-    gasbee_scan_entry_t entries[SENSOR_GASBEE_SCAN_MAX_TAGS];
-    size_t count = gasbee_ble_scanner_get_scan_list(entries, SENSOR_GASBEE_SCAN_MAX_TAGS);
-
     cJSON *root = cJSON_CreateObject();
-    if (!root) return;
-    cJSON_AddStringToObject(root, "type", "gasbee_scan");
+    if (!root) return NULL;
+    cJSON_AddStringToObject(root, "type", type);
+    cJSON_AddNumberToObject(root, "sid", sid);
+    cJSON_AddNumberToObject(root, "idx", (double)idx);
+    cJSON_AddNumberToObject(root, "cnt", (double)cnt);
+    return root;
+}
 
-    cJSON *tags = cJSON_AddArrayToObject(root, "tags");
-    int64_t now = esp_timer_get_time();
-    for (size_t i = 0; i < count; i++) {
-        cJSON *t = cJSON_CreateObject();
-        if (!t) continue;
-        // MSB-first-Notation wie bei der MAC-Filterkonfiguration (addr.val ist LSB-first)
+// Abbild der Scan-Liste anlegen; das Senden übernimmt rs485_scan_tx_step()
+static void ruuvi_scan_start(void)
+{
+    s_ruuvi_tx_cnt    = ruuvi_ble_scanner_get_scan_list(s_ruuvi_tx, SENSOR_RUUVI_SCAN_MAX_TAGS);
+    s_ruuvi_tx_idx    = 0;
+    s_ruuvi_tx_sid    = ++s_scan_sid;
+    s_ruuvi_tx_active = true;
+}
+
+static void gasbee_scan_start(void)
+{
+    s_gasbee_tx_cnt    = gasbee_ble_scanner_get_scan_list(s_gasbee_tx, SENSOR_GASBEE_SCAN_MAX_TAGS);
+    s_gasbee_tx_idx    = 0;
+    s_gasbee_tx_sid    = ++s_scan_sid;
+    s_gasbee_tx_active = true;
+}
+
+static void ruuvi_scan_send_next(void)
+{
+    cJSON *root = scan_frame_create("ruuvi_scan", s_ruuvi_tx_sid, s_ruuvi_tx_idx, s_ruuvi_tx_cnt);
+    if (root && s_ruuvi_tx_idx < s_ruuvi_tx_cnt) {
+        const ruuvi_scan_entry_t *e = &s_ruuvi_tx[s_ruuvi_tx_idx];
         char mac_str[18];
-        snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
-                 entries[i].mac[5], entries[i].mac[4], entries[i].mac[3],
-                 entries[i].mac[2], entries[i].mac[1], entries[i].mac[0]);
-        cJSON_AddStringToObject(t, "mac", mac_str);
-        cJSON_AddNumberToObject(t, "rssi", entries[i].rssi);
-        if (entries[i].weight_valid)
-            cJSON_AddNumberToObject(t, "weight_kg", round2(entries[i].weight_kg));
-        if (entries[i].battery_valid) {
-            cJSON_AddNumberToObject(t, "batt_mv", entries[i].battery_mv);
-            cJSON_AddNumberToObject(t, "batt_pct", gasbee_battery_pct(entries[i].battery_mv));
-        }
-        cJSON_AddBoolToObject(t, "chg", entries[i].charging);
-        cJSON_AddBoolToObject(t, "cal", entries[i].calibrated);
-        cJSON_AddNumberToObject(t, "seq", entries[i].seq);
-        cJSON_AddNumberToObject(t, "age_s", (double)((now - entries[i].last_seen_us) / 1000000));
-        cJSON_AddItemToArray(tags, t);
+        scan_mac_to_str(e->mac, mac_str);
+        cJSON_AddStringToObject(root, "mac", mac_str);
+        cJSON_AddNumberToObject(root, "rssi", e->rssi);
+        cJSON_AddNumberToObject(root, "temp_c", round2(e->temp_c));
+        cJSON_AddBoolToObject(root, "has_pressure", e->has_pressure);
+        cJSON_AddNumberToObject(root, "age_s", (double)((esp_timer_get_time() - e->last_seen_us) / 1000000));
     }
+    if (root) {
+        rs485_send_frame("ruuvi_scan", root, false);
+        cJSON_Delete(root);
+    }
+    s_ruuvi_tx_idx++;
+    s_ruuvi_tx_active = (s_ruuvi_tx_idx < s_ruuvi_tx_cnt);
+}
 
-    rs485_send_frame("gasbee_scan", root, false);
-    cJSON_Delete(root);
+static void gasbee_scan_send_next(void)
+{
+    cJSON *root = scan_frame_create("gasbee_scan", s_gasbee_tx_sid, s_gasbee_tx_idx, s_gasbee_tx_cnt);
+    if (root && s_gasbee_tx_idx < s_gasbee_tx_cnt) {
+        const gasbee_scan_entry_t *e = &s_gasbee_tx[s_gasbee_tx_idx];
+        char mac_str[18];
+        scan_mac_to_str(e->mac, mac_str);
+        cJSON_AddStringToObject(root, "mac", mac_str);
+        cJSON_AddNumberToObject(root, "rssi", e->rssi);
+        if (e->weight_valid)
+            cJSON_AddNumberToObject(root, "weight_kg", round2(e->weight_kg));
+        if (e->battery_valid) {
+            cJSON_AddNumberToObject(root, "batt_mv", e->battery_mv);
+            cJSON_AddNumberToObject(root, "batt_pct", gasbee_battery_pct(e->battery_mv));
+        }
+        cJSON_AddBoolToObject(root, "chg", e->charging);
+        cJSON_AddBoolToObject(root, "cal", e->calibrated);
+        cJSON_AddNumberToObject(root, "bee_seq", e->seq);
+        cJSON_AddNumberToObject(root, "age_s", (double)((esp_timer_get_time() - e->last_seen_us) / 1000000));
+    }
+    if (root) {
+        rs485_send_frame("gasbee_scan", root, false);
+        cJSON_Delete(root);
+    }
+    s_gasbee_tx_idx++;
+    s_gasbee_tx_active = (s_gasbee_tx_idx < s_gasbee_tx_cnt);
+}
+
+// Höchstens einen Scan-Frame senden. true = gesendet (Round-Robin dann aussetzen).
+static bool rs485_scan_tx_step(void)
+{
+    if (s_ruuvi_tx_active)  { ruuvi_scan_send_next();  return true; }
+    if (s_gasbee_tx_active) { gasbee_scan_send_next(); return true; }
+    return false;
 }
 
 static rs485_topic_t s_topics[] = {
@@ -1545,20 +1585,20 @@ static void rs485_tx_task(void *arg)
             s_topics[0].last_sent = now;  // ctrl-Timer zurücksetzen
         }
 
-        // Ruuvi-Scan-Liste auf Anfrage (Display-Konfigurationsdialog)
+        // Scan-Listen auf Anfrage (Display-Konfigurationsdialog): neue Anfrage
+        // startet die Liste neu, gesendet wird ein Eintrag pro Durchlauf
         if (s_display_ready && s_ruuvi_scan_requested) {
             s_ruuvi_scan_requested = false;
-            rs485_publish_ruuvi_scan();
+            ruuvi_scan_start();
         }
-
-        // GasBee-Scan-Liste auf Anfrage (Display-Konfigurationsdialog)
         if (s_display_ready && s_gasbee_scan_requested) {
             s_gasbee_scan_requested = false;
-            rs485_publish_gasbee_scan();
+            gasbee_scan_start();
         }
+        bool scan_sent = s_display_ready && rs485_scan_tx_step();
 
-        // Round-Robin: pro Loop maximal 1 Topic senden
-        if (s_display_ready) {
+        // Round-Robin: pro Loop maximal 1 Topic senden (nicht zusätzlich zu einem Scan-Frame)
+        if (s_display_ready && !scan_sent) {
             for (size_t i = 0; i < RS485_TOPIC_COUNT; ++i) {
                 size_t idx = (s_topic_rr + i) % RS485_TOPIC_COUNT;
                 if ((now - s_topics[idx].last_sent) >= pdMS_TO_TICKS(s_topics[idx].interval_ms)) {

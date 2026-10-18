@@ -36,8 +36,8 @@ Topics (Round-Robin, max. 1 pro 100 ms):
 | `gas` | 10 s | `src`, `active`, `net`, `rate1h`, `rate2h`, `rest_h`, … |
 | `bme_in` | 15 s | `chip`, `addr`, `temp_c`, `rh_pct`, `press_hpa`, `ts`; nur BME680: `gas_kohm` sowie – erst nach BSEC-Burn-in – `iaq`, `iaq_acc` (0–3), `eco2_ppm`, `bvoc_ppm`; Ruuvi-Fallback zusätzlich `batt_mv` |
 | `bme_out` | 15 s | `chip`, `addr`, `temp_c`, `rh_pct`, `press_hpa`, `ts`; bei Trend `press_trend_state` (`fall_fast`/`fall_slow`/`steady`/`rise_slow`/`rise_fast`) + `press_trend_hpa_h`; nur BME680: `gas_kohm`; kein IAQ/BSEC außen; Ruuvi-Fallback zusätzlich `batt_mv` |
-| `ruuvi_scan` | nur auf Anfrage | `tags:[{mac, rssi, temp_c, has_pressure, age_s}, …]` – alle zuletzt gesehenen Ruuvi-Tags (unabhängig vom Filter), Antwort auf `ruuvi_scan_request` |
-| `gasbee_scan` | nur auf Anfrage | `tags:[{mac, rssi, weight_kg, batt_mv, batt_pct, chg, cal, seq, age_s}, …]` – alle gesehenen GasBees, Antwort auf `gasbee_scan_request` |
+| `ruuvi_scan` | nur auf Anfrage | ein Frame pro Tag: `sid`, `idx`, `cnt` (0 = keiner) + `mac`, `rssi`, `temp_c`, `has_pressure`, `age_s` – alle zuletzt gesehenen Ruuvi-Tags (unabhängig vom Filter), Antwort auf `ruuvi_scan_request` |
+| `gasbee_scan` | nur auf Anfrage | ein Frame pro GasBee: `sid`, `idx`, `cnt` (0 = keine) + `mac`, `rssi`, `weight_kg`, `batt_mv`, `batt_pct`, `chg`, `cal`, `bee_seq`, `age_s` – alle gesehenen GasBees, Antwort auf `gasbee_scan_request` |
 
 Display → Sensorboard (Kommandos per `cmd`): `display_ready`, `pwr_12v_on/off`, `radio_on/off`, `tare_a/b`, `gas_bottle_replace`, `level_start/stop`, `wifi_config` (`ssid`, `pass`), `ruuvi_config` (`indoor_mac`, `outdoor_mac` – MAC-Filter für Ruuvi-BLE-Scanner, NVS `ruuvi_cfg`, leer = Slot deaktiviert), `ruuvi_scan_request` (fordert `ruuvi_scan`-Antwort an), `gasbee_config` (`bottle_a_mac`, `bottle_b_mac` – Zuordnung GasBee → Flasche, NVS `gasbee_cfg`), `gasbee_scan_request`.
 
