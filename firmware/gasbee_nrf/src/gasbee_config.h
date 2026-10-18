@@ -50,7 +50,7 @@
 #define GASBEE_GAS_TARE_KG             10.5f       // Tara-Gewicht (leer)
 
 // ── BLE ──────────────────────────────────────────────────────────────────────
-// Name muss exakt "GasBee" sein: Sensorboard filtert darauf (gasbee_ble_client.c)
+// Name muss exakt "GasBee" sein: Sensorboard filtert darauf (gasbee_ble_scanner.c)
 #define GASBEE_BLE_DEVICE_NAME         "GasBee"
 
 // Service UUID: 4a5b6c7d-8e9f-0a1b-2c3d-4e5f60718293 (identisch zu firmware/gasbee)

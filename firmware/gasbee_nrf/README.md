@@ -1,6 +1,6 @@
 # GasBee nRF – BLE-Gaswaage auf Seeed XIAO nRF52840
 
-Ersatz für [firmware/gasbee](../gasbee/) (ESP32-C3). Wiegt die Gasflasche mit einer Wägezelle über einen HX711 und sendet Gewicht, Gas-Netto und Füllstand per BLE GATT an das Sensorboard. Das BLE-Protokoll ist identisch, deshalb braucht das Sensorboard keine Änderung.
+Ersatz für [firmware/gasbee](../gasbee/) (ESP32-C3). Wiegt die Gasflasche mit einer Wägezelle über einen HX711 und sendet Bruttogewicht, Akkuspannung und Status per **BLE-Advertising (Format v1)**. Das Sensorboard empfängt das per passivem Scan und verbindet sich nicht (`firmware/sensorboard/main/network/gasbee_ble_scanner.c`, dann `sensors/gas_source.c` ins Gas-Topic). Den GATT-Service des ESP32-C3-GasBee gibt es weiterhin, aber nur noch für andere Clients wie Handy-Apps und für den Tare-Befehl.
 
 ## Hardware
 
@@ -82,7 +82,9 @@ Tara, Gas-Netto, Füllstand und Akku-% berechnet das Sensorboard. Die Adresse is
 
 ### GATT (Kompatibilität)
 
-Das Advertising ist verbindbar. Ein Central kann sich während eines Bursts verbinden. Solange die Verbindung steht, gibt es keine Bursts mehr, die Werte kommen dann nur per Notify. Nach dem Trennen sendet der GasBee erst beim nächsten Messzyklus wieder.
+Das Sensorboard nutzt GATT nicht. Der Service ist für andere Clients gedacht, etwa nRF Connect auf dem Handy, und für den Tare-Befehl.
+
+Das Advertising ist verbindbar. Ein GATT-Client kann sich während eines Bursts verbinden. Solange diese Verbindung steht, gibt es keine Bursts, und auch das Sensorboard bekommt dann keine Werte. Nach dem Trennen sendet der GasBee erst beim nächsten Messzyklus wieder.
 
 - Service: `4a5b6c7d-8e9f-0a1b-2c3d-4e5f60718293`
 
@@ -212,7 +214,8 @@ Unterschied zum ESP32-C3-GasBee: Dort setzte Tare die Tara nur auf 0 und machte 
 - [x] Build mit NCS v3.4.1, Board `xiao_ble`
 - [x] Erster Test auf Hardware (2026-10-17): UF2-Flash, USB-Log, NVS und Advertising „GasBee" laufen. Ohne HX711 kommt „HX711 nicht bereit … retry".
 - [x] HX711 angeschlossen, liefert Rohwerte (2026-10-17)
-- [x] Verbindung mit dem Sensorboard: Die Werte kommen dort an (2026-10-17). Solange die Verbindung besteht, sendet der XIAO kein Advertising und taucht in keinem Scan auf.
+- [x] Empfang am Sensorboard per GATT, erster Test (2026-10-17). Inzwischen überholt.
+- [x] Empfang am Sensorboard per Advertising v1, passiver Scan über `gasbee_ble_scanner` und `gas_source` ins Gas-Topic (2026-10-17)
 - [x] Akkubetrieb ohne USB funktioniert (2026-10-17)
 - [x] Advertising-Format v1 auf Hardware empfangen (Laptop-Scan), seq im 60-s-Takt (2026-10-17)
 - [x] Akkuspannung: Multimeter 4,025 V, GasBee 4,003 V, −0,55 %, keine Korrektur nötig (2026-10-18)

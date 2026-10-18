@@ -12,13 +12,14 @@ Ersatz für `firmware/gasbee` (ESP32-C3). Details zu Hardware, Protokoll und Kal
 
 ## Verbindliche Schnittstelle (nicht ändern ohne Sensorboard-Anpassung)
 
-**Advertising-Format v1** (Hauptweg, passiver Scan): Beschreibung in der README, Abschnitt „Advertising-Format v1". Manufacturer Data 0xFFFF + 7 Byte: Version, Bruttogewicht int16 in 10 g, Akku uint16 mV, seq, Flags. Ein Burst aus 10 Paketen à 1 s pro Messzyklus. Das Sensorboard wird in einem anderen Arbeitsbereich angepasst.
+**Advertising-Format v1** (Hauptweg, passiver Scan): Beschreibung in der README, Abschnitt „Advertising-Format v1". Manufacturer Data 0xFFFF + 7 Byte: Version, Bruttogewicht int16 in 10 g, Akku uint16 mV, seq, Flags. Ein Burst aus 10 Paketen à 1 s pro Messzyklus.
+- Gegenstelle: `firmware/sensorboard/main/network/gasbee_ble_scanner.c`. Sie scannt nur passiv und verbindet sich nie. Erkannt wird über den exakten Namen `GasBee` (6 Byte, im Advertising selbst), Company-ID 0xFFFF und Version 1. Die Zuordnung zu Flasche A/B läuft über die MAC, die im Sensorboard-NVS steht.
+- Weiterverarbeitung: `sensors/gas_source.c` ins Gas-Topic, getestet am 2026-10-17.
 
-GATT (Kompatibilität mit dem heutigen `firmware/sensorboard/main/network/gasbee_ble_client.c`):
-- Das Sensorboard verbindet nur, wenn im **Advertising** exakt der Name `GasBee` steht (6 Byte).
+GATT (nur für andere Clients wie Handy-Apps und für den Tare-Befehl, nicht für das Sensorboard):
 - Service-UUID `4a5b6c7d-8e9f-0a1b-2c3d-4e5f60718293`
-- Characteristics 0x2B01 (float kg), 0x2B02 (uint8 %), 0x2B03 (float kg), alle mit Notify. 0x2B10 ist der Tare-Write.
-- 0x2B04 (uint16 mV, Akku, Notify) ist eine Erweiterung, die nur der GasBee nRF hat. Das Sensorboard muss damit umgehen, dass sie beim ESP32-C3-GasBee fehlt. Sensorboard und Display werden in einem anderen Arbeitsbereich angepasst.
+- Characteristics 0x2B01 (float kg), 0x2B02 (uint8 %), 0x2B03 (float kg), 0x2B04 (uint16 mV Akku, nur GasBee nRF), alle mit Notify. 0x2B10 ist der Tare-Write.
+- Eine GATT-Verbindung unterdrückt die Bursts. Solange ein Client verbunden ist, bekommt das Sensorboard keine Werte.
 
 ## Entscheidungen
 
@@ -42,6 +43,6 @@ GATT (Kompatibilität mit dem heutigen `firmware/sensorboard/main/network/gasbee
 ## Offen
 
 - Grob-Kalibrierung erledigt (2026-10-18, siehe `src/gasbee_config.h`). Gegenprobe mit 14,285 kg steht aus. Feinkalibrierung pro MAC macht das Sensorboard.
-- Stand 2026-10-17: HX711, Akkubetrieb und Empfang am Sensorboard funktionieren. Allerdings ruft das Sensorboard `gasbee_ble_client_get_snapshot()` nirgends auf. Die GasBee-Werte stehen dort nur im Log, das Gas-Topic nimmt den eigenen HX711 (Kanäle A/B). Das wird in einem anderen Arbeitsbereich geklärt.
-- Erster Hardwaretest ist erledigt (2026-10-17, XIAO nRF52840 Sense, Bootloader 0.6.1 / S140 7.3.0): Firmware, NVS und Advertising laufen. Offen sind der Betrieb mit HX711 und die Bestätigung der Sensorboard-Verbindung im Sensorboard-Log.
+- Ruhestrom im Akkubetrieb messen (Stromspar-Image vom 2026-10-18)
+- Hardware-Stand: XIAO nRF52840 Sense, Bootloader 0.6.1 / S140 7.3.0. HX711, Akkubetrieb, Advertising v1 und der Empfang am Sensorboard funktionieren (2026-10-17/18).
 - Das USB-Log liegt nicht fest auf `/dev/ttyACM0`. Den Port über `ID_SERIAL` zuordnen. Die ESP32-Ports nicht öffnen, weil das Öffnen sie resetten kann.
