@@ -47,6 +47,7 @@ typedef struct {
     uint8_t  battery_pct;
     bool     charging;
     bool     calibrated;
+    bool     config_mode;    // USB angesteckt (Flag Bit 3), Kalibrierung möglich
 } gas_bee_info_t;
 
 typedef struct {

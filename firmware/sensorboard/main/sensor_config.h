@@ -374,6 +374,14 @@
 #define SENSOR_GASBEE_STALE_MS       ((2 * SENSOR_GASBEE_CYCLE_S + SENSOR_GASBEE_BURST_S) * 1000LL)
 #define SENSOR_GASBEE_SCAN_MAX_TAGS  8       // Max. Einträge in der Scan-Liste ans Display
 #define SENSOR_GASBEE_SCAN_MAX_AGE_S (SENSOR_GASBEE_CYCLE_S + 60) // Scan-Liste: mind. 1 Zyklus halten
+// Einrichten am Display: nur GasBees im Konfigurationsmodus (USB, sendet jede Sekunde),
+// die innerhalb dieser Zeit gesehen wurden, gelten als "angesteckt"
+#define SENSOR_GASBEE_CFG_MAX_AGE_S  5
+// Kalibrierung per GATT (gasbee_gatt_cal.c): Verbinden + Discovery + Write, danach trennen
+#define SENSOR_GASBEE_CAL_TIMEOUT_MS 15000
+// Kalibrier-Sitzung (Display-Assistent): Flasche gilt solange als nc (kein Alarm, keine Rate).
+// Sicherheitsgrenze, falls gasbee_cal_end ausbleibt
+#define SENSOR_GASBEE_CAL_SESSION_MAX_S 900
 
 // LiPo-Kennlinie (1 Zelle, 4,2 V voll): Stützpunkte {mV, %}, absteigend, linear interpoliert.
 // Quelle: verbreitete 1S-LiPo-Ruhespannungstabelle (RC-/Maker-Community), NICHT gemessen.
@@ -400,6 +408,7 @@
 #define LOG_LEVEL_INA226         ESP_LOG_WARN    // ina226 Strom-/Leistungsmessung (DEBUG)
 #define LOG_LEVEL_BLE_MANAGER    ESP_LOG_INFO    // temporär INFO für Ruuvi-Scan-Fehlersuche
 #define LOG_LEVEL_GASBEE_BLE     ESP_LOG_INFO    // temporär INFO: Erkennung GasBee nRF (XIAO) prüfen
+#define LOG_LEVEL_GASBEE_CAL     ESP_LOG_INFO    // Kalibrierung per GATT (selten, immer protokollieren)
 #define LOG_LEVEL_GAS_SOURCE     ESP_LOG_INFO    // Wechsel der Gas-Quelle (HX711/GasBee) – selten
 #define LOG_LEVEL_RUUVI_BLE      ESP_LOG_INFO    // temporär INFO für Außensensor-Fehlersuche
 #define LOG_LEVEL_I2C_BUS        ESP_LOG_INFO    // temporär INFO für I2C-Scan Diagnose

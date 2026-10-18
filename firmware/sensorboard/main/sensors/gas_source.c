@@ -40,6 +40,7 @@ static bool bee_to_channel(int slot, int64_t now, float *kg, bool *valid,
     info->battery_pct   = s.battery_pct;
     info->charging      = s.charging;
     info->calibrated    = s.calibrated;
+    info->config_mode   = s.config_mode;
 
     // Unkalibriert ist der Wert kein echtes Gewicht → wie fehlender Wert (nc)
     *valid = s.weight_valid && s.calibrated;

@@ -49,6 +49,7 @@ typedef struct {
             uint8_t batt_pct;  // LiPo-Kennlinie, auf dem Sensorboard berechnet
             bool charging;     // Akku lädt (USB)
             bool calibrated;   // false: GasBee nutzt Firmware-Default-Kalibrierung
+            bool config_mode;  // GasBee an USB (Konfigurationsmodus, Kalibrierung möglich)
         } bee[2];           // 0 = Flasche A, 1 = Flasche B (nur bei is_gasbee)
     } hx711;
 
@@ -214,6 +215,8 @@ typedef struct {
     uint8_t  batt_pct;
     bool     charging;
     bool     calibrated;
+    bool     config_mode;   // GasBee an USB (Konfigurationsmodus)
+    uint8_t  seq;           // Messzyklus der GasBee (bee_seq), steigt bei neuer Messung
     uint32_t age_s;
 } womo_gasbee_scan_entry_t;
 
@@ -249,6 +252,11 @@ void womo_sensorboard_set_ruuvi_scan_callback(womo_ruuvi_scan_cb_t callback, voi
 // Callback für GasBee-Scan-Ergebnisse (Antwort auf womo_sensorboard_send_gasbee_scan_request)
 void womo_sensorboard_set_gasbee_scan_callback(womo_gasbee_scan_cb_t callback, void *user_data);
 
+// Ergebnis eines GasBee-Kalibrierschritts (Frame "gasbee_cal_result").
+// err: 0 = ok, > 0 ATT-Fehlercode der GasBee, < 0 Fehler im Sensorboard; msg = Klartext
+typedef void (*womo_gasbee_cal_result_cb_t)(bool zero_step, bool ok, int err, const char *msg, void *user_data);
+void womo_sensorboard_set_gasbee_cal_result_callback(womo_gasbee_cal_result_cb_t callback, void *user_data);
+
 // Kommandos an Sensorboard senden
 esp_err_t womo_sensorboard_send_level_start(void);
 esp_err_t womo_sensorboard_send_level_stop(void);
@@ -261,6 +269,12 @@ esp_err_t womo_sensorboard_send_ruuvi_config(const char *indoor_mac, const char 
 esp_err_t womo_sensorboard_send_ruuvi_scan_request(void);
 esp_err_t womo_sensorboard_send_gasbee_config(const char *bottle_a_mac, const char *bottle_b_mac);
 esp_err_t womo_sensorboard_send_gasbee_scan_request(void);
+// Einrichten: nur GasBees im Konfigurationsmodus (an USB) melden lassen
+esp_err_t womo_sensorboard_send_gasbee_setup_scan(void);
+// Kalibrier-Sitzung je Flasche (0 = A, 1 = B): Sensorboard meldet die Flasche solange als nc
+esp_err_t womo_sensorboard_send_gasbee_cal_session(int slot, bool start);
+// Kalibrierschritt per GATT: zero = Nullpunkt, sonst Referenzgewicht grams
+esp_err_t womo_sensorboard_send_gasbee_cal(const char *mac, bool zero, uint32_t grams);
 esp_err_t womo_sensorboard_send_gas_bottle_replace(uint8_t slot, const char *channel);
 esp_err_t womo_sensorboard_send_pwr_12v(bool enable);
 esp_err_t womo_sensorboard_send_radio(bool enable);

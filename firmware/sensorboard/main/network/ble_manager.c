@@ -85,14 +85,16 @@ void ble_manager_start_scan(void)
     }
 }
 
-void ble_manager_connect(const ble_addr_t *addr)
+int ble_manager_connect(const ble_addr_t *addr, int32_t timeout_ms)
 {
+    if (!s_ready) return BLE_HS_ENOTSYNCED;
     ble_gap_disc_cancel();
-    int rc = ble_gap_connect(BLE_OWN_ADDR_PUBLIC, addr, 30000, NULL, gap_cb, NULL);
+    int rc = ble_gap_connect(BLE_OWN_ADDR_PUBLIC, addr, timeout_ms, NULL, gap_cb, NULL);
     if (rc != 0) {
         ESP_LOGE(TAG, "Connect fehlgeschlagen (rc=%d) → Scan neu starten", rc);
         xTimerStart(s_scan_retry_timer, 0);
     }
+    return rc;
 }
 
 // ── Interner GAP-Callback (Scan + Connection) ─────────────────────────────

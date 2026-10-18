@@ -37,6 +37,7 @@ typedef struct {
     uint8_t  battery_pct;    // aus battery_mv per LiPo-Kennlinie (SENSOR_GASBEE_LIPO_CURVE)
     bool     charging;       // Flag Bit 1: Akku lädt (nur mit USB)
     bool     calibrated;     // Flag Bit 2: Offset/Skalierung aus NVS der GasBee
+    bool     config_mode;    // Flag Bit 3: Konfigurationsmodus (USB angesteckt, Kalibrierung möglich)
     uint8_t  seq;            // Sequenzzähler des letzten Messzyklus
     int8_t   rssi;
     uint8_t  mac[6];         // BLE-Adresse (LSB-first, wie vom Stack geliefert)
@@ -48,6 +49,7 @@ typedef struct {
 // für die Auswahlliste im Display (Einstellungen > RTC / Temp / Gas).
 typedef struct {
     uint8_t  mac[6];         // BLE-Adresse (LSB-first, wie vom Stack geliefert)
+    uint8_t  addr_type;      // BLE-Adresstyp (für den Verbindungsaufbau zur Kalibrierung)
     int8_t   rssi;
     float    weight_kg;
     bool     weight_valid;
@@ -55,8 +57,9 @@ typedef struct {
     bool     battery_valid;
     bool     charging;
     bool     calibrated;
+    bool     config_mode;    // Flag Bit 3: USB angesteckt
     uint8_t  seq;
-    int64_t  last_seen_us;
+    int64_t  last_seen_us;   // letztes Paket (im Konfigurationsmodus jede Sekunde)
 } gasbee_scan_entry_t;
 
 /**
@@ -82,6 +85,12 @@ esp_err_t gasbee_ble_scanner_set_macs(const char *bottle_a_mac, const char *bott
  *        Display kopieren. Gibt die Anzahl kopierter Einträge zurück.
  */
 size_t gasbee_ble_scanner_get_scan_list(gasbee_scan_entry_t *out, size_t max_entries);
+
+/**
+ * @brief Eintrag der Scan-Liste per MAC suchen ("AA:BB:CC:DD:EE:FF", MSB-first).
+ *        Gibt false zurück, wenn die GasBee nicht (mehr) in der Liste steht.
+ */
+bool gasbee_ble_scanner_find(const char *mac_str, gasbee_scan_entry_t *out);
 
 /** @brief Akkuspannung (mV) per LiPo-Kennlinie in Prozent (0–100) umrechnen. */
 uint8_t gasbee_battery_pct(uint16_t mv);

@@ -27,6 +27,8 @@
 #include "freertos/task.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
 
 static const char *TAG = "settings_modal";
 
@@ -94,18 +96,56 @@ static char        s_ruuvi_outdoor_mac[18]    = "";
 static womo_ruuvi_scan_entry_t s_ruuvi_scan_results[WOMO_RUUVI_SCAN_MAX_TAGS];
 static size_t       s_ruuvi_scan_result_count = 0;
 
-/* ── GasBee (BLE-Gaswaage): MAC-Konfiguration Flasche A/B ───── */
-#define GASBEE_SCAN_MAX_RETRY 2
+/* ── GasBee (BLE-Gaswaage): Zuordnung Flasche A/B per Einrichten-Assistent ── */
 static lv_obj_t   *s_gasbee_lbl[2]       = {NULL, NULL};  /* 0=A, 1=B */
-static lv_obj_t   *s_gasbee_scan_btn[2]  = {NULL, NULL};
-static lv_obj_t   *s_gasbee_scan_popup   = NULL;
-static lv_timer_t *s_gasbee_scan_timeout_timer = NULL;
-static bool        s_gasbee_scan_in_progress   = false;
-static int         s_gasbee_scan_target        = 0;  /* 0=A, 1=B */
-static int         s_gasbee_scan_retry         = 0;
-static char        s_gasbee_mac[2][18]         = {"", ""};
-static womo_gasbee_scan_entry_t s_gasbee_scan_results[WOMO_GASBEE_SCAN_MAX_TAGS];
-static size_t       s_gasbee_scan_result_count = 0;
+static lv_obj_t   *s_gasbee_scan_btn[2]  = {NULL, NULL};  /* Button "Einrichten" */
+static char        s_gasbee_mac[2][18]   = {"", ""};
+
+/* Abholfach für Ergebnisse aus dem ESP-NOW-RX- bzw. esp_timer-Task. Ausgewertet wird
+ * nur im LVGL-Task (s_rtc_poll_timer) – kein lvgl_port_lock() in fremden Tasks. */
+static portMUX_TYPE s_inbox_lock = portMUX_INITIALIZER_UNLOCKED;
+static bool        s_ruuvi_inbox_ready = false;
+static womo_ruuvi_scan_entry_t s_ruuvi_inbox[WOMO_RUUVI_SCAN_MAX_TAGS];
+static size_t      s_ruuvi_inbox_count = 0;
+static bool        s_gasbee_inbox_ready = false;
+static womo_gasbee_scan_entry_t s_gasbee_inbox[WOMO_GASBEE_SCAN_MAX_TAGS];
+static size_t      s_gasbee_inbox_count = 0;
+static bool        s_gbcal_inbox_ready = false;
+static bool        s_gbcal_inbox_zero  = false;
+static bool        s_gbcal_inbox_ok    = false;
+static int         s_gbcal_inbox_err   = 0;
+static lv_timer_t *s_rtc_poll_timer    = NULL;   /* 100 ms, nur solange das Modal offen ist */
+
+/* Zustand des GasBee-Einrichten-Assistenten (Ablauf siehe gbw_render) */
+typedef enum {
+    GBW_OFF = 0,
+    GBW_SEARCH,       /* wartet auf genau eine Gaswaage im Konfigurationsmodus */
+    GBW_NOT_FOUND,
+    GBW_FOUND,        /* Übernehmen? */
+    GBW_CAL_ASK,      /* Jetzt kalibrieren? */
+    GBW_ZERO,         /* Waage leeren, Weiter */
+    GBW_ZERO_BUSY,
+    GBW_REF,          /* Gewicht auflegen + eingeben */
+    GBW_REF_BUSY,
+    GBW_VERIFY,       /* nächste Messung mit Flag "kalibriert" abwarten */
+    GBW_ERROR,        /* Fehler eines Schritts, Wiederholen möglich */
+    GBW_DONE,
+} gbw_state_t;
+
+static gbw_state_t s_gbw_state = GBW_OFF;
+static int         s_gbw_slot = 0;            /* 0 = A, 1 = B */
+static womo_gasbee_scan_entry_t s_gbw_cand;   /* gefundene Gaswaage */
+static uint32_t    s_gbw_t0 = 0;              /* Beginn des aktuellen Zustands (lv_tick) */
+static uint32_t    s_gbw_last_poll = 0;
+static bool        s_gbw_session = false;     /* gasbee_cal_start gesendet */
+static uint32_t    s_gbw_ref_g = 0;
+static uint8_t     s_gbw_seq_ref = 0;         /* letzte bekannte bee_seq vor dem Referenz-Write */
+static gbw_state_t s_gbw_retry_state = GBW_ZERO;
+static char        s_gbw_msg[200] = "";
+static lv_obj_t   *s_gbw_popup = NULL;
+static lv_obj_t   *s_gbw_text  = NULL;
+static lv_obj_t   *s_gbw_ta    = NULL;        /* Gewichtseingabe (Gramm) */
+static lv_obj_t   *s_gbw_kb    = NULL;
 
 /* ── thresh_ud_t ────────────────────────────────────────────── */
 typedef struct {
@@ -512,17 +552,26 @@ static void close_modal(void)
     s_ruuvi_scan_list     = NULL;
     s_ruuvi_scan_in_progress = false;
 
-    if (s_gasbee_scan_timeout_timer) {
-        lv_timer_del(s_gasbee_scan_timeout_timer);
-        s_gasbee_scan_timeout_timer = NULL;
-    }
     womo_sensorboard_set_gasbee_scan_callback(NULL, NULL);
+    womo_sensorboard_set_gasbee_cal_result_callback(NULL, NULL);
+    if (s_rtc_poll_timer) {
+        lv_timer_del(s_rtc_poll_timer);
+        s_rtc_poll_timer = NULL;
+    }
+    /* Assistent: Popup/Tastatur werden mit dem Overlay gelöscht, offene Sitzung beenden */
+    if (s_gbw_session) {
+        womo_sensorboard_send_gasbee_cal_session(s_gbw_slot, false);
+        s_gbw_session = false;
+    }
+    s_gbw_state = GBW_OFF;
+    s_gbw_popup = NULL;
+    s_gbw_text  = NULL;
+    s_gbw_ta    = NULL;
+    s_gbw_kb    = NULL;
     s_gasbee_lbl[0]      = NULL;
     s_gasbee_lbl[1]      = NULL;
     s_gasbee_scan_btn[0] = NULL;
     s_gasbee_scan_btn[1] = NULL;
-    s_gasbee_scan_popup  = NULL;
-    s_gasbee_scan_in_progress = false;
 }
 
 static void close_btn_cb(lv_event_t *e)
@@ -982,6 +1031,16 @@ static bool ruuvi_wired_active(bool indoor, const womo_sensor_data_t *sd, bool h
         : (sd->bme680.valid && !sd->bme680.is_ruuvi);
 }
 
+/* Warnschwelle der Ruuvi-Knopfzelle (CR2477) abhängig von der Tag-Temperatur –
+ * gleiche Bänder wie die Ruuvi-Station-App (Quelle: https://ruuvi.com/battery-usage/).
+ * Prozent ist bei Lithium-Knopfzellen nicht sinnvoll (Spannung bis kurz vor Ende flach). */
+static float ruuvi_batt_min_v(float temp_c)
+{
+    if (temp_c < -20.0f) return 2.0f;
+    if (temp_c < 0.0f)   return 2.3f;
+    return 2.5f;
+}
+
 static void ruuvi_refresh_labels(void)
 {
     womo_sensor_data_t sd = {0};
@@ -998,10 +1057,12 @@ static void ruuvi_refresh_labels(void)
             snprintf(buf, sizeof(buf), "nicht konfiguriert");
             lv_obj_set_style_text_color(s_ruuvi_indoor_lbl, lv_color_hex(0x888888), 0);
         } else if (have_sd && sd.bme680_indoor.is_ruuvi && sd.bme680_indoor.batt_valid) {
-            float v = sd.bme680_indoor.batt_mv / 1000.0f;
-            snprintf(buf, sizeof(buf), "%s  %.2fV%s", s_ruuvi_indoor_mac, v, v < 2.5f ? " !" : "");
+            float v   = sd.bme680_indoor.batt_mv / 1000.0f;
+            float v_min = ruuvi_batt_min_v(sd.bme680_indoor.temperature_c);
+            snprintf(buf, sizeof(buf), "%s  Batt %.2fV (min %.1fV)%s",
+                     s_ruuvi_indoor_mac, v, v_min, v < v_min ? " !" : "");
             lv_obj_set_style_text_color(s_ruuvi_indoor_lbl,
-                v < 2.5f ? lv_color_hex(0xC62828) : lv_color_hex(0x2E7D32), 0);
+                v < v_min ? lv_color_hex(0xC62828) : lv_color_hex(0x2E7D32), 0);
         } else {
             snprintf(buf, sizeof(buf), "%s", s_ruuvi_indoor_mac);
             lv_obj_set_style_text_color(s_ruuvi_indoor_lbl, lv_color_hex(0x333333), 0);
@@ -1018,10 +1079,12 @@ static void ruuvi_refresh_labels(void)
             snprintf(buf, sizeof(buf), "nicht konfiguriert");
             lv_obj_set_style_text_color(s_ruuvi_outdoor_lbl, lv_color_hex(0x888888), 0);
         } else if (have_sd && sd.bme680.is_ruuvi && sd.bme680.batt_valid) {
-            float v = sd.bme680.batt_mv / 1000.0f;
-            snprintf(buf, sizeof(buf), "%s  %.2fV%s", s_ruuvi_outdoor_mac, v, v < 2.5f ? " !" : "");
+            float v   = sd.bme680.batt_mv / 1000.0f;
+            float v_min = ruuvi_batt_min_v(sd.bme680.temperature_c);
+            snprintf(buf, sizeof(buf), "%s  Batt %.2fV (min %.1fV)%s",
+                     s_ruuvi_outdoor_mac, v, v_min, v < v_min ? " !" : "");
             lv_obj_set_style_text_color(s_ruuvi_outdoor_lbl,
-                v < 2.5f ? lv_color_hex(0xC62828) : lv_color_hex(0x2E7D32), 0);
+                v < v_min ? lv_color_hex(0xC62828) : lv_color_hex(0x2E7D32), 0);
         } else {
             snprintf(buf, sizeof(buf), "%s", s_ruuvi_outdoor_mac);
             lv_obj_set_style_text_color(s_ruuvi_outdoor_lbl, lv_color_hex(0x333333), 0);
@@ -1187,32 +1250,35 @@ static void ruuvi_scan_timeout_cb(lv_timer_t *t)
     rtc_tab_set_status("Keine Antwort vom Sensorboard");
 }
 
-/* Läuft im ESP-NOW-RX-Task – kein LVGL-Kontext, daher lvgl_port_lock() nötig. */
+/* Läuft im ESP-NOW-RX- bzw. esp_timer-Task: nur ins Abholfach legen,
+ * ausgewertet wird in rtc_poll_timer_cb() (LVGL-Task). */
 static void ruuvi_scan_result_cb(const womo_ruuvi_scan_entry_t *entries, size_t count, void *user_data)
 {
     (void)user_data;
+    if (count > WOMO_RUUVI_SCAN_MAX_TAGS) count = WOMO_RUUVI_SCAN_MAX_TAGS;
+    taskENTER_CRITICAL(&s_inbox_lock);
+    memcpy(s_ruuvi_inbox, entries, count * sizeof(entries[0]));
+    s_ruuvi_inbox_count = count;
+    s_ruuvi_inbox_ready = true;
+    taskEXIT_CRITICAL(&s_inbox_lock);
+}
 
+/* LVGL-Task: Ergebnis einer Ruuvi-Scan-Anfrage anzeigen */
+static void ruuvi_scan_process(const womo_ruuvi_scan_entry_t *entries, size_t count)
+{
     size_t stored = 0;
     for (size_t i = 0; i < count && stored < WOMO_RUUVI_SCAN_MAX_TAGS; i++) {
         s_ruuvi_scan_results[stored++] = entries[i];
     }
     s_ruuvi_scan_result_count = stored;
 
-    if (!lvgl_port_lock(-1)) {
-        s_ruuvi_scan_in_progress = false;
-        return;
-    }
-
+    if (!s_ruuvi_scan_in_progress) return;   /* verspätete Antwort nach Timeout */
     s_ruuvi_scan_in_progress = false;
     if (s_ruuvi_scan_timeout_timer) {
         lv_timer_del(s_ruuvi_scan_timeout_timer);
         s_ruuvi_scan_timeout_timer = NULL;
     }
-
-    if (!s_overlay) {
-        lvgl_port_unlock();
-        return;
-    }
+    if (!s_overlay) return;
 
     if (stored == 0) {
         rtc_tab_set_status("Keine Ruuvi-Tags gefunden");
@@ -1222,8 +1288,6 @@ static void ruuvi_scan_result_cb(const womo_ruuvi_scan_entry_t *entries, size_t 
         rtc_tab_set_status(buf);
         show_ruuvi_scan_popup();
     }
-
-    lvgl_port_unlock();
 }
 
 static void ruuvi_scan_btn_cb(lv_event_t *e)
@@ -1277,7 +1341,7 @@ static void ruuvi_scan_btn_cb(lv_event_t *e)
 /* ── GasBee (BLE-Gaswaage): Hilfsfunktionen ─────────────────── */
 
 /* Kabel-HX711 hat Vorrang vor den GasBees (Sensorboard meldet src "hx") –
- * Scan/Config ist dann wirkungslos. */
+ * Einrichten ist dann wirkungslos. */
 static bool gasbee_wired_active(const womo_sensor_data_t *sd, bool have_sd)
 {
     return have_sd && sd->hx711.valid && sd->hx711.is_wired;
@@ -1297,7 +1361,7 @@ static void gasbee_refresh_labels(void)
                 snprintf(buf, sizeof(buf), "Kabelwaage aktiv (Vorrang)");
                 col = lv_color_hex(0x888888);
             } else if (s_gasbee_mac[i][0] == '\0') {
-                snprintf(buf, sizeof(buf), "nicht konfiguriert");
+                snprintf(buf, sizeof(buf), "nicht eingerichtet");
                 col = lv_color_hex(0x888888);
             } else if (have_sd && sd.hx711.is_gasbee && sd.hx711.bee[i].present) {
                 const __typeof__(sd.hx711.bee[0]) *b = &sd.hx711.bee[i];
@@ -1305,12 +1369,13 @@ static void gasbee_refresh_labels(void)
                 if (b->batt_valid) {
                     snprintf(batt, sizeof(batt), "Akku %u%%%s", b->batt_pct, b->charging ? " (laedt)" : "");
                 }
-                snprintf(buf, sizeof(buf), "%s  %s%s", s_gasbee_mac[i], batt,
-                         b->calibrated ? "" : "  unkal.");
-                col = (b->batt_valid && b->batt_pct < 20 && !b->charging)
+                snprintf(buf, sizeof(buf), "Gaswaage  %s%s%s", batt,
+                         b->calibrated ? "" : "  nicht kalibriert",
+                         b->config_mode ? "  (USB)" : "");
+                col = (!b->calibrated || (b->batt_valid && b->batt_pct < 20 && !b->charging))
                       ? lv_color_hex(0xC62828) : lv_color_hex(0x2E7D32);
             } else {
-                snprintf(buf, sizeof(buf), "%s  (keine Daten)", s_gasbee_mac[i]);
+                snprintf(buf, sizeof(buf), "Gaswaage  (keine Daten)");
             }
             lv_obj_set_style_text_color(s_gasbee_lbl[i], col, 0);
             lv_label_set_text(s_gasbee_lbl[i], buf);
@@ -1327,7 +1392,6 @@ static void gasbee_apply_config(void)
     gasbee_cfg_save(s_gasbee_mac[0], s_gasbee_mac[1]);
     womo_sensorboard_send_gasbee_config(s_gasbee_mac[0], s_gasbee_mac[1]);
     gasbee_refresh_labels();
-    rtc_tab_set_status("GasBee-Konfiguration gespeichert");
 }
 
 static void gasbee_clear_cb(lv_event_t *e)
@@ -1335,206 +1399,561 @@ static void gasbee_clear_cb(lv_event_t *e)
     int slot = (int)(intptr_t)lv_event_get_user_data(e);
     s_gasbee_mac[slot][0] = '\0';
     gasbee_apply_config();
+    rtc_tab_set_status("Gaswaage entfernt");
 }
 
-static void close_gasbee_scan_popup(void)
+/* ── GasBee: Einrichten-Assistent ───────────────────────────────
+ *
+ * Der Nutzer tippt bei Flasche A/B auf "Einrichten" und steckt die Gaswaage an USB.
+ * Nur eine Gaswaage an USB sendet mit Flag "Konfigurationsmodus" (Bit 3) – das
+ * Sensorboard meldet auf gasbee_scan_request mit cfg_only nur diese. Dadurch ist
+ * keine MAC-Auswahl nötig, auch nicht mit fremden Gaswaagen in Reichweite.
+ * Danach optional Kalibrierung (Nullpunkt + Referenzgewicht) per Sensorboard/GATT.
+ */
+
+#define GBW_SEARCH_TIMEOUT_MS  60000   /* so lange auf eine Gaswaage an USB warten */
+#define GBW_POLL_MS             2000   /* Abfrageintervall Scan (cfg_only) */
+#define GBW_STEP_TIMEOUT_MS    25000   /* Antwort auf einen Kalibrierschritt */
+#define GBW_VERIFY_TIMEOUT_MS  20000   /* Messung nach Kalibrierung abwarten */
+#define GBW_REF_MIN_G            500
+#define GBW_REF_MAX_G         200000
+#define GBW_TOL_REL           0.01f    /* Kalibrierung gilt als gelungen bei ±1 % … */
+#define GBW_TOL_ABS_KG        0.05f    /* … mindestens aber ±50 g */
+
+
+static void gbw_render(void);
+
+static void gbw_set_state(gbw_state_t st)
 {
-    if (s_gasbee_scan_popup) {
-        lv_obj_del(s_gasbee_scan_popup);
-        s_gasbee_scan_popup = NULL;
+    s_gbw_state = st;
+    s_gbw_t0 = lv_tick_get();
+    s_gbw_last_poll = 0;
+    gbw_render();
+}
+
+/* Asynchron löschen: wird auch aus dem Klick-Callback eines Popup-Buttons aufgerufen */
+static void gbw_close_popup(void)
+{
+    if (s_gbw_kb) {
+        lv_keyboard_set_textarea(s_gbw_kb, NULL);
+        lv_obj_del_async(s_gbw_kb);
+        s_gbw_kb = NULL;
+    }
+    if (s_gbw_popup) {
+        lv_obj_del_async(s_gbw_popup);
+        s_gbw_popup = NULL;
+    }
+    s_gbw_text = NULL;
+    s_gbw_ta   = NULL;
+}
+
+/* Assistent beenden; eine laufende Kalibrier-Sitzung wird beim Sensorboard geschlossen */
+static void gbw_finish(void)
+{
+    if (s_gbw_session) {
+        womo_sensorboard_send_gasbee_cal_session(s_gbw_slot, false);
+        s_gbw_session = false;
+    }
+    gbw_close_popup();
+    s_gbw_state = GBW_OFF;
+    gasbee_refresh_labels();
+}
+
+static const char *gbw_err_text(int err)
+{
+    switch (err) {
+        case 0x03: case -2:
+            return "Die Gaswaage ist nicht mehr im Einrichtungsmodus.\n"
+                   "Bitte das USB-Kabel angesteckt lassen.";
+        case 0x13:
+            return "Die Gaswaage hat den Wert abgelehnt.";
+        case -1:
+            return "Ein anderer Schritt laeuft noch. Bitte kurz warten.";
+        case -3: case -5: case -6:
+            return "Keine Verbindung zur Gaswaage.\n"
+                   "Bitte naeher an das Sensorboard bringen und wiederholen.";
+        default:
+            return "Der Schritt ist fehlgeschlagen.";
     }
 }
 
-static void gasbee_scan_popup_close_cb(lv_event_t *e)
+static void gbw_start_cal(void)
 {
-    (void)e;
-    close_gasbee_scan_popup();
+    if (!s_gbw_session) {
+        womo_sensorboard_send_gasbee_cal_session(s_gbw_slot, true);
+        s_gbw_session = true;
+    }
+    gbw_set_state(GBW_ZERO);
 }
 
-static void gasbee_scan_list_btn_cb(lv_event_t *e)
+static void gbw_send_zero(void)
 {
-    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
-
-    uint32_t idx = lv_obj_get_index(lv_event_get_target(e));
-    if (idx < s_gasbee_scan_result_count) {
-        int other = 1 - s_gasbee_scan_target;
-        const char *mac = s_gasbee_scan_results[idx].mac;
-        /* Eine GasBee kann nur einer Flasche zugeordnet sein */
-        if (strcmp(s_gasbee_mac[other], mac) == 0) s_gasbee_mac[other][0] = '\0';
-        snprintf(s_gasbee_mac[s_gasbee_scan_target], sizeof(s_gasbee_mac[0]), "%s", mac);
-        close_gasbee_scan_popup();
-        gasbee_apply_config();
+    s_gbw_retry_state = GBW_ZERO;
+    if (womo_sensorboard_send_gasbee_cal(s_gbw_cand.mac, true, 0) != ESP_OK) {
+        snprintf(s_gbw_msg, sizeof(s_gbw_msg), "Sensorboard nicht erreichbar.");
+        gbw_set_state(GBW_ERROR);
         return;
     }
-    close_gasbee_scan_popup();
+    gbw_set_state(GBW_ZERO_BUSY);
 }
 
-static void show_gasbee_scan_popup(void)
+static void gbw_send_ref(void)
 {
-    close_gasbee_scan_popup();
-    if (s_gasbee_scan_result_count == 0 || !s_overlay) return;
-
-    s_gasbee_scan_popup = lv_obj_create(s_overlay);
-    lv_obj_set_size(s_gasbee_scan_popup, 460, 320);
-    lv_obj_center(s_gasbee_scan_popup);
-    lv_obj_set_style_bg_color(s_gasbee_scan_popup, lv_color_white(), 0);
-    lv_obj_set_style_radius(s_gasbee_scan_popup, 8, 0);
-    lv_obj_set_style_pad_all(s_gasbee_scan_popup, 12, 0);
-    lv_obj_set_flex_flow(s_gasbee_scan_popup, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_shadow_width(s_gasbee_scan_popup, 20, 0);
-    lv_obj_set_style_shadow_opa(s_gasbee_scan_popup, LV_OPA_30, 0);
-    lv_obj_move_foreground(s_gasbee_scan_popup);
-
-    lv_obj_t *popup_hdr = lv_obj_create(s_gasbee_scan_popup);
-    lv_obj_remove_style_all(popup_hdr);
-    lv_obj_set_size(popup_hdr, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(popup_hdr, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(popup_hdr,
-                          LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
-    lv_obj_set_style_pad_bottom(popup_hdr, 8, 0);
-
-    lv_obj_t *popup_title = lv_label_create(popup_hdr);
-    lv_label_set_text(popup_title,
-        s_gasbee_scan_target == 0 ? "GasBee waehlen (Flasche A)" : "GasBee waehlen (Flasche B)");
-    lv_obj_set_style_text_font(popup_title, &lv_font_montserrat_16, 0);
-    lv_obj_set_flex_grow(popup_title, 1);
-
-    lv_obj_t *popup_close = lv_btn_create(popup_hdr);
-    lv_obj_set_style_pad_all(popup_close, 6, 0);
-    lv_obj_add_event_cb(popup_close, gasbee_scan_popup_close_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *close_lbl = lv_label_create(popup_close);
-    lv_label_set_text(close_lbl, LV_SYMBOL_CLOSE);
-
-    lv_obj_t *list = lv_list_create(s_gasbee_scan_popup);
-    lv_obj_set_width(list, LV_PCT(100));
-    lv_obj_set_flex_grow(list, 1);
-
-    for (size_t i = 0; i < s_gasbee_scan_result_count; i++) {
-        const womo_gasbee_scan_entry_t *r = &s_gasbee_scan_results[i];
-        char weight[16] = "-- kg";
-        char batt[16]   = "Akku ?";
-        if (r->weight_valid) snprintf(weight, sizeof(weight), "%.1f kg", (double)r->weight_kg);
-        if (r->batt_valid)   snprintf(batt, sizeof(batt), "Akku %u%%", r->batt_pct);
-        char text[160];
-        snprintf(text, sizeof(text), "%.17s  %s  %s  %d dBm%s",
-                 r->mac, weight, batt, (int)r->rssi, r->calibrated ? "" : "  (unkal.)");
-        lv_obj_t *btn = lv_list_add_btn(list, LV_SYMBOL_BLUETOOTH, text);
-        lv_obj_add_event_cb(btn, gasbee_scan_list_btn_cb, LV_EVENT_CLICKED, NULL);
-    }
-}
-
-static void gasbee_scan_timeout_cb(lv_timer_t *t)
-{
-    (void)t;
-    s_gasbee_scan_timeout_timer = NULL;
-    if (!s_gasbee_scan_in_progress) return;
-
-    if (s_gasbee_scan_retry < GASBEE_SCAN_MAX_RETRY) {
-        s_gasbee_scan_retry++;
-        char buf[48];
-        snprintf(buf, sizeof(buf), "Keine Antwort - Versuch %d/%d",
-                 s_gasbee_scan_retry + 1, GASBEE_SCAN_MAX_RETRY + 1);
-        rtc_tab_set_status(buf);
-
-        s_gasbee_scan_timeout_timer = lv_timer_create(gasbee_scan_timeout_cb, 4000, NULL);
-        if (!s_gasbee_scan_timeout_timer) {
-            s_gasbee_scan_in_progress = false;
-            rtc_tab_set_status("Scan-Timer konnte nicht angelegt werden");
-            return;
-        }
-        lv_timer_set_repeat_count(s_gasbee_scan_timeout_timer, 1);
-
-        if (womo_sensorboard_send_gasbee_scan_request() != ESP_OK) {
-            s_gasbee_scan_in_progress = false;
-            lv_timer_del(s_gasbee_scan_timeout_timer);
-            s_gasbee_scan_timeout_timer = NULL;
-            rtc_tab_set_status("Sensorboard nicht erreichbar");
+    const char *txt = s_gbw_ta ? lv_textarea_get_text(s_gbw_ta) : "";
+    long g = strtol(txt ? txt : "", NULL, 10);
+    if (g < GBW_REF_MIN_G || g > GBW_REF_MAX_G) {
+        if (s_gbw_text) {
+            lv_label_set_text_fmt(s_gbw_text,
+                "Schritt 2 von 2\nBitte ein Gewicht von %d bis %d Gramm eingeben.",
+                GBW_REF_MIN_G, GBW_REF_MAX_G);
         }
         return;
     }
-
-    s_gasbee_scan_in_progress = false;
-    rtc_tab_set_status("Keine Antwort vom Sensorboard");
+    s_gbw_ref_g = (uint32_t)g;
+    s_gbw_seq_ref = s_gbw_cand.seq;
+    s_gbw_retry_state = GBW_REF;
+    if (womo_sensorboard_send_gasbee_cal(s_gbw_cand.mac, false, s_gbw_ref_g) != ESP_OK) {
+        snprintf(s_gbw_msg, sizeof(s_gbw_msg), "Sensorboard nicht erreichbar.");
+        gbw_set_state(GBW_ERROR);
+        return;
+    }
+    gbw_set_state(GBW_REF_BUSY);
 }
 
-/* Läuft im ESP-NOW-RX-Task – kein LVGL-Kontext, daher lvgl_port_lock() nötig. */
+/* Gefundene Gaswaage der Flasche zuordnen (von der anderen Flasche ggf. entfernen) */
+static void gbw_assign(void)
+{
+    int other = 1 - s_gbw_slot;
+    if (strcmp(s_gasbee_mac[other], s_gbw_cand.mac) == 0) s_gasbee_mac[other][0] = '\0';
+    snprintf(s_gasbee_mac[s_gbw_slot], sizeof(s_gasbee_mac[0]), "%s", s_gbw_cand.mac);
+    gasbee_apply_config();
+}
+
+/* Button 1 (rechts, Hauptaktion) bzw. 2 (links, Abbrechen/Später) */
+static void gbw_btn_cb(lv_event_t *e)
+{
+    int btn = (int)(intptr_t)lv_event_get_user_data(e);
+    switch (s_gbw_state) {
+        case GBW_SEARCH:
+        case GBW_ZERO_BUSY:
+        case GBW_REF_BUSY:
+        case GBW_VERIFY:
+            gbw_finish();                         /* einziger Button: Abbrechen */
+            break;
+        case GBW_NOT_FOUND:
+            if (btn == 1) gbw_set_state(GBW_SEARCH);
+            else          gbw_finish();
+            break;
+        case GBW_FOUND:
+            if (btn == 1) {
+                if (strcmp(s_gasbee_mac[s_gbw_slot], s_gbw_cand.mac) == 0) {
+                    gbw_start_cal();              /* schon zugeordnet → Kalibrieren */
+                } else {
+                    gbw_assign();
+                    gbw_set_state(GBW_CAL_ASK);
+                }
+            } else {
+                gbw_finish();
+            }
+            break;
+        case GBW_CAL_ASK:
+            if (btn == 1) gbw_start_cal();
+            else          gbw_set_state(GBW_DONE);
+            break;
+        case GBW_ZERO:
+            if (btn == 1) gbw_send_zero();
+            else          gbw_finish();
+            break;
+        case GBW_REF:
+            if (btn == 1) gbw_send_ref();
+            else          gbw_finish();
+            break;
+        case GBW_ERROR:
+            if (btn == 1) gbw_set_state(s_gbw_retry_state);
+            else          gbw_finish();
+            break;
+        case GBW_DONE:
+        default:
+            gbw_finish();
+            break;
+    }
+}
+
+static void gbw_kb_cb(lv_event_t *e)
+{
+    if (lv_event_get_code(e) == LV_EVENT_READY && s_gbw_state == GBW_REF) gbw_send_ref();
+}
+
+static lv_obj_t *gbw_add_btn(lv_obj_t *row, const char *text, int id, bool primary)
+{
+    lv_obj_t *b = lv_btn_create(row);
+    lv_obj_set_size(b, 150, 40);
+    lv_obj_set_style_radius(b, 6, 0);
+    lv_obj_set_style_bg_color(b, primary ? lv_color_hex(0x1565C0) : lv_color_hex(0x757575), 0);
+    lv_obj_add_event_cb(b, gbw_btn_cb, LV_EVENT_CLICKED, (void *)(intptr_t)id);
+    lv_obj_t *l = lv_label_create(b);
+    lv_label_set_text(l, text);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+    lv_obj_center(l);
+    return b;
+}
+
+/* Popup für den aktuellen Zustand neu aufbauen */
+static void gbw_render(void)
+{
+    gbw_close_popup();
+    if (s_gbw_state == GBW_OFF || !s_overlay) return;
+
+    char text[320] = "";
+    const char *b1 = NULL;   /* Hauptaktion (rechts) */
+    const char *b2 = NULL;   /* Abbrechen / Später (links) */
+    bool input = false;
+    const char bottle = (char)('A' + s_gbw_slot);
+
+    switch (s_gbw_state) {
+        case GBW_SEARCH:
+            snprintf(text, sizeof(text),
+                     "Gaswaage per USB-Kabel mit Strom verbinden\n"
+                     "(ein USB-Ladegeraet genuegt).\n\nSuche laeuft ...");
+            b2 = "Abbrechen";
+            break;
+        case GBW_NOT_FOUND:
+            snprintf(text, sizeof(text),
+                     "Keine Gaswaage gefunden.\n\n"
+                     "Bitte pruefen, ob das USB-Kabel steckt und das\n"
+                     "Ladegeraet Strom hat.");
+            b1 = "Nochmal"; b2 = "Schliessen";
+            break;
+        case GBW_FOUND: {
+            char batt[24] = "";
+            char weight[24] = "";
+            if (s_gbw_cand.batt_valid) snprintf(batt, sizeof(batt), "Akku %u %%", s_gbw_cand.batt_pct);
+            if (s_gbw_cand.weight_valid) snprintf(weight, sizeof(weight), "   %.1f kg", (double)s_gbw_cand.weight_kg);
+            int other = 1 - s_gbw_slot;
+            if (strcmp(s_gasbee_mac[s_gbw_slot], s_gbw_cand.mac) == 0) {
+                snprintf(text, sizeof(text), "Gaswaage gefunden: %s%s\n\n"
+                         "Diese Gaswaage ist bereits Flasche %c.", batt, weight, bottle);
+                b1 = "Kalibrieren"; b2 = "Fertig";
+            } else if (strcmp(s_gasbee_mac[other], s_gbw_cand.mac) == 0) {
+                snprintf(text, sizeof(text), "Gaswaage gefunden: %s%s\n\n"
+                         "Sie ist bisher Flasche %c und wird jetzt Flasche %c.",
+                         batt, weight, (char)('A' + other), bottle);
+                b1 = "Uebernehmen"; b2 = "Abbrechen";
+            } else {
+                snprintf(text, sizeof(text), "Gaswaage gefunden: %s%s\n\n"
+                         "Als Flasche %c uebernehmen?", batt, weight, bottle);
+                b1 = "Uebernehmen"; b2 = "Abbrechen";
+            }
+            break;
+        }
+        case GBW_CAL_ASK:
+            if (s_gbw_cand.calibrated) {
+                snprintf(text, sizeof(text), "Die Gaswaage ist jetzt Flasche %c.\n\n"
+                         "Sie ist bereits kalibriert. Neu kalibrieren?", bottle);
+                b1 = "Kalibrieren"; b2 = "Fertig";
+            } else {
+                snprintf(text, sizeof(text), "Die Gaswaage ist jetzt Flasche %c.\n\n"
+                         "Sie ist noch nicht kalibriert und zeigt bis dahin\n"
+                         "keinen Gasstand. Dafuer wird ein Gegenstand mit\n"
+                         "bekanntem Gewicht benoetigt.", bottle);
+                b1 = "Kalibrieren"; b2 = "Spaeter";
+            }
+            break;
+        case GBW_ZERO:
+            snprintf(text, sizeof(text), "Schritt 1 von 2\n\n"
+                     "Waage leeren: keine Flasche, nichts auflegen.\n"
+                     "Dann auf Weiter tippen.");
+            b1 = "Weiter"; b2 = "Abbrechen";
+            break;
+        case GBW_ZERO_BUSY:
+            snprintf(text, sizeof(text), "Schritt 1 von 2\n\nNullpunkt wird gemessen ...");
+            b2 = "Abbrechen";
+            break;
+        case GBW_REF:
+            snprintf(text, sizeof(text), "Schritt 2 von 2\n"
+                     "Gegenstand mit bekanntem Gewicht auflegen\n"
+                     "(z. B. Wasserkanister) und Gewicht in Gramm eingeben:");
+            b1 = "Weiter"; b2 = "Abbrechen";
+            input = true;
+            break;
+        case GBW_REF_BUSY:
+            snprintf(text, sizeof(text), "Schritt 2 von 2\n\nGewicht wird gemessen ...");
+            b2 = "Abbrechen";
+            break;
+        case GBW_VERIFY:
+            snprintf(text, sizeof(text), "Kalibrierung wird geprueft ...");
+            b2 = "Abbrechen";
+            break;
+        case GBW_ERROR:
+            snprintf(text, sizeof(text), "%s", s_gbw_msg);
+            b1 = "Wiederholen"; b2 = "Abbrechen";
+            break;
+        case GBW_DONE:
+            snprintf(text, sizeof(text), "%s%sFertig.\nDas USB-Kabel kann jetzt abgezogen werden.",
+                     s_gbw_msg, s_gbw_msg[0] ? "\n\n" : "");
+            b1 = "OK";
+            break;
+        default:
+            break;
+    }
+
+    s_gbw_popup = lv_obj_create(s_overlay);
+    lv_obj_set_size(s_gbw_popup, 480, input ? 230 : 260);
+    if (input) lv_obj_align(s_gbw_popup, LV_ALIGN_TOP_MID, 0, 10);
+    else       lv_obj_center(s_gbw_popup);
+    lv_obj_set_style_bg_color(s_gbw_popup, lv_color_white(), 0);
+    lv_obj_set_style_radius(s_gbw_popup, 8, 0);
+    lv_obj_set_style_pad_all(s_gbw_popup, 14, 0);
+    lv_obj_set_style_shadow_width(s_gbw_popup, 20, 0);
+    lv_obj_set_style_shadow_opa(s_gbw_popup, LV_OPA_30, 0);
+    lv_obj_set_flex_flow(s_gbw_popup, LV_FLEX_FLOW_COLUMN);
+    lv_obj_clear_flag(s_gbw_popup, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_move_foreground(s_gbw_popup);
+
+    lv_obj_t *title = lv_label_create(s_gbw_popup);
+    lv_label_set_text_fmt(title, "Gaswaage einrichten (Flasche %c)", bottle);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+
+    s_gbw_text = lv_label_create(s_gbw_popup);
+    lv_label_set_text(s_gbw_text, text);
+    lv_obj_set_width(s_gbw_text, LV_PCT(100));
+    lv_obj_set_style_text_font(s_gbw_text, &lv_font_montserrat_14, 0);
+    lv_obj_set_flex_grow(s_gbw_text, 1);
+
+    if (input) {
+        s_gbw_ta = lv_textarea_create(s_gbw_popup);
+        lv_textarea_set_one_line(s_gbw_ta, true);
+        lv_textarea_set_accepted_chars(s_gbw_ta, "0123456789");
+        lv_textarea_set_max_length(s_gbw_ta, 6);
+        lv_textarea_set_placeholder_text(s_gbw_ta, "Gramm, z. B. 10000");
+        lv_obj_set_width(s_gbw_ta, 220);
+        if (s_gbw_ref_g) {
+            char g[12];
+            snprintf(g, sizeof(g), "%lu", (unsigned long)s_gbw_ref_g);
+            lv_textarea_set_text(s_gbw_ta, g);
+        }
+
+        s_gbw_kb = lv_keyboard_create(s_overlay);
+        lv_keyboard_set_mode(s_gbw_kb, LV_KEYBOARD_MODE_NUMBER);
+        lv_obj_set_size(s_gbw_kb, LV_PCT(70), 180);
+        lv_obj_align(s_gbw_kb, LV_ALIGN_BOTTOM_MID, 0, -10);
+        lv_keyboard_set_textarea(s_gbw_kb, s_gbw_ta);
+        lv_obj_add_event_cb(s_gbw_kb, gbw_kb_cb, LV_EVENT_READY, NULL);
+    }
+
+    lv_obj_t *row = lv_obj_create(s_gbw_popup);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    if (b2) gbw_add_btn(row, b2, 2, false);
+    else    { lv_obj_t *sp = lv_obj_create(row); lv_obj_remove_style_all(sp); lv_obj_set_size(sp, 1, 1); }
+    if (b1) gbw_add_btn(row, b1, 1, true);
+}
+
+/* LVGL-Task: Scan-Ergebnis (cfg_only) für den Assistenten auswerten */
+static void gbw_on_scan(const womo_gasbee_scan_entry_t *entries, size_t count)
+{
+    if (s_gbw_state == GBW_SEARCH) {
+        size_t usb = 0;
+        const womo_gasbee_scan_entry_t *hit = NULL;
+        for (size_t i = 0; i < count; i++) {
+            if (entries[i].config_mode) { usb++; hit = &entries[i]; }
+        }
+        if (usb == 1) {
+            s_gbw_cand = *hit;
+            gbw_set_state(GBW_FOUND);
+        } else if (usb > 1 && s_gbw_text) {
+            lv_label_set_text(s_gbw_text,
+                "Mehrere Gaswaagen sind gerade an USB angesteckt.\n\n"
+                "Bitte nur die Gaswaage fuer diese Flasche anstecken.\n"
+                "Suche laeuft ...");
+        }
+    } else if (s_gbw_state == GBW_ZERO || s_gbw_state == GBW_REF) {
+        /* Werte der Gaswaage aktuell halten (bee_seq als Bezug für die Prüfung) */
+        for (size_t i = 0; i < count; i++) {
+            if (strcmp(entries[i].mac, s_gbw_cand.mac) == 0) { s_gbw_cand = entries[i]; break; }
+        }
+    } else if (s_gbw_state == GBW_VERIFY) {
+        for (size_t i = 0; i < count; i++) {
+            if (strcmp(entries[i].mac, s_gbw_cand.mac) != 0) continue;
+            s_gbw_cand = entries[i];
+            /* Mindestens 2 Messzyklen nach dem letzten bekannten Stand: eine Messung
+             * zwischen letzter Abfrage und Write könnte sonst noch unkalibriert sein */
+            uint8_t seq_diff = (uint8_t)(entries[i].seq - s_gbw_seq_ref);
+            if (!entries[i].calibrated || seq_diff < 2 || !entries[i].weight_valid) break;
+            float want = (float)s_gbw_ref_g / 1000.0f;
+            float got  = entries[i].weight_kg;
+            float tol  = want * GBW_TOL_REL;
+            if (tol < GBW_TOL_ABS_KG) tol = GBW_TOL_ABS_KG;
+            if (fabsf(got - want) <= tol) {
+                snprintf(s_gbw_msg, sizeof(s_gbw_msg),
+                         "Kalibrierung erfolgreich.\nGemessen: %.2f kg (eingegeben %.2f kg).",
+                         (double)got, (double)want);
+                if (s_gbw_session) {
+                    womo_sensorboard_send_gasbee_cal_session(s_gbw_slot, false);
+                    s_gbw_session = false;
+                }
+                gbw_set_state(GBW_DONE);
+            } else {
+                snprintf(s_gbw_msg, sizeof(s_gbw_msg),
+                         "Die Waage misst %.2f kg statt %.2f kg.\n"
+                         "Bitte Gewicht pruefen und die Kalibrierung wiederholen.",
+                         (double)got, (double)want);
+                s_gbw_retry_state = GBW_ZERO;
+                gbw_set_state(GBW_ERROR);
+            }
+            break;
+        }
+    }
+}
+
+/* LVGL-Task: Ergebnis eines Kalibrierschritts */
+static void gbw_on_cal_result(bool zero_step, bool ok, int err)
+{
+    if (zero_step && s_gbw_state == GBW_ZERO_BUSY) {
+        if (ok) {
+            gbw_set_state(GBW_REF);
+        } else {
+            snprintf(s_gbw_msg, sizeof(s_gbw_msg), "Nullpunkt nicht gespeichert.\n%s", gbw_err_text(err));
+            gbw_set_state(GBW_ERROR);
+        }
+    } else if (!zero_step && s_gbw_state == GBW_REF_BUSY) {
+        if (ok) {
+            gbw_set_state(GBW_VERIFY);
+        } else {
+            snprintf(s_gbw_msg, sizeof(s_gbw_msg), "Gewicht nicht gespeichert.\n%s", gbw_err_text(err));
+            gbw_set_state(GBW_ERROR);
+        }
+    }
+}
+
+/* LVGL-Task, alle 100 ms: Abholfach leeren, Zeitabläufe des Assistenten */
+static void gbw_tick(void)
+{
+    uint32_t in_state = lv_tick_elaps(s_gbw_t0);
+    bool polling = (s_gbw_state == GBW_SEARCH || s_gbw_state == GBW_ZERO ||
+                    s_gbw_state == GBW_REF || s_gbw_state == GBW_VERIFY);
+
+    if (polling && (s_gbw_last_poll == 0 || lv_tick_elaps(s_gbw_last_poll) >= GBW_POLL_MS)) {
+        s_gbw_last_poll = lv_tick_get();
+        if (s_gbw_last_poll == 0) s_gbw_last_poll = 1;
+        womo_sensorboard_send_gasbee_setup_scan();
+    }
+
+    switch (s_gbw_state) {
+        case GBW_SEARCH:
+            if (in_state > GBW_SEARCH_TIMEOUT_MS) gbw_set_state(GBW_NOT_FOUND);
+            break;
+        case GBW_ZERO_BUSY:
+        case GBW_REF_BUSY:
+            if (in_state > GBW_STEP_TIMEOUT_MS) {
+                snprintf(s_gbw_msg, sizeof(s_gbw_msg), "Keine Antwort vom Sensorboard.");
+                gbw_set_state(GBW_ERROR);
+            }
+            break;
+        case GBW_VERIFY:
+            if (in_state > GBW_VERIFY_TIMEOUT_MS) {
+                snprintf(s_gbw_msg, sizeof(s_gbw_msg),
+                         "Die Gaswaage hat die Kalibrierung nicht bestaetigt.\n"
+                         "Bitte USB angesteckt lassen und wiederholen.");
+                s_gbw_retry_state = GBW_ZERO;
+                gbw_set_state(GBW_ERROR);
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+/* Läuft im ESP-NOW-RX- bzw. esp_timer-Task: nur ins Abholfach legen */
 static void gasbee_scan_result_cb(const womo_gasbee_scan_entry_t *entries, size_t count, void *user_data)
 {
     (void)user_data;
+    if (count > WOMO_GASBEE_SCAN_MAX_TAGS) count = WOMO_GASBEE_SCAN_MAX_TAGS;
+    taskENTER_CRITICAL(&s_inbox_lock);
+    memcpy(s_gasbee_inbox, entries, count * sizeof(entries[0]));
+    s_gasbee_inbox_count = count;
+    s_gasbee_inbox_ready = true;
+    taskEXIT_CRITICAL(&s_inbox_lock);
+}
 
-    size_t stored = 0;
-    for (size_t i = 0; i < count && stored < WOMO_GASBEE_SCAN_MAX_TAGS; i++) {
-        s_gasbee_scan_results[stored++] = entries[i];
+static void gasbee_cal_result_cb(bool zero_step, bool ok, int err, const char *msg, void *user_data)
+{
+    (void)msg; (void)user_data;
+    taskENTER_CRITICAL(&s_inbox_lock);
+    s_gbcal_inbox_zero  = zero_step;
+    s_gbcal_inbox_ok    = ok;
+    s_gbcal_inbox_err   = err;
+    s_gbcal_inbox_ready = true;
+    taskEXIT_CRITICAL(&s_inbox_lock);
+}
+
+/* LVGL-Timer (100 ms) des Tabs "RTC / Temp / Gas": Ergebnisse abholen, Assistent takten */
+static void rtc_poll_timer_cb(lv_timer_t *t)
+{
+    (void)t;
+    static womo_ruuvi_scan_entry_t  ruuvi[WOMO_RUUVI_SCAN_MAX_TAGS];
+    static womo_gasbee_scan_entry_t bees[WOMO_GASBEE_SCAN_MAX_TAGS];
+    static uint32_t last_label_refresh = 0;
+    size_t n_ruuvi = 0, n_bees = 0;
+    bool have_ruuvi, have_bees, have_cal, cal_zero = false, cal_ok = false;
+    int cal_err = 0;
+
+    taskENTER_CRITICAL(&s_inbox_lock);
+    have_ruuvi = s_ruuvi_inbox_ready;
+    if (have_ruuvi) {
+        n_ruuvi = s_ruuvi_inbox_count;
+        memcpy(ruuvi, s_ruuvi_inbox, n_ruuvi * sizeof(ruuvi[0]));
+        s_ruuvi_inbox_ready = false;
     }
-    s_gasbee_scan_result_count = stored;
-
-    if (!lvgl_port_lock(-1)) {
-        s_gasbee_scan_in_progress = false;
-        return;
+    have_bees = s_gasbee_inbox_ready;
+    if (have_bees) {
+        n_bees = s_gasbee_inbox_count;
+        memcpy(bees, s_gasbee_inbox, n_bees * sizeof(bees[0]));
+        s_gasbee_inbox_ready = false;
     }
-
-    s_gasbee_scan_in_progress = false;
-    if (s_gasbee_scan_timeout_timer) {
-        lv_timer_del(s_gasbee_scan_timeout_timer);
-        s_gasbee_scan_timeout_timer = NULL;
+    have_cal = s_gbcal_inbox_ready;
+    if (have_cal) {
+        cal_zero = s_gbcal_inbox_zero;
+        cal_ok   = s_gbcal_inbox_ok;
+        cal_err  = s_gbcal_inbox_err;
+        s_gbcal_inbox_ready = false;
     }
+    taskEXIT_CRITICAL(&s_inbox_lock);
 
-    if (s_overlay) {
-        if (stored == 0) {
-            rtc_tab_set_status("Keine GasBee gefunden (sendet nur alle 5 min)");
-        } else {
-            char buf[48];
-            snprintf(buf, sizeof(buf), "%zu GasBee gefunden", stored);
-            rtc_tab_set_status(buf);
-            show_gasbee_scan_popup();
-        }
+    if (have_ruuvi) ruuvi_scan_process(ruuvi, n_ruuvi);
+    if (have_bees)  gbw_on_scan(bees, n_bees);
+    if (have_cal)   gbw_on_cal_result(cal_zero, cal_ok, cal_err);
+    if (s_gbw_state != GBW_OFF) gbw_tick();
+
+    if (lv_tick_elaps(last_label_refresh) >= 2000) {
+        last_label_refresh = lv_tick_get();
+        gasbee_refresh_labels();
     }
-
-    lvgl_port_unlock();
 }
 
 static void gasbee_scan_btn_cb(lv_event_t *e)
 {
-    if (s_gasbee_scan_in_progress) {
-        rtc_tab_set_status("Scan laeuft bereits - bitte warten");
-        return;
-    }
-
     womo_sensor_data_t sd = {0};
     bool have_sd = womo_sensorboard_get_latest_data(&sd);
     if (gasbee_wired_active(&sd, have_sd)) {
-        rtc_tab_set_status("Kabelwaage hat Vorrang - kein Scan noetig");
+        rtc_tab_set_status("Kabelwaage hat Vorrang - Einrichten nicht noetig");
         return;
     }
+    if (s_gbw_state != GBW_OFF) return;
 
-    s_gasbee_scan_target = (int)(intptr_t)lv_event_get_user_data(e);
-    s_gasbee_scan_in_progress = true;
-    s_gasbee_scan_result_count = 0;
-    s_gasbee_scan_retry = 0;
-    rtc_tab_set_status("Suche GasBee...");
-
-    if (s_gasbee_scan_timeout_timer) {
-        lv_timer_del(s_gasbee_scan_timeout_timer);
-        s_gasbee_scan_timeout_timer = NULL;
-    }
-    s_gasbee_scan_timeout_timer = lv_timer_create(gasbee_scan_timeout_cb, 4000, NULL);
-    if (!s_gasbee_scan_timeout_timer) {
-        s_gasbee_scan_in_progress = false;
-        rtc_tab_set_status("Scan-Timer konnte nicht angelegt werden");
-        return;
-    }
-    lv_timer_set_repeat_count(s_gasbee_scan_timeout_timer, 1);
-
-    if (womo_sensorboard_send_gasbee_scan_request() != ESP_OK) {
-        s_gasbee_scan_in_progress = false;
-        lv_timer_del(s_gasbee_scan_timeout_timer);
-        s_gasbee_scan_timeout_timer = NULL;
-        rtc_tab_set_status("Sensorboard nicht erreichbar");
-    }
+    s_gbw_slot = (int)(intptr_t)lv_event_get_user_data(e);
+    memset(&s_gbw_cand, 0, sizeof(s_gbw_cand));
+    s_gbw_ref_g = 0;
+    s_gbw_msg[0] = '\0';
+    rtc_tab_set_status("");
+    gbw_set_state(GBW_SEARCH);
 }
 
-/* Eine Konfigurationszeile: Label, MAC/Status, Scan-Button, Löschen-Button */
+/* Eine Konfigurationszeile: Label, MAC/Status, Aktions-Button (btn_text), Löschen-Button */
 static lv_obj_t *make_cfg_row(lv_obj_t *tab, int y, const char *name, lv_obj_t **val_lbl,
+                              const char *btn_text, int btn_w,
                               lv_event_cb_t scan_cb, lv_event_cb_t clear_cb, void *user_data)
 {
     lv_obj_t *name_lbl = lv_label_create(tab);
@@ -1549,14 +1968,14 @@ static lv_obj_t *make_cfg_row(lv_obj_t *tab, int y, const char *name, lv_obj_t *
     lv_obj_set_width(*val_lbl, 330);
 
     lv_obj_t *scan_btn = lv_btn_create(tab);
-    lv_obj_set_size(scan_btn, 60, 26);
-    lv_obj_set_pos(scan_btn, 400, y - 6);
+    lv_obj_set_size(scan_btn, btn_w, 26);
+    lv_obj_set_pos(scan_btn, 460 - btn_w, y - 6);
     lv_obj_set_style_bg_color(scan_btn, lv_color_hex(0x1565C0), 0);
     lv_obj_set_style_radius(scan_btn, 6, 0);
     lv_obj_set_style_border_width(scan_btn, 0, 0);
     lv_obj_add_event_cb(scan_btn, scan_cb, LV_EVENT_CLICKED, user_data);
     lv_obj_t *scan_lbl = lv_label_create(scan_btn);
-    lv_label_set_text(scan_lbl, "Scan");
+    lv_label_set_text(scan_lbl, btn_text);
     lv_obj_set_style_text_font(scan_lbl, &lv_font_montserrat_12, 0);
     lv_obj_center(scan_lbl);
 
@@ -1646,13 +2065,14 @@ static void build_tab_rtc(lv_obj_t *tab)
 
     make_section_sep(tab, 124, MODAL_W - 2 * PAD);
 
-    s_ruuvi_scan_btn_in  = make_cfg_row(tab, 136, "Innen:", &s_ruuvi_indoor_lbl,
+    s_ruuvi_scan_btn_in  = make_cfg_row(tab, 136, "Innen:", &s_ruuvi_indoor_lbl, "Scan", 60,
                                         ruuvi_scan_btn_cb, ruuvi_clear_indoor_cb, (void *)0);
-    s_ruuvi_scan_btn_out = make_cfg_row(tab, 166, "Aussen:", &s_ruuvi_outdoor_lbl,
+    s_ruuvi_scan_btn_out = make_cfg_row(tab, 166, "Aussen:", &s_ruuvi_outdoor_lbl, "Scan", 60,
                                         ruuvi_scan_btn_cb, ruuvi_clear_outdoor_cb, (void *)1);
 
-    /* GasBee: BLE-Gaswaage je Flasche per Scan zuordnen, Akku anzeigen (nur belegt,
-     * wenn statt der Kabelwaage (HX711) GasBees im Einsatz sind) */
+    /* GasBee: BLE-Gaswaage je Flasche per Einrichten-Assistent (USB) zuordnen und
+     * kalibrieren, Akku anzeigen (nur belegt, wenn statt der Kabelwaage (HX711)
+     * GasBees im Einsatz sind) */
     gasbee_cfg_load(s_gasbee_mac[0], sizeof(s_gasbee_mac[0]),
                     s_gasbee_mac[1], sizeof(s_gasbee_mac[1]));
 
@@ -1664,9 +2084,9 @@ static void build_tab_rtc(lv_obj_t *tab)
 
     make_section_sep(tab, 216, MODAL_W - 2 * PAD);
 
-    s_gasbee_scan_btn[0] = make_cfg_row(tab, 228, "Flasche A:", &s_gasbee_lbl[0],
+    s_gasbee_scan_btn[0] = make_cfg_row(tab, 228, "Flasche A:", &s_gasbee_lbl[0], "Einrichten", 90,
                                         gasbee_scan_btn_cb, gasbee_clear_cb, (void *)0);
-    s_gasbee_scan_btn[1] = make_cfg_row(tab, 258, "Flasche B:", &s_gasbee_lbl[1],
+    s_gasbee_scan_btn[1] = make_cfg_row(tab, 258, "Flasche B:", &s_gasbee_lbl[1], "Einrichten", 90,
                                         gasbee_scan_btn_cb, gasbee_clear_cb, (void *)1);
 
     /* Status-/Scan-Feedback (gemeinsam für Ruuvi und GasBee) */
@@ -1681,6 +2101,8 @@ static void build_tab_rtc(lv_obj_t *tab)
     gasbee_refresh_labels();
     womo_sensorboard_set_ruuvi_scan_callback(ruuvi_scan_result_cb, NULL);
     womo_sensorboard_set_gasbee_scan_callback(gasbee_scan_result_cb, NULL);
+    womo_sensorboard_set_gasbee_cal_result_callback(gasbee_cal_result_cb, NULL);
+    if (!s_rtc_poll_timer) s_rtc_poll_timer = lv_timer_create(rtc_poll_timer_cb, 100, NULL);
 }
 
 static void build_tab_grenzwerte(lv_obj_t *tab)

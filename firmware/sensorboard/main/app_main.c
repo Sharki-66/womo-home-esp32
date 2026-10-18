@@ -25,6 +25,7 @@
 #include "network/wifi/sensor_http.h"
 #include "network/ble_manager.h"
 #include "network/gasbee_ble_scanner.h"
+#include "network/gasbee_gatt_cal.h"
 #include "network/ruuvi_ble_scanner.h"
 #include "hal/deep_sleep.h"
 #include "led_strip.h"
@@ -49,6 +50,7 @@ static void sensor_log_init(void)
     esp_log_level_set("ina226",       LOG_LEVEL_INA226);
     esp_log_level_set("ble_manager",   LOG_LEVEL_BLE_MANAGER);
     esp_log_level_set("gasbee_ble",   LOG_LEVEL_GASBEE_BLE);
+    esp_log_level_set("gasbee_cal",   LOG_LEVEL_GASBEE_CAL);
     esp_log_level_set("gas_src",      LOG_LEVEL_GAS_SOURCE);
     esp_log_level_set("ruuvi_ble",    LOG_LEVEL_RUUVI_BLE);
     esp_log_level_set("i2c_bus",      LOG_LEVEL_I2C_BUS);
@@ -269,6 +271,8 @@ void app_main(void)
     if (gasbee_err != ESP_OK) {
         ESP_LOGW(TAG, "GasBee Scanner nicht gestartet (err=%s)", esp_err_to_name(gasbee_err));
     }
+    // Kalibrierung per GATT (nur auf Anfrage des Display-Assistenten, GasBee an USB)
+    gasbee_gatt_cal_init();
 
     // Ruuvi BLE Scanner (registriert sich beim BLE-Manager, unabhängig von GasBee)
     esp_err_t ruuvi_err = ruuvi_ble_scanner_init();

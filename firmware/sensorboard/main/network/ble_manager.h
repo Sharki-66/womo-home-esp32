@@ -50,8 +50,10 @@ void ble_manager_set_conn_handler(ble_conn_event_handler_t fn, void *arg);
 /**
  * @brief Verbindung zu einer BLE-Adresse aufbauen.
  *        Bricht laufenden Scan ab, verbindet, startet Scan danach neu.
+ * @param timeout_ms Abbruch des Verbindungsaufbaus durch den Stack
+ * @return 0 = Verbindungsaufbau gestartet (Ergebnis per BLE_GAP_EVENT_CONNECT), sonst NimBLE-rc
  */
-void ble_manager_connect(const ble_addr_t *addr);
+int ble_manager_connect(const ble_addr_t *addr, int32_t timeout_ms);
 
 /**
  * @brief Scan (neu) starten.

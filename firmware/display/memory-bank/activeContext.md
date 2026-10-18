@@ -1,6 +1,10 @@
 # Active Context — WoMoHome Display
 
-## Scan-Listen ein Frame pro Gerät (2026-10-18, gebaut, nicht getestet)
+## GasBee-Einrichten-Assistent (2026-10-18, auf Hardware getestet, Ruuvi-Scan läuft ebenfalls)
+
+Scan-Popup für GasBee ersetzt durch Assistenten `gbw_*` (`womo_settings_modal.c`): USB anstecken → gefunden → übernehmen → kalibrieren (Nullpunkt, Referenzgewicht in g, Prüfung ±1 %/±50 g nach ≥ 2 Messzyklen) → USB abziehen. Ruuvi- und GasBee-Ergebnisse gehen jetzt über ein Abholfach + `rtc_poll_timer_cb` (vorher `lvgl_port_lock(-1)` im RX-/esp_timer-Task). `make_cfg_row()` mit Button-Text/-Breite. Neue API in `womo_sensorboard.h`: `send_gasbee_setup_scan`, `send_gasbee_cal_session`, `send_gasbee_cal`, `set_gasbee_cal_result_callback`; `cfg`/`seq` in `womo_gasbee_scan_entry_t`, `config_mode` in `hx711.bee[]`.
+
+## Scan-Listen ein Frame pro Gerät (2026-10-18, auf Hardware getestet)
 
 `ruuvi_scan`/`gasbee_scan` kommen jetzt als ein Frame pro Gerät (`sid`, `idx`, `cnt`). `womo_sensorboard.c` setzt zusammen (`scan_asm_*`, esp_timer 1 s Timeout), GUI-Callbacks unverändert. Nur zusammen mit passender Sensorboard-Firmware lauffähig.
 

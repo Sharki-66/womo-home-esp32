@@ -19,7 +19,8 @@
  *   [3–4]  Bruttogewicht int16 LE in 10 g      (0x8000 = ungültig)
  *   [5–6]  Akkuspannung  uint16 LE in mV       (0xFFFF = ungültig)
  *   [7]    Sequenzzähler, +1 pro Messzyklus (alle 10 Pakete eines Zyklus gleich)
- *   [8]    Flags: Bit 0 HX711 ok, Bit 1 lädt, Bit 2 kalibriert, Bit 3–7 reserviert
+ *   [8]    Flags: Bit 0 HX711 ok, Bit 1 lädt, Bit 2 kalibriert,
+ *          Bit 3 Konfigurationsmodus (USB, Sekundentakt), Bit 4–7 reserviert
  *
  * Duplikate: Pro Zyklus kommen bis zu 10 Pakete mit gleicher seq – ausgewertet
  * wird nur das erste Paket einer neuen seq. Jede seq ≠ der zuletzt gesehenen
@@ -49,6 +50,7 @@ static const char *TAG = "gasbee_ble";
 #define GASBEE_FLAG_HX_OK      0x01
 #define GASBEE_FLAG_CHARGING   0x02
 #define GASBEE_FLAG_CALIBRATED 0x04
+#define GASBEE_FLAG_CONFIG     0x08
 
 #define SLOT_COUNT 2
 
@@ -197,10 +199,11 @@ static void gasbee_on_adv(const struct ble_gap_disc_desc *disc)
     int16_t  raw_weight = (int16_t)((uint16_t)m[3] | ((uint16_t)m[4] << 8));
     uint16_t raw_batt   = (uint16_t)m[5] | ((uint16_t)m[6] << 8);
     uint8_t  seq        = m[7];
-    uint8_t  flags      = m[8];   // Bit 3–7 reserviert → ignoriert
+    uint8_t  flags      = m[8];   // Bit 4–7 reserviert → ignoriert
 
     gasbee_scan_entry_t e = {0};
     memcpy(e.mac, disc->addr.val, 6);
+    e.addr_type     = disc->addr.type;
     e.rssi          = disc->rssi;
     e.weight_valid  = (flags & GASBEE_FLAG_HX_OK) && raw_weight != GASBEE_WEIGHT_INVALID;
     e.weight_kg     = e.weight_valid ? raw_weight / 100.0f : 0.0f;
@@ -208,6 +211,7 @@ static void gasbee_on_adv(const struct ble_gap_disc_desc *disc)
     e.battery_mv    = e.battery_valid ? raw_batt : 0;
     e.charging      = (flags & GASBEE_FLAG_CHARGING) != 0;
     e.calibrated    = (flags & GASBEE_FLAG_CALIBRATED) != 0;
+    e.config_mode   = (flags & GASBEE_FLAG_CONFIG) != 0;
     e.seq           = seq;
     e.last_seen_us  = esp_timer_get_time();
 
@@ -253,6 +257,7 @@ static void gasbee_on_adv(const struct ble_gap_disc_desc *disc)
         s->battery_pct   = battery_pct;
         s->charging      = e.charging;
         s->calibrated    = e.calibrated;
+        s->config_mode   = e.config_mode;
         s->seq           = seq;
         memcpy(s->mac, a, 6);
         s->valid         = true;
@@ -342,6 +347,26 @@ size_t gasbee_ble_scanner_get_scan_list(gasbee_scan_entry_t *out, size_t max_ent
         xSemaphoreGive(s_mutex);
     }
     return n;
+}
+
+bool gasbee_ble_scanner_find(const char *mac_str, gasbee_scan_entry_t *out)
+{
+    mac_filter_t want;
+    parse_mac_filter(mac_str, &want);
+    if (!want.active || !out || !s_mutex) return false;
+
+    bool found = false;
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+        for (size_t i = 0; i < s_scan_list_count; i++) {
+            if (mac_matches(s_scan_list[i].mac, &want)) {
+                *out  = s_scan_list[i];
+                found = true;
+                break;
+            }
+        }
+        xSemaphoreGive(s_mutex);
+    }
+    return found;
 }
 
 esp_err_t gasbee_ble_scanner_init(void)

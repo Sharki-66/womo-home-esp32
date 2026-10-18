@@ -13,7 +13,10 @@
 Risiko: RTC-Batterie leer + kein NTP → falsche, aber „gültige“ Uhrzeit.
 Gleicher Fehler bei den Tanks (Rate nach Neustart eingefroren, im Log 2026-10-18 gesehen) → `tank_state_load_from_nvs()` setzt `last_ts_us = 0`, erster Messwert = neue Basis, Raten bleiben.
 
-### Scan-Listen: ein Frame pro Gerät (2026-10-18, gebaut, nicht getestet)
+### GasBee einrichten + kalibrieren am Display (2026-10-18, auf Hardware getestet)
+Vorgabe aus `firmware/gasbee_nrf` (Bit 3 Konfigurationsmodus per USB, GATT 0x2B11/0x2B12). Neu: `network/gasbee_gatt_cal.c` (GATT-Client nur für Kalibrierung), Kommandos `gasbee_cal_start/_end/gasbee_cal`, Frame `gasbee_cal_result`, `cfg` in `gasbee_scan`, `cfg_a/_b` in `hx`, `gasbee_scan_request` mit `cfg_only`. `ble_manager_connect()` liefert jetzt rc + Timeout-Parameter. Nebenbei: Rate-Basis nach Reset (`last_ts_us = 0`) wurde mit Uptime als dt und alter Basis gerechnet → jetzt sauber neue Basis. Entscheidungen: MAC-Liste für GasBee entfällt, Alarm/Rate nur während der Sitzung unterdrückt (nicht pauschal bei Bit 3, da GasBee dauerhaft an USB hängen kann). **Test 2026-10-18:** Assistent (Einrichten + Kalibrieren) und Ruuvi-Scan laufen. „Scan geht nicht“ war Port-Problem (Display lief noch mit alter Firmware, Flash ins Leere – VS Code hielt den Port vermutlich per Monitor fest).
+
+### Scan-Listen: ein Frame pro Gerät (2026-10-18, auf Hardware getestet)
 `gasbee_scan` mit 2 GasBees war 301 Byte > 250 → Frame verworfen, Display bekam keine Liste. Jetzt ein Frame pro Gerät (`sid`/`idx`/`cnt`) für `ruuvi_scan` und `gasbee_scan`, Display setzt zusammen. GasBee-Feld `seq` → `bee_seq` (Kollision mit Frame-`seq`). **Sensorboard und Display gemeinsam flashen.**
 
 ### GasBee: nc vs. leer (2026-10-18, gebaut, nicht getestet)

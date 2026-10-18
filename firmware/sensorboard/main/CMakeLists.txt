@@ -16,6 +16,7 @@ idf_component_register(
         "time/time_sync.c"
         "network/ble_manager.c"
         "network/gasbee_ble_scanner.c"
+        "network/gasbee_gatt_cal.c"
         "sensors/gas_source.c"
         "network/ruuvi_ble_scanner.c"
     INCLUDE_DIRS

@@ -48,19 +48,20 @@ CRLF-terminierte ASCII-JSON-Zeilen. Round-Robin, max. 1 Topic pro 100 ms. Nach `
 | `imu` | 5 s | `yaw_deg`, `pitch_deg`, `roll_deg`, `hdg`, `cal:{sys,gyro,acc,mag}`, `calibrated`, `ts` |
 | `bat` | 10 s | `b1`, `b2` (Volt), `nc1`, `nc2` |
 | `tank` | 10 s | `t1`, `t2` (%), `nc1`, `nc2`, `t1_l`, `t2_l` (Liter), `t1_rate1h`, `t1_rate2h`, `t1_rest_h`, `t2_rate1h`, `t2_rate2h`, `t2_rest_h` |
-| `hx` | 10 s | `src` (`hx`/`ble`/`none`), `a`, `b` (kg, optional), `sum` (optional), `nc`, `ts`; nur bei `src:"ble"` je Flasche `batt_a_mv`/`batt_a_pct`, `chg_a`, `cal_a` (analog `_b`) |
+| `hx` | 10 s | `src` (`hx`/`ble`/`none`), `a`, `b` (kg, optional), `sum` (optional), `nc`, `ts`; nur bei `src:"ble"` je Flasche `batt_a_mv`/`batt_a_pct`, `chg_a`, `cal_a`, `cfg_a` (nur wenn an USB/Konfigurationsmodus, analog `_b`) |
 | `gas` | 10 s | `src`, `active`, `net`, `rate1h`, `rate2h`, `rest_h`, `net_a`, `net_b`, `cap_kg`, `pct`, `pct_a`, `pct_b` |
 | `bme_in` | 15 s | `chip` (`bme680`/`bme280`/`bme260`/`ruuvi`), `addr`?, `temp_c`, `rh_pct`, `press_hpa`, `ts`; BME680 zusätzlich: `gas_kohm`? (wenn Gas gültig) sowie `iaq`, `iaq_acc` (0–3), `eco2_ppm`, `bvoc_ppm` – erst nach BSEC-Burn-in (fehlen während der Stabilisierung); bei Ruuvi-Fallback zusätzlich `batt_mv`? |
 | `bme_out` | 15 s | `chip`, `addr`?, `temp_c`, `rh_pct`, `press_hpa`, `ts`, `press_trend_state`?, `press_trend_hpa_h`?, `gas_kohm`? (wenn Gas gültig); **kein `iaq`/`eco2`/`bvoc` für den Außensensor**; bei Ruuvi-Fallback zusätzlich `batt_mv`? |
 | `elec` | 5 s | `v_bus` (V), `i_a` (A), `p_w` (W), `v_shunt_mv` (mV), `ts`; `nc=true` wenn INA226 nicht gefunden |
 | `ruuvi_scan` | nur auf Anfrage | ein Frame pro Tag: `sid`, `idx`, `cnt` (0 = keiner) + `mac`, `rssi`, `temp_c`, `has_pressure`, `age_s` – alle gesehenen Ruuvi-Tags (ungefiltert), Antwort auf `cmd:"ruuvi_scan_request"` |
-| `gasbee_scan` | nur auf Anfrage | ein Frame pro GasBee: `sid`, `idx`, `cnt` (0 = keine) + `mac`, `rssi`, `weight_kg`, `batt_mv`, `batt_pct`, `chg`, `cal`, `bee_seq`, `age_s` – alle gesehenen GasBees (ungefiltert), Antwort auf `cmd:"gasbee_scan_request"` |
+| `gasbee_scan` | nur auf Anfrage | ein Frame pro GasBee: `sid`, `idx`, `cnt` (0 = keine) + `mac`, `rssi`, `weight_kg`, `batt_mv`, `batt_pct`, `chg`, `cal`, `cfg`, `bee_seq`, `age_s` – alle gesehenen GasBees (ungefiltert), Antwort auf `cmd:"gasbee_scan_request"` |
+| `gasbee_cal_result` | nach `gasbee_cal` | `step` (`zero`/`ref`), `ok`, `err` (0 ok, > 0 ATT-Fehler der GasBee, < 0 Sensorboard-Fehler, s. `gasbee_gatt_cal.h`), `msg` |
 
 **Ruuvi-MAC-Konfiguration:** Display → Sensorboard `cmd:"ruuvi_config"` (`indoor_mac`, `outdoor_mac`) setzt den MAC-Filter des Ruuvi-BLE-Scanners zur Laufzeit und persistiert ihn in NVS (`ruuvi_cfg`); leer = Slot deaktiviert. Kein Compile-Time-Default mehr.
 
 ### GasBee BLE (Gaswaage, Advertising-Format v1)
 
-Quelle der Vorgabe: `firmware/gasbee_nrf` (XIAO nRF52840). Das Sensorboard **scannt passiv und verbindet sich nicht** (`gasbee_ble_scanner.c`).
+Quelle der Vorgabe: `firmware/gasbee_nrf` (XIAO nRF52840). Das Sensorboard **scannt passiv** (`gasbee_ble_scanner.c`). Verbunden wird nur zur Kalibrierung, wenn die GasBee an USB hängt (`gasbee_gatt_cal.c`).
 
 - GasBee misst alle 5 min (Testmodus: 1 min) und sendet danach 10 Advertising-Pakete im 1-s-Abstand, alle mit derselben `seq`. Ausgewertet wird nur das erste Paket einer neuen `seq` (jede `seq` ≠ der letzten gilt als neu).
 - Erkennung: Complete Local Name `"GasBee"` + Manufacturer Data mit Company-ID `0xFFFF` (SIG-reserviert für Tests/interne Nutzung) und Format-Version 1. Unbekannte Version → Paket verwerfen.
@@ -72,7 +73,7 @@ Quelle der Vorgabe: `firmware/gasbee_nrf` (XIAO nRF52840). Das Sensorboard **sca
 | 1–2 | int16 LE | Bruttogewicht der Waage in 10 g (±327,67 kg), ohne Tara | `0x8000` |
 | 3–4 | uint16 LE | Akkuspannung in mV | `0xFFFF` |
 | 5 | uint8 | Sequenzzähler, +1 pro Messzyklus (255 → 0) | – |
-| 6 | uint8 | Flags: Bit 0 HX711 ok, Bit 1 Akku lädt, Bit 2 kalibriert, Bit 3–7 reserviert (ignoriert) | – |
+| 6 | uint8 | Flags: Bit 0 HX711 ok, Bit 1 Akku lädt, Bit 2 kalibriert, Bit 3 Konfigurationsmodus (USB angesteckt, Sekundentakt, Messung alle 5 s, verbindbar), Bit 4–7 reserviert (ignoriert) | – |
 
 Tara, Voll-Referenz, Netto, Füllstand und Verbrauchsrate berechnet das Sensorboard genau wie beim Kabel-HX711. Akku-% per LiPo-Kennlinie `SENSOR_GASBEE_LIPO_CURVE` (TODO: am echten Akku verifizieren). Veraltet nach `SENSOR_GASBEE_STALE_MS` (2 Zyklen + Sendefenster) ohne neue `seq`.
 
@@ -83,6 +84,8 @@ Tara, Voll-Referenz, Netto, Füllstand und Verbrauchsrate berechnet das Sensorbo
 **Verbrauch über Ausschalt-Lücken:** Ausschalt-Lücke: `gas_state` speichert Netto A/B mit Uhrzeit (RTC/NTP) und Quelle; beim ersten Messwert nach dem Boot wird der mittlere Verbrauch über die Lücke direkt als `rate1h`/`rate2h` übernommen (gleiche Quelle, Lücke ≤ `SENSOR_GAS_GAP_MAX_S` = 1 Tag, Abnahme ≥ `SENSOR_GAS_ACTIVE_EPS_KG`), sonst Raten auf 0 und neue Basis.
 
 **GasBee-MAC-Konfiguration:** Display → Sensorboard `cmd:"gasbee_config"` (`bottle_a_mac`, `bottle_b_mac`), NVS `gasbee_cfg`; leer = Slot deaktiviert. `cmd:"gasbee_scan_request"` → Antwort-Topic `gasbee_scan`.
+
+**Einrichten und Kalibrieren (Display-Assistent):** Der Nutzer tippt bei Flasche A/B auf „Einrichten“ und steckt die GasBee an USB. Das Display fragt alle 2 s `gasbee_scan_request` mit `cfg_only` ab; nur GasBees mit Bit 3 (an USB) werden gemeldet, fremde GasBees in Reichweite bleiben außen vor. Genau eine gefunden → Zuordnung per `gasbee_config`. Kalibrierung: `gasbee_cal_start` (Flasche `nc`, kein Alarm durch leere Waage), `gasbee_cal` `zero` (0x2B11 = 01), `gasbee_cal` `ref` mit `g` (0x2B12 = uint32 LE Gramm), `gasbee_cal_end`. `gasbee_gatt_cal.c` verbindet gezielt per MAC (Adresstyp aus der Scan-Liste), sucht Service `4a5b6c7d-8e9f-0a1b-2c3d-4e5f60718293` und die Characteristic per UUID, schreibt und trennt sofort. Timeout `SENSOR_GASBEE_CAL_TIMEOUT_MS`. Der Write bestätigt nur das Format; das Display prüft den Erfolg am Advertising (Bit 2 = 1, mindestens 2 Messzyklen nach dem Write, Gewicht ±1 % bzw. ±50 g zur Eingabe).
 
 **`press_trend_state`-Werte:** `fall_fast` / `fall_slow` / `steady` / `rise_slow` / `rise_fast`
 (bevorzugt 3h-Fenster, Fallback 1h; ab 4 bzw. 12 Samples à 15 min verfügbar)
@@ -164,6 +167,7 @@ main/
 │   ├── ble_manager         NimBLE-Stack, passiver Scan, Advertising-Dispatch
 │   ├── ruuvi_ble_scanner   Ruuvi DF5 (Innen/Außen)
 │   ├── gasbee_ble_scanner  GasBee Advertising v1 (Flasche A/B)
+│   ├── gasbee_gatt_cal     GATT-Client nur für die GasBee-Kalibrierung (USB-Modus)
 │   └── wifi/
 │       ├── sensor_wifi     STA-Verbindung (RUTX11), NVS-Credentials
 │       └── sensor_http     HTTP-Server (Dashboard, Parkhilfe, API)

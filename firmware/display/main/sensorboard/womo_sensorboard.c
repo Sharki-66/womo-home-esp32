@@ -42,6 +42,8 @@ static womo_ruuvi_scan_cb_t s_ruuvi_scan_callback = NULL;
 static void *s_ruuvi_scan_user_data = NULL;
 static womo_gasbee_scan_cb_t s_gasbee_scan_callback = NULL;
 static void *s_gasbee_scan_user_data = NULL;
+static womo_gasbee_cal_result_cb_t s_gasbee_cal_callback = NULL;
+static void *s_gasbee_cal_user_data = NULL;
 static TaskHandle_t s_heartbeat_task = NULL;
 
 typedef struct {
@@ -577,6 +579,12 @@ void womo_sensorboard_set_gasbee_scan_callback(womo_gasbee_scan_cb_t callback, v
     s_gasbee_scan_user_data = user_data;
 }
 
+void womo_sensorboard_set_gasbee_cal_result_callback(womo_gasbee_cal_result_cb_t callback, void *user_data)
+{
+    s_gasbee_cal_callback = callback;
+    s_gasbee_cal_user_data = user_data;
+}
+
 bool womo_sensorboard_get_latest_data(womo_sensor_data_t *data)
 {
     if (!data || !s_initialized) {
@@ -751,6 +759,56 @@ esp_err_t womo_sensorboard_send_gasbee_scan_request(void)
     esp_err_t err = sb_send_simple_command("gasbee_scan_request");
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "gasbee_scan_request senden fehlgeschlagen: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t womo_sensorboard_send_gasbee_setup_scan(void)
+{
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+    cJSON_AddStringToObject(root, "cmd", "gasbee_scan_request");
+    cJSON_AddBoolToObject(root, "cfg_only", true);
+    esp_err_t err = sb_send_frame(root, "gasbee_scan_request");
+    cJSON_Delete(root);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "gasbee_scan_request (cfg_only) senden fehlgeschlagen: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t womo_sensorboard_send_gasbee_cal_session(int slot, bool start)
+{
+    if (slot != 0 && slot != 1) return ESP_ERR_INVALID_ARG;
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+    const char *cmd = start ? "gasbee_cal_start" : "gasbee_cal_end";
+    cJSON_AddStringToObject(root, "cmd", cmd);
+    cJSON_AddNumberToObject(root, "slot", slot);
+    esp_err_t err = sb_send_frame(root, cmd);
+    cJSON_Delete(root);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "%s senden fehlgeschlagen: %s", cmd, esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t womo_sensorboard_send_gasbee_cal(const char *mac, bool zero, uint32_t grams)
+{
+    if (!mac || mac[0] == '\0') return ESP_ERR_INVALID_ARG;
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return ESP_ERR_NO_MEM;
+    cJSON_AddStringToObject(root, "cmd", "gasbee_cal");
+    cJSON_AddStringToObject(root, "mac", mac);
+    cJSON_AddStringToObject(root, "step", zero ? "zero" : "ref");
+    if (!zero) cJSON_AddNumberToObject(root, "g", (double)grams);
+    esp_err_t err = sb_send_frame(root, "gasbee_cal");
+    cJSON_Delete(root);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "GasBee-Kalibrierung %s an %s gesendet (%lu g)", zero ? "Nullpunkt" : "Referenz",
+                 mac, (unsigned long)(zero ? 0 : grams));
+    } else {
+        ESP_LOGW(TAG, "gasbee_cal senden fehlgeschlagen: %s", esp_err_to_name(err));
     }
     return err;
 }
@@ -1249,6 +1307,8 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
                 s_latest_data.hx711.bee[i].calibrated = cJSON_IsTrue(cal);
                 snprintf(key, sizeof(key), "chg_%c", sfx);
                 s_latest_data.hx711.bee[i].charging = cJSON_IsTrue(cJSON_GetObjectItem(root, key));
+                snprintf(key, sizeof(key), "cfg_%c", sfx);
+                s_latest_data.hx711.bee[i].config_mode = cJSON_IsTrue(cJSON_GetObjectItem(root, key));
                 snprintf(key, sizeof(key), "batt_%c_mv", sfx);
                 cJSON *mv = cJSON_GetObjectItem(root, key);
                 snprintf(key, sizeof(key), "batt_%c_pct", sfx);
@@ -1373,6 +1433,9 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
                 e.batt_pct     = cJSON_IsNumber(batt_pct) ? (uint8_t)batt_pct->valueint : 0;
                 e.charging     = cJSON_IsTrue(cJSON_GetObjectItem(root, "chg"));
                 e.calibrated   = cJSON_IsTrue(cJSON_GetObjectItem(root, "cal"));
+                e.config_mode  = cJSON_IsTrue(cJSON_GetObjectItem(root, "cfg"));
+                cJSON *bee_seq = cJSON_GetObjectItem(root, "bee_seq");
+                e.seq          = cJSON_IsNumber(bee_seq) ? (uint8_t)bee_seq->valueint : 0;
                 e.age_s        = cJSON_IsNumber(age_s) ? (uint32_t)age_s->valueint : 0;
                 have_entry = true;
             }
@@ -1387,6 +1450,26 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         }
         topic_handled = true;
         ack_success = true;
+    }
+    else if (strcmp(frame_kind, "gasbee_cal_result") == 0) {
+        cJSON *step = cJSON_GetObjectItem(root, "step");
+        cJSON *err  = cJSON_GetObjectItem(root, "err");
+        cJSON *msg  = cJSON_GetObjectItem(root, "msg");
+        bool zero_step = cJSON_IsString(step) && step->valuestring && strcmp(step->valuestring, "zero") == 0;
+        bool ok = cJSON_IsTrue(cJSON_GetObjectItem(root, "ok"));
+        int code = cJSON_IsNumber(err) ? err->valueint : -100;
+        const char *text = (cJSON_IsString(msg) && msg->valuestring) ? msg->valuestring : "";
+        ESP_LOGI(TAG, "GasBee-Kalibrierung %s: %s (%d)", zero_step ? "Nullpunkt" : "Referenz",
+                 ok ? "ok" : text, code);
+        if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            notify_snapshot = s_latest_data;
+            xSemaphoreGive(s_data_mutex);
+        }
+        topic_handled = true;
+        ack_success = true;
+        if (s_gasbee_cal_callback) {
+            s_gasbee_cal_callback(zero_step, ok, code, text, s_gasbee_cal_user_data);
+        }
     }
     else if (strcmp(frame_kind, "tank") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {

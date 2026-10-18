@@ -18,6 +18,7 @@
 #include "network/espnow_transport.h"
 #include "network/ruuvi_ble_scanner.h"
 #include "network/gasbee_ble_scanner.h"
+#include "network/gasbee_gatt_cal.h"
 #include "sensors/bno055_sensor.h"
 #include "network/wifi/sensor_wifi.h"
 
@@ -634,6 +635,34 @@ static esp_err_t rs485_set_radio(bool enable)
 static volatile bool s_ctrl_immediate = false;
 static volatile bool s_ruuvi_scan_requested = false;
 static volatile bool s_gasbee_scan_requested = false;
+static volatile bool s_gasbee_scan_cfg_only = false;   // nur GasBees im Konfigurationsmodus (Einrichten)
+
+// Kalibrier-Sitzung je Flasche (Display-Assistent): solange aktiv gilt die Flasche als nc
+// (kein Alarm durch leere Waage / Referenzgewicht) und die Verbrauchsrate ruht.
+// 0 = keine Sitzung, sonst Ablaufzeitpunkt (esp_timer, µs) als Sicherheitsgrenze.
+static int64_t s_gas_cal_until_us[2] = {0, 0};
+
+static bool gas_cal_active(int slot)
+{
+    int64_t until = s_gas_cal_until_us[slot];
+    return until != 0 && esp_timer_get_time() < until;
+}
+
+// Ergebnis eines GATT-Kalibrierschritts → Frame gasbee_cal_result (Versand im TX-Task)
+static portMUX_TYPE s_cal_res_lock = portMUX_INITIALIZER_UNLOCKED;
+static bool s_cal_res_pending = false;
+static gasbee_cal_step_t s_cal_res_step;
+static int s_cal_res_code;
+
+static void gasbee_cal_report(gasbee_cal_step_t step, int result, void *arg)
+{
+    (void)arg;
+    taskENTER_CRITICAL(&s_cal_res_lock);
+    s_cal_res_step    = step;
+    s_cal_res_code    = result;
+    s_cal_res_pending = true;
+    taskEXIT_CRITICAL(&s_cal_res_lock);
+}
 
 static void rs485_publish_ctrl(void)
 {
@@ -883,6 +912,10 @@ static void add_gas_bee_info(cJSON *obj, const gas_source_snapshot_t *gs)
         cJSON_AddBoolToObject(obj, key, bee[i]->charging);
         snprintf(key, sizeof(key), "cal_%c", suffix[i]);
         cJSON_AddBoolToObject(obj, key, bee[i]->calibrated);
+        if (bee[i]->config_mode) {
+            snprintf(key, sizeof(key), "cfg_%c", suffix[i]);
+            cJSON_AddBoolToObject(obj, key, true);
+        }
     }
 }
 
@@ -947,8 +980,11 @@ static void rs485_publish_gas(void)
     const bool bee = (gs.src == GAS_SRC_GASBEE);
     bool empty_a = hx.valid_a && net_a < no_bottle_thr;
     bool empty_b = hx.valid_b && net_b < no_bottle_thr;
-    bool nc_a = !hx.valid_a || (!bee && empty_a);
-    bool nc_b = !hx.valid_b || (!bee && empty_b);
+    // Kalibrier-Sitzung: Flasche als nc melden (leere Waage/Referenzgewicht ≠ Gasstand)
+    const bool cal_a = gas_cal_active(0);
+    const bool cal_b = gas_cal_active(1);
+    bool nc_a = !hx.valid_a || (!bee && empty_a) || cal_a;
+    bool nc_b = !hx.valid_b || (!bee && empty_b) || cal_b;
 
     // Voll-Referenz erfassen (erste Messung nach Flaschenwechsel)
     bool nvs_dirty = false;
@@ -996,7 +1032,10 @@ static void rs485_publish_gas(void)
     }
     double rate1h = s_gas_state.rate1h;
     double rate2h = s_gas_state.rate2h;
-    if (hx.timestamp_us > s_gas_state.last_ts_us) {
+    if (cal_a || cal_b) {
+        // Gewichtssprünge der Kalibrierung sind kein Verbrauch → nach Ende neue Basis
+        s_gas_state.last_ts_us = 0;
+    } else if (s_gas_state.last_ts_us != 0 && hx.timestamp_us > s_gas_state.last_ts_us) {
         double dt_s = (double)(hx.timestamp_us - s_gas_state.last_ts_us) / 1e6;
         if (dt_s >= SENSOR_GAS_RATE_MIN_DT_SEC) {
             double d_a = net_a - s_gas_state.last_net_a;
@@ -1256,9 +1295,19 @@ static void ruuvi_scan_start(void)
     s_ruuvi_tx_active = true;
 }
 
-static void gasbee_scan_start(void)
+// cfg_only: nur GasBees im Konfigurationsmodus (USB), die gerade senden – für den Einrichten-Assistenten
+static void gasbee_scan_start(bool cfg_only)
 {
-    s_gasbee_tx_cnt    = gasbee_ble_scanner_get_scan_list(s_gasbee_tx, SENSOR_GASBEE_SCAN_MAX_TAGS);
+    s_gasbee_tx_cnt = gasbee_ble_scanner_get_scan_list(s_gasbee_tx, SENSOR_GASBEE_SCAN_MAX_TAGS);
+    if (cfg_only) {
+        int64_t now = esp_timer_get_time();
+        size_t n = 0;
+        for (size_t i = 0; i < s_gasbee_tx_cnt; i++) {
+            bool fresh = (now - s_gasbee_tx[i].last_seen_us) <= (int64_t)SENSOR_GASBEE_CFG_MAX_AGE_S * 1000000LL;
+            if (s_gasbee_tx[i].config_mode && fresh) s_gasbee_tx[n++] = s_gasbee_tx[i];
+        }
+        s_gasbee_tx_cnt = n;
+    }
     s_gasbee_tx_idx    = 0;
     s_gasbee_tx_sid    = ++s_scan_sid;
     s_gasbee_tx_active = true;
@@ -1302,6 +1351,7 @@ static void gasbee_scan_send_next(void)
         }
         cJSON_AddBoolToObject(root, "chg", e->charging);
         cJSON_AddBoolToObject(root, "cal", e->calibrated);
+        cJSON_AddBoolToObject(root, "cfg", e->config_mode);
         cJSON_AddNumberToObject(root, "bee_seq", e->seq);
         cJSON_AddNumberToObject(root, "age_s", (double)((esp_timer_get_time() - e->last_seen_us) / 1000000));
     }
@@ -1311,6 +1361,19 @@ static void gasbee_scan_send_next(void)
     }
     s_gasbee_tx_idx++;
     s_gasbee_tx_active = (s_gasbee_tx_idx < s_gasbee_tx_cnt);
+}
+
+static void rs485_publish_gasbee_cal_result(gasbee_cal_step_t step, int result)
+{
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return;
+    cJSON_AddStringToObject(root, "type", "gasbee_cal_result");
+    cJSON_AddStringToObject(root, "step", step == GASBEE_CAL_STEP_ZERO ? "zero" : "ref");
+    cJSON_AddBoolToObject(root, "ok", result == GASBEE_CAL_OK);
+    cJSON_AddNumberToObject(root, "err", result);
+    cJSON_AddStringToObject(root, "msg", gasbee_gatt_cal_result_str(result));
+    rs485_send_frame("gasbee_cal_result", root, false);
+    cJSON_Delete(root);
 }
 
 // Höchstens einen Scan-Frame senden. true = gesendet (Round-Robin dann aussetzen).
@@ -1380,7 +1443,40 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
         cmd_err = gasbee_ble_scanner_set_macs(mac_a, mac_b);
         ESP_LOGI(TAG, "GasBee-Config aktualisiert: A=%s B=%s", mac_a, mac_b);
     } else if (strcmp(cmd_str, "gasbee_scan_request") == 0) {
+        s_gasbee_scan_cfg_only = cJSON_IsTrue(cJSON_GetObjectItem(root, "cfg_only"));
         s_gasbee_scan_requested = true;
+    } else if (strcmp(cmd_str, "gasbee_cal_start") == 0 || strcmp(cmd_str, "gasbee_cal_end") == 0) {
+        // Kalibrier-Sitzung je Flasche (slot 0 = A, 1 = B): Alarm/Rate für die Dauer aussetzen
+        const cJSON *j_slot = cJSON_GetObjectItem(root, "slot");
+        int slot = cJSON_IsNumber(j_slot) ? j_slot->valueint : -1;
+        if (slot == 0 || slot == 1) {
+            bool start = (strcmp(cmd_str, "gasbee_cal_start") == 0);
+            s_gas_cal_until_us[slot] = start
+                ? esp_timer_get_time() + (int64_t)SENSOR_GASBEE_CAL_SESSION_MAX_S * 1000000LL : 0;
+            s_gas_state.last_ts_us = 0;   // Rate-Basis neu aufsetzen
+            ESP_LOGI(TAG, "GasBee-Kalibrierung Flasche %c: %s", 'A' + slot, start ? "Start" : "Ende");
+        } else {
+            cmd_err = ESP_ERR_INVALID_ARG;
+        }
+    } else if (strcmp(cmd_str, "gasbee_cal") == 0) {
+        // Kalibrierschritt per GATT; Ergebnis kommt asynchron als Frame gasbee_cal_result
+        const cJSON *j_mac  = cJSON_GetObjectItem(root, "mac");
+        const cJSON *j_step = cJSON_GetObjectItem(root, "step");
+        const cJSON *j_g    = cJSON_GetObjectItem(root, "g");
+        const char *mac  = (cJSON_IsString(j_mac) && j_mac->valuestring) ? j_mac->valuestring : NULL;
+        const char *step = (cJSON_IsString(j_step) && j_step->valuestring) ? j_step->valuestring : "";
+        bool is_ref = (strcmp(step, "ref") == 0);
+        int rc = GASBEE_CAL_ERR_ARG;
+        if (mac && (is_ref || strcmp(step, "zero") == 0)) {
+            uint32_t grams = (is_ref && cJSON_IsNumber(j_g) && j_g->valuedouble > 0)
+                             ? (uint32_t)j_g->valuedouble : 0;
+            rc = gasbee_gatt_cal_start(mac, is_ref ? GASBEE_CAL_STEP_REF : GASBEE_CAL_STEP_ZERO,
+                                       grams, gasbee_cal_report, NULL);
+        }
+        if (rc != GASBEE_CAL_OK) {
+            // Nicht gestartet: Ergebnis trotzdem als Frame, damit das Display nur einen Weg kennt
+            gasbee_cal_report(is_ref ? GASBEE_CAL_STEP_REF : GASBEE_CAL_STEP_ZERO, rc, NULL);
+        }
     } else if (strcmp(cmd_str, "tare_a") == 0 || strcmp(cmd_str, "tare_b") == 0) {
         ESP_LOGI(TAG, "Tare command: %s", cmd_str);
         s_gas_state = (gas_state_t){0};
@@ -1593,9 +1689,26 @@ static void rs485_tx_task(void *arg)
         }
         if (s_display_ready && s_gasbee_scan_requested) {
             s_gasbee_scan_requested = false;
-            gasbee_scan_start();
+            gasbee_scan_start(s_gasbee_scan_cfg_only);
         }
         bool scan_sent = s_display_ready && rs485_scan_tx_step();
+
+        // Ergebnis eines Kalibrierschritts (aus NimBLE-/Timer-Kontext gemeldet)
+        if (!scan_sent && s_display_ready) {
+            bool res_pending;
+            gasbee_cal_step_t res_step;
+            int res_code;
+            taskENTER_CRITICAL(&s_cal_res_lock);
+            res_pending = s_cal_res_pending;
+            res_step    = s_cal_res_step;
+            res_code    = s_cal_res_code;
+            s_cal_res_pending = false;
+            taskEXIT_CRITICAL(&s_cal_res_lock);
+            if (res_pending) {
+                rs485_publish_gasbee_cal_result(res_step, res_code);
+                scan_sent = true;   // Round-Robin für diesen Durchlauf aussetzen
+            }
+        }
 
         // Round-Robin: pro Loop maximal 1 Topic senden (nicht zusätzlich zu einem Scan-Frame)
         if (s_display_ready && !scan_sent) {
@@ -1790,8 +1903,8 @@ esp_err_t espnow_modem_get_snapshot(char **json_out)
         const bool bee = (gs.src == GAS_SRC_GASBEE);
         bool empty_a = hx.valid_a && net_a < no_bottle_thr;
         bool empty_b = hx.valid_b && net_b < no_bottle_thr;
-        bool nc_a = !hx.valid_a || (!bee && empty_a);
-        bool nc_b = !hx.valid_b || (!bee && empty_b);
+        bool nc_a = !hx.valid_a || (!bee && empty_a) || gas_cal_active(0);
+        bool nc_b = !hx.valid_b || (!bee && empty_b) || gas_cal_active(1);
 
         cJSON *jg = cJSON_AddObjectToObject(root, "gas");
         cJSON_AddBoolToObject(jg, "nc",   nc_a && nc_b);
