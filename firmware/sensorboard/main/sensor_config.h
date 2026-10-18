@@ -291,7 +291,7 @@
 // =============================================================================
 #define SENSOR_GAS_FILL_KG                11.0f  // Netto-Inhalt einer vollen 11-kg-Flasche (alle Flaschentypen)
 #define SENSOR_GAS_TARE_KG                10.5f  // Fallback-Tara wenn noch keine Voll-Referenz gesetzt (Stahlflasche)
-#define SENSOR_GAS_NO_BOTTLE_THRESHOLD_KG  1.0f  // Unter diesem Gewicht = keine Flasche auf der Waage (nc)
+#define SENSOR_GAS_NO_BOTTLE_THRESHOLD_KG  1.0f  // Unter diesem Gewicht = keine Flasche auf der Waage (HX711: nc, GasBee: leer/0 %)
 #define SENSOR_GAS_ACTIVE_DEFAULT   -1       // -1 = Auto-Erkennung (A oder B)
 #define SENSOR_GAS_RATE_ALPHA_1H    0.2f     // EMA-Glättungsfaktor (1h-Fenster)
 #define SENSOR_GAS_RATE_ALPHA_2H    0.1f     // EMA-Glättungsfaktor (2h-Fenster)

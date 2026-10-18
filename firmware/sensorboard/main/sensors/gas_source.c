@@ -41,8 +41,9 @@ static bool bee_to_channel(int slot, int64_t now, float *kg, bool *valid,
     info->charging      = s.charging;
     info->calibrated    = s.calibrated;
 
-    *valid = s.weight_valid;
-    *kg    = s.weight_valid ? s.weight_kg : 0.0f;
+    // Unkalibriert ist der Wert kein echtes Gewicht → wie fehlender Wert (nc)
+    *valid = s.weight_valid && s.calibrated;
+    *kg    = *valid ? s.weight_kg : 0.0f;
     if (s.timestamp_us > *ts) *ts = s.timestamp_us;
     return true;
 }

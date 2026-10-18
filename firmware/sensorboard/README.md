@@ -78,6 +78,8 @@ Tara, Voll-Referenz, Netto, Füllstand und Verbrauchsrate berechnet das Sensorbo
 
 **Quellenwahl (`sensors/gas_source.c`):** HX711-Modul am Kabel vorhanden (DOUT antwortet) → HX711 liefert A+B (Vorrang). Sonst GasBee A/B, sofern aktuell. Sonst `nc`. Eine fehlende Wägezelle bei vorhandenem HX711-Modul ist nicht erkennbar – dieser Mischbetrieb ist nicht vorgesehen. Beim Wechsel HX711 ↔ GasBee wird die Basis der Verbrauchsrate neu gesetzt.
 
+**nc vs. leer (`gas`-Topic `nc_a`/`nc_b`):** GasBee: `nc` nur, wenn keine aktuellen Werte kommen (veraltet, HX711-Fehler-Flag oder **unkalibriert**); gültiger Wert unter `SENSOR_GAS_NO_BOTTLE_THRESHOLD_KG` (1 kg, keine Flasche auf der Waage) = **leer** → `pct_a` 0, Gas-Alarm im Display. HX711 am Kabel: unter Schwelle weiterhin `nc` (abgesteckte Wägezelle sonst nicht erkennbar). Leere Waage wird weder als aktive Flasche gewählt noch als Voll-Referenz übernommen.
+
 **Verbrauch über Ausschalt-Lücken:** Ausschalt-Lücke: `gas_state` speichert Netto A/B mit Uhrzeit (RTC/NTP) und Quelle; beim ersten Messwert nach dem Boot wird der mittlere Verbrauch über die Lücke direkt als `rate1h`/`rate2h` übernommen (gleiche Quelle, Lücke ≤ `SENSOR_GAS_GAP_MAX_S` = 1 Tag, Abnahme ≥ `SENSOR_GAS_ACTIVE_EPS_KG`), sonst Raten auf 0 und neue Basis.
 
 **GasBee-MAC-Konfiguration:** Display → Sensorboard `cmd:"gasbee_config"` (`bottle_a_mac`, `bottle_b_mac`), NVS `gasbee_cfg`; leer = Slot deaktiviert. `cmd:"gasbee_scan_request"` → Antwort-Topic `gasbee_scan`.

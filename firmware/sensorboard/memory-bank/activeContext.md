@@ -13,6 +13,9 @@
 Risiko: RTC-Batterie leer + kein NTP → falsche, aber „gültige“ Uhrzeit.
 Gleicher Fehler bei den Tanks (Rate nach Neustart eingefroren, im Log 2026-10-18 gesehen) → `tank_state_load_from_nvs()` setzt `last_ts_us = 0`, erster Messwert = neue Basis, Raten bleiben.
 
+### GasBee: nc vs. leer (2026-10-18, gebaut, nicht getestet)
+GasBee < 1 kg → leer (0 %, Alarm) statt nc; nc nur ohne Werte oder unkalibriert (`gas_source.c`). HX711 am Kabel unverändert (< 1 kg = nc). Achtung: aktuelle XIAO-GasBee meldet „unkalibriert“ → Display zeigt jetzt nc, bis sie kalibriert ist.
+
 
 ### GasBee per BLE-Advertising (2026-10-17, auf Hardware getestet)
 Zwei GasBees (Flasche A/B, `firmware/gasbee_nrf`) liefern per Advertising-Format v1

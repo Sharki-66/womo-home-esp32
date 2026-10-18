@@ -41,7 +41,7 @@ Topics (Round-Robin, max. 1 pro 100 ms):
 
 Display → Sensorboard (Kommandos per `cmd`): `display_ready`, `pwr_12v_on/off`, `radio_on/off`, `tare_a/b`, `gas_bottle_replace`, `level_start/stop`, `wifi_config` (`ssid`, `pass`), `ruuvi_config` (`indoor_mac`, `outdoor_mac` – MAC-Filter für Ruuvi-BLE-Scanner, NVS `ruuvi_cfg`, leer = Slot deaktiviert), `ruuvi_scan_request` (fordert `ruuvi_scan`-Antwort an), `gasbee_config` (`bottle_a_mac`, `bottle_b_mac` – Zuordnung GasBee → Flasche, NVS `gasbee_cfg`), `gasbee_scan_request`.
 
-**Gas-Quelle:** HX711-Modul am Kabel hat Vorrang; ohne Modul kommen die Gewichte von den GasBees (BLE-Advertising v1, kein Connect, Format in `README.md`). Details: `memory-bank/systemPatterns.md`.
+**Gas-Quelle:** HX711-Modul am Kabel hat Vorrang; ohne Modul kommen die Gewichte von den GasBees (BLE-Advertising v1, kein Connect, Format in `README.md`). GasBee unter 1 kg = leer (0 %), `nc` nur ohne Werte bzw. unkalibriert; HX711 unter 1 kg = `nc`. Details: `memory-bank/systemPatterns.md`.
 
 **Protokolländerungen immer in `memory-bank/systemPatterns.md` und `README.md` nachpflegen.**
 

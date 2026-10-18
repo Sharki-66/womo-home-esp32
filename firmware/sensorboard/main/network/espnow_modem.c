@@ -942,19 +942,23 @@ static void rs485_publish_gas(void)
     double net_a = hx.valid_a ? hx.kg_a : 0.0;
     double net_b = hx.valid_b ? hx.kg_b : 0.0;
 
-    // Flaschenpräsenz: unter Schwellwert = keine Flasche auf der Waage
-    bool nc_a = !hx.valid_a || net_a < no_bottle_thr;
-    bool nc_b = !hx.valid_b || net_b < no_bottle_thr;
+    // Unter Schwellwert = keine Flasche auf der Waage. GasBee: gültiger Wert → „leer“ (0 %),
+    // nc nur ohne Werte. HX711: fehlende Wägezelle nicht erkennbar → unter Schwelle = nc.
+    const bool bee = (gs.src == GAS_SRC_GASBEE);
+    bool empty_a = hx.valid_a && net_a < no_bottle_thr;
+    bool empty_b = hx.valid_b && net_b < no_bottle_thr;
+    bool nc_a = !hx.valid_a || (!bee && empty_a);
+    bool nc_b = !hx.valid_b || (!bee && empty_b);
 
     // Voll-Referenz erfassen (erste Messung nach Flaschenwechsel)
     bool nvs_dirty = false;
-    if (s_ref_pending_a && hx.valid_a && !nc_a) {
+    if (s_ref_pending_a && !nc_a && !empty_a) {
         s_gas_state.ref_full_a = (float)net_a;
         s_ref_pending_a = false;
         nvs_dirty = true;
         ESP_LOGI(TAG, "Voll-Referenz A gesetzt: %.2f kg", net_a);
     }
-    if (s_ref_pending_b && hx.valid_b && !nc_b) {
+    if (s_ref_pending_b && !nc_b && !empty_b) {
         s_gas_state.ref_full_b = (float)net_b;
         s_ref_pending_b = false;
         nvs_dirty = true;
@@ -964,8 +968,8 @@ static void rs485_publish_gas(void)
 
     int active = (s_gas_active_override >= 0) ? s_gas_active_override : SENSOR_GAS_ACTIVE_DEFAULT;
     if (active < 0) {
-        if (hx.valid_a && !nc_a) active = 0;
-        else if (hx.valid_b && !nc_b) active = 1;
+        if (!nc_a && !empty_a) active = 0;
+        else if (!nc_b && !empty_b) active = 1;
     }
 
     double net = (active == 0) ? net_a : (active == 1) ? net_b : 0.0;
@@ -1065,7 +1069,9 @@ static void rs485_publish_gas(void)
     if (nc_b) cJSON_AddBoolToObject(root, "nc_b", true);
 
     ESP_LOGI(TAG, "GAS[%s]: active=%d, %.2f kg (%.0f%%), A=%.2f kg%s, B=%.2f kg%s, rate=%.3f/%.3f kg/h, rest=%.1f h",
-             gas_source_name(gs.src), active, net, pct, net_a, nc_a ? " (nc)" : "", net_b, nc_b ? " (nc)" : "",
+             gas_source_name(gs.src), active, net, pct,
+             net_a, nc_a ? " (nc)" : empty_a ? " (leer)" : "",
+             net_b, nc_b ? " (nc)" : empty_b ? " (leer)" : "",
              rate1h, rate2h, rest_h);
 
     rs485_send_frame("gas", root, false);
@@ -1740,8 +1746,12 @@ esp_err_t espnow_modem_get_snapshot(char **json_out)
         const double no_bottle_thr = SENSOR_GAS_NO_BOTTLE_THRESHOLD_KG;
         double net_a = hx.valid_a ? hx.kg_a : 0.0;
         double net_b = hx.valid_b ? hx.kg_b : 0.0;
-        bool nc_a = !hx.valid_a || net_a < no_bottle_thr;
-        bool nc_b = !hx.valid_b || net_b < no_bottle_thr;
+        // Gleiche Regel wie im gas-Topic: GasBee unter Schwelle = leer, nicht nc
+        const bool bee = (gs.src == GAS_SRC_GASBEE);
+        bool empty_a = hx.valid_a && net_a < no_bottle_thr;
+        bool empty_b = hx.valid_b && net_b < no_bottle_thr;
+        bool nc_a = !hx.valid_a || (!bee && empty_a);
+        bool nc_b = !hx.valid_b || (!bee && empty_b);
 
         cJSON *jg = cJSON_AddObjectToObject(root, "gas");
         cJSON_AddBoolToObject(jg, "nc",   nc_a && nc_b);
@@ -1751,8 +1761,8 @@ esp_err_t espnow_modem_get_snapshot(char **json_out)
             int active = (s_gas_active_override >= 0)
                          ? s_gas_active_override : SENSOR_GAS_ACTIVE_DEFAULT;
             if (active < 0) {
-                if (!nc_a) active = 0;
-                else if (!nc_b) active = 1;
+                if (!nc_a && !empty_a) active = 0;
+                else if (!nc_b && !empty_b) active = 1;
             }
             double net = (active == 0) ? net_a : (active == 1) ? net_b : 0.0;
             double pct = 0.0, pct_a = 0.0, pct_b = 0.0;

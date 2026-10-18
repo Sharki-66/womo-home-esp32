@@ -115,6 +115,7 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 - Veraltet nach `SENSOR_GASBEE_STALE_MS` (2 Zyklen + Sendefenster) ohne neue `seq`
 - Akku-% per LiPo-Tabelle `SENSOR_GASBEE_LIPO_CURVE` (linear interpoliert, noch nicht am Akku verifiziert)
 - `gas_source_get_snapshot()`: HX711-Modul vorhanden (`valid_a || valid_b`) → HX711 (Vorrang); sonst GasBee A→Kanal A, B→Kanal B; sonst nc. Alle Gas-Publisher (`hx`, `gas`, Web-Snapshot) nutzen nur noch diese Funktion. Fehlende Wägezelle bei vorhandenem Modul ist nicht erkennbar (Mischbetrieb nicht vorgesehen).
+- **nc vs. leer (`gas`-Topic `nc_a`/`nc_b`):** GasBee: `nc` nur, wenn keine aktuellen Werte kommen (veraltet, HX711-Fehler-Flag oder **unkalibriert**); gültiger Wert unter `SENSOR_GAS_NO_BOTTLE_THRESHOLD_KG` (1 kg, keine Flasche auf der Waage) = **leer** → `pct_a` 0, Gas-Alarm im Display. HX711 am Kabel: unter Schwelle weiterhin `nc` (abgesteckte Wägezelle sonst nicht erkennbar). Leere Waage wird weder als aktive Flasche gewählt noch als Voll-Referenz übernommen.
 - Wechsel HX711 ↔ GasBee setzt die Rate-Basis zurück (`last_ts_us = 0`), Voll-Referenzen bleiben
 
 ### BNO055 (bno055_sensor.c)
