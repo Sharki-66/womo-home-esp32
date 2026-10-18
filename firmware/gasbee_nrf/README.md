@@ -13,6 +13,7 @@ Ersatz für [firmware/gasbee](../gasbee/) (ESP32-C3). Wiegt die Gasflasche mit e
 | Programmierung | USB, UF2-Bootloader (Adafruit), kein SWD nötig |
 | Akku | LiPo 1 Zelle 3,7 V / 1000 mAh an den Pads BAT+/BAT− (Unterseite). Geladen wird über USB-C vom Laderegler BQ25101 auf dem Board, ohne externe Beschaltung. |
 | Ladestrom | ca. **100 mA** (0,1C): P0.13 (`HICHG`) per `gpio-hog` fest Low, damit liegen R12 und R18 (je 2,7 kΩ) parallel an ISET. Hochohmig wären es ca. 50 mA. **Nicht High setzen.** Nachgemessen ist der Wert noch nicht. |
+| Stromsparen | UART0 aus (D6/D7 frei). IMU und Mikrofon der Sense-Variante aus: P1.08 und P1.10 per `gpio-hog` auf Low. QSPI-Flash beim Start in Deep Power-Down (`CONFIG_PM_DEVICE`). HX711 zwischen den Messungen im Power-Down. |
 | Ladestatus | P0.17 = BQ25101 `~CHG`, Low = lädt (Seeed-Schaltplan). Das Boardfile legt dort `pwm0` auf, das ist im Overlay deaktiviert. |
 | Akkumessung | Laut Seeed-Schaltplan: VBAT – R16 1 MΩ – P0.31 (AIN7) – R17 510 kΩ – P0.14 (READ_BAT). P0.14 bleibt per `gpio-hog` dauerhaft Low, wie Seeed empfiehlt. Bei High kann P0.31 über 3,6 V kommen. |
 
@@ -75,7 +76,7 @@ Zusammen sind das 22 von 31 Byte, eine Scan-Response wird nicht gebraucht.
 | 1–2 | int16 LE | Bruttogewicht der Waage in 10 g, **ohne Tara** | 0x8000 |
 | 3–4 | uint16 LE | Akkuspannung in mV | 0xFFFF |
 | 5 | uint8 | Sequenzzähler, +1 pro Messzyklus (alle 10 Pakete eines Bursts haben denselben Wert) | – |
-| 6 | uint8 | Flags: Bit 0 = HX711 ok, Bit 1 = lädt (BQ25101 ~CHG), Bit 2 = kalibriert (Offset und Scale aus NVS), Bit 3–7 = 0 | – |
+| 6 | uint8 | Flags: Bit 0 = HX711 ok, Bit 1 = lädt (BQ25101 ~CHG), Bit 2 = Waage für diese Hardware kalibriert (Offset und Scale aus NVS oder `GASBEE_HX711_CAL_MEASURED = 1`). Bei 0 zeigt das Sensorboard „nc". Bit 3–7 = 0 | – |
 
 Tara, Gas-Netto, Füllstand und Akku-% berechnet das Sensorboard. Die Adresse ist random static und bleibt fest.
 
@@ -186,14 +187,19 @@ Beenden mit `Strg+]`. Das Boot-Log ist nur zu sehen, wenn der Port gleich nach e
 
 ## Kalibrierung
 
-> **TODO:** Die Werte in `gasbee_config.h` (`GASBEE_HX711_OFFSET`, `GASBEE_HX711_SCALE`) stammen vom ESP32-C3-GasBee. Sie gelten mit HX711 an 3,3 V **nicht** und müssen neu gemessen werden.
+**Grob-Kalibrierung am 2026-10-18:** `GASBEE_HX711_OFFSET = −294304`, `GASBEE_HX711_SCALE = 0.0000395471` kg/LSB, das sind etwa 25.290 LSB pro kg. Messung über das Advertising:
+- Leer: −0,64 kg
+- 14,285 kg aufgelegt: 13,805 kg
 
-1. Waage leer: im Log `HX711 raw=…` ablesen. Das ergibt `GASBEE_HX711_OFFSET`.
+Beides noch mit der alten ESP32-C3-Kalibrierung gemessen, die um den Faktor 0,98892 daneben lag. Der Nullpunkt enthält alles, was fest auf der Wägezelle sitzt. Die **Tara und die Feinkalibrierung**, ein Faktor pro GasBee-MAC, übernimmt das Sensorboard.
+
+So wird neu gemessen:
+1. Waage leer. Der Rohwert `raw_0` ist dann `GASBEE_HX711_OFFSET`. Abzulesen ist er im Log (`HX711 raw=…`) oder aus dem Advertising zurückgerechnet: `raw = Gewicht / SCALE_alt + OFFSET_alt`.
 2. Bekanntes Gewicht `m` (kg) auflegen und `raw_m` ablesen.
-3. `GASBEE_HX711_SCALE = m / (raw_m - OFFSET)`
+3. `GASBEE_HX711_SCALE = m / (raw_m − raw_0)`
 4. Werte in `gasbee_config.h` eintragen und neu bauen.
 
-Werte in den Settings (`gasbee/offset`, `gasbee/scale`) haben Vorrang vor den Defaults. Im Moment schreibt die Firmware nur `gasbee/tare`.
+Werte in den Settings (`gasbee/offset`, `gasbee/scale`) haben Vorrang vor den Defaults. Im Moment schreibt die Firmware nur `gasbee/tare`. Flag Bit 2 („kalibriert") ist gesetzt, wenn Offset und Scale aus NVS kommen oder wenn `GASBEE_HX711_CAL_MEASURED` in `gasbee_config.h` auf 1 steht. Das markiert die Werte dort als an dieser Hardware gemessen. Auf einem neuen GasBee die Konstante auf 0 setzen, bis gemessen ist. Das Sensorboard zeigt ihn dann als „nc".
 
 ### Tare
 
@@ -208,9 +214,11 @@ Unterschied zum ESP32-C3-GasBee: Dort setzte Tare die Tara nur auf 0 und machte 
 - [x] HX711 angeschlossen, liefert Rohwerte (2026-10-17)
 - [x] Verbindung mit dem Sensorboard: Die Werte kommen dort an (2026-10-17). Solange die Verbindung besteht, sendet der XIAO kein Advertising und taucht in keinem Scan auf.
 - [x] Akkubetrieb ohne USB funktioniert (2026-10-17)
-- [ ] Advertising-Format v1, Burst, HX711-Power-Down, Ladestatus: gebaut, auf Hardware noch nicht geprüft
-- [ ] Akkuspannung: Den Log-Wert `Akku=… mV` mit dem Multimeter an BAT+/BAT− vergleichen.
-- [ ] Ladestatus P0.17 mit Pull-Up: Prüfen, ob „lädt" bei USB richtig erkannt wird.
+- [x] Advertising-Format v1 auf Hardware empfangen (Laptop-Scan), seq im 60-s-Takt (2026-10-17)
+- [x] Akkuspannung: Multimeter 4,025 V, GasBee 4,003 V, −0,55 %, keine Korrektur nötig (2026-10-18)
+- [x] Ladestatus P0.17: mit USB Flags `03`, ohne USB `01` (2026-10-18)
+- [x] Stromspar-Image (UART0 aus, QSPI-Flash DPD, IMU/Mikrofon aus, 100 mA Ladestrom) läuft, Bursts im 5-min-Takt (2026-10-18)
 - [ ] Stromverbrauch im Akkubetrieb messen (Leerlauf und Burst)
 - [ ] HX711-Timing auf nRF verifizieren: PD_SCK-high < 50 µs, auch bei BLE-Aktivität
-- [ ] Rauschen und Sprünge der Rohwerte klären, Kalibrierung messen
+- [x] Grob-Kalibrierung (2026-10-18), Gegenprobe mit 14,285 kg steht aus
+- [ ] Feinkalibrierung pro GasBee im Sensorboard (anderer Arbeitsbereich)

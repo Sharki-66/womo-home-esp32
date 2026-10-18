@@ -23,13 +23,21 @@
 // Messintervall: CONFIG_GASBEE_MEASURE_INTERVAL_S (Kconfig, Standard 300 s, debug.conf 60 s)
 
 // Kalibrierung
-// TODO(Kalibrierung): Werte stammen vom GasBee (ESP32-C3, Messung 21.02.2026) und
-// gelten am XIAO (HX711 an 3,3 V) NICHT. Neu ermitteln:
-//   1. Waage leer → Log "HX711 raw=…" ablesen  → GASBEE_HX711_OFFSET
-//   2. Bekanntes Gewicht m [kg] auflegen → raw_m ablesen
-//   3. GASBEE_HX711_SCALE = m / (raw_m - OFFSET)
-#define GASBEE_HX711_OFFSET            -278300
-#define GASBEE_HX711_SCALE             0.00003999f    // kg pro raw-LSB
+// Grob-Kalibrierung XIAO + HX711 an 3,3 V, gemessen 2026-10-18 über das Advertising
+// (Werte mit alter Kalibrierung OFFSET −278300 / SCALE 0.00003999):
+//   leer:                −0,64 kg  (2 Zyklen)
+//   14,285 kg aufgelegt: 13,805 kg (Mittel aus 4 Zyklen)
+//   SCALE_neu  = 0.00003999 × 14,285 / (13,805 + 0,64)
+//   OFFSET_neu = −0,64 / 0.00003999 − 278300  (Rohwert bei leerer Waage)
+// Der Nullpunkt enthält alles, was fest auf der Wägezelle sitzt. Tara und
+// Feinkalibrierung (Faktor pro GasBee-MAC) übernimmt das Sensorboard.
+// Neu ermitteln: Waage leer → Rohwert = OFFSET; Gewicht m auflegen → raw_m;
+//   SCALE = m / (raw_m − OFFSET)
+#define GASBEE_HX711_OFFSET            -294304
+#define GASBEE_HX711_SCALE             0.0000395471f  // kg pro raw-LSB (≈ 25 290 LSB/kg)
+// 1 = OFFSET/SCALE oben sind an dieser Hardware gemessen → Advertising-Flag
+// "kalibriert" (Bit 2). 0 = Platzhalter, Sensorboard zeigt dann "nc".
+#define GASBEE_HX711_CAL_MEASURED      1
 
 // Settings (NVS) – Kalibrierung persistent speichern
 #define GASBEE_SETTINGS_SUBTREE        "gasbee"
@@ -68,7 +76,7 @@
 #define GASBEE_ADV_BAT_INVALID         UINT16_MAX  // 0xFFFF
 #define GASBEE_ADV_FLAG_HX711_OK       BIT(0)
 #define GASBEE_ADV_FLAG_CHARGING       BIT(1)  // BQ25101 ~CHG an P0.17
-#define GASBEE_ADV_FLAG_CALIBRATED     BIT(2)  // Offset + Scale aus NVS
+#define GASBEE_ADV_FLAG_CALIBRATED     BIT(2)  // Waage für diese Hardware kalibriert (NVS oder gemessene Defaults)
 
 // ── Status-LED (nur mit CONFIG_GASBEE_STATUS_LED) ────────────────────────────
 #define GASBEE_LED_FLASH_MS            80     // Dauer eines Blitzes / einer Pause

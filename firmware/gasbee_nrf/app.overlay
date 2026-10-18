@@ -53,6 +53,32 @@
 	};
 };
 
+/* Stromsparen: UART0 (D6/D7) wird nicht genutzt, das Log läuft über USB-CDC.
+ * Der UARTE-Treiber startet sonst den Empfang beim Init und hält damit den
+ * HF-Takt dauerhaft an. */
+&uart0 {
+	status = "disabled";
+};
+
+/* Sense-Variante: IMU (LSM6DS3TR-C) und Mikrofon werden direkt aus GPIOs
+ * versorgt (Boardfile xiao_ble_nrf52840_sense.dts: P1.08, P1.10). Wir bauen
+ * für xiao_ble, dort sind die Pins nicht definiert → fest Low = sicher aus. */
+&gpio1 {
+	imu_pwr_off: imu-pwr-off {
+		gpio-hog;
+		gpios = <8 GPIO_ACTIVE_HIGH>;
+		output-low;
+		line-name = "IMU_PWR";
+	};
+
+	mic_pwr_off: mic-pwr-off {
+		gpio-hog;
+		gpios = <10 GPIO_ACTIVE_HIGH>;
+		output-low;
+		line-name = "MIC_PWR";
+	};
+};
+
 /* Das Boardfile legt pwm0 auf P0.17. Der Pin ist hier der Ladestatus-Eingang. */
 &pwm0 {
 	status = "disabled";

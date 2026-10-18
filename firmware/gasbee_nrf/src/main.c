@@ -25,6 +25,8 @@
 #include <limits.h>
 
 #include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/pm/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/settings/settings.h>
@@ -43,7 +45,8 @@ static int32_t s_offset = GASBEE_HX711_OFFSET;
 static float   s_scale  = GASBEE_HX711_SCALE;
 static float   s_tare   = 0.0f;   // Tara: Bruttogewicht der leeren Waage (nur GATT)
 
-// Kalibrierung aus NVS geladen (beide Werte) → Advertising-Flag "kalibriert"
+// Kalibrierung aus NVS geladen (beide Werte) → Advertising-Flag "kalibriert",
+// ebenso bei GASBEE_HX711_CAL_MEASURED (gemessene Defaults)
 static bool s_offset_from_nvs;
 static bool s_scale_from_nvs;
 
@@ -264,7 +267,7 @@ static void measure_cycle(void)
 	if (charging) {
 		flags |= GASBEE_ADV_FLAG_CHARGING;
 	}
-	if (s_offset_from_nvs && s_scale_from_nvs) {
+	if (GASBEE_HX711_CAL_MEASURED || (s_offset_from_nvs && s_scale_from_nvs)) {
 		flags |= GASBEE_ADV_FLAG_CALIBRATED;
 	}
 
@@ -284,12 +287,31 @@ static void measure_cycle(void)
 	}
 }
 
+// ── Externer QSPI-Flash (P25Q16H) ───────────────────────────────────────────
+// Wird nicht genutzt (Settings liegen im internen Flash). Suspend schickt ihn
+// in Deep Power-Down und schaltet die QSPI-Peripherie ab.
+static void ext_flash_sleep(void)
+{
+	const struct device *flash = DEVICE_DT_GET_OR_NULL(DT_NODELABEL(p25q16h));
+
+	if (!flash || !device_is_ready(flash)) {
+		return;
+	}
+	int err = pm_device_action_run(flash, PM_DEVICE_ACTION_SUSPEND);
+	if (err && err != -EALREADY) {
+		LOG_WRN("QSPI-Flash Suspend err=%d", err);
+	} else {
+		LOG_INF("QSPI-Flash in Deep Power-Down");
+	}
+}
+
 // ── main ──────────────────────────────────────────────────────────────────────
 int main(void)
 {
 	LOG_INF("GasBee startet (XIAO nRF52840), Messintervall %d s",
 		CONFIG_GASBEE_MEASURE_INTERVAL_S);
 
+	ext_flash_sleep();
 	status_led_init();
 	cal_load();
 	battery_init();

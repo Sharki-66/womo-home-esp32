@@ -29,13 +29,19 @@ GATT (Kompatibilität mit dem heutigen `firmware/sensorboard/main/network/gasbee
 - **Akkumessung:** Zephyr-Treiber `voltage-divider` (Knoten `vbatt`, AIN7, 1 MΩ/510 kΩ laut Seeed-Schaltplan) **ohne** `power-gpios`. P0.14 wird per `gpio-hog` fest auf Low gesetzt. Mit `power-gpios` würde der Treiber P0.14 beim Init kurz und im PM-Suspend dauerhaft auf High setzen, und genau davor warnt Seeed (P0.31 kann dann über 3,6 V kommen). Gemessen wird im Messzyklus in `main.c`.
 - **Messzyklus und Funk:** Intervall `CONFIG_GASBEE_MEASURE_INTERVAL_S` (300 s, `debug.conf` 60 s), feste Taktung ab Zyklusbeginn. Der Burst läuft über `bt_le_ext_adv_start()` mit `num_events = 10` (`CONFIG_BT_EXT_ADV`, Legacy-PDU, verbindbar). Bei bestehender Verbindung gibt es keinen Burst (`CONFIG_BT_MAX_CONN=1`). Der HX711 geht zwischen den Zyklen in den Power-Down, nach dem Aufwachen werden 4 Wandlungen verworfen.
 - **Advertising-Gewicht = Brutto ohne Tara.** Tara und Gas rechnet das Sensorboard. Die GasBee-Tara (`gasbee/tare`) wirkt nur auf GATT 0x2B01..0x2B03.
+- **Flag Bit 2 „kalibriert"** = Waage für diese Hardware kalibriert, also Offset und Scale aus NVS oder `GASBEE_HX711_CAL_MEASURED = 1` in `gasbee_config.h`. Das Sensorboard zeigt einen GasBee mit Bit 2 = 0 als „nc". Für einen neuen XIAO die Konstante auf 0 setzen, bis gemessen ist.
+- **Stromsparen:**
+  - `&uart0` ist deaktiviert. Der UARTE-Treiber startet sonst den Empfang beim Init und hält den HF-Takt an (`uart_nrfx_uarte.c`).
+  - Der QSPI-Flash geht beim Start per `pm_device_action_run(SUSPEND)` in Deep Power-Down. Das geht nur mit `CONFIG_PM_DEVICE`, siehe `nrf_qspi_nor.c`.
+  - P1.08 (IMU) und P1.10 (Mikrofon) sind per `gpio-hog` Low, weil wir für `xiao_ble` statt für die Sense-Variante bauen.
+  - Gemessen ist der Strom noch nicht.
 - **Ladestrom 100 mA:** P0.13 per `gpio-hog` `output-low` (Schaltplan: R12 2,7 kΩ von ISET nach P0.13 parallel zu R18 2,7 kΩ nach GND). P0.13 nie High setzen. Für Akkus unter 100 mAh den Hog entfernen, dann sind es 50 mA.
 - **Ladestatus:** P0.17 (`~CHG`) über `zephyr,user chg-gpios` mit Pull-Up. `&pwm0` ist im Overlay deaktiviert, weil das Boardfile dort PWM auflegt.
 - **Persistenz:** Zephyr Settings auf NVS, `storage_partition` @ 0xEC000. Schlüssel: `gasbee/offset`, `gasbee/scale`, `gasbee/tare`.
 
 ## Offen
 
-- Kalibrierung (OFFSET/SCALE) an der echten Hardware messen, siehe TODO in `src/gasbee_config.h`
+- Grob-Kalibrierung erledigt (2026-10-18, siehe `src/gasbee_config.h`). Gegenprobe mit 14,285 kg steht aus. Feinkalibrierung pro MAC macht das Sensorboard.
 - Stand 2026-10-17: HX711, Akkubetrieb und Empfang am Sensorboard funktionieren. Allerdings ruft das Sensorboard `gasbee_ble_client_get_snapshot()` nirgends auf. Die GasBee-Werte stehen dort nur im Log, das Gas-Topic nimmt den eigenen HX711 (Kanäle A/B). Das wird in einem anderen Arbeitsbereich geklärt.
 - Erster Hardwaretest ist erledigt (2026-10-17, XIAO nRF52840 Sense, Bootloader 0.6.1 / S140 7.3.0): Firmware, NVS und Advertising laufen. Offen sind der Betrieb mit HX711 und die Bestätigung der Sensorboard-Verbindung im Sensorboard-Log.
 - Das USB-Log liegt nicht fest auf `/dev/ttyACM0`. Den Port über `ID_SERIAL` zuordnen. Die ESP32-Ports nicht öffnen, weil das Öffnen sie resetten kann.
