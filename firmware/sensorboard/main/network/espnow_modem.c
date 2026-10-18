@@ -501,6 +501,10 @@ static void tank_state_load_from_nvs(void)
     size = sizeof(tank_state_t);
     nvs_get_blob(handle, TANK2_NVS_KEY, &s_tank2_state, &size);
     nvs_close(handle);
+    // Laufzeit-Zeitstempel stammt aus dem vorigen Boot → erster Messwert wird neue Basis,
+    // sonst bleibt die Rate eingefroren, bis die Laufzeit den alten Wert überholt
+    s_tank1_state.last_ts_us = 0;
+    s_tank2_state.last_ts_us = 0;
 }
 
 static void tank_state_save_to_nvs(void)
