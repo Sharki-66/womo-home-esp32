@@ -119,6 +119,36 @@ typedef enum {
     STR_BATTERY_KFZ,
     // Forecast modal
     STR_FORECAST_TITLE,
+    // Settings modal – Tabs
+    STR_SET_TAB_AP,
+    STR_SET_TAB_SENSORS,
+    STR_SET_TAB_THRESH,
+    STR_SET_TAB_SYSTEM,
+    // Settings modal – System-Tab
+    STR_ON,
+    STR_OFF,
+    STR_LANG_SECTION,
+    STR_TIME_SECTION,
+    STR_TIME_SOURCE,
+    STR_TIME_LAST_SYNC,
+    STR_TIME_RTC_BATT,
+    STR_TIME_SRC_RTC,
+    STR_TIME_SYNC_NEVER,
+    STR_TIME_AGO_S,       // Format mit %lu
+    STR_TIME_AGO_MIN,     // Format mit %lu
+    STR_TIME_AGO_H,       // Format mit %lu
+    STR_TIME_BATT_UNKNOWN,
+    STR_TIME_BATT_LOW,
+    STR_TIME_RTC_POWER_LOST,
+    // Settings modal – Sensoren-Tab
+    STR_SENS_RUUVI_SECTION,
+    STR_SENS_GASBEE_SECTION,
+    STR_SENS_INDOOR,
+    STR_SENS_OUTDOOR,
+    STR_SENS_BOTTLE_A,
+    STR_SENS_BOTTLE_B,
+    STR_SENS_SCAN_BTN,
+    STR_SENS_SETUP_BTN,
     // Max value
     STR_MAX
 } womo_string_id_t;

@@ -54,7 +54,7 @@ main/
 │   ├── womo_forecast_modal     5-Tage-Vorhersage Modal (Open-Meteo daily)
 │   ├── womo_connectivity_modal WLAN/LTE/AP-Steuerung
 │   ├── womo_router_leds_modal  Router-LED-Statusanzeige
-│   ├── womo_settings_modal     Einstellungs-Modal (Schwellwerte, NVS)
+│   ├── womo_settings_modal     Einstellungs-Modal: Tabs AP | Sensoren | Grenzwerte | System
 │   └── womo_thresholds         Schwellwert-Verwaltung (NVS-Persistenz)
 ├── hardware/
 │   ├── waveshare_rgb_lcd_port  LCD + Touch + CH422G Init

@@ -50,7 +50,7 @@
 ## Backlog / noch nicht implementiert
 
 - **Kalibrierungs-UI**: NVS-Layer + Web-UI für HX711/Batterie/Tank-Kalibrierung (heute alles hardcodiert in `sensor_config.h`)
-- **GasBee-Status im Hauptbildschirm**: Akku/Quelle bisher nur im Einstellungs-Tab „RTC / Temp / Gas“ sichtbar (2026-10-17), nicht am Gas-Widget
+- **GasBee-Status im Hauptbildschirm**: Akku/Quelle bisher nur im Einstellungs-Tab „Sensoren“ sichtbar (2026-10-17), nicht am Gas-Widget
 - **Drucktrend-Anzeige**: BME280 Drucktrend visuell (aktuell nur Text)
 - **OTA-Update**: Firmware-Update über WLAN
 

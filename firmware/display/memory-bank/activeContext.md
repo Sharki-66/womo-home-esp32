@@ -1,5 +1,9 @@
 # Active Context — WoMoHome Display
 
+## Einstellungs-Modal umgebaut (2026-10-19, gebaut, noch nicht auf Hardware getestet)
+
+Tabs jetzt AP | Sensoren | Grenzwerte | System (AP = Starttab, `enum TAB_*`). Sprache und RTC-Info sind in den System-Tab gewandert (zwei Spalten: Töne + Sprache | Zeit / RTC, `system_time_info_refresh()`). „RTC / Temp / Gas“ heißt jetzt „Sensoren“ (`build_tab_sensoren`, Ruuvi + GasBee nach oben gerückt, Platz für weitere Sensoren). Alle Texte der umgebauten Tabs über `womo_locale` (neue `STR_SET_TAB_*`, `STR_TIME_*`, `STR_SENS_*`, `STR_ON/OFF`), Live-Update in `settings_locale_cb()`. Die Ton-Buttons lesen ihren Zustand jetzt aus dem Buzzer-Modul statt aus dem Button-Text. Noch hart codiert: Statustexte Ruuvi/GasBee/Assistent, AP-Tab, Popups.
+
 ## GasBee-Einrichten-Assistent (2026-10-18, auf Hardware getestet, Ruuvi-Scan läuft ebenfalls)
 
 Scan-Popup für GasBee ersetzt durch Assistenten `gbw_*` (`womo_settings_modal.c`): USB anstecken → gefunden → übernehmen → kalibrieren (Nullpunkt, Referenzgewicht in g, Prüfung ±1 %/±50 g nach ≥ 2 Messzyklen) → USB abziehen. Ruuvi- und GasBee-Ergebnisse gehen jetzt über ein Abholfach + `rtc_poll_timer_cb` (vorher `lvgl_port_lock(-1)` im RX-/esp_timer-Task). `make_cfg_row()` mit Button-Text/-Breite. Neue API in `womo_sensorboard.h`: `send_gasbee_setup_scan`, `send_gasbee_cal_session`, `send_gasbee_cal`, `set_gasbee_cal_result_callback`; `cfg`/`seq` in `womo_gasbee_scan_entry_t`, `config_mode` in `hx711.bee[]`.

@@ -57,9 +57,26 @@ static lv_obj_t *s_warn_hdr_lbl  = NULL;
 static lv_obj_t *s_row_lbl[3]    = {NULL, NULL, NULL};
 static bool      s_locale_cb_reg  = false;
 
+/* Tab-Reihenfolge = Reihenfolge in der Tab-Leiste, erster Tab = Starttab */
+enum { TAB_AP = 0, TAB_SENSORS, TAB_THRESH, TAB_SYSTEM, TAB_COUNT };
+static lv_obj_t *s_tabview = NULL;
+
 /* Ton-Buttons */
 static lv_obj_t *s_btn_tones = NULL;
 static lv_obj_t *s_btn_touch = NULL;
+
+/* System-Tab: übersetzbare Labels */
+static lv_obj_t *s_sound_title_lbl = NULL;
+static lv_obj_t *s_tones_lbl       = NULL;
+static lv_obj_t *s_touch_lbl       = NULL;
+static lv_obj_t *s_lang_title_lbl  = NULL;
+static lv_obj_t *s_time_title_lbl  = NULL;
+static lv_obj_t *s_time_info_lbl   = NULL;
+
+/* Sensoren-Tab: übersetzbare Labels (Zeilennamen 0=Innen, 1=Außen, 2=Flasche A, 3=Flasche B) */
+static lv_obj_t *s_ruuvi_title_lbl  = NULL;
+static lv_obj_t *s_gasbee_title_lbl = NULL;
+static lv_obj_t *s_sens_row_lbl[4]  = {NULL};
 
 /* AP-Tab */
 static lv_obj_t *s_ap_keyboard        = NULL;
@@ -310,9 +327,54 @@ static esp_err_t gasbee_cfg_save(const char *mac_a, const char *mac_b)
 
 /* ── Locale-Callback ────────────────────────────────────────── */
 
+static void sound_btn_update(lv_obj_t *btn, bool on);
+static void system_time_info_refresh(void);
+
+static void set_label_str(lv_obj_t *lbl, womo_string_id_t id)
+{
+    if (lbl) lv_label_set_text(lbl, womo_locale_get_string(id));
+}
+
+/* Text des ersten Kind-Labels eines Buttons setzen */
+static void set_btn_str(lv_obj_t *btn, womo_string_id_t id)
+{
+    if (btn) set_label_str(lv_obj_get_child(btn, 0), id);
+}
+
 static void settings_locale_cb(void)
 {
     if (!s_panel) return;
+    static const womo_string_id_t tab_str[TAB_COUNT] = {
+        STR_SET_TAB_AP, STR_SET_TAB_SENSORS, STR_SET_TAB_THRESH, STR_SET_TAB_SYSTEM,
+    };
+    if (s_tabview) {
+        for (int i = 0; i < TAB_COUNT; i++) {
+            lv_tabview_set_tab_text(s_tabview, i, womo_locale_get_string(tab_str[i]));
+        }
+    }
+
+    /* System-Tab */
+    set_label_str(s_sound_title_lbl, STR_SOUND_SECTION);
+    set_label_str(s_tones_lbl,       STR_SOUND_TONES);
+    set_label_str(s_touch_lbl,       STR_SOUND_TOUCH_CLICK);
+    set_label_str(s_lang_title_lbl,  STR_LANG_SECTION);
+    set_label_str(s_time_title_lbl,  STR_TIME_SECTION);
+    if (s_btn_tones) sound_btn_update(s_btn_tones, display_buzzer_is_enabled());
+    if (s_btn_touch) sound_btn_update(s_btn_touch, display_buzzer_is_click_enabled());
+    system_time_info_refresh();
+
+    /* Sensoren-Tab */
+    set_label_str(s_ruuvi_title_lbl,  STR_SENS_RUUVI_SECTION);
+    set_label_str(s_gasbee_title_lbl, STR_SENS_GASBEE_SECTION);
+    set_label_str(s_sens_row_lbl[0],  STR_SENS_INDOOR);
+    set_label_str(s_sens_row_lbl[1],  STR_SENS_OUTDOOR);
+    set_label_str(s_sens_row_lbl[2],  STR_SENS_BOTTLE_A);
+    set_label_str(s_sens_row_lbl[3],  STR_SENS_BOTTLE_B);
+    set_btn_str(s_ruuvi_scan_btn_in,  STR_SENS_SCAN_BTN);
+    set_btn_str(s_ruuvi_scan_btn_out, STR_SENS_SCAN_BTN);
+    set_btn_str(s_gasbee_scan_btn[0], STR_SENS_SETUP_BTN);
+    set_btn_str(s_gasbee_scan_btn[1], STR_SENS_SETUP_BTN);
+
     if (s_title_lbl)     lv_label_set_text(s_title_lbl,     womo_locale_get_string(STR_SETTINGS_TITLE));
     if (s_thr_title_lbl) lv_label_set_text(s_thr_title_lbl, womo_locale_get_string(STR_THRESH_TITLE));
     if (s_warn_hdr_lbl)  lv_label_set_text(s_warn_hdr_lbl,  womo_locale_get_string(STR_THRESH_WARNING));
@@ -448,15 +510,15 @@ static void sound_btn_update(lv_obj_t *btn, bool on)
 {
     lv_obj_set_style_bg_color(btn, on ? lv_color_hex(0x2E7D32) : lv_color_hex(0x757575), 0);
     lv_obj_t *lbl = lv_obj_get_child(btn, 0);
-    if (lbl) lv_label_set_text(lbl, on ? "EIN" : "AUS");
+    if (lbl) lv_label_set_text(lbl, womo_locale_get_string(on ? STR_ON : STR_OFF));
 }
 
+/* Zustand aus dem Buzzer-Modul lesen, nicht aus dem (übersetzten) Button-Text */
 static void sound_tones_cb(lv_event_t *e)
 {
     (void)e;
     if (!s_btn_tones) return;
-    lv_obj_t *lbl = lv_obj_get_child(s_btn_tones, 0);
-    bool new_state = !(lbl && lv_label_get_text(lbl)[0] == 'E');
+    bool new_state = !display_buzzer_is_enabled();
     sound_btn_update(s_btn_tones, new_state);
     womo_sensorboard_send_buzzer(new_state);
     display_buzzer_set_enabled(new_state);
@@ -467,8 +529,7 @@ static void sound_touch_cb(lv_event_t *e)
 {
     (void)e;
     if (!s_btn_touch) return;
-    lv_obj_t *lbl = lv_obj_get_child(s_btn_touch, 0);
-    bool new_state = !(lbl && lv_label_get_text(lbl)[0] == 'E');
+    bool new_state = !display_buzzer_is_click_enabled();
     sound_btn_update(s_btn_touch, new_state);
     womo_sensorboard_send_touch_click(new_state);
     display_buzzer_set_click_enabled(new_state);
@@ -526,6 +587,16 @@ static void close_modal(void)
     s_row_lbl[2]       = NULL;
     s_btn_tones        = NULL;
     s_btn_touch        = NULL;
+    s_tabview          = NULL;
+    s_sound_title_lbl  = NULL;
+    s_tones_lbl        = NULL;
+    s_touch_lbl        = NULL;
+    s_lang_title_lbl   = NULL;
+    s_time_title_lbl   = NULL;
+    s_time_info_lbl    = NULL;
+    s_ruuvi_title_lbl  = NULL;
+    s_gasbee_title_lbl = NULL;
+    for (int i = 0; i < 4; i++) s_sens_row_lbl[i] = NULL;
     s_ap_keyboard      = NULL;
     s_ap_saved_lbl     = NULL;
     s_ap_scan_btn      = NULL;
@@ -960,11 +1031,11 @@ static lv_obj_t *make_tab_base(lv_obj_t *tab)
     return tab;
 }
 
-static lv_obj_t *make_section_sep(lv_obj_t *parent, int y, int w)
+static lv_obj_t *make_section_sep_at(lv_obj_t *parent, int x, int y, int w)
 {
     lv_obj_t *sep = lv_obj_create(parent);
     lv_obj_set_size(sep, w, 1);
-    lv_obj_set_pos(sep, PAD, y);
+    lv_obj_set_pos(sep, x, y);
     lv_obj_set_style_bg_color(sep, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_border_width(sep, 0, 0);
     lv_obj_set_style_radius(sep, 0, 0);
@@ -972,23 +1043,33 @@ static lv_obj_t *make_section_sep(lv_obj_t *parent, int y, int w)
     return sep;
 }
 
-static void build_tab_sprache(lv_obj_t *tab)
+static lv_obj_t *make_section_sep(lv_obj_t *parent, int y, int w)
 {
-    make_tab_base(tab);
+    return make_section_sep_at(parent, PAD, y, w);
+}
 
-    lv_obj_t *title = lv_label_create(tab);
-    lv_label_set_text(title, "Sprache / Language");
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+/* Abschnittstitel (übersetzt, 16 px mit Umlauten) + Trennlinie 26 px darunter */
+static lv_obj_t *make_section_title(lv_obj_t *parent, int x, int y, int w, womo_string_id_t id)
+{
+    lv_obj_t *title = lv_label_create(parent);
+    lv_label_set_text(title, womo_locale_get_string(id));
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_16_german, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(0x333333), 0);
-    lv_obj_set_pos(title, 0, 0);
+    lv_obj_set_pos(title, x, y);
+    make_section_sep_at(parent, x, y + 26, w);
+    return title;
+}
 
-    make_section_sep(tab, 26, MODAL_W - 2 * PAD);
+/* Sprachwahl als Abschnitt im System-Tab (Buttons 48 px hoch, ab y + 38) */
+static void build_lang_section(lv_obj_t *tab, int x, int y, int w)
+{
+    s_lang_title_lbl = make_section_title(tab, x, y, w, STR_LANG_SECTION);
 
     bool is_de = (womo_locale_get() == WOMO_LOCALE_DE);
 
     lv_obj_t *btn_de = lv_btn_create(tab);
     lv_obj_set_size(btn_de, 120, 48);
-    lv_obj_set_pos(btn_de, 0, 38);
+    lv_obj_set_pos(btn_de, x, y + 38);
     lv_obj_set_style_bg_color(btn_de, is_de ? lv_color_hex(0x1565C0) : lv_color_hex(0xC0C0C0), 0);
     lv_obj_set_style_radius(btn_de, 8, 0);
     lv_obj_set_style_border_width(btn_de, 0, 0);
@@ -1000,7 +1081,7 @@ static void build_tab_sprache(lv_obj_t *tab)
 
     lv_obj_t *btn_en = lv_btn_create(tab);
     lv_obj_set_size(btn_en, 120, 48);
-    lv_obj_set_pos(btn_en, 136, 38);
+    lv_obj_set_pos(btn_en, x + 136, y + 38);
     lv_obj_set_style_bg_color(btn_en, !is_de ? lv_color_hex(0x1565C0) : lv_color_hex(0xC0C0C0), 0);
     lv_obj_set_style_radius(btn_en, 8, 0);
     lv_obj_set_style_border_width(btn_en, 0, 0);
@@ -1952,13 +2033,14 @@ static void gasbee_scan_btn_cb(lv_event_t *e)
 }
 
 /* Eine Konfigurationszeile: Label, MAC/Status, Aktions-Button (btn_text), Löschen-Button */
-static lv_obj_t *make_cfg_row(lv_obj_t *tab, int y, const char *name, lv_obj_t **val_lbl,
-                              const char *btn_text, int btn_w,
+static lv_obj_t *make_cfg_row(lv_obj_t *tab, int y, womo_string_id_t name, lv_obj_t **name_out,
+                              lv_obj_t **val_lbl, womo_string_id_t btn_text, int btn_w,
                               lv_event_cb_t scan_cb, lv_event_cb_t clear_cb, void *user_data)
 {
     lv_obj_t *name_lbl = lv_label_create(tab);
-    lv_label_set_text(name_lbl, name);
-    lv_obj_set_style_text_font(name_lbl, &lv_font_montserrat_12, 0);
+    lv_label_set_text(name_lbl, womo_locale_get_string(name));
+    lv_obj_set_style_text_font(name_lbl, &lv_font_montserrat_12_german, 0);
+    if (name_out) *name_out = name_lbl;
     lv_obj_set_style_text_color(name_lbl, lv_color_hex(0x333333), 0);
     lv_obj_set_pos(name_lbl, 0, y);
 
@@ -1975,8 +2057,8 @@ static lv_obj_t *make_cfg_row(lv_obj_t *tab, int y, const char *name, lv_obj_t *
     lv_obj_set_style_border_width(scan_btn, 0, 0);
     lv_obj_add_event_cb(scan_btn, scan_cb, LV_EVENT_CLICKED, user_data);
     lv_obj_t *scan_lbl = lv_label_create(scan_btn);
-    lv_label_set_text(scan_lbl, btn_text);
-    lv_obj_set_style_text_font(scan_lbl, &lv_font_montserrat_12, 0);
+    lv_label_set_text(scan_lbl, womo_locale_get_string(btn_text));
+    lv_obj_set_style_text_font(scan_lbl, &lv_font_montserrat_12_german, 0);
     lv_obj_center(scan_lbl);
 
     lv_obj_t *clear_btn = lv_btn_create(tab);
@@ -1994,80 +2076,71 @@ static lv_obj_t *make_cfg_row(lv_obj_t *tab, int y, const char *name, lv_obj_t *
     return scan_btn;
 }
 
-static void build_tab_rtc(lv_obj_t *tab)
+/* Zeit-/RTC-Info im System-Tab (Text beim Öffnen und bei Sprachwechsel neu setzen) */
+static void system_time_info_refresh(void)
 {
-    make_tab_base(tab);
-
-    lv_obj_t *title = lv_label_create(tab);
-    lv_label_set_text(title, "Batterie (RTC)");
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(title, lv_color_hex(0x333333), 0);
-    lv_obj_set_pos(title, 0, 0);
-
-    make_section_sep(tab, 26, MODAL_W - 2 * PAD);
+    if (!s_time_info_lbl) return;
 
     const char *src_name;
     switch (womo_time_get_source()) {
-        case TIME_SOURCE_NTP:          src_name = "NTP (Internet)";  break;
-        case TIME_SOURCE_GPS:          src_name = "GPS (Router)";    break;
-        case TIME_SOURCE_SENSOR:        src_name = "Sensorboard ESP-NOW";    break;
-        case TIME_SOURCE_INTERNAL_RTC: src_name = "RTC (intern)";    break;
+        case TIME_SOURCE_NTP:          src_name = "NTP (Internet)";       break;
+        case TIME_SOURCE_GPS:          src_name = "GPS (Router)";         break;
+        case TIME_SOURCE_SENSOR:       src_name = "Sensorboard ESP-NOW";  break;
+        case TIME_SOURCE_INTERNAL_RTC: src_name = womo_locale_get_string(STR_TIME_SRC_RTC); break;
         default:                       src_name = "---"; break;
     }
 
     char sync_buf[48];
     if (womo_time_is_synced()) {
         uint32_t secs = womo_time_get_seconds_since_sync();
-        if (secs < 60)        snprintf(sync_buf, sizeof(sync_buf), "vor %lu s",   (unsigned long)secs);
-        else if (secs < 3600) snprintf(sync_buf, sizeof(sync_buf), "vor %lu min", (unsigned long)(secs / 60));
-        else                  snprintf(sync_buf, sizeof(sync_buf), "vor %lu h",   (unsigned long)(secs / 3600));
+        if (secs < 60)
+            snprintf(sync_buf, sizeof(sync_buf), womo_locale_get_string(STR_TIME_AGO_S),   (unsigned long)secs);
+        else if (secs < 3600)
+            snprintf(sync_buf, sizeof(sync_buf), womo_locale_get_string(STR_TIME_AGO_MIN), (unsigned long)(secs / 60));
+        else
+            snprintf(sync_buf, sizeof(sync_buf), womo_locale_get_string(STR_TIME_AGO_H),   (unsigned long)(secs / 3600));
     } else {
-        snprintf(sync_buf, sizeof(sync_buf), "nie");
+        snprintf(sync_buf, sizeof(sync_buf), "%s", womo_locale_get_string(STR_TIME_SYNC_NEVER));
     }
 
     extern void womo_get_rtc_battery_status(bool *valid, bool *low, bool *switched);
     bool rtc_valid = false, rtc_low = false, rtc_sw = false;
     womo_get_rtc_battery_status(&rtc_valid, &rtc_low, &rtc_sw);
 
-    char rtc_bat_buf[32];
-    if (!rtc_valid) snprintf(rtc_bat_buf, sizeof(rtc_bat_buf), "unbekannt");
-    else            snprintf(rtc_bat_buf, sizeof(rtc_bat_buf), "%s", rtc_low ? "SCHWACH !!" : "OK");
+    const char *rtc_bat = !rtc_valid ? womo_locale_get_string(STR_TIME_BATT_UNKNOWN)
+                        : rtc_low    ? womo_locale_get_string(STR_TIME_BATT_LOW)
+                        :              womo_locale_get_string(STR_STATUS_OK);
 
-    char rtc_info_text[300];
-    int n = snprintf(rtc_info_text, sizeof(rtc_info_text),
-             "Quelle:       %s\n"
-             "Letzte Sync:  %s\n"
-             "RTC-Batterie: %s",
-             src_name, sync_buf, rtc_bat_buf);
-    if (rtc_valid && rtc_sw && n < (int)sizeof(rtc_info_text) - 2)
-        strncat(rtc_info_text, "\nRTC war ohne Strom",
-                sizeof(rtc_info_text) - strlen(rtc_info_text) - 1);
+    char text[300];
+    int n = snprintf(text, sizeof(text), "%s\n  %s\n%s\n  %s\n%s\n  %s",
+                     womo_locale_get_string(STR_TIME_SOURCE),    src_name,
+                     womo_locale_get_string(STR_TIME_LAST_SYNC), sync_buf,
+                     womo_locale_get_string(STR_TIME_RTC_BATT),  rtc_bat);
+    if (rtc_valid && rtc_sw && n > 0 && n < (int)sizeof(text) - 2) {
+        snprintf(text + n, sizeof(text) - n, "\n%s", womo_locale_get_string(STR_TIME_RTC_POWER_LOST));
+    }
+    lv_label_set_text(s_time_info_lbl, text);
+}
 
-    lv_obj_t *info = lv_label_create(tab);
-    lv_label_set_text(info, rtc_info_text);
-    lv_obj_set_style_text_font(info, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(info, lv_color_hex(0x444444), 0);
-    lv_obj_set_pos(info, 0, 38);
+static void build_tab_sensoren(lv_obj_t *tab)
+{
+    make_tab_base(tab);
 
-    /* Layout (Tab nicht scrollbar, ~300 px nutzbar): RTC-Info bis ~y 95,
-     * Ruuvi ab y 104, GasBee ab y 196, gemeinsame Statuszeile y 284. */
+    /* Layout (Tab nicht scrollbar, ~300 px nutzbar): Ruuvi ab y 0, GasBee ab y 106,
+     * gemeinsame Statuszeile y 212 – Rest frei für weitere Sensoren. */
 
     /* Ruuvi-Tag: MAC per Scan auswählen, Batteriespannung anzeigen (nur belegt,
      * wenn statt eines verkabelten BME280/680 ein Ruuvi-BLE-Tag im Einsatz ist) */
     ruuvi_cfg_load(s_ruuvi_indoor_mac, sizeof(s_ruuvi_indoor_mac),
                    s_ruuvi_outdoor_mac, sizeof(s_ruuvi_outdoor_mac));
 
-    lv_obj_t *ruuvi_title = lv_label_create(tab);
-    lv_label_set_text(ruuvi_title, "Temperatur (Ruuvi-Tag)");
-    lv_obj_set_style_text_font(ruuvi_title, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(ruuvi_title, lv_color_hex(0x333333), 0);
-    lv_obj_set_pos(ruuvi_title, 0, 104);
+    s_ruuvi_title_lbl = make_section_title(tab, 0, 0, MODAL_W - 2 * PAD, STR_SENS_RUUVI_SECTION);
 
-    make_section_sep(tab, 124, MODAL_W - 2 * PAD);
-
-    s_ruuvi_scan_btn_in  = make_cfg_row(tab, 136, "Innen:", &s_ruuvi_indoor_lbl, "Scan", 60,
+    s_ruuvi_scan_btn_in  = make_cfg_row(tab, 44, STR_SENS_INDOOR, &s_sens_row_lbl[0],
+                                        &s_ruuvi_indoor_lbl, STR_SENS_SCAN_BTN, 60,
                                         ruuvi_scan_btn_cb, ruuvi_clear_indoor_cb, (void *)0);
-    s_ruuvi_scan_btn_out = make_cfg_row(tab, 166, "Aussen:", &s_ruuvi_outdoor_lbl, "Scan", 60,
+    s_ruuvi_scan_btn_out = make_cfg_row(tab, 74, STR_SENS_OUTDOOR, &s_sens_row_lbl[1],
+                                        &s_ruuvi_outdoor_lbl, STR_SENS_SCAN_BTN, 60,
                                         ruuvi_scan_btn_cb, ruuvi_clear_outdoor_cb, (void *)1);
 
     /* GasBee: BLE-Gaswaage je Flasche per Einrichten-Assistent (USB) zuordnen und
@@ -2076,17 +2149,13 @@ static void build_tab_rtc(lv_obj_t *tab)
     gasbee_cfg_load(s_gasbee_mac[0], sizeof(s_gasbee_mac[0]),
                     s_gasbee_mac[1], sizeof(s_gasbee_mac[1]));
 
-    lv_obj_t *gas_title = lv_label_create(tab);
-    lv_label_set_text(gas_title, "Gaswaage (GasBee)");
-    lv_obj_set_style_text_font(gas_title, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(gas_title, lv_color_hex(0x333333), 0);
-    lv_obj_set_pos(gas_title, 0, 196);
+    s_gasbee_title_lbl = make_section_title(tab, 0, 106, MODAL_W - 2 * PAD, STR_SENS_GASBEE_SECTION);
 
-    make_section_sep(tab, 216, MODAL_W - 2 * PAD);
-
-    s_gasbee_scan_btn[0] = make_cfg_row(tab, 228, "Flasche A:", &s_gasbee_lbl[0], "Einrichten", 90,
+    s_gasbee_scan_btn[0] = make_cfg_row(tab, 150, STR_SENS_BOTTLE_A, &s_sens_row_lbl[2],
+                                        &s_gasbee_lbl[0], STR_SENS_SETUP_BTN, 90,
                                         gasbee_scan_btn_cb, gasbee_clear_cb, (void *)0);
-    s_gasbee_scan_btn[1] = make_cfg_row(tab, 258, "Flasche B:", &s_gasbee_lbl[1], "Einrichten", 90,
+    s_gasbee_scan_btn[1] = make_cfg_row(tab, 180, STR_SENS_BOTTLE_B, &s_sens_row_lbl[3],
+                                        &s_gasbee_lbl[1], STR_SENS_SETUP_BTN, 90,
                                         gasbee_scan_btn_cb, gasbee_clear_cb, (void *)1);
 
     /* Status-/Scan-Feedback (gemeinsam für Ruuvi und GasBee) */
@@ -2094,7 +2163,7 @@ static void build_tab_rtc(lv_obj_t *tab)
     lv_label_set_text(s_ruuvi_status_lbl, "");
     lv_obj_set_style_text_font(s_ruuvi_status_lbl, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_ruuvi_status_lbl, lv_color_hex(0x1565C0), 0);
-    lv_obj_set_pos(s_ruuvi_status_lbl, 0, 284);
+    lv_obj_set_pos(s_ruuvi_status_lbl, 0, 212);
     lv_obj_set_width(s_ruuvi_status_lbl, MODAL_W - 2 * PAD);
 
     ruuvi_refresh_labels();
@@ -2138,56 +2207,55 @@ static void build_tab_grenzwerte(lv_obj_t *tab)
                     &s_te.grey_warn,  &s_te.grey_crit,  true,  &s_row_lbl[2]);
 }
 
+/* System-Tab, zwei Spalten: links Töne + Sprache, rechts Zeit / RTC */
+#define SYS_COL_W   290
+#define SYS_COL2_X  (MODAL_W - 2 * PAD - SYS_COL_W)
+
+static lv_obj_t *make_sound_row(lv_obj_t *tab, int y, womo_string_id_t name,
+                                lv_obj_t **name_out, bool on, lv_event_cb_t cb)
+{
+    lv_obj_t *lbl = lv_label_create(tab);
+    lv_label_set_text(lbl, womo_locale_get_string(name));
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14_german, 0);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(0x333333), 0);
+    lv_obj_set_pos(lbl, 0, y + 4);
+    *name_out = lbl;
+
+    lv_obj_t *btn = lv_btn_create(tab);
+    lv_obj_set_size(btn, 64, 30);
+    lv_obj_set_pos(btn, 164, y);
+    lv_obj_set_style_radius(btn, 6, 0);
+    lv_obj_set_style_border_width(btn, 0, 0);
+    lv_obj_set_style_pad_all(btn, 0, 0);
+    lv_obj_t *btn_lbl = lv_label_create(btn);
+    lv_obj_set_style_text_font(btn_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_center(btn_lbl);
+    sound_btn_update(btn, on);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
+    return btn;
+}
+
 static void build_tab_system(lv_obj_t *tab)
 {
     make_tab_base(tab);
 
-    lv_obj_t *title = lv_label_create(tab);
-    lv_label_set_text(title, "Toene / Sounds");
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(title, lv_color_hex(0x333333), 0);
-    lv_obj_set_pos(title, 0, 0);
+    /* Linke Spalte: Töne (y 0) + Sprache (y 134) */
+    s_sound_title_lbl = make_section_title(tab, 0, 0, SYS_COL_W, STR_SOUND_SECTION);
+    s_btn_tones = make_sound_row(tab, 40, STR_SOUND_TONES, &s_tones_lbl,
+                                 display_buzzer_is_enabled(), sound_tones_cb);
+    s_btn_touch = make_sound_row(tab, 86, STR_SOUND_TOUCH_CLICK, &s_touch_lbl,
+                                 display_buzzer_is_click_enabled(), sound_touch_cb);
 
-    make_section_sep(tab, 26, MODAL_W - 2 * PAD);
+    build_lang_section(tab, 0, 134, SYS_COL_W);
 
-    bool buzzer_on   = display_buzzer_is_enabled();
-    bool touch_click = display_buzzer_is_click_enabled();
-
-    lv_obj_t *lbl_tones = lv_label_create(tab);
-    lv_label_set_text(lbl_tones, womo_locale_get_string(STR_SOUND_TONES));
-    lv_obj_set_style_text_font(lbl_tones, &lv_font_montserrat_14_german, 0);
-    lv_obj_set_style_text_color(lbl_tones, lv_color_hex(0x333333), 0);
-    lv_obj_set_pos(lbl_tones, 0, 44);
-
-    s_btn_tones = lv_btn_create(tab);
-    lv_obj_set_size(s_btn_tones, 64, 30);
-    lv_obj_set_pos(s_btn_tones, 164, 40);
-    lv_obj_set_style_radius(s_btn_tones, 6, 0);
-    lv_obj_set_style_border_width(s_btn_tones, 0, 0);
-    lv_obj_set_style_pad_all(s_btn_tones, 0, 0);
-    lv_obj_t *tones_lbl = lv_label_create(s_btn_tones);
-    lv_obj_set_style_text_font(tones_lbl, &lv_font_montserrat_14, 0);
-    lv_obj_center(tones_lbl);
-    sound_btn_update(s_btn_tones, buzzer_on);
-    lv_obj_add_event_cb(s_btn_tones, sound_tones_cb, LV_EVENT_CLICKED, NULL);
-
-    lv_obj_t *lbl_touch = lv_label_create(tab);
-    lv_label_set_text(lbl_touch, womo_locale_get_string(STR_SOUND_TOUCH_CLICK));
-    lv_obj_set_style_text_font(lbl_touch, &lv_font_montserrat_14_german, 0);
-    lv_obj_set_style_text_color(lbl_touch, lv_color_hex(0x333333), 0);
-    lv_obj_set_pos(lbl_touch, 0, 90);
-
-    s_btn_touch = lv_btn_create(tab);
-    lv_obj_set_size(s_btn_touch, 64, 30);
-    lv_obj_set_pos(s_btn_touch, 164, 86);
-    lv_obj_set_style_radius(s_btn_touch, 6, 0);
-    lv_obj_set_style_border_width(s_btn_touch, 0, 0);
-    lv_obj_set_style_pad_all(s_btn_touch, 0, 0);
-    lv_obj_t *touch_lbl = lv_label_create(s_btn_touch);
-    lv_obj_set_style_text_font(touch_lbl, &lv_font_montserrat_14, 0);
-    lv_obj_center(touch_lbl);
-    sound_btn_update(s_btn_touch, touch_click);
-    lv_obj_add_event_cb(s_btn_touch, sound_touch_cb, LV_EVENT_CLICKED, NULL);
+    /* Rechte Spalte: Zeit / RTC */
+    s_time_title_lbl = make_section_title(tab, SYS_COL2_X, 0, SYS_COL_W, STR_TIME_SECTION);
+    s_time_info_lbl = lv_label_create(tab);
+    lv_obj_set_style_text_font(s_time_info_lbl, &lv_font_montserrat_14_german, 0);
+    lv_obj_set_style_text_color(s_time_info_lbl, lv_color_hex(0x444444), 0);
+    lv_obj_set_pos(s_time_info_lbl, SYS_COL2_X, 40);
+    lv_obj_set_width(s_time_info_lbl, SYS_COL_W);
+    system_time_info_refresh();
 }
 
 static void build_tab_ap(lv_obj_t *tab)
@@ -2367,19 +2435,20 @@ void womo_settings_modal_show(lv_obj_t *parent)
     lv_obj_t *tab_bar = lv_tabview_get_tab_bar(tabview);
     lv_obj_set_style_bg_color(tab_bar, lv_color_hex(0xE0E0E0), 0);
     lv_obj_set_style_bg_opa(tab_bar, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_font(tab_bar, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(tab_bar, &lv_font_montserrat_14_german, 0);
 
-    lv_obj_t *tab_lang   = lv_tabview_add_tab(tabview, "Sprache");
-    lv_obj_t *tab_rtc    = lv_tabview_add_tab(tabview, "RTC / Temp / Gas");
-    lv_obj_t *tab_thresh = lv_tabview_add_tab(tabview, "Grenzwerte");
-    lv_obj_t *tab_sys    = lv_tabview_add_tab(tabview, "System");
-    lv_obj_t *tab_ap     = lv_tabview_add_tab(tabview, "AP");
+    /* Reihenfolge = enum TAB_*, erster Tab (AP) ist beim Öffnen aktiv */
+    lv_obj_t *tab_ap     = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_AP));
+    lv_obj_t *tab_sens   = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_SENSORS));
+    lv_obj_t *tab_thresh = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_THRESH));
+    lv_obj_t *tab_sys    = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_SYSTEM));
 
-    build_tab_sprache(tab_lang);
-    build_tab_rtc(tab_rtc);
+    s_tabview = tabview;  /* für Tab-Texte bei Sprachwechsel */
+
+    build_tab_ap(tab_ap);
+    build_tab_sensoren(tab_sens);
     build_tab_grenzwerte(tab_thresh);
     build_tab_system(tab_sys);
-    build_tab_ap(tab_ap);
 
     /* ── QWERTZ-Tastatur auf Overlay (für AP-Passwort) ────── */
     s_ap_keyboard = lv_keyboard_create(s_overlay);
