@@ -17,8 +17,8 @@
 
   <!-- ── SENSORBEE ── -->
   <rect x="612" y="16" width="155" height="68" rx="10" fill="#bfdbfe" stroke="rgba(99,102,241,0.4)" stroke-width="1.5" stroke-dasharray="5,3"/>
-  <text x="689" y="46" text-anchor="middle" fill="#1e3a5f" font-size="13" font-weight="bold">SensorBee</text>
-  <text x="689" y="64" text-anchor="middle" fill="#3b6289" font-size="10">ESP32-C3</text>
+  <text x="689" y="46" text-anchor="middle" fill="#1e3a5f" font-size="13" font-weight="bold">GasBee A/B</text>
+  <text x="689" y="64" text-anchor="middle" fill="#3b6289" font-size="10">nRF52840 · Akku</text>
   <!-- BLE Funkwellen -->
   <path d="M 609,32 A 18,18 0 0,0 609,66" fill="none" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round"/>
   <path d="M 609,37 A 13,13 0 0,0 609,63" fill="none" stroke="#6366f1" stroke-width="1.8" stroke-linecap="round"/>
@@ -35,12 +35,12 @@
   <rect x="51" y="209" width="100" height="23" rx="6" fill="rgba(217,119,6,0.15)" stroke="#d97706" stroke-width="1"/>
   <text x="101" y="225" text-anchor="middle" fill="#b45309" font-size="11" font-weight="600">Buzzer</text>
 
-  <!-- RS485 bidirektional -->
-  <line x1="182" y1="196" x2="285" y2="196" stroke="#d97706" stroke-width="2"/>
+  <!-- ESP-NOW bidirektional (Funk) -->
+  <line x1="182" y1="196" x2="285" y2="196" stroke="#d97706" stroke-width="2" stroke-dasharray="5,4"/>
   <polygon points="281,191 293,196 281,201" fill="#d97706"/>
-  <line x1="285" y1="208" x2="182" y2="208" stroke="#d97706" stroke-width="2"/>
+  <line x1="285" y1="208" x2="182" y2="208" stroke="#d97706" stroke-width="2" stroke-dasharray="5,4"/>
   <polygon points="186,203 174,208 186,213" fill="#d97706"/>
-  <text x="233" y="188" text-anchor="middle" fill="#b45309" font-size="10" font-weight="600">RS485</text>
+  <text x="233" y="188" text-anchor="middle" fill="#b45309" font-size="10" font-weight="600">ESP-NOW</text>
 
   <!-- ── SENSORBOARD ── -->
   <rect x="291" y="118" width="215" height="165" rx="12" fill="#bfdbfe" stroke="rgba(30,58,138,0.2)" stroke-width="1.5"/>

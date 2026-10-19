@@ -34,7 +34,7 @@ import Layout from '../layouts/Layout.astro';
       WoMoHome ist ein selbst entwickeltes Smart-Home-System für Wohnmobile (mit dem Anzeige Panel LT_45X von Schaudt).
     </p>
     <p class="text-lg md:text-xl text-gray-400 max-w-2xl mb-10">
-      Mit Touch-Display, Sensorboard, LTE-Router zur vollständigen Eigenversorgungsüberwachung.
+      Mit Touch-Display, Sensorboard, Funk-Gaswaage GasBee und LTE-Router zur vollständigen Eigenversorgungsüberwachung – drahtlos per ESP-NOW und Bluetooth.
     </p>
     <div class="flex flex-wrap justify-center gap-4">
       <!-- Foto-Thumbnails -->
@@ -92,7 +92,7 @@ import Layout from '../layouts/Layout.astro';
     </div>
     <!-- Schnellübersicht-Badges -->
     <div class="flex flex-wrap justify-center gap-3 mt-14 text-sm text-gray-400">
-      {["🔥 Gas", "💧 Tanks", "🔋 Batterie", "✈️ Künstlicher Horizont", "🌡️ Klima / IAQ", "📡 LTE & GPS", "🖥️ 7\" Touch-Display"].map(f => (
+      {["🔥 Gas", "🐝 GasBee (Funk-Gaswaage)", "💧 Tanks", "🔋 Batterie", "✈️ Künstlicher Horizont", "🌡️ Klima / IAQ", "📡 LTE & GPS", "🖥️ 7\" Touch-Display"].map(f => (
         <span class="bg-gray-800 border border-gray-700 px-3 py-1 rounded-full">{f}</span>
       ))}
     </div>
@@ -118,9 +118,9 @@ import Layout from '../layouts/Layout.astro';
     <div class="max-w-6xl mx-auto">
       <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">Was ist WoMoHome?</h2>
       <p class="text-center text-gray-400 max-w-2xl mx-auto mb-16">
-        Drei Komponenten, die zusammen ein vollständiges Fahrzeugmanagementsystem bilden.
+        Vier Komponenten, die zusammen ein vollständiges Fahrzeugmanagementsystem bilden – verbunden per Funk.
       </p>
-      <div class="grid md:grid-cols-3 gap-8">
+      <div class="grid md:grid-cols-2 gap-8">
         {[
           {
             icon: "🖥️",
@@ -128,15 +128,23 @@ import Layout from '../layouts/Layout.astro';
             chip: "ESP32-S3 · 7\" Touch",
             img: "/ESP32-S3-Touch-LCD-7.png",
             imgStyle: "margin-top:-1rem;margin-right:-1rem",
-            desc: "Visualisiert alle Sensor- und Statusdaten in Echtzeit. Bedienbar per Touch – Steuerbefehle werden per RS485 an das Sensorboard weitergeleitet. On-Board-Buzzer für akustische Alarme. LVGL-basierte Benutzeroberfläche."
+            desc: "Visualisiert alle Sensor- und Statusdaten in Echtzeit. Bedienbar per Touch – Steuerbefehle gehen drahtlos per ESP-NOW an das Sensorboard. On-Board-Buzzer für akustische Alarme. LVGL-basierte Benutzeroberfläche, Deutsch und Englisch."
           },
           {
             icon: "🔧",
             title: "Sensorboard",
-            chip: "ESP32-S3 · RS485",
+            chip: "ESP32-S3 · ESP-NOW · BLE",
             img: "/Sensor-Board.png",
             imgStyle: "margin-top:-1rem;margin-right:-1rem",
-            desc: "Erfasst Batterien, Tanks, Gas, Temperatur/Luftdruck/IAQ (BME680 und BME280), Inklination (BNO055) und Wägezellen (HX711). Schaltet Bordnetz und Multimedia direkt. Kommuniziert per RS485 mit dem Display-Board."
+            desc: "Erfasst Batterien, Tanks, Gas, Temperatur/Luftdruck/IAQ (BME680 und BME280), Inklination (BNO055), Wägezellen (HX711) sowie den Eigenverbrauch der Elektronik (INA226). Empfängt per Bluetooth GasBee-Waagen und RuuviTags. Schaltet das Bordnetz direkt. Funkt per ESP-NOW zum Display – ohne Kabel und ohne Router."
+          },
+          {
+            icon: "🐝",
+            title: "GasBee",
+            chip: "nRF52840 · BLE · Akku",
+            img: null,
+            imgStyle: "",
+            desc: "Kabellose Gaswaage für bis zu zwei Flaschen (A/B): Seeed XIAO nRF52840 mit HX711 und Wägezelle, LiPo-Akku, Laden per USB-C. Sendet Gewicht, Akku und Status per Bluetooth-Advertising – ohne Verbindungsaufbau, Ruhestrom nur 6,7 µA. Einrichten und Kalibrieren per Assistent am Display. Eigene Platine in Entwicklung."
           },
           {
             icon: "📡",
@@ -176,14 +184,16 @@ import Layout from '../layouts/Layout.astro';
       <p class="text-center text-gray-400 max-w-xl mx-auto mb-16">Alles was ein Reisemobilist(in) braucht – in einem System.</p>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {[
-          { icon: "🔥", title: "Gasverbrauch",          desc: "Zwei Gasflaschen per Wägezelle. Füllstand 0–100 %, Verbrauchsrate, Restlaufzeit. Das Display wechselt die Anzeige automatisch auf die aktive Flasche. Einstellbare Alarmschwellen.",                                                link: null },
+          { icon: "🔥", title: "Gasverbrauch",          desc: "Zwei Gasflaschen per Wägezelle – am Kabel (HX711 am Sensorboard) oder kabellos per GasBee; das Kabel hat Vorrang. Füllstand 0–100 %, Verbrauchsrate, Restlaufzeit, auch über Zeiten gemittelt, in denen das System aus war. Das Display wechselt automatisch auf die aktive Flasche. Einstellbare Alarmschwellen.", link: null },
           { icon: "💧", title: "Tank-Überwachung",     desc: "Frisch- und Grauwasser kapazitiv per Votronic-Sensor, Anzeige 0–100 %. Einstellbare Alarmschwellen.",                                                                              link: null },
-          { icon: "🔋", title: "Batteriemonitor",      desc: "Bordnetz- und Aufbaubatterie in Volt – kontinuierlich überwacht. Alarmschwellen fest vorgegeben.",                                                                                   link: null },
+          { icon: "🔋", title: "Batteriemonitor",      desc: "Bordnetz- und Aufbaubatterie in Volt – kontinuierlich überwacht. Alarmschwellen fest vorgegeben.", link: null },
+          { icon: "⚡", title: "Eigenverbrauch",       desc: "Spannung, Strom und Leistung (V / mA / W) der Sensor-/Display-Einheit per INA226 – Anzeige im Elec-Widget am Display.", link: null },
           { icon: "✈️", title: "Künstlicher Horizont", desc: "Der Sensorboard-Webserver stellt die Anzeige als Webseite bereit – abrufbar von jedem Handy, Tablet oder Autoradio im WLAN.",          link: "/horizont" },
-          { icon: "🌡️", title: "Klima & Luftqualität", desc: "Innen + Außen: Temperatur, Luftfeuchte, Druck. Innen zusätzlich Luftqualität (IAQ, eCO₂, bVOC). Einstellbare Alarmschwellen.",                                                    link: null },
-          { icon: "📡", title: "LTE & GPS",             desc: "Echtzeit-Signalstärke, Provider, GPS-Position – direkt vom RUTX11 Router.",                                                                                                          link: null },
+          { icon: "🌡️", title: "Klima & Luftqualität", desc: "Innen + Außen: Temperatur, Luftfeuchte, Druck. Außen wahlweise per Kabel (BME280) oder kabellos per RuuviTag. Innen zusätzlich Luftqualität (IAQ, eCO₂, bVOC). Einstellbare Alarmschwellen.", link: null },
+          { icon: "📡", title: "LTE & GPS",             desc: "Echtzeit-Signalstärke, Provider, GPS-Position und Restvolumen des Datenpasses – direkt vom RUTX11 Router.", link: null },
           { icon: "🖥️", title: "7\" Touch-Display",    desc: "800×480 px IPS-Panel mit GT911 kapazitivem Touch – vollständig per Finger bedienbar.",                                                                                               link: null },
-          { icon: "🌐", title: "WLAN-Management",       desc: "Hotspot, gespeicherte Netzwerke, SSID-Scan, Passwort-Eingabe per QWERTZ-Tastatur. WLAN und LTE per Touch abschaltbar.",                                                          link: null },
+          { icon: "🌐", title: "WLAN-Management",       desc: "Hotspot, gespeicherte Netzwerke, SSID-Scan über 2,4 und 5 GHz, Passwort-Eingabe per QWERTZ-Tastatur. WLAN und LTE per Touch abschaltbar.", link: null },
+          { icon: "⚙️", title: "Einstellungen",        desc: "Übersichtlich in vier Tabs: AP (WLAN-Zugangspunkt), Sensoren (RuuviTag und GasBee per Scan zuordnen, GasBee-Assistent per USB mit Kalibrierung über Nullpunkt und Referenzgewicht), Grenzwerte (Alarmschwellen) und System (Töne, Sprache DE/EN, Zeit/RTC).", link: null },
           { icon: "🔌", title: "Bordnetz-Steuerung",    desc: "12V-Bordnetz und Multimedia per Touch oder Automatik ein-/ausschalten.",                                                                                                             link: null },
         ].map(f => (
           <a href={f.link ?? undefined}
@@ -222,12 +232,16 @@ import Layout from '../layouts/Layout.astro';
               { comp: "Sensorboard",  desc: "Heemol ESP32-S3-DevKitC-1 (N16R8)",            indent: false },
               { comp: "├ Horizont",   desc: "BNO055 (I²C, Pitch/Roll/Heading)",              indent: true  },
               { comp: "├ Klima inn.", desc: "BME680 (Temperatur / Feuchte / IAQ / BSEC)",     indent: true  },
-              { comp: "├ Klima auß.", desc: "BME280 (Temperatur / Feuchte / Druck)",           indent: true  },
-              { comp: "├ Gas",        desc: "2× Wägezelle + HX711 ADC",                      indent: true  },
+              { comp: "├ Klima auß.", desc: "BME280 (Temperatur / Feuchte / Druck) oder RuuviTag (BLE)", indent: true  },
+              { comp: "├ Eigenverbr.", desc: "INA226 (Strom / Leistung der Sensor-/Display-Einheit, I²C)", indent: true  },
+              { comp: "├ Gas",        desc: "2× Wägezelle + HX711 ADC (am Kabel)",           indent: true  },
               { comp: "├ Tanks",      desc: "2× Votronic kapazitive Sensoren",               indent: true  },
               { comp: "├ Schaltausg.",desc: "2× 12V-Ausgang (Bordnetz, Multimedia), per Display steuerbar", indent: true  },
               { comp: "├ Display-Strom", desc: "MOSFET schaltet Display-Versorgung ein/aus",           indent: true  },
               { comp: "└ Zeit",       desc: "RTC (Echtzeituhr, I²C)",                         indent: true  },
+              { comp: "GasBee",       desc: "Seeed XIAO nRF52840 (kabellose Gaswaage, bis zu 2×)", indent: false },
+              { comp: "├ Waage",      desc: "Wägezelle + HX711 ADC",                         indent: true  },
+              { comp: "└ Akku",       desc: "LiPo 1S 3,7 V / 1000 mAh, Laden per USB-C",     indent: true  },
               { comp: "Router",       desc: "Teltonika RUTX11 (LTE / WLAN / GNSS)",          indent: false },
               { comp: "└ Relais",     desc: "2× Kfz-Relais mit Freilaufdiode",               indent: true  },
             ].map(({ comp, desc, indent }) => (
@@ -241,8 +255,8 @@ import Layout from '../layouts/Layout.astro';
         <!-- Ressourcen -->
         <div class="space-y-6">
           <div class="bg-gray-800 border border-gray-700 rounded-xl p-6">
-            <h3 class="font-bold mb-2">💻 Firmware (ESP-IDF)</h3>
-            <p class="text-gray-400 text-sm mb-4">Die Firmware für Sensorboard und Display ist vollständig in C mit ESP-IDF 5.x entwickelt. Das Sensorboard-Hardware-Design entstand in KiCad.</p>
+            <h3 class="font-bold mb-2">💻 Firmware (ESP-IDF / Zephyr)</h3>
+            <p class="text-gray-400 text-sm mb-4">Die Firmware für Sensorboard und Display ist vollständig in C mit ESP-IDF 5.x entwickelt, die GasBee mit dem nRF Connect SDK (Zephyr). Das Sensorboard-Hardware-Design entstand in KiCad.</p>
             <a href="https://github.com/Sharki-66/womo-home-esp32" target="_blank" rel="noopener" class="text-amber-400 text-sm hover:underline">→ GitHub: Sharki-66/womo-home-esp32</a>
           </div>
           <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-amber-400/60 transition">
@@ -313,7 +327,7 @@ import Layout from '../layouts/Layout.astro';
       <div class="grid sm:grid-cols-3 gap-6">
         {[
           { title: "Sensorboard",    price: "150 €", desc: "Fertig aufgebaut und getestet. Inkl. Firmware.",                      available: true  },
-          { title: "SensorBee",      price: "50 €",  desc: "BLE-Gaswaage für bestehende Wägezellen-Setups.",                      available: false },
+          { title: "GasBee",         price: "Selbstbau", desc: "Kabellose BLE-Gaswaage mit Akku. Aktuell als Selbstbau (Quellen auf GitHub) – eigene Platine in Entwicklung.", available: false, badge: "Platine in Entwicklung", href: "https://github.com/Sharki-66/womo-home-esp32" },
           { title: "Waageplattform", price: "70 €",  desc: "1 Wägemodul inkl. Wägezellen und Platte (pro Gasflasche).",           available: true  },
         ].map(p => (
           <div class="rounded-2xl p-6 flex flex-col gap-3" style={`background:var(--c-bg-surface);border:1px solid var(--c-border);opacity:${p.available ? '1' : '0.7'}`}>
@@ -323,7 +337,7 @@ import Layout from '../layouts/Layout.astro';
                 <span class="text-amber-400 font-semibold text-sm">{p.price}</span>
               </div>
               {!p.available && (
-                <span class="text-xs bg-gray-700 text-gray-400 border border-gray-600 px-2 py-1 rounded-full shrink-0">demnächst</span>
+                <span class="text-xs bg-gray-700 text-gray-400 border border-gray-600 px-2 py-1 rounded-full shrink-0">{p.badge ?? 'demnächst'}</span>
               )}
             </div>
             <p class="text-gray-400 text-sm leading-relaxed flex-1">{p.desc}</p>
@@ -331,6 +345,11 @@ import Layout from '../layouts/Layout.astro';
               <a href="#kontakt"
                  class="mt-2 text-center bg-amber-400 text-gray-950 text-sm font-bold py-2 rounded-lg hover:bg-amber-300 transition">
                 Anfrage
+              </a>
+            ) : p.href ? (
+              <a href={p.href} target="_blank" rel="noopener"
+                 class="mt-2 text-center bg-amber-400/10 border border-amber-400/30 text-amber-400 text-sm font-semibold py-2 rounded-lg hover:bg-amber-400/20 transition">
+                → Quellen auf GitHub
               </a>
             ) : (
               <span class="mt-2 text-center bg-gray-700/50 text-gray-500 text-sm font-semibold py-2 rounded-lg cursor-not-allowed">
@@ -360,7 +379,7 @@ import Layout from '../layouts/Layout.astro';
           },
           {
             q: "Funktioniert das System ohne Internetverbindung?",
-            a: "Ja. Sensorboard und Display kommunizieren per RS485 vollständig offline. LTE und GPS sind optional."
+            a: "Ja. Sensorboard und Display funken direkt per ESP-NOW miteinander – ohne Kabel, ohne Router, ohne Internet. GasBee und RuuviTags senden per Bluetooth an das Sensorboard. LTE und GPS sind optional."
           },
           {
             q: "Was kostet das Komplettsystem fertig aufgebaut?",
@@ -373,7 +392,7 @@ import Layout from '../layouts/Layout.astro';
           },
           {
             q: "Wird das Projekt weiterentwickelt?",
-            a: "Ja. Aktuell laufende Projekte: Web-Konfiguration über das Sensorboard (Standalone, ohne Router), SensorBee (Platine zum Anschluss beliebiger Sensoren mit Bluetooth-Übertragung)."
+            a: "Ja. Aktuell laufende Projekte: eigene Platine für die GasBee sowie Kalibrierung von Batterie- und Tankmessung über die Oberfläche statt fester Werte."
           }
         ].map(item => (
           <details class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden group">
@@ -417,7 +436,7 @@ import Layout from '../layouts/Layout.astro';
           <label class="block text-sm font-semibold mb-2">Interesse</label>
           <select name="interest" class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-gray-100 focus:outline-none focus:border-amber-400 transition">
             <option value="sensorboard">Sensorboard (150 €)</option>
-            <option value="sensorbee">SensorBee (demnächst)</option>
+            <option value="gasbee">GasBee (Selbstbau / Platine)</option>
             <option value="waage">Waageplattform (demnächst)</option>
             <option value="komplett">Komplettsystem</option>
             <option value="frage" selected>Allgemeine Frage</option>

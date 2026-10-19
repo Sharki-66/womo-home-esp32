@@ -69,7 +69,7 @@ Build, Flash und Monitor werden vom Nutzer über VS Code Tasks gestartet — Cla
 
 - **Fahrzeug:** Fiat Ducato
 - **Stromversorgung:** 12V Bordnetz (Blei-Säure / LiFePO4)
-- **Shunt-Messung:** INA226 in der Hauptleitung (I2C 0x40)
+- **Eigenverbrauch:** INA226 misst Strom/Leistung der Sensorboard-/Display-Einheit (I2C 0x40), nicht die Batterien
 - **Netzwerk:** Teltonika RUTX11 (OpenWRT), Dachantenne 2×WLAN + 2×LTE + GNSS
 
 ## Sprache & Stil

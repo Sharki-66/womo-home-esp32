@@ -12,7 +12,7 @@ ESP-IDF v5.5.2 · ESP32-S3-WROOM-1 (N16R8)
 | **Klima außen** | BME280 oder BME260 – Temp, Feuchte, Druck, Trend (1h/3h) | I2C 0x77 |
 | **Gasfüllstand** | HX711 – 2× Wägezelle (Kanal A + B) | DOUT=GPIO47, SCK=GPIO45 |
 | **GasBee** | BLE-Gaswaage (`firmware/gasbee_nrf`), bis zu 2× (Flasche A/B) – passiver Scan, Advertising-Format v1, nur wenn kein HX711-Modul am Kabel | BLE |
-| **INA226** | Strom-/Leistungsmessung Hauptleitung (Vbus 0–36V, ±81,92mV Shunt) | I2C 0x40 |
+| **INA226** | Strom-/Leistungsmessung Eigenverbrauch Sensorboard-/Display-Einheit (Vbus 0–36V, ±81,92mV Shunt) | I2C 0x40 |
 | **Batterien** | 2× ADC mit Spannungsteiler | Kfz=GPIO4, Board=GPIO5 |
 | **Tanks** | 2× Votronic kapazitiv (0–1V) | Frisch=GPIO1 (100L), Grau=GPIO2 (92L) |
 | **RTC** | PCF8523 – Echtzeituhr | I2C 0x68 |
@@ -160,7 +160,7 @@ main/
 │   ├── bno055_sensor       IMU + Kalibrierung
 │   ├── hx711_sensor        Wägezellen (Gas, Kabel)
 │   ├── gas_source          Quellenwahl Gasgewicht: HX711 (Vorrang) oder GasBee
-│   └── ina226_sensor       INA226 Strom-/Leistungsmessung Hauptleitung
+│   └── ina226_sensor       INA226 Strom-/Leistungsmessung Eigenverbrauch
 ├── network/
 │   ├── rs485_modem         JSON-Serialisierung aller Topics, Steuerlogik
 │   ├── womo_rs485          UART-Transport, Framing, ACK
