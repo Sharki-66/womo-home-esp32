@@ -419,7 +419,7 @@ import Layout from '../layouts/Layout.astro';
         Interesse an einem Eigenprodukt oder allgemeine Fragen? Schreib mir – ich melde mich persönlich.
       </p>
       <form
-        action="mailto:info@womohome.de"
+        action="mailto:WoMoHome@gmx.de"
         method="get"
         class="bg-gray-900 border border-gray-700 rounded-2xl p-8 text-left space-y-5"
       >
@@ -464,8 +464,21 @@ import Layout from '../layouts/Layout.astro';
     </p>
     <p class="mb-2">© {new Date().getFullYear()} Hajo Harms · Alle Rechte vorbehalten</p>
     <p>
-      <a href="/impressum" class="hover:text-amber-400 transition">Impressum</a>
+      <a href="/impressum" class="hover:text-amber-400 transition">Impressum</a> ·
+      <a href="/datenschutz" class="hover:text-amber-400 transition">Datenschutz</a>
     </p>
+    <p id="visits" class="mt-2 text-xs text-gray-600"></p>
+    <script is:inline>
+      // Seitenaufrufzähler (netlify/functions/counter.mjs); bei Fehler bleibt die Zeile leer
+      fetch('/api/counter', { method: 'POST' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (d && typeof d.count === 'number') {
+            document.getElementById('visits').textContent = d.count.toLocaleString('de-DE') + ' Seitenaufrufe';
+          }
+        })
+        .catch(function () {});
+    </script>
   </footer>
 
   <!-- Lightbox -->
