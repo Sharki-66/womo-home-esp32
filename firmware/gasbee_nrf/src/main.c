@@ -8,20 +8,23 @@
  * main.c – GasBee nRF Hauptprogramm
  *
  * Seeed XIAO nRF52840: HX711 Einzelkanal + Akku → BLE Advertising (Format v1)
- * GATT bleibt zur Kompatibilität mit dem bisherigen Sensorboard erhalten.
+ * GATT für Kalibrierung (nur im Konfigurationsmodus) und andere Clients.
  *
  * Ablauf:
  *  1. Settings (NVS) laden: offset / scale / tare
  *  2. BLE init, Advertising-Set anlegen
- *  3. Alle CONFIG_GASBEE_MEASURE_INTERVAL_S:
+ *  3. Akkubetrieb: alle CONFIG_GASBEE_MEASURE_INTERVAL_S
  *     HX711 aufwecken → messen → Power-Down, Akku + Ladestatus lesen,
  *     Advertising-Burst (10 Pakete à 1 s), GATT-Notify falls verbunden.
  *     Fehlt der HX711, wird trotzdem gesendet (Gewicht ungültig, Flag Bit 0 = 0).
+ *     Konfigurationsmodus (USB/VBUS): Messung alle 5 s, Dauersenden, Kalibrierung
+ *     per GATT 0x2B11–0x2B13 freigegeben. USB ab → zurück in den Akkubetrieb.
  *  4. Tare-Befehl über GATT: wirkt nur auf die GATT-Werte, das Advertising
  *     überträgt immer das Bruttogewicht.
  */
 
 #include <math.h>
+#include <stdlib.h>
 #include <limits.h>
 
 #include <zephyr/kernel.h>
@@ -45,14 +48,27 @@ static int32_t s_offset = GASBEE_HX711_OFFSET;
 static float   s_scale  = GASBEE_HX711_SCALE;
 static float   s_tare   = 0.0f;   // Tara: Bruttogewicht der leeren Waage (nur GATT)
 
-// Kalibrierung aus NVS geladen (beide Werte) → Advertising-Flag "kalibriert",
-// ebenso bei GASBEE_HX711_CAL_MEASURED (gemessene Defaults)
+// Kalibrierung aus NVS geladen bzw. per GATT gespeichert (beide Werte)
+// → Advertising-Flag "kalibriert"
 static bool s_offset_from_nvs;
 static bool s_scale_from_nvs;
 
 static bool s_hx_ready;
 
+// Konfigurationsmodus = USB-Spannung (VBUS) liegt an
+static bool s_config_mode;
+
 static atomic_t s_tare_request;
+
+// Kalibrier-Befehle aus BLE (BT-Kontext → dort nur übernehmen)
+static atomic_t s_cal_zero_request;
+static atomic_t s_cal_ref_grams;     // 0 = keine Anforderung
+static atomic_t s_cal_set_request;
+static int32_t  s_cal_set_offset;
+static float    s_cal_set_scale;
+
+// Weckt die Mess-Schleife für eine sofortige Messung (Tare, Kalibrierung)
+static K_SEM_DEFINE(s_wake, 0, 1);
 
 #define ZEPHYR_USER DT_PATH(zephyr_user)
 
@@ -119,16 +135,84 @@ static void cal_save_tare(void)
 	}
 }
 
-// ── Tare-Befehl (aus BLE) ────────────────────────────────────────────────────
-// Läuft im BT-Kontext → nur Flag setzen, Übernahme in der Mess-Schleife
+static void cal_save_offset(void)
+{
+	int err = settings_save_one(GASBEE_SETTINGS_SUBTREE "/" GASBEE_SETTINGS_KEY_OFFSET,
+				    &s_offset, sizeof(s_offset));
+	if (err) {
+		LOG_ERR("Offset speichern fehlgeschlagen err=%d", err);
+		return;
+	}
+	s_offset_from_nvs = true;
+}
+
+static void cal_save_scale(void)
+{
+	int err = settings_save_one(GASBEE_SETTINGS_SUBTREE "/" GASBEE_SETTINGS_KEY_SCALE,
+				    &s_scale, sizeof(s_scale));
+	if (err) {
+		LOG_ERR("Scale speichern fehlgeschlagen err=%d", err);
+		return;
+	}
+	s_scale_from_nvs = true;
+}
+
+// Kalibrierung aus NVS löschen → Startwerte aus gasbee_config.h, Flag "kalibriert" aus
+static void cal_delete(void)
+{
+	settings_delete(GASBEE_SETTINGS_SUBTREE "/" GASBEE_SETTINGS_KEY_OFFSET);
+	settings_delete(GASBEE_SETTINGS_SUBTREE "/" GASBEE_SETTINGS_KEY_SCALE);
+	s_offset = GASBEE_HX711_OFFSET;
+	s_scale  = GASBEE_HX711_SCALE;
+	s_offset_from_nvs = false;
+	s_scale_from_nvs  = false;
+	LOG_INF("Kalibrierung gelöscht, Startwerte aktiv");
+}
+
+// ── Befehle aus BLE ──────────────────────────────────────────────────────────
+// Laufen im BT-Kontext → nur übernehmen und die Mess-Schleife wecken
 static void on_ble_tare(void)
 {
 	atomic_set(&s_tare_request, 1);
+	k_sem_give(&s_wake);
 	LOG_INF("Tare angefordert: nächste Messung wird als Tara übernommen");
 }
 
+static void on_cal_zero(void)
+{
+	atomic_set(&s_cal_zero_request, 1);
+	k_sem_give(&s_wake);
+}
+
+static void on_cal_reference(uint32_t grams)
+{
+	atomic_set(&s_cal_ref_grams, (atomic_val_t)grams);
+	k_sem_give(&s_wake);
+}
+
+static void on_cal_set(int32_t offset, float scale)
+{
+	s_cal_set_offset = offset;
+	s_cal_set_scale  = scale;
+	atomic_set(&s_cal_set_request, 1);
+	k_sem_give(&s_wake);
+}
+
+static void on_cal_get(int32_t *offset, float *scale)
+{
+	*offset = s_offset;
+	*scale  = s_scale;
+}
+
+static const ble_gas_cal_ops_t s_cal_ops = {
+	.zero      = on_cal_zero,
+	.reference = on_cal_reference,
+	.set       = on_cal_set,
+	.get       = on_cal_get,
+};
+
 // ── HX711 Messung ─────────────────────────────────────────────────────────────
-static bool measure_gross(float *gross_kg_out)
+static bool measure_gross(float *gross_kg_out, int32_t *raw_out)
 {
 	int32_t raw = 0;
 	int64_t sum = 0;
@@ -170,6 +254,7 @@ static bool measure_gross(float *gross_kg_out)
 		avg_raw, min_raw, max_raw, s_offset, avg_raw - s_offset);
 
 	*gross_kg_out = ((float)avg_raw - (float)s_offset) * s_scale;
+	*raw_out      = avg_raw;
 	return true;
 }
 
@@ -223,13 +308,83 @@ static void hx711_sleep(void)
 	}
 }
 
+// ── Kalibrier-Befehle ausführen (Mess-Schleife) ──────────────────────────────
+// Direkt gesetzte Werte (0x2B13) brauchen keine Messung.
+static bool cal_apply_set_request(void)
+{
+	if (!atomic_cas(&s_cal_set_request, 1, 0)) {
+		return false;
+	}
+	if (s_cal_set_scale == 0.0f) {
+		cal_delete();
+		return true;
+	}
+	s_offset = s_cal_set_offset;
+	s_scale  = s_cal_set_scale;
+	cal_save_offset();
+	cal_save_scale();
+	LOG_INF("Kalibrierung gespeichert: offset=%d scale=%.10f", s_offset, (double)s_scale);
+	return true;
+}
+
+// Nullpunkt (0x2B11) und Referenzgewicht (0x2B12) brauchen den aktuellen Rohwert.
+static bool cal_handle_measured(int32_t raw)
+{
+	bool done = false;
+
+	if (atomic_cas(&s_cal_zero_request, 1, 0)) {
+		s_offset = raw;
+		cal_save_offset();
+		LOG_INF("Kalibrierung: Nullpunkt gespeichert, offset=%d", s_offset);
+		done = true;
+	}
+
+	uint32_t grams = (uint32_t)atomic_set(&s_cal_ref_grams, 0);
+	if (grams) {
+		int32_t delta = raw - s_offset;
+		if (abs(delta) < GASBEE_CAL_MIN_DELTA_RAW) {
+			LOG_ERR("Kalibrierung: kein Gewicht erkennbar (delta=%d), Scale unverändert", delta);
+		} else {
+			// Negatives Scale ist erlaubt (Wägezelle andersherum angeschlossen)
+			s_scale = ((float)grams / 1000.0f) / (float)delta;
+			cal_save_scale();
+			LOG_INF("Kalibrierung: %u g bei delta=%d → scale=%.10f gespeichert",
+				grams, delta, (double)s_scale);
+			done = true;
+		}
+	}
+	return done;
+}
+
+static void cal_drop_measured(void)
+{
+	bool zero = atomic_cas(&s_cal_zero_request, 1, 0);
+	bool ref  = atomic_set(&s_cal_ref_grams, 0) != 0;
+
+	if (zero || ref) {
+		LOG_ERR("Kalibrierung verworfen: HX711 liefert keinen Messwert");
+	}
+}
+
 // ── Ein Messzyklus ────────────────────────────────────────────────────────────
 static void measure_cycle(void)
 {
-	float gross_kg = 0.0f;
-	bool  hx_ok = hx711_wake() && measure_gross(&gross_kg);
+	float   gross_kg = 0.0f;
+	int32_t raw = 0;
+	bool    cal_done = cal_apply_set_request();
+	bool    hx_ok = hx711_wake() && measure_gross(&gross_kg, &raw);
 
 	hx711_sleep();
+
+	if (hx_ok) {
+		if (cal_handle_measured(raw)) {
+			cal_done = true;
+		}
+		// nach einer Kalibrierung mit den neuen Werten rechnen
+		gross_kg = ((float)raw - (float)s_offset) * s_scale;
+	} else {
+		cal_drop_measured();
+	}
 
 	uint16_t bat_mv = GASBEE_ADV_BAT_INVALID;
 	int err = battery_read_mv(&bat_mv);
@@ -267,7 +422,10 @@ static void measure_cycle(void)
 	if (charging) {
 		flags |= GASBEE_ADV_FLAG_CHARGING;
 	}
-	if (GASBEE_HX711_CAL_MEASURED || (s_offset_from_nvs && s_scale_from_nvs)) {
+	if (s_config_mode) {
+		flags |= GASBEE_ADV_FLAG_CONFIG_MODE;
+	}
+	if (s_offset_from_nvs && s_scale_from_nvs) {
 		flags |= GASBEE_ADV_FLAG_CALIBRATED;
 	}
 
@@ -280,7 +438,7 @@ static void measure_cycle(void)
 	ble_gas_adv_publish(weight_10g, bat_mv, flags);
 
 	status_led_hx711_ok(hx_ok);
-	if (tared) {
+	if (tared || cal_done) {
 		status_led_flash_tare();
 	} else if (hx_ok) {
 		status_led_flash_measure();
@@ -320,17 +478,48 @@ int main(void)
 		LOG_ERR("BLE nicht verfügbar – nur lokale Messung");
 	}
 	ble_gas_set_tare_callback(on_ble_tare);
+	ble_gas_set_cal_ops(&s_cal_ops);
 
 	k_msleep(GASBEE_HX711_STARTUP_MS);
 
-	// Feste Taktung: Intervall zählt ab Zyklusbeginn, nicht ab Zyklusende
+	// Feste Taktung: Intervall zählt ab Zyklusbeginn, nicht ab Zyklusende.
+	// Alle GASBEE_USB_POLL_MS wird VBUS abgefragt: USB an → Konfigurationsmodus
+	// (Dauersenden, 5-s-Takt, Kalibrierung frei), USB ab → Akkubetrieb.
+	// Ein Befehl über BLE (Tare, Kalibrierung) löst sofort eine Zusatzmessung
+	// aus, der Takt bleibt dabei erhalten.
 	int64_t next_ms = k_uptime_get();
 
 	while (1) {
-		measure_cycle();
+		int64_t now = k_uptime_get();
 
-		next_ms += (int64_t)CONFIG_GASBEE_MEASURE_INTERVAL_S * MSEC_PER_SEC;
-		k_sleep(K_TIMEOUT_ABS_MS(next_ms));
+		bool usb = battery_usb_present();
+		if (usb != s_config_mode) {
+			s_config_mode = usb;
+			LOG_INF("USB %s → %s", usb ? "an" : "ab",
+				usb ? "Konfigurationsmodus" : "Akkubetrieb");
+			ble_gas_set_config_mode(usb);
+			next_ms = now;   // sofort messen, dann im neuen Takt
+		}
+
+		if (now >= next_ms) {
+			int64_t interval_ms = s_config_mode
+				? (int64_t)GASBEE_CONFIG_MEASURE_MS
+				: (int64_t)CONFIG_GASBEE_MEASURE_INTERVAL_S * MSEC_PER_SEC;
+
+			measure_cycle();
+			next_ms += interval_ms;
+			if (next_ms <= now) {
+				next_ms = now + interval_ms;   // keine verpassten Zyklen nachholen
+			}
+		}
+
+		// Bis zur nächsten Messung warten, spätestens bis zur nächsten VBUS-Abfrage
+		int64_t wake_ms = MIN(next_ms, k_uptime_get() + GASBEE_USB_POLL_MS);
+
+		if (k_sem_take(&s_wake, K_TIMEOUT_ABS_MS(wake_ms)) == 0) {
+			LOG_INF("Befehl über BLE → sofort messen");
+			measure_cycle();
+		}
 	}
 	return 0;
 }

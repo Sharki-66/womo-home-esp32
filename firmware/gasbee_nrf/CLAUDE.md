@@ -30,19 +30,26 @@ GATT (nur für andere Clients wie Handy-Apps und für den Tare-Befehl, nicht fü
 - **Akkumessung:** Zephyr-Treiber `voltage-divider` (Knoten `vbatt`, AIN7, 1 MΩ/510 kΩ laut Seeed-Schaltplan) **ohne** `power-gpios`. P0.14 wird per `gpio-hog` fest auf Low gesetzt. Mit `power-gpios` würde der Treiber P0.14 beim Init kurz und im PM-Suspend dauerhaft auf High setzen, und genau davor warnt Seeed (P0.31 kann dann über 3,6 V kommen). Gemessen wird im Messzyklus in `main.c`.
 - **Messzyklus und Funk:** Intervall `CONFIG_GASBEE_MEASURE_INTERVAL_S` (300 s, `debug.conf` 60 s), feste Taktung ab Zyklusbeginn. Der Burst läuft über `bt_le_ext_adv_start()` mit `num_events = 10` (`CONFIG_BT_EXT_ADV`, Legacy-PDU, verbindbar). Bei bestehender Verbindung gibt es keinen Burst (`CONFIG_BT_MAX_CONN=1`). Der HX711 geht zwischen den Zyklen in den Power-Down, nach dem Aufwachen werden 4 Wandlungen verworfen.
 - **Advertising-Gewicht = Brutto ohne Tara.** Tara und Gas rechnet das Sensorboard. Die GasBee-Tara (`gasbee/tare`) wirkt nur auf GATT 0x2B01..0x2B03.
-- **Flag Bit 2 „kalibriert"** = Waage für diese Hardware kalibriert, also Offset und Scale aus NVS oder `GASBEE_HX711_CAL_MEASURED = 1` in `gasbee_config.h`. Das Sensorboard zeigt einen GasBee mit Bit 2 = 0 als „nc". Für einen neuen XIAO die Konstante auf 0 setzen, bis gemessen ist.
+- **Kalibrierung pro Gerät in NVS** (alle GasBees haben dasselbe Image): Kalibriert wird per GATT, 0x2B11 Nullpunkt, 0x2B12 Referenzgewicht in g, 0x2B13 Werte lesen/setzen (Scale 0 = löschen). Die Write-Callbacks prüfen nur das Format, gemessen und gespeichert wird in der Mess-Schleife, die per `k_sem` sofort geweckt wird. `gasbee_config.h` enthält nur Startwerte (von GasBee 1).
+- **Flag Bit 2 „kalibriert"** = Offset und Scale aus NVS. Das Sensorboard zeigt einen GasBee mit Bit 2 = 0 als „nc".
+- **Konfigurationsmodus = USB-Spannung (VBUS) liegt an:**
+  - Erkannt wird über `nrf_power_usbregstatus_vbusdet_get()`, Abfrage alle 2 s in der Hauptschleife. Die USB-Ereignisse des Stacks werden nicht genutzt, weil das Board CDC-ACM selbst initialisiert und dafür keinen Callback bietet.
+  - Im Modus: Dauersenden, Messung alle 5 s, Flag Bit 3, Kalibrier-Writes erlaubt. Ohne USB liefern sie `WRITE_NOT_PERMITTED`.
+  - USB ab: Advertising stoppen, Verbindungen trennen, Burst-Modus.
+  - Bedienung für Nutzer: am Display, das Sensorboard ist der GATT-Client. Das liegt im anderen Arbeitsbereich.
 - **Stromsparen:**
   - `&uart0` ist deaktiviert. Der UARTE-Treiber startet sonst den Empfang beim Init und hält den HF-Takt an (`uart_nrfx_uarte.c`).
   - Der QSPI-Flash geht beim Start per `pm_device_action_run(SUSPEND)` in Deep Power-Down. Das geht nur mit `CONFIG_PM_DEVICE`, siehe `nrf_qspi_nor.c`.
   - P1.08 (IMU) und P1.10 (Mikrofon) sind per `gpio-hog` Low, weil wir für `xiao_ble` statt für die Sense-Variante bauen.
-  - Gemessen ist der Strom noch nicht.
+  - **USB-Stack, USB-Konsole und Log sind im Normalbetrieb aus** (`prj.conf`: `CONFIG_BOARD_SERIAL_BACKEND_CDC_ACM=n` u. a.). Gemessen am 2026-10-19: Ruhestrom 6,7 µA statt ca. 1,9 mA mit USB-CDC und Log. Der Testmodus (`debug.conf`) schaltet sie wieder ein. Eine Alternative wäre, den USB-Stack nur bei VBUS selbst zu starten. Das ist nicht umgesetzt.
 - **Ladestrom 100 mA:** P0.13 per `gpio-hog` `output-low` (Schaltplan: R12 2,7 kΩ von ISET nach P0.13 parallel zu R18 2,7 kΩ nach GND). P0.13 nie High setzen. Für Akkus unter 100 mAh den Hog entfernen, dann sind es 50 mA.
 - **Ladestatus:** P0.17 (`~CHG`) über `zephyr,user chg-gpios` mit Pull-Up. `&pwm0` ist im Overlay deaktiviert, weil das Boardfile dort PWM auflegt.
 - **Persistenz:** Zephyr Settings auf NVS, `storage_partition` @ 0xEC000. Schlüssel: `gasbee/offset`, `gasbee/scale`, `gasbee/tare`.
 
 ## Offen
 
-- Grob-Kalibrierung erledigt (2026-10-18, siehe `src/gasbee_config.h`). Gegenprobe mit 14,285 kg steht aus. Feinkalibrierung pro MAC macht das Sensorboard.
-- Ruhestrom im Akkubetrieb messen (Stromspar-Image vom 2026-10-18)
+- Kalibrierung per GATT und Konfigurationsmodus per USB laufen auf beiden GasBees, bedient über das Display (2026-10-19).
+- Sensorboard: `gasbee_scan`-Frame ist mit 2 GasBees zu groß für ESP-NOW (301 > 250 Byte). Das liegt im Sensorboard-Arbeitsbereich.
+- Mittleren Strom inklusive Messung und Burst messen (Ruhestrom 6,7 µA ist gemessen)
 - Hardware-Stand: XIAO nRF52840 Sense, Bootloader 0.6.1 / S140 7.3.0. HX711, Akkubetrieb, Advertising v1 und der Empfang am Sensorboard funktionieren (2026-10-17/18).
-- Das USB-Log liegt nicht fest auf `/dev/ttyACM0`. Den Port über `ID_SERIAL` zuordnen. Die ESP32-Ports nicht öffnen, weil das Öffnen sie resetten kann.
+- USB-Log gibt es nur im Testmodus (`debug.conf`), Port `/dev/ttyGASBEE_<Seriennummer>` (udev). Im Normalbetrieb den Zustand per BLE-Scan prüfen. Die ESP32-Ports nicht öffnen, weil das Öffnen sie resetten kann.

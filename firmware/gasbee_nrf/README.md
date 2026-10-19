@@ -34,12 +34,12 @@ Die HX711-Pins werden in [app.overlay](app.overlay) festgelegt. Die Zuordnung vo
 
 ```
 CMakeLists.txt
-prj.conf              BT Peripheral, Settings/NVS, Logging
+prj.conf              Normalbetrieb: BT Peripheral, Settings/NVS, ohne USB/Log (Stromsparen)
 app.overlay           HX711-Pins (zephyr,user), Akkuteiler (vbatt), ADC-Kanal AIN7, P0.14-Hog
 src/main.c            Mess-Schleife, Gas-Berechnung, Tare, Kalibrierung
 src/hx711.c/.h        HX711-GPIO-Treiber (Port von esp-idf-lib/hx711, BSD-3)
 Kconfig               Projektoption CONFIG_GASBEE_STATUS_LED
-debug.conf            Testmodus (Status-LED an), Zusatz zu prj.conf
+debug.conf            Testmodus: Status-LED, 60 s, USB-Konsole + Log, Zusatz zu prj.conf
 src/ble_gas.c/.h      GATT-Server + Advertising
 src/battery.c/.h      Akkuspannung (Zephyr voltage-divider) + Ladestatus (P0.17)
 src/status_led.c/.h   RGB-Status-LED (nur mit CONFIG_GASBEE_STATUS_LED)
@@ -57,6 +57,16 @@ Alle `CONFIG_GASBEE_MEASURE_INTERVAL_S` (Standard 300 s, Testmodus 60 s) läuft 
 3. HX711 in den Power-Down legen.
 4. Akkuspannung und Ladestatus lesen.
 5. Einen Advertising-Burst senden: 10 Pakete im Abstand von 1 s. Danach herrscht Funkstille bis zum nächsten Zyklus.
+
+**Konfigurationsmodus (USB angesteckt):** Sobald USB-Spannung anliegt, ob vom Netzteil oder vom PC, wechselt der GasBee spätestens nach 2 s in den Konfigurationsmodus:
+- Er sendet dauerhaft im Sekundentakt und ist verbindbar.
+- Er misst alle 5 s, damit man während der Kalibrierung live sieht, was die Waage misst.
+- Er setzt Flag Bit 3.
+- Die Kalibrier-Befehle 0x2B11–0x2B13 sind nur in diesem Modus erlaubt. Im Akkubetrieb antwortet der GasBee mit dem ATT-Fehler „Write Not Permitted".
+
+Nach dem Abziehen trennt er laufende Verbindungen und kehrt in den Akkubetrieb zurück (5 min, Burst). Erkannt wird USB über das VBUS-Register des nRF52840 (`nrf_power_usbregstatus_vbusdet_get`, Abfrage alle `GASBEE_USB_POLL_MS`). Ein GasBee, der dauerhaft an USB hängt, bleibt im Konfigurationsmodus und liefert weiter Werte, nur häufiger.
+
+**Befehle über GATT** (Tare, Kalibrierung) lösen sofort eine Zusatzmessung aus. Der 5-min-Takt bleibt dabei erhalten.
 
 Auch ohne HX711 wird gesendet, das Gewicht ist dann als ungültig markiert. Im Leerlauf geht der nRF52840 automatisch in System ON Idle. System OFF ist nicht möglich, weil der nRF52840 daraus nicht per Timer aufwacht. Der Stromverbrauch ist noch nicht gemessen.
 
@@ -76,7 +86,7 @@ Zusammen sind das 22 von 31 Byte, eine Scan-Response wird nicht gebraucht.
 | 1–2 | int16 LE | Bruttogewicht der Waage in 10 g, **ohne Tara** | 0x8000 |
 | 3–4 | uint16 LE | Akkuspannung in mV | 0xFFFF |
 | 5 | uint8 | Sequenzzähler, +1 pro Messzyklus (alle 10 Pakete eines Bursts haben denselben Wert) | – |
-| 6 | uint8 | Flags: Bit 0 = HX711 ok, Bit 1 = lädt (BQ25101 ~CHG), Bit 2 = Waage für diese Hardware kalibriert (Offset und Scale aus NVS oder `GASBEE_HX711_CAL_MEASURED = 1`). Bei 0 zeigt das Sensorboard „nc". Bit 3–7 = 0 | – |
+| 6 | uint8 | Flags: Bit 0 = HX711 ok, Bit 1 = lädt (BQ25101 ~CHG), Bit 2 = kalibriert: Offset und Scale stehen in NVS, dieser GasBee ist also per GATT kalibriert. Bei 0 zeigt das Sensorboard „nc". Bit 3 = Konfigurationsmodus (USB angesteckt, Kalibrierung möglich). Bit 4–7 = 0 | – |
 
 Tara, Gas-Netto, Füllstand und Akku-% berechnet das Sensorboard. Die Adresse ist random static und bleibt fest.
 
@@ -95,6 +105,9 @@ Das Advertising ist verbindbar. Ein GATT-Client kann sich während eines Bursts 
 | 0x2B03 | Gas-Netto kg | float32 LE | Read, Notify |
 | 0x2B04 | Akkuspannung mV | uint16 LE | Read, Notify |
 | 0x2B10 | Tare | uint8 (`0x01`) | Write |
+| 0x2B11 | Kalibrierung Nullpunkt (Waage leer) | uint8 (`0x01`) | Write |
+| 0x2B12 | Kalibrierung Referenzgewicht in Gramm | uint32 LE | Write |
+| 0x2B13 | Kalibrierwerte: Offset, Scale (Scale = 0 löscht) | int32 LE + float32 LE (8 Byte) | Read, Write |
 
 Die GATT-Werte werden im Messzyklus aktualisiert. 0x2B01 bis 0x2B03 rechnen wie bisher mit der GasBee-Tara und mit 10,5 kg Leergewicht der Flasche.
 
@@ -158,11 +171,13 @@ Hinweis: Der Projektpfad darf **keine Leerzeichen** enthalten, sonst bricht der 
    ```bash
    cp build/gasbee_nrf/zephyr/zephyr.uf2 /media/$USER/XIAO-SENSE/ && sync
    ```
-   Der XIAO startet sofort neu und wirft das Laufwerk aus. Der Kopiervorgang kann deshalb wie fehlgeschlagen aussehen, obwohl das Flashen geklappt hat. Erfolgreich war es, wenn sich der serielle Port danach als `Zephyr_Project_CDC_ACM` meldet.
+   Der XIAO startet sofort neu und wirft das Laufwerk aus. Der Kopiervorgang kann deshalb wie fehlgeschlagen aussehen, obwohl das Flashen geklappt hat. Erfolgreich war es, wenn der GasBee danach wieder sendet, zum Beispiel am Display oder im BLE-Scan. Nur das Testmodus-Image meldet sich zusätzlich als serieller Port `Zephyr_Project_CDC_ACM`.
 
-## Log-Monitor (USB-CDC)
+## Log-Monitor (USB-CDC, nur Testmodus)
 
-Das Log läuft über USB-CDC (VID/PID `2fe3:0004`, Zephyr-Standard). Statt wechselnder `/dev/ttyACMx`-Nummern bekommt jede GasBee über die udev-Regel [`tools/udev/99-esp32-womo.rules`](../../tools/udev/99-esp32-womo.rules) automatisch einen festen Port:
+**Das Normalbetrieb-Image hat keinen USB-Stack und kein Log**, damit spart es Strom: Gemessen waren ca. 1,9 mA mit USB-Konsole und 6,7 µA ohne. Zum Mitlesen das **Testmodus-Image** (`debug.conf`) flashen.
+
+Im Testmodus läuft das Log über USB-CDC (VID/PID `2fe3:0004`, Zephyr-Standard). Statt wechselnder `/dev/ttyACMx`-Nummern bekommt jede GasBee über die udev-Regel [`tools/udev/99-esp32-womo.rules`](../../tools/udev/99-esp32-womo.rules) automatisch einen festen Port:
 
 ```
 /dev/ttyGASBEE_<USB-Seriennummer>     (Seriennummer = Chip-ID, je XIAO eindeutig)
@@ -189,19 +204,31 @@ Beenden mit `Strg+]`. Das Boot-Log ist nur zu sehen, wenn der Port gleich nach e
 
 ## Kalibrierung
 
-**Grob-Kalibrierung am 2026-10-18:** `GASBEE_HX711_OFFSET = −294304`, `GASBEE_HX711_SCALE = 0.0000395471` kg/LSB, das sind etwa 25.290 LSB pro kg. Messung über das Advertising:
-- Leer: −0,64 kg
-- 14,285 kg aufgelegt: 13,805 kg
+Jeder GasBee wird **einzeln** kalibriert. Die Werte liegen pro Gerät in NVS (`gasbee/offset`, `gasbee/scale`) und überstehen Reset und Firmware-Update. Neu kalibrieren geht jederzeit, das überschreibt die alten Werte. Ohne NVS-Werte rechnet der GasBee mit den Startwerten aus `gasbee_config.h` und meldet Bit 2 = 0. Das Sensorboard zeigt dann „nc".
 
-Beides noch mit der alten ESP32-C3-Kalibrierung gemessen, die um den Faktor 0,98892 daneben lag. Der Nullpunkt enthält alles, was fest auf der Wägezelle sitzt. Die **Tara und die Feinkalibrierung**, ein Faktor pro GasBee-MAC, übernimmt das Sensorboard.
+### Ablauf
 
-So wird neu gemessen:
-1. Waage leer. Der Rohwert `raw_0` ist dann `GASBEE_HX711_OFFSET`. Abzulesen ist er im Log (`HX711 raw=…`) oder aus dem Advertising zurückgerechnet: `raw = Gewicht / SCALE_alt + OFFSET_alt`.
-2. Bekanntes Gewicht `m` (kg) auflegen und `raw_m` ablesen.
-3. `GASBEE_HX711_SCALE = m / (raw_m − raw_0)`
-4. Werte in `gasbee_config.h` eintragen und neu bauen.
+Für Nutzer ist die Bedienung am **Display** vorgesehen: Das Sensorboard verbindet sich und schreibt die Befehle. Das wird im Sensorboard-/Display-Arbeitsbereich umgesetzt. Bis dahin, und für Entwickler, geht es mit **nRF Connect** auf dem Handy:
 
-Werte in den Settings (`gasbee/offset`, `gasbee/scale`) haben Vorrang vor den Defaults. Im Moment schreibt die Firmware nur `gasbee/tare`. Flag Bit 2 („kalibriert") ist gesetzt, wenn Offset und Scale aus NVS kommen oder wenn `GASBEE_HX711_CAL_MEASURED` in `gasbee_config.h` auf 1 steht. Das markiert die Werte dort als an dieser Hardware gemessen. Auf einem neuen GasBee die Konstante auf 0 setzen, bis gemessen ist. Das Sensorboard zeigt ihn dann als „nc".
+1. GasBee an USB anstecken, ein Netzteil reicht. Er ist nach spätestens 2 s im Konfigurationsmodus, Flag Bit 3.
+2. In nRF Connect „GasBee" suchen und verbinden. Die richtige MAC steht im Scan, zum Beispiel E5:DC:C9:7D:C4:27.
+3. Waage **leer**: auf **0x2B11** den Wert `01` schreiben. Der GasBee misst sofort und speichert den Nullpunkt.
+4. Bekanntes Gewicht auflegen und auf **0x2B12** das Gewicht in Gramm als uint32 LE schreiben. Für 14285 g sind das die Bytes `CD370000`.
+5. Zur Kontrolle **0x2B13** lesen: 8 Byte, int32 Offset und float32 Scale.
+6. USB abziehen. Der GasBee trennt die Verbindung, kehrt in den Akkubetrieb zurück und meldet „kalibriert". Bei aktivierter Status-LED blitzt Grün nach jedem Kalibrierschritt 3×.
+
+Die Writes prüfen nur das Format: falsche Länge, 0 g oder mehr als 200 kg führen zu einem ATT-Fehler. Ob die Messung geklappt hat, zeigen 0x2B13 und das Log. Gespeichert wird zum Beispiel nicht, wenn der HX711 keinen Wert liefert oder beim Referenzgewicht kaum eine Änderung gegenüber dem Nullpunkt messbar ist (`GASBEE_CAL_MIN_DELTA_RAW`, ca. 40 g). Ein negatives Scale ist erlaubt, falls die Wägezelle andersherum angeschlossen ist.
+
+### Werte direkt setzen, sichern, löschen
+
+Auf **0x2B13** 8 Byte schreiben: int32 Offset und float32 Scale, beide LE. Mit Scale = 0 wird die Kalibrierung gelöscht, dann gelten wieder die Startwerte und Bit 2 ist 0.
+
+| GasBee | MAC | Offset | Scale | 0x2B13 (Hex) | gemessen |
+|---|---|---|---|---|---|
+| 1 | F7:8A:BE:C9:83:CB | −294304 | 0.0000395471 | `6082FBFF60DF2538` | 2026-10-18: leer −0,64 kg, 14,285 kg → 13,805 kg (mit Startwerten ESP32-C3) |
+| 2 | E5:DC:C9:7D:C4:27 | – | – | – | 2026-10-19 über das Display kalibriert. Die Werte stehen nur im NVS, bei Bedarf über 0x2B13 auslesen. |
+
+Die Startwerte in `gasbee_config.h` sind die von GasBee 1. Die Tara (Nullpunkt mit Flaschenhalter) und die Feinkalibrierung übernimmt das Sensorboard.
 
 ### Tare
 
@@ -221,7 +248,11 @@ Unterschied zum ESP32-C3-GasBee: Dort setzte Tare die Tara nur auf 0 und machte 
 - [x] Akkuspannung: Multimeter 4,025 V, GasBee 4,003 V, −0,55 %, keine Korrektur nötig (2026-10-18)
 - [x] Ladestatus P0.17: mit USB Flags `03`, ohne USB `01` (2026-10-18)
 - [x] Stromspar-Image (UART0 aus, QSPI-Flash DPD, IMU/Mikrofon aus, 100 mA Ladestrom) läuft, Bursts im 5-min-Takt (2026-10-18)
-- [ ] Stromverbrauch im Akkubetrieb messen (Leerlauf und Burst)
+- [x] Ruhestrom im Akkubetrieb (2026-10-19, Metra Hit 28S in der Akkuleitung): **6,7 µA** ohne USB-Stack/Log, ca. 1,9 mA mit USB-CDC-Konsole + Log. Deshalb ist USB/Log nur noch im Testmodus.
+- [ ] Mittlerer Strom inkl. Messung und Burst (Spitzen) messen
 - [ ] HX711-Timing auf nRF verifizieren: PD_SCK-high < 50 µs, auch bei BLE-Aktivität
-- [x] Grob-Kalibrierung (2026-10-18), Gegenprobe mit 14,285 kg steht aus
+- [x] Grob-Kalibrierung GasBee 1 (2026-10-18), Gegenprobe 14,32 statt 14,285 kg (+0,25 %)
+- [x] Kalibrierung per GATT (0x2B11–0x2B13, NVS pro Gerät) und Konfigurationsmodus per USB: beide GasBees über das Display kalibriert (2026-10-19)
+- [x] Kalibrierung am Display (Sensorboard als GATT-Client), umgesetzt im anderen Arbeitsbereich
+- [ ] GasBee 2 (E5:DC:C9:7D:C4:27) kalibrieren
 - [ ] Feinkalibrierung pro GasBee im Sensorboard (anderer Arbeitsbereich)

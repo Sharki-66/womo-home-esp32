@@ -35,9 +35,11 @@
 //   SCALE = m / (raw_m − OFFSET)
 #define GASBEE_HX711_OFFSET            -294304
 #define GASBEE_HX711_SCALE             0.0000395471f  // kg pro raw-LSB (≈ 25 290 LSB/kg)
-// 1 = OFFSET/SCALE oben sind an dieser Hardware gemessen → Advertising-Flag
-// "kalibriert" (Bit 2). 0 = Platzhalter, Sensorboard zeigt dann "nc".
-#define GASBEE_HX711_CAL_MEASURED      1
+// Die Werte oben sind nur Startwerte (gemessen an GasBee 1, F7:8A:BE:C9:83:CB).
+// Jeder GasBee wird per GATT kalibriert (0x2B11/0x2B12/0x2B13), das Ergebnis
+// liegt pro Gerät in NVS. Erst dann ist Advertising-Flag Bit 2 "kalibriert" gesetzt.
+#define GASBEE_CAL_MIN_DELTA_RAW       1000        // min. |raw − OFFSET| beim Referenzgewicht (≈ 40 g)
+#define GASBEE_CAL_REF_MAX_G           200000U     // max. Referenzgewicht 200 kg
 
 // Settings (NVS) – Kalibrierung persistent speichern
 #define GASBEE_SETTINGS_SUBTREE        "gasbee"
@@ -62,6 +64,9 @@
 #define GASBEE_CHR_GAS_PCT             0x2B02  // Füllstand in % (uint8, Notify)
 #define GASBEE_CHR_GAS_NET_KG          0x2B03  // Nettogewicht Gas in kg (float, Notify)
 #define GASBEE_CHR_TARE                0x2B10  // Tara-Befehl (Write, 1 Byte: 0x01 = Tare)
+#define GASBEE_CHR_CAL_ZERO            0x2B11  // Kalibrierung Nullpunkt (Write 0x01, Waage leer)
+#define GASBEE_CHR_CAL_REF_G           0x2B12  // Kalibrierung Referenzgewicht (Write uint32 Gramm)
+#define GASBEE_CHR_CAL_VALUES          0x2B13  // Kalibrierwerte int32 Offset + float32 Scale (Read/Write)
 
 #define GASBEE_CHR_BAT_MV              0x2B04  // Akkuspannung in mV (uint16, Notify)
 
@@ -76,7 +81,12 @@
 #define GASBEE_ADV_BAT_INVALID         UINT16_MAX  // 0xFFFF
 #define GASBEE_ADV_FLAG_HX711_OK       BIT(0)
 #define GASBEE_ADV_FLAG_CHARGING       BIT(1)  // BQ25101 ~CHG an P0.17
-#define GASBEE_ADV_FLAG_CALIBRATED     BIT(2)  // Waage für diese Hardware kalibriert (NVS oder gemessene Defaults)
+#define GASBEE_ADV_FLAG_CALIBRATED     BIT(2)  // Offset + Scale aus NVS (per GATT kalibriert)
+#define GASBEE_ADV_FLAG_CONFIG_MODE    BIT(3)  // Konfigurationsmodus (USB): Dauersenden, Kalibrierung möglich
+
+// ── Konfigurationsmodus (USB/VBUS vorhanden) ─────────────────────────────────
+#define GASBEE_USB_POLL_MS             2000U   // VBUS-Abfrage, Moduswechsel spätestens nach 2 s
+#define GASBEE_CONFIG_MEASURE_MS       5000U   // Messtakt im Konfigurationsmodus (live während der Kalibrierung)
 
 // ── Status-LED (nur mit CONFIG_GASBEE_STATUS_LED) ────────────────────────────
 #define GASBEE_LED_FLASH_MS            80     // Dauer eines Blitzes / einer Pause

@@ -10,7 +10,9 @@
  * Teiler und ADC-Kanal stehen in app.overlay (Knoten vbatt). Der Treiber
  * voltage-divider rechnet das Teilerverhältnis heraus und liefert VBAT.
  * Ladestatus: BQ25101 ~CHG an P0.17 (zephyr,user chg-gpios, aktiv = lädt).
- * Aufgerufen wird beides aus dem Messzyklus in main.c.
+ * USB: VBUS-Erkennung des nRF52840 (POWER.USBREGSTATUS), nur lesend – der
+ *      USB-Stack des Boards bleibt unberührt.
+ * Aufgerufen wird alles aus der Mess-Schleife in main.c.
  */
 
 #include "battery.h"
@@ -20,6 +22,7 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/logging/log.h>
+#include <hal/nrf_power.h>
 
 LOG_MODULE_REGISTER(battery, LOG_LEVEL_INF);
 
@@ -63,6 +66,11 @@ int battery_read_mv(uint16_t *mv_out)
 	// 0xFFFF ist im Advertising "ungültig"
 	*mv_out = (uint16_t)MIN(mv, UINT16_MAX - 1);
 	return 0;
+}
+
+bool battery_usb_present(void)
+{
+	return nrf_power_usbregstatus_vbusdet_get(NRF_POWER);
 }
 
 bool battery_is_charging(void)
