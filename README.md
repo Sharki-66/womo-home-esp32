@@ -87,6 +87,16 @@ Das Projekt nutzt das [Espressif ESP-IDF](https://docs.espressif.com/projects/es
 
 **!!! Der gesammte Code wurde im Vibe Coding erzeugt !!!**
 
+## ⚠️ Haftungsausschluss
+
+WoMo Home ist ein privates Hobbyprojekt. Schaltpläne, Firmware und Anleitungen werden ohne jede Gewähr bereitgestellt. **Nachbau, Einbau und Nutzung erfolgen ausschließlich auf eigene Gefahr.**
+
+- Eingriffe in die Fahrzeugelektrik (12-V-Bordnetz, EBL, Batterien) und Arbeiten im Umfeld der Gasanlage nur mit ausreichender Sachkunde. Sie können Garantie- oder Gewährleistungsansprüche gegenüber Fahrzeug- oder Aufbauhersteller gefährden.
+- WoMo Home ersetzt keine vorgeschriebenen Prüfungen (z. B. Gasprüfung nach DVGW G 607) und keine Sicherheitseinrichtungen. Messwerte können ungenau sein oder ausfallen.
+- Für Schäden an Fahrzeugen, Geräten, Batterien oder sonstigem Eigentum sowie für Folgeschäden wird – soweit gesetzlich zulässig – keine Haftung übernommen. Unberührt bleiben die Haftung für Vorsatz und grobe Fahrlässigkeit, für Schäden an Leben, Körper oder Gesundheit, nach dem Produkthaftungsgesetz sowie gesetzliche Gewährleistungsrechte bei gekauften Produkten.
+
+Vollständiger Text im Impressum der Website ([website/src/pages/impressum.astro](website/src/pages/impressum.astro), Abschnitt „Haftungsausschluss für Nachbau und Nutzung“).
+
 ## 📜 Lizenz
 
 Privates Projekt. Siehe [LICENSE](LICENSE).
