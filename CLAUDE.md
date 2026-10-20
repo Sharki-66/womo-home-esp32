@@ -78,3 +78,11 @@ Build, Flash und Monitor werden vom Nutzer über VS Code Tasks gestartet — Cla
 - Commit-Messages: **Deutsch**
 - Kommentare im Code: **Deutsch**
 - Keine Emojis außer auf explizite Anfrage
+
+<!-- OPENWIKI:START -->
+
+## OpenWiki
+
+@AGENTS.md
+
+<!-- OPENWIKI:END -->

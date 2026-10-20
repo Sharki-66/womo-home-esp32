@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:8c620bc73c47e9f39376f657cd6faf4d0123ee138789da0b6294ddea64d01740",
+  "claims": [
+    {
+      "id": "claim_6191bd19e8d54f0e8fbd0b7847ce50a9",
+      "statement": "website/ is a standalone Astro static site (Astro 6 + Tailwind CSS 4 via @tailwindcss/vite) separate from the firmware/ and hardware/ projects in the repository, providing marketing pages, a photo gallery, an artificial-horizon demo, and a schematic viewer.",
+      "evidence": [
+        {
+          "resource": "repo://website/astro.config.mjs",
+          "version": "repo-file-v1:sha256:485dc7699f8bb774e17987b6d22eadfb8ca017edf90daba59cff3d58c12490f1"
+        },
+        {
+          "resource": "repo://website/package.json#L14-L19",
+          "version": "repo-lines-v1:sha256:392c59c71730523b2160d6db2b4cc0af17c2cf44b9fa7f7a80740ab691d8a8d1:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmEzYjQ2OWQ5ZTA5NzU3MjI0NjY2NzM0YzllZjdiMjU0ZDg4NTM0ZjVkNWJiNzA5ODk2MDgwNWM1NTNkYzMwNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjdlNTc4OGQ1ZDlkNzNkMjRhODFkYmMwYTVhNzRiZmE4MmM5YzNiM2FmOTllNTJhZjc5NmU5MGI0NjhhOGEzZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzUyNGFmNjcxZTk1NjQzZjFjYTgyZDQ5ODBiMTkzZDE0NzA2ZWFkZWJjODEyYmNiMWFiNWU2Y2RhZTExODVkMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjEsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSJ9"
+        },
+        {
+          "resource": "repo://website/src/pages/index.astro#L192-L193",
+          "version": "repo-lines-v1:sha256:85703c6acc417f0baee9a0a970eac6d2af121e6e8516aec3bda96378e948cd70:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTI0YjI0ZDdiYTE2NTEwZWE4ZDE5MDNjOTBlNGRlMGEwN2E2M2MwYmNkZTc1NTA3OWYyY2MyMTExOGMyYjM5OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjkyMWQxZDFmODQ2M2ZlMTdmZGIzMGZhOTBiZWM1YmE4NWEzMDg4NWIxYjdhNTc1MzNmZGE2MzQyNjJkZTAwNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjQxZGY3ZDJmNjc2OWRiYjk2N2M0MGI4OTM4NjQxNzEwOGY3M2E0MjExYzgxODQ0MDBjMDU1NWZkMDcwZDFjZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmU3ZTIxY2JiOTI5ZWNjMDA3MDVlNjRiOTZjZGQzYWE3Mjg0ZjBjM2JhZmYwNzFiMzIyNWQwNTEyMzE3ODA0YSJ9"
+        },
+        {
+          "resource": "repo://website/src/pages/index.astro#L263-L267",
+          "version": "repo-lines-v1:sha256:e9a1e80b40cce49e25c7c4fad1fa4bb09266e90ea0cb3223988d301d13c3167a:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTdmNWMwYjg0YzdiOTk4OTQ2Zjc3MmMzMjU0NzdkMjlkOTZkYWQyN2I1ODNhNTVkYWNiMGVkOTNhYzQzZGNjOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGUwMDYzOTk3NmZhNzYzMWE1ZGJkMjdlM2U0Y2MyMjdiYjRjMzcxYzc1NWU2NWU3OWQ0OWRkMzAwZWQ4ZjQzYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjk0ZTJlNzkzZjgxYWIwYzg0ZDgzNGFiNzgyNjdiNzMwNmE1N2E4YmQ1ZmI3M2NjYjI3NzJmMjZiYzdkMzc0YyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzU2NTk0ZDU5NjM3YTQ3MjQzMTFkN2ViZTUyZTdjOWRmNmI0NGU1YjQ3NTU3N2I3NmI5MjMzYmZkNzgwMjIyNiJ9"
+        },
+        {
+          "resource": "repo://website/src/pages/index.astro#L39-L99",
+          "version": "repo-lines-v1:sha256:e4b6166e3c28bc20ce9ca2563c0a66036504bfb0970176ce75472639c25bc130:eyJzZWxlY3RlZExpbmVDb3VudCI6NjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2Zjc2MDY3YTAxNDNjMzYwZjZiYWI0MGU4MTliOWNkZWQxZTIzOTdkZmEyOTgzMmZkNjQzZDkzZmJmNDdkZjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUwNTYzMDRiMGVlYWJkODhhZDRjYmRkNjBiZGY0NjY1MWFkODU3YWQxZTAxMDRlNDJhYmZmNmIwNDNhZThlYTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNiZDA4MWNiZGU0ZmEwZjlmN2Q4ZTJhZDUxZTFhMDllNTJmZDJhYmY2OTFkMGE0NDU1OGU2ZWU1N2M4YTdiZTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlhZWQzODQ5NDc5NzFhMGNiYzA2NWE1ZTE5OGZhN2M5Njk0NmNjNzRjZDU4ZGFlMDJkNDJmNGJlOTQxMzRkNmYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_adef5c7ac7b6412592b1b98f439cbd09",
+      "statement": "website/src/pages/schaltplan.astro renders a static exported Sensorboard.svg schematic and descriptive captions (board revision 0.2, ESP32-S3 DevKitC-1 N16R8, KiCad 8, sensor list) as presentational copy, and links out to the KiCad source files on GitHub and the CERN-OHL-P v2 license rather than deriving content live from the KiCad project.",
+      "evidence": [
+        {
+          "resource": "repo://website/src/pages/schaltplan.astro#L33-L63",
+          "version": "repo-lines-v1:sha256:986e0d8ab97e5eee24ce767d3747b2530866bbcfbc272b9942bbc3d19800b7d9:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlMThjYWMxOWViZDFjYmZmNTUxZmMyZDQxZWY5NWRlNmQwZjBlYzkxYWM4Nzg3MGFiZTgyNDJiNGU4YTY5OGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyZjNjZmQxMWRhNjE1MDE5N2FjZWVkMDg0MDZhYzY0YjA1MDM0MGRlN2JjMDQxMjRhNGNiN2VmYTY3MTM0MGIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMyOTRhZjRiZDNlYzg2ZDdjZmRkOTlkYmFjZDVhMzMzYzY2NzBmMzc1MzA1ZjRiOTlhYjNhOGNlMzE1OGRjYWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZjMDVhYWFmYjYzNjgzYzY0MzEwZjdlMjNmOWE2NzEwN2RiZmUwYjVhMDA3ZTcwYWI1OTZjYTAzMWFjNjZjYWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_08dd0a718aa541cfaf8ef2e28bf8cc18",
+      "statement": "website/src/pages/horizont.astro presents a simulated/static artificial-horizon demo as a stand-in for the real feature, which the page itself states is actually served live by the sensor board's own web server from BNO055 IMU data.",
+      "evidence": [
+        {
+          "resource": "repo://website/src/pages/horizont.astro#L25-L34",
+          "version": "repo-lines-v1:sha256:d834df28730ff3cac51cb5d72a6476b078c2c83555366fecf9525e478e3f309d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyMTcyNjA0M2ExZWQ2ZDFmYmExYzIwYmU5ZjRhZjc1ZjE2NWQzNTU1YWMxNzg2OTRkMjkxZDQ4ZDFjNDUyZjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRlNTYwNDZkMzBmZmM0OGIyYjQ5ODgxNTI2MjkxZTc4ZWM4NGE0NDlhOTJkZTU4YjE0ZTU2ZTg5MmUyNzdkMGIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgzNDY4YzRiMzc4ZTk4ODlhYjA5MjQ0NGY1YTZhMTVkY2Y4OWEzMGM3ZjgxYTU2MjA3YmJmYjE1N2NiYTAzNzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjExOTZiMzU1OTBiNWRkMDRmY2NlZWY2YmE1ODQ2OTQ4MmYxZTQ5MmFiYzQ4OTBmMWMwZDQ3NTgwZmYwNDRhMDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_702c298cce2e40409184621cea0669ea",
+      "statement": "The website is built and deployed via Netlify using repository-root netlify.toml, which sets base = \"website\" so Netlify builds only the website subproject, command = \"npm run build\" to run the Astro production build, and publish = \"dist\" as the static output directory served by Netlify.",
+      "evidence": [
+        {
+          "resource": "repo://netlify.toml",
+          "version": "repo-file-v1:sha256:a8d6c8de777f6df016536935ef2160d8be0cce5ea671b6eb32a18e07a9ebc7c3"
+        }
+      ]
+    },
+    {
+      "id": "claim_970d8b47f7a741efab777af17322a48b",
+      "statement": "The website's only server-side code path is the Netlify Function website/netlify/functions/counter.mjs (a /api/counter page-view counter backed by Netlify Blobs); otherwise the site is a fully static Astro build with no tooling that re-renders KiCad schematics or reads firmware headers at build time, so device facts shown on the site (sensor lists, pinouts, protocols, board revisions) are static exports/marketing copy that can drift from the authoritative hardware (KiCad) and firmware sources.",
+      "evidence": [
+        {
+          "resource": "repo://website/astro.config.mjs",
+          "version": "repo-file-v1:sha256:485dc7699f8bb774e17987b6d22eadfb8ca017edf90daba59cff3d58c12490f1"
+        },
+        {
+          "resource": "repo://website/netlify/functions/counter.mjs",
+          "version": "repo-file-v1:sha256:fdfc859f3ddd47a3c0431b3378439153752c2f55c0b27d8ef5553bf57dbb41d7"
+        },
+        {
+          "resource": "repo://website/package.json#L14-L19",
+          "version": "repo-lines-v1:sha256:392c59c71730523b2160d6db2b4cc0af17c2cf44b9fa7f7a80740ab691d8a8d1:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmEzYjQ2OWQ5ZTA5NzU3MjI0NjY2NzM0YzllZjdiMjU0ZDg4NTM0ZjVkNWJiNzA5ODk2MDgwNWM1NTNkYzMwNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjdlNTc4OGQ1ZDlkNzNkMjRhODFkYmMwYTVhNzRiZmE4MmM5YzNiM2FmOTllNTJhZjc5NmU5MGI0NjhhOGEzZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzUyNGFmNjcxZTk1NjQzZjFjYTgyZDQ5ODBiMTkzZDE0NzA2ZWFkZWJjODEyYmNiMWFiNWU2Y2RhZTExODVkMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjEsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSJ9"
+        },
+        {
+          "resource": "repo://website/src/pages/schaltplan.astro#L33-L63",
+          "version": "repo-lines-v1:sha256:986e0d8ab97e5eee24ce767d3747b2530866bbcfbc272b9942bbc3d19800b7d9:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlMThjYWMxOWViZDFjYmZmNTUxZmMyZDQxZWY5NWRlNmQwZjBlYzkxYWM4Nzg3MGFiZTgyNDJiNGU4YTY5OGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyZjNjZmQxMWRhNjE1MDE5N2FjZWVkMDg0MDZhYzY0YjA1MDM0MGRlN2JjMDQxMjRhNGNiN2VmYTY3MTM0MGIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMyOTRhZjRiZDNlYzg2ZDdjZmRkOTlkYmFjZDVhMzMzYzY2NzBmMzc1MzA1ZjRiOTlhYjNhOGNlMzE1OGRjYWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZjMDVhYWFmYjYzNjgzYzY0MzEwZjdlMjNmOWE2NzEwN2RiZmUwYjVhMDA3ZTcwYWI1OTZjYTAzMWFjNjZjYWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e51c2d73878144c5a8f23acc02955fba",
+      "statement": "website/netlify/functions/counter.mjs is a Netlify Function v2 exposed at POST /api/counter that increments and returns a single pageviews counter stored via @netlify/blobs (getStore with consistency: 'strong'), rejects non-POST methods with 405, responds with Cache-Control: no-store, and intentionally performs a non-atomic read-modify-write that the code comments accept as tolerable for a simple visit counter while persisting no IP address, timestamp, or user agent.",
+      "evidence": [
+        {
+          "resource": "repo://website/netlify/functions/counter.mjs",
+          "version": "repo-file-v1:sha256:fdfc859f3ddd47a3c0431b3378439153752c2f55c0b27d8ef5553bf57dbb41d7"
+        }
+      ]
+    },
+    {
+      "id": "claim_759f2e09a2ad484eb043b8cc00a47c9c",
+      "statement": "index.astro's footer invokes the counter API via fetch('/api/counter', { method: 'POST' }) and renders the returned count as a localized 'Seitenaufrufe' string, silently leaving the counter line empty on any fetch error.",
+      "evidence": [
+        {
+          "resource": "repo://website/src/pages/index.astro#L470-L482",
+          "version": "repo-lines-v1:sha256:ac96358583d09095d85a7ddbd1ef4b13965e5c3291591ab1099068901f2addb3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyY2FhOWIwYzIzOWJlNGMyNDQwODczNTI5MzNiZjUxMmMwMzFhNmE3NTExMTMyNTk0YmI5NDhjN2YxM2FjNDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY3OTlkODJlY2IwODJmNTZkMjA3YzVjZjYyZjk1MDRhZDIxOWUzNThiNWFkZjkwMzM5MzFiMjVhOTMxZGQyOTkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEwZjE0N2VmNWUyZjk2NTgzZTZhMzhjODEyMzEwNjU4ODNkYjNlYjEwNzA5NDBmZjBiNzQyMjNkYjJhZTcyYjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRmMGVmNWE4Y2I4NGRlN2YxNzMwZjA4YmU0NDVjMjU2ZWQwYTQxNTg0MjU4OGE2MWQ5ZDUzMGNkOTg3ODkyYTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9bbb8c3881cf4e5db08e2a48a285ba29",
+      "statement": "website/src/pages/datenschutz.astro is the site's privacy policy page, documenting Netlify hosting server-log processing (IP, timestamp, requested page, referrer, user agent), the page-view counter's limited, non-personal data collection, the mailto: contact form's lack of server-side storage, external links, the absence of cookies/tracking, and GDPR data-subject rights.",
+      "evidence": [
+        {
+          "resource": "repo://website/src/pages/datenschutz.astro",
+          "version": "repo-file-v1:sha256:1a670b91cc0c7ed03b8c23eca22d64cea6701385f30adbd30d9df45d81517d63"
+        }
+      ]
+    },
+    {
+      "id": "claim_3eb665beba7e492f91e950b49c9916a3",
+      "statement": "Because repository-root netlify.toml sets base = \"website\" without a separate functions setting, Netlify resolves the default netlify/functions directory relative to that base, i.e. website/netlify/functions/, which is where counter.mjs is deployed from.",
+      "evidence": [
+        {
+          "resource": "repo://netlify.toml",
+          "version": "repo-file-v1:sha256:a8d6c8de777f6df016536935ef2160d8be0cce5ea671b6eb32a18e07a9ebc7c3"
+        },
+        {
+          "resource": "repo://website/netlify/functions/counter.mjs",
+          "version": "repo-file-v1:sha256:fdfc859f3ddd47a3c0431b3378439153752c2f55c0b27d8ef5553bf57dbb41d7"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

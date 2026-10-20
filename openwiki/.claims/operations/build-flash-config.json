@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:a0505092fcfb17c048cd8ee2ec2cbcd9d8530314a9ea86f5d201be56f4f0b68b",
+  "claims": [
+    {
+      "id": "claim_833db4abfeec410892a93d1fd4ad9c50",
+      "statement": "firmware/shared/womo_config.h is included by both the Sensorboard and Display ESP-IDF firmware; any change to it requires rebuilding and reflashing both firmware images because mismatched protocol/topic-interval constants break Sensorboard-Display interoperability.",
+      "evidence": [
+        {
+          "resource": "repo://CLAUDE.md#L63-L66",
+          "version": "repo-lines-v1:sha256:bdbacfca5a0c61e9e98d73211997c2ede72634b204c89f1d1ca61455cddc4ed3:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMThjYWI0OWMyZTU5NzRmNzAzZmFkMWM3NDU0NzIwMjQxZjUyY2JjNmE5ZTMxOTA3NTdlZmRjNTMyMDNmMjI2MiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzg2OTZjNGMxMWU1MmNiYTg4MjQzNDJlOGVlNWQxYmNlMDU3OWZhZDYwZjdiMzcxNTk1ZWFiODAzMTgxNjExNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTgxZWZlZTgwM2JiYWZlN2RiNjNlZjZmNTBhOTJhOTI1NTViOTY5ZmVjODRkNGUyMDY2OTA4ZmY5ZjdkZGZjYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDQ0OWViMTk5ZTc1YWNlNThlMWYwNTllY2I5MjAwYTA1MTZkYTBlMzdiNDBkNDYwYjU2NTJiMmUxN2U3OTlkMCJ9"
+        },
+        {
+          "resource": "repo://firmware/shared/womo_config.h#L1-L24",
+          "version": "repo-lines-v1:sha256:cf246c27f90aa7a682e626df1f1d5690799c2af12d2525f254cc38a4e1e80788:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg2ZGY1ZGY1ODNlY2M1MTA4MTcwNjgyZjM1ODMwYjc3ZDlhODhhMTJiNzY2ODBkYTMwNzY4Njc5ZGI1Yzg5MWYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3a1e411a5dbc4ef5b9e2253caf79bed4",
+      "statement": "firmware/shared/womo_credentials.h is gitignored and must be created by copying firmware/shared/womo_credentials.h.example before the Sensorboard or Display can build, since womo_config.h includes it directly.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/shared/womo_config.h#L18-L23",
+          "version": "repo-lines-v1:sha256:a68f06400402deb08a47fda6234173922027ec739754178c3d43074c5ae74b72:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWRiYjA3YmIyOThjYTdjZjhmNTgzYmQyYTc5MDJhMzlhMzIyYmVmYWFkN2M3NjU2MjRjMzNmZGJmNGE4ZWFiNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjFkZDZlMzI4YWFhMzdjMTIyNmNjYjU4ZmM1NWUxY2NlMWY0Yjc1OWU3MDQxMTUzMWMzZDI0NTI4MjJkOTBjNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODc0N2IyNGE0MGVhMTUyZGZmNjIyMjI5MjkwOGNiZDlhZDA1YjBmYWFiZjI5NzA1MzgwMGI5YjFmOTUzMDY5MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWEyOTQ5MzM3NjkzYjExYTc4NmEzZDU1NzI2MzFmZTllYzUxYzYzYzhiMGU1NDA0OTRlMjkyMmY0Zjc1NzZlMSJ9"
+        },
+        {
+          "resource": "repo://firmware/shared/womo_credentials.h.example#L1-L15",
+          "version": "repo-lines-v1:sha256:e1be1afead2dee1667512f67d91e95827f942d305810e537063f692df54aad5c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5OTY1MWU1ZWQ1YWRkYTQ2ODg3MDI2OGIzNzQ4YzUxZDEyY2ZiYjEzMTQzMjA0NzYxM2FhNzY3OTRhOTNhZmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f715bce6beef41caa6b8d8439027e3b3",
+      "statement": "All three ESP-IDF firmware targets (Sensorboard, Display, GasBee ESP32-C3) are built with ESP-IDF v5.5.2 using the same `source .../esp-idf/export.sh && cd firmware/<target> && idf.py build` pattern, while GasBee nRF (XIAO nRF52840) instead uses the nRF Connect SDK v3.4.1 (Zephyr) west build toolchain.",
+      "evidence": [
+        {
+          "resource": "repo://CLAUDE.md#L44-L52",
+          "version": "repo-lines-v1:sha256:2e3b97b144e2f678f4a2d27c6773013f4b4553a5914b9d1e9ec8a1083867bb09:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDE2ZmEzMDliM2NmOTNhMDEyM2E0MjE0ZDNhMDZmNzcxMDNmMGIzMzM2YjRmOWY5ZGVkZDFmMDE5NDIxMWZiNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTY2YTcwOGI4MjIwYTM4MDYyYWVmMzQwNzgxZTQ0NTg2OTNhMjcwM2NjNDkzOGFjZTY4ODlkZDg2ZGY3YzNiNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTAyYzAyYjQwOTRkYzkyNjI0YjgzYTc0ZDRkMjQyMjUzZDQwZGQyYmZjZjM3YTQ1OWNmMmUzYzk2ODVjYzQ0OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTQ0YzQ4ZTliYTUyMTdjOTI5Zjc5ZTYyMWNiYTZmNjVkMDNmMDMxZmJjZTVkNTNiNTVmZDQ0ZTg5YzhkOGJlNyJ9"
+        },
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L118-L150",
+          "version": "repo-lines-v1:sha256:6a19842a7076fa4c5b69fb2c35e4b5f6b844aa65267afa477d26c680cf0c86fa:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY0YjJjZjgzMWY3YmNhZGE3NDlkYzAxNGE2Yzc1Y2IzN2NhZjllOWZkZDRkZTJlYjY4Nzg5NzJmM2RlZGIyODQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM0OTRhYmU3NmQyMDg2ZDYxZTE0ZjhlNmE4ZWM1NzBhNjM0MTQ1NjUzNjQyNDdlN2MzNmM1ZDhjMGE4NDg3YTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIxMjdhNzYxZDExMDgxZWM1YTE4OTJhZjk5NTcyMmRiMWUzNmJlZTE0MjUxNTgxOGEwZTE4ZDJiMWNhNGVjNmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU3MTA0NDYwNmJhYWI1MjJjMDYwODhiYjQxM2RkZjdhMDUzYjdmODU3ODZiOTQzNjM0YWViZjdhMTQ2YTIwZWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_af8c9b895a1c438db98d2c7a14e84f71",
+      "statement": "Claude/agents must only explain build, flash, and monitor steps for the firmware projects and must never execute the flashing commands themselves; actual build/flash/monitor is started by the user via VS Code tasks.",
+      "evidence": [
+        {
+          "resource": "repo://CLAUDE.md#L54-L54",
+          "version": "repo-lines-v1:sha256:35ebc017e96dc8ff84a47b2757464243ca9cd6cec865237a2527af0f6c127303:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzVlYmMwMTdlOTZkYzhmZjg0YTQ3YjI3NTc0NjQyNDNjYTljZDZjZWM4NjUyMzdhMjUyN2FmMGY2YzEyNzMwMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzVlYmMwMTdlOTZkYzhmZjg0YTQ3YjI3NTc0NjQyNDNjYTljZDZjZWM4NjUyMzdhMjUyN2FmMGY2YzEyNzMwMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDQ0MmQxODQ0NDA1YTAxYzlmMmUyYTkxZDYxM2MwZWQyMDUxM2MwNWE1YmZhOGZjNTUyMTA0OGYyMjM3NWJkNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjllODRkYjAzMGFiZWUwYTJmOWUzZDliNjA1NDliOWM5YWRkOTBlNzc1NTVjYmY1M2VhZjcwMDgyMjlhYzQ0NyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/CLAUDE.md#L6-L7",
+          "version": "repo-lines-v1:sha256:fae920abcc58358b0442a7c24e8701c1ac87f4da2649ff5f074622c787949358:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjY0NzQzZmNlOTcxNTczMTI5NjMwNjgyMmMwMWEwZTlmZjA3YzAyN2M0MDRlMjM0ODgxYzg2ZmE1YjRiYjQ3ZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWZmM2MyMDY5YTJjZGM4ZDIwYjllMWI1MmRjNTgzOWRiNmI2MzI5YjZhYTA3MzE1MzU0ODBjODA5MmM4ZmJhNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmEyYzU1ZTQzYWU4OTRiOTU1MjYxOWQyNDIxNjI2Njc3YzZlZGY2NzFmMTc2MzUxYjAzMWZkYWRhNjgxYTIwOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTczMzE2ZTZlNzIwMGJhZTUyY2Y3ODY2NmZhYWQ1NzNlOWQwMGVlODY1ZDlkZmEwNmYyNjNhMTY3Yzk5YTRhNCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_daf1ef3980b542e2b5d1c6c2208fb287",
+      "statement": "womo-sensor.code-workspace groups Sensorboard (MAIN), Display (REF), and GasBee ESP32-C3, fixes idf.port to /dev/ttyESP_SENSOR, and defines Build/Flash/Monitor/Clean tasks for the Sensorboard plus separate GasBee tasks targeting /dev/ttyUSB0.",
+      "evidence": [
+        {
+          "resource": "repo://womo-sensor.code-workspace#L1-L30",
+          "version": "repo-lines-v1:sha256:ac25fc39aa960d703002828e75102ff50855884aa2eaf89b6002015cf8b87715:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2ZmIwOGZkYTFhY2I5NTdiNjExNmJkMzc4MTFhMWZlNDFhMDE2MTFjMDYzMWVkYmY3ODZkNjg4OWEyN2E1NWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQxZDRkZTA2ZWJmYmUyMDJmMmE3MGFhZmQzZWNkYzk1Y2UwOGY3MGExODBmOWExMDcxNmRhNDY3MWY3ZDUzZWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhlZjZiMzlhNDhiMzAzOTZmNDIxNDBmYjliMzY4OTExM2I2ZDBhMzUyZDQ3MjQ0MjQwYmI0Y2FmYzE2NTAzZWMifQ"
+        },
+        {
+          "resource": "repo://womo-sensor.code-workspace#L88-L129",
+          "version": "repo-lines-v1:sha256:3ab917dae0f6377753de9a82a3b2fd1dff407850ff20cfc5e714ae6a5a82dccb:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5NWI4YzViZjg2Mzc0MzY3MWRlZjNmNjMwZWIyMzJkNTlhN2E2MzRhMDcwZmM0MzZlZWMzN2E4Njc0ZTZjMzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjliNjJmNjBkODU5MGE1NzljZjQ2ZjhkNjczNzhjNGM1NzJiOTYyY2VjY2RiOTBjN2E1ZjdiNDJiOTYwNzgyYTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU4MTViM2YyNmM0MzQzODAwOGNlMzdhMDcwZmQ3YTNjZWNkZTgzOGJkZDU1Yjk0MGU3OWMwOWEyYjA4ZWI1YzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM3YmNjNDNhYmNmNmIwODg4ODZlMTNmYjFiZDhhZDU5ODhiZGVjOGRmMGM4YzJlMTRkNmNjYzc4MTc4NGY1ZTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c2b23cf10fe740f98e8b879d8f9cefba",
+      "statement": "womo-display.code-workspace groups Display (MAIN) and Sensorboard (REF), fixes idf.port to /dev/ttyESP_DISPLAY, and defines Build/Flash/Monitor/Clean tasks for the Display firmware.",
+      "evidence": [
+        {
+          "resource": "repo://womo-display.code-workspace#L1-L27",
+          "version": "repo-lines-v1:sha256:fcf034db3387083c218afc59c5029c99230995e1dd773c79d7237ef8e8878f6f:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2ZmIwOGZkYTFhY2I5NTdiNjExNmJkMzc4MTFhMWZlNDFhMDE2MTFjMDYzMWVkYmY3ODZkNjg4OWEyN2E1NWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0N2YwNDcyYTI2ZThiOTdiYTkxNmQ4OGEwYTMxOGMwMmEyOWM3OWJmYjNiY2ExNmYwOWY1MjA5ZjgwMTg2MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxYWY0YmVjZWQzMjI3OGExYzY2N2M4ZGEwNzQwNDhiOTQ2ODdlZGZmYzBlMGNjYzlhMGZhOTkyYmM3NzI4MWYifQ"
+        },
+        {
+          "resource": "repo://womo-display.code-workspace#L29-L85",
+          "version": "repo-lines-v1:sha256:5950adce4275bd059028741612cb731e827e92d378060b5e0252389c99713950:eyJzZWxlY3RlZExpbmVDb3VudCI6NTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2ZTIzYjQ5ZWQ3ODBkMzgwMzk3YWVhNzllM2NkZTgwZmU5NGM4YzU3YmZmODc1MjJjODMxNjM4MDhmN2M3OTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkNWNkMmZiNGYzZGY4ODQ1MTUyNTViMzk1MjNmMmY4YjU0NzJiZWVhOWY1NjZmZmNhMjA0ZGI4MDI1NjEwNDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY1NzFmYTY4ZjIxZDNhYjM4NzY2N2ViN2E4NWRmMWRhYzk4YzAwZTg2N2NiYTQ2MTIxMmNjOWE4MjE1NTc3YzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc0NGYxMWY3M2E3MGVlMWQyOThmYzVhY2M2YzVmNzJjZWM3YTZjNmFhNzYxYjgxYmExZDhlY2M3MzAyNjJiN2YifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4e288aac31c74911a4b002b59955a9ea",
+      "statement": "womo-gasbee.code-workspace groups GasBee nRF (MAIN) and GasBee ESP32-C3 (reference only), and defines Build Testmodus/Normalbetrieb, Flash (UF2), Monitor, and Clean tasks using the nRF Connect SDK v3.4.1 toolchain and board xiao_ble.",
+      "evidence": [
+        {
+          "resource": "repo://womo-gasbee.code-workspace#L1-L71",
+          "version": "repo-lines-v1:sha256:f5217d86d27dd1018144920860a0232bef2ab951a7b3b6daec76ba0292a17ef2:eyJzZWxlY3RlZExpbmVDb3VudCI6NzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2ZmIwOGZkYTFhY2I5NTdiNjExNmJkMzc4MTFhMWZlNDFhMDE2MTFjMDYzMWVkYmY3ODZkNjg4OWEyN2E1NWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkZDI0NDU4MmI2ZmIwM2QyM2I4NDE1YWJlY2QzNDZiMGM5ZjQ2NmI2Zjc1MmIwNjgxODljZTdlOWEyZGMzNTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE1NjJmY2E5YjBiODllNDg5ZmJlM2MzZTgwNjUwMDM3MjgxMDBmZTQ0ZTllOGM2YzNiYzExNTIxYzA3NDkwNTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5ac9b7bd6d264aca83573032bc018fb1",
+      "statement": "The Sensorboard partition table (firmware/sensorboard/partitions_2m_app.csv) defines nvs at 0x9000/24KB, phy_init at 0xf000/4KB, a 2MB factory app partition, and a 1MB storage SPIFFS partition; the Display partition table (firmware/display/partitions.csv) defines nvs at 0x9000/20KB, phy_init at 0xe000/4KB, a 3MB factory app partition at 0x10000, and a ~1.56MB storage SPIFFS partition.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/partitions.csv",
+          "version": "repo-file-v1:sha256:67dd7a8a2c177963b0c264f0a744466e51e581afc114a21fd49957241a239e05"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/partitions_2m_app.csv",
+          "version": "repo-file-v1:sha256:5f46e041136841290a76383af6f119cf0e5be32e5a6fea18d341c20dd21f5bfc"
+        }
+      ]
+    },
+    {
+      "id": "claim_d38be516638140f2a782ff8dac59fdea",
+      "statement": "The Sensorboard firmware persists calibration and runtime configuration state across reboots in NVS namespaces: bno055 (calib, pr_zero), bme680 (press_hist), bsec (state_in_<addr>_v<n>), gas_state (gas), tank_state (tank1, tank2), wifi_cfg (ssid, pass), ruuvi_cfg (indoor_mac, outdoor_mac), and gasbee_cfg (bottle_a_mac, bottle_b_mac).",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L131-L142",
+          "version": "repo-lines-v1:sha256:b18d6a10ab0c1937c8b337aac3cfdad7560f27d43d71a261cc0044ed7d7fe9eb:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2MDk1ZDc5MjAxZDQwOGFhZmMzZjZjZTQ0MDc2ZDU0YzdkYjA3YjFjYmFlMzljMzI5ZGRlZWQyN2I2Njc4ODMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI3YmQ3NGJlZjQ0MGMwMzY2ZTdiZmIyY2MxYjJjMTRhOTUwNmQ2ZGM0ZmZiMjU3NmE2ZDFhYTYyYmFlMDE3YzQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk3MzNiMDBiYmU5ZWE5ZmJjMTAzYjNkYmVlNWFhNzM5MTU0YmY2MjVlMzU4YmY3NWViNjBkMDBhMDJmMWI4NGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk2MmNhYTEyMWRlNGYzY2RhZDRlZDY0YjY1YmIwMzNmNTU5NWRkOGViMDRhMTljZWU1MGY5M2JjMWQwYzUxZWYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_68212c310cd64bf0b941e67e98604d1f",
+      "statement": "sensor_config.h constants SENSOR_INA226_SHUNT_MOHM/SENSOR_INA226_MAX_CURRENT_A must be set to the installed shunt and desired current range, and SENSOR_BME680_BSEC_STATE_VERSION must be incremented when the indoor BME680 is replaced so stale BSEC baseline state in the bsec NVS namespace is not reapplied to a new sensor.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L144-L146",
+          "version": "repo-lines-v1:sha256:74c4cfc860ed9b14f95c5b5c3e6d2044c2a65adc3de9d977869c71a2423fd322:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTkzMTUwZmRkNTVjYWM5YzQ0YTYyMGU2ODhhOWY1Y2M4NWMxNDMwNTMxYjQzOGI3YjVlNDhmYWE4NjgxZGExZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjRkZGU2NDgyNTA2YTE0NmQxOTY3OThhYWU1MWU3NmViMGI1NWFjMmZlZTNjYjFhYWU3NDJjNzZhZjkwYjZlYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNWQ5ZDg3MmQ3NWFlMGViNDgzNDMzMzdkNDIzOTc0YWQ1YzdlN2NlODBiNmVmZmM0MjcyMzA5NThkODNiYTA0OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDY5OGJkNzYwM2Q4NjdlY2M1MzRlMmQzZjhjNTI1ZDU3NDU0NGIyMmIzMjM2ZDk3NmFlZDNkYTdjODg3Mzk3YyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_017e9748d0424e49abfcd4d9b82d6c44",
+      "statement": "Each GasBee nRF unit stores its own per-device load-cell calibration (offset, scale) in on-device NVS under keys gasbee/offset and gasbee/scale, separate from and not duplicated by the Sensorboard's gasbee_cfg namespace which only stores the bottle-to-MAC slot assignment.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L207-L226",
+          "version": "repo-lines-v1:sha256:33eaa748943e273506b69df1e2f2355e49298e78e5d307fa8b10962e41224d5b:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYzVkYzViODE3ODkzNGEwYWU3NTk1NDE4MTc0N2JkNDA4MzI5YjllYTU4OWEyNzE1YjYzNmUzYjVmMzgzNDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA0MjYzZDEzM2E3ZWUxODVmYmU1N2JiMmUwNDg5ZWVkMmQxNTdlMTc3NmI4MmNiZTMxNTlkMjQ0MTZjMmU5MjQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMxNGRkODU4OGVjNzE4ZDVlYjBiZDUzYzY4NTNkYzdkZmUxZjY3MTNjZWVjN2E1ZjdmZWZlYWQ5NTEzNTY3NmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRlMmVlNzI4ZjVlNTg5YTNiM2Y5OTk3NTliMWE3YThhN2E5ZWQxYjgxOTAzNzY3NWY3MTNkZDZlOTYyYjgxNjgifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L141-L142",
+          "version": "repo-lines-v1:sha256:8451b3cdda272bdd2365dc3edfa4f6d3bda0fb8f3a574eb0067b1ec83c6fda24:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWZlNjIzNjk2MmI0NzA0OWM3ZGRkNjllNThiMTY5ZjQ0MDU3MDllY2EzMDdiMzE0MTljNzUwZTk4ZGM5ODE2ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjdiZDc0YmVmNDQwYzAzNjZlN2JmYjJjYzFiMmMxNGE5NTA2ZDZkYzRmZmIyNTc2YTZkMWFhNjJiYWUwMTdjNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmM1M2JhOTQ0NTA0M2M2MDhmNWRjOTdlMzNiMzc4NDkxNWQ1MDAxOTBiMzYwNWQyZjliODM5MWNjNjczNTA2NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTYyY2FhMTIxZGU0ZjNjZGFkNGVkNjRiNjViYjAzM2Y1NTk1ZGQ4ZWIwNGExOWNlZTUwZjkzYmMxZDBjNTFlZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_9b528834563d43bfbddeb0245bf24795",
+      "statement": "GasBee nRF calibration and tare are performed over BLE GATT characteristics 0x2B10 (tare), 0x2B11 (zero calibration), 0x2B12 (reference weight in grams), and 0x2B13 (read/write raw offset+scale, write with scale=0 clears calibration), usable only while the device is in USB configuration mode.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L207-L239",
+          "version": "repo-lines-v1:sha256:cfa060de0d4b9dde190051f346a13231575b6998b4158b692530cc9a463a2a9c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYzVkYzViODE3ODkzNGEwYWU3NTk1NDE4MTc0N2JkNDA4MzI5YjllYTU4OWEyNzE1YjYzNmUzYjVmMzgzNDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0ZDI5ZjQ2M2MwMzc3NWZjYjNiODcyYWExN2I0OTQ2ZGY1ZWM1MGQzN2IzYjhkMTg4ZjRmNjMyODhlNmM0MTciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMxNGRkODU4OGVjNzE4ZDVlYjBiZDUzYzY4NTNkYzdkZmUxZjY3MTNjZWVjN2E1ZjdmZWZlYWQ5NTEzNTY3NmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5ZTJlNGVmMTM5YmM1ZDljNDc2ZGQ4MjJhYzIzOGNiYzg3N2MwMTIzODM5ZDU3Y2JkNDQ1YTM3OTlmODlkMzQifQ"
+        },
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L99-L112",
+          "version": "repo-lines-v1:sha256:2f09e7c82455fbaf37d351338d007c5e2131f2650b78663c55d188d491656c90:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmODUxODA4Y2MzOTIwMGQyNGUyN2M5MjUxMzIwZGJlNjE1YWU2MzcwNzE4MjE0ZjJkMTU5N2NhNTY4YzM0OGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyM2I0ZDQ3MDQ2YmQwYmY5NTNlOTdmOWRkNDIyNDVhYjM1MzIwOTk3MzU4MDNiMzVhN2I2NjY0M2M3ZmY1NjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM3ODFhY2RiMDQzMWNhNmFkMjk2ZmVlODM4ZTRmYzZkYjYwNDY1MDMxYmI4MTk4NDRmMzg2ODc4MWQ5YWZiNWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBkYzU0ZGIzZGJkMDdjNWYzM2FhNTBmMDczZmY3ZWQ3ZWYyYTJmNjFlYjIyMDJhOGY5MzVkOWQzNmVjMDQ5NDgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_347860385fe047a5897446602ab2b4b4",
+      "statement": "Building GasBee nRF in test mode (status LED active, 60s measurement interval) requires appending `-DEXTRA_CONF_FILE=debug.conf` with `-p always` to the west build command; omitting it keeps the LED off and the default 300s interval, and the project path must not contain spaces or the Zephyr build fails.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L144-L166",
+          "version": "repo-lines-v1:sha256:2c30768f52bf398c22e0cd7063bc62bdb8e1ba3e593fa54bfea60b10838d6e17:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDA2ZDBlNGFlNmQwNDg1MzZiZThmOGZlNWVmZDhjYjVkNGRhMTZmYTc4YjdjODAzMmVhN2FmNmZjYWRiNjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyMzdjNDhkOGMwYmNiODYwMWRkZWE4ZDE0OGIyMzVmOGYwNmIxOTI2MDA2MjJmYTNiNmVkYmRhOTUyOWFmZjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQzZjYxNzgxNmRiYTk0MDBlMzA2MjUzN2Q3YzBjMDM0ODgzNTk0OTZiMTg3NTVhMTBhYzZkZmVhMGUzOTM0MzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZjMmQ3ZTFhYzkyYmEzNjk4MDQ2YmFhOTJjYjkwNGI1YjRkYTViNWEwNDIzMjA5YmY3NjRmYzBmYjJlYjgzMWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0fd9acd8839d4fce9c0da6fd9d12e1f5",
+      "statement": "GasBee nRF logs over USB-CDC and is given a stable device path via the udev rule tools/udev/99-esp32-womo.rules (/dev/ttyGASBEE_<serial>), monitored via tools/gasbee-monitor.sh; the UF2 bootloader drive XIAO-SENSE exposes no serial port, so boot logs are only visible after a plain reset.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L178-L203",
+          "version": "repo-lines-v1:sha256:8246f25fbd0ff5ef52d0c10c41c44a68ef739d6bec0ccf34f081082ee2af856e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlZWRlZGYzMjNhZWI0MjFkNTBjNDA3MDdlOGZlYmMzNDk4MzMyNTAxMjBmNDhmNjYxNjk4Mjg2ODlhNjkzMjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYyYmJhYWMxOWE3MmMyZWJlNzA3NzYyNWE1NWZhZjk1MmMyZTc1NjQ3OGEwNmIzMzU5MTAyNmMyMGZhMjlhZDkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkxYjI2ZjU4MDgyYTYxYjkxYzI0OTZhMGE2YzZiYWJkN2QxYWI2NzQwZTFhZTNiNGJmOWE2MDVjMDA2N2FjOTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMxNGRkODU4OGVjNzE4ZDVlYjBiZDUzYzY4NTNkYzdkZmUxZjY3MTNjZWVjN2E1ZjdmZWZlYWQ5NTEzNTY3NmEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

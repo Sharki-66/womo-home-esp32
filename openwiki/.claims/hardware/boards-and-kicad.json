@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:9dec9a5cc477e168e3731636b38ef52d1fdd7a07511fc342c03cd63f88a5b93f",
+  "claims": [
+    {
+      "id": "claim_610d165a553d4f0db3001701faa2ee9c",
+      "statement": "Original WoMoHome hardware designs (Sensorboard, GasBee, WoMoHome ESP Touch LCD 7 HAT) are licensed under CERN-OHL-P v2, per the Sensorboard schematic's title-block comment and the project website's schematic/legal pages, while firmware and website code are MIT-licensed under the repo root LICENSE.",
+      "evidence": [
+        {
+          "resource": "repo://LICENSE",
+          "version": "repo-file-v1:sha256:872319503b33fe1cbe7bc2b15ec800fb38b97bf9f780919b7de68f7f2e25d2b8"
+        },
+        {
+          "resource": "repo://hardware/schematics/Sensorboard/Sensorboard.kicad_sch#L7-L17",
+          "version": "repo-lines-v1:sha256:5cb7908dd87b68b5b0c70bed515b2948cfbdb90681d8505b494abb7c57e28850:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQwY2YxM2Y1YjM5NmU5MTFhMjZiMjU5MDY2MzZjMDM2ZDgwNDY2ZGMzNDY2MmQ3YzVkYmNkZTVmZjc1NDNmMjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMzZjVmZmQxM2UzNDFhYWVlOTY0Y2Y2OTY2MWIzYzQwMmU1OTg0NzM4NGEyOTVmZGMzMjI4MGU0MjIxOTVjYjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE3MTA1MTQyYjkzZGUxMDY5YWQ2ZTM2MDcyYTIxNmMyMGRhOGVjODk4OWRhZTY4Y2NiNTg0MGNhNTkwOWYzY2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNkMjE3NjgwOGZhMGQzNmNkMjM1MzU2MzQ2ZmU1OTNjNTA1YWI2Yjc5ODdlYmE5OWJkMWQ4Y2U3ZTk2YzI2MzkifQ"
+        },
+        {
+          "resource": "repo://website/src/pages/impressum.astro#L69-L77",
+          "version": "repo-lines-v1:sha256:eab5fafea8a5f7041dddb054ebd7db773f807c03b13762138dc791a32260a2eb:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTU0YTE5Njk1NmYwZTQ2MTMwZTRjYTZjOWQzYzk1ZDVhODQwMGIzOTY3NjBiNzIwOGIwNzE4Yjk3Zjg4MTcwYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTAwMGVkMjk0ZWQ4ZDU3MjYxYjJmNzQ1NzM1YmQxZGU4OGJjOWI3YjRlNzk0NGVkYTE5ZjAwMDBjMzQ1YzZkYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjY3MGVhZTYxOTZhZTQxZDUxYTYwMDhhM2UwMGFlNjFmMjI1ZjcxZTQyNGE3MDY5MzIyYWU2YTJkMDMwMzAyYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDU2ODMwOGQxMGNjYmYxZTNlZjkzZTMzMDViNTk0NDJjODk2MDVhMjBiM2U2ZTU1MmMyNDg5NTc1NDU1ZjQzYSJ9"
+        },
+        {
+          "resource": "repo://website/src/pages/schaltplan.astro#L4-L52",
+          "version": "repo-lines-v1:sha256:6f0dd1997b4ebcb7c1bce065d9469bcfdb03d1040d2dd065861637b87e3f4af0:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM3YmY0MjE2YTkwYjA0MDE5MzA1NzY5NjUxNTFkMTJkMGViMzBhZjIzNjMxMGI4NmI2NGNjMWMzZDY2NDUxNTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFmMjE1ZmQwM2NmYzJiZWViZjgwNGExN2FjNWU5NDc5NTFmN2NkMmRjMDU2MDUyMjQ5OWM2MDZmZGJjZDcxODUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhkODZkMDdkZDk4MWM0NzIwMmM0YTY3N2E0MzUxNmU4YTM5MmU3ODQwYzk1MzIxYTZjOTU3YTY1ZjI2YWNjOGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyMTIzNjM3N2YwNzhmNzEyYzg1NmQwOTc5ZDdmOTg4YWQ4MGJiODM4N2IwNzcxMGM4NGIwOGJkYTA4OGE3Y2QifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5a38e22259ec4e61b9af3020d973d015",
+      "statement": "RuuviTag Gas is a fork of RuuviTag Rev.B8 (ruuvi/ruuvitag_hw @ afa1b03) and inherits Ruuvi's CC BY-SA 4.0 licence rather than the project's own CERN-OHL-P v2, including Ruuvi's restriction against using the 'Ruuvi' name on derivative products.",
+      "evidence": [
+        {
+          "resource": "repo://hardware/schematics/ruuvitag_gas/README.md#L1-L4",
+          "version": "repo-lines-v1:sha256:c164dbc79b2992008483f87f0aa033241dad3ba40e6c60e5661d3ec5ab750438:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWQ5MDM2ZDBiYjRlZmFhMjhhZDc3OWFkNDU4NzViZDc1ZTEzNTFhNmViY2M1MTUyOTE3ZjlhNzkxYzQyYWJlZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGIwNWJiMDZiNzFkNTEzY2NlMGJlNjJhZDc5ODEwZDA3ZTMzNmRmM2JiYTNiNmMwZTE3M2M3N2ViMDhiZDFmMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWQ5NjE3ZjRhMDgwODcyMWIwZDM3YmE0MTIyODFhNDc5NGVkYWZmMGFmODUyYjEwMDliMTk2NDhhYTdlNTAwYyJ9"
+        },
+        {
+          "resource": "repo://hardware/schematics/ruuvitag_hw/README.md#L14-L14",
+          "version": "repo-lines-v1:sha256:ca7ab6fd52de24cd9c4de0309c19797e8d05b14cb73473b6a24bee41bb45c9e9:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2E3YWI2ZmQ1MmRlMjRjZDljNGRlMDMwOWMxOTc5N2U4ZDA1YjE0Y2I3MzQ3M2I2YTI0YmVlNDFiYjQ1YzllOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiY2E3YWI2ZmQ1MmRlMjRjZDljNGRlMDMwOWMxOTc5N2U4ZDA1YjE0Y2I3MzQ3M2I2YTI0YmVlNDFiYjQ1YzllOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzgzZTQ3ZDRhMDA2MzQ1OTYyYTU0NDIxMTk1MWE1NTUxOWMxYmNmNDdjM2Y0MWIxZThjN2QzM2JhYjFmNDE4NyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjEsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjk0YTU0NDEzNDkxYjVhMjUwMTk1ZmRmNzIxNWNlOGIzNzlmODA2YzhjZTQzNjE0NjNlZjQ0YTlkMTg1YTdiYSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_84d31903d9ae42db9e3225ab44f1ce5a",
+      "statement": "The current Sensorboard KiCad schematic's title block records revision 0.5 (dated 2026-06-14), and production fabrication packages exist for revisions 0.2 through 0.5 under hardware/schematics/Sensorboard/production/; the board's own DRC report shows 0 violations, 0 unconnected pads, 0 footprint errors.",
+      "evidence": [
+        {
+          "resource": "repo://hardware/schematics/Sensorboard/DRC.rpt",
+          "version": "repo-file-v1:sha256:c2e17d05fab6d669aa1ab58d6216d975cc4582cbd8081b5cf118c0b0407d7e53"
+        },
+        {
+          "resource": "repo://hardware/schematics/Sensorboard/Sensorboard.kicad_sch#L7-L17",
+          "version": "repo-lines-v1:sha256:5cb7908dd87b68b5b0c70bed515b2948cfbdb90681d8505b494abb7c57e28850:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQwY2YxM2Y1YjM5NmU5MTFhMjZiMjU5MDY2MzZjMDM2ZDgwNDY2ZGMzNDY2MmQ3YzVkYmNkZTVmZjc1NDNmMjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMzZjVmZmQxM2UzNDFhYWVlOTY0Y2Y2OTY2MWIzYzQwMmU1OTg0NzM4NGEyOTVmZGMzMjI4MGU0MjIxOTVjYjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE3MTA1MTQyYjkzZGUxMDY5YWQ2ZTM2MDcyYTIxNmMyMGRhOGVjODk4OWRhZTY4Y2NiNTg0MGNhNTkwOWYzY2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNkMjE3NjgwOGZhMGQzNmNkMjM1MzU2MzQ2ZmU1OTNjNTA1YWI2Yjc5ODdlYmE5OWJkMWQ4Y2U3ZTk2YzI2MzkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b896cddbf606441285a9934ac2889bd9",
+      "statement": "The Sensorboard's GPIO7 Display-5V switch uses an N-channel pre-driver Q5 (2N7002) ahead of the P-channel high-side switch Q4 (AO3401A), confirmed present in both the Rev. 0.4 and Rev. 0.5 production BOMs and documented in sensor_config.h as fixing an earlier single-FET design that caused a direct gate-source through-current when GPIO7 was driven HIGH; sensor_config.h states the current pin assignments apply only to this new, undamaged board revision.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L237-L263",
+          "version": "repo-lines-v1:sha256:635587173e6dc2f1205041b95914d51adea969430814f18cffb9cf419a2d37d8:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjViY2FiMDM5N2YyYmNlZWM3MzE2ZmE5NGFjMzM3OWQ1ZjVjNGU0ZDNiZjBjNzE4ZjhiODg2ODEzNmRkODI3OGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJmZDVkMTcwZTQxNzUxNzExYTgwZjVhN2JlMTdmNTE5ZjczYWUzY2NiNWEzZTA1YzU4MDgwM2RmYTA2OWIzZmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY1MmE3MzJiNDhkMTI1MzY5MmY1MjkzMDIyY2M3ZGJkNzU2MWI3ZGVkYzc1YmIzNzg0OGZkY2RkMjM5MmM5YTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5ZWU4Y2U5ZGEyMzc0ODMyMDBiMzk0ZDVhYjBiNDRkYWNkZTRiYjkwMzg3NzBiYTUzYTdhODg5NzliZGFkYWIifQ"
+        },
+        {
+          "resource": "repo://hardware/schematics/Sensorboard/production/SensorBoard_Rev_0.5_bom.csv",
+          "version": "repo-file-v1:sha256:0f5e3cbe41244456df3c4181b8654fa062892dd9a19a2b7fa6bdfdcb436722b8"
+        }
+      ]
+    },
+    {
+      "id": "claim_f1ce7c8466064aec931c37afe04ca02a",
+      "statement": "hardware/schematics/Sensorboard/SensorBee/ is a nested, never-laid-out schematic-only stub (empty .kicad_pcb) sketching an HX711 + TP4056 Li-ion charger + USB-C circuit around a 'WEMOS C3 mini' symbol, distinct from the fabricated Sensorboard and GasBee boards.",
+      "evidence": [
+        {
+          "resource": "repo://hardware/schematics/Sensorboard/SensorBee/SensorBee.kicad_pcb",
+          "version": "repo-file-v1:sha256:3e491cd8085eff0d6c95f0a11a135421cbcfce4c5620e6356c3896e122f1772b"
+        },
+        {
+          "resource": "repo://hardware/schematics/Sensorboard/SensorBee/SensorBee.kicad_sch#L20-L1046",
+          "version": "repo-lines-v1:sha256:4c8abc44cbb62212daccaa54387aa05d2da14b874a5024224d7bc341e82b969d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAyNywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGYwZGRlZDkzMjFiOWZlNzE1ZWZhZWE4ZTkxNWMzOTU2ODQxYjkxMzBkM2QwZmEwNzJhYmZmNTJjMDFiZDRhNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTkzZjMzN2U0NGY2NDk3ZDZkOWMxMWI4NWJlYWU3MzE4NzE4NGIxM2YzZDA1YjJmMjZlY2Y2MjRiMTA5MDkxOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzVhODNkNWZiNjcxZGY5MzRiZDcwOWI2NzI4NWY2NDkyMTkzYjQ2NmU2ZmNlMTg0ODYzMTQ0M2Y2YTI3ODljNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTUyMGExNjg3YWNhMTI4YzYwMjNhN2RjOTI2ZjhjYjlmNjc5MmMxODc2MjUyODU5NTE3Y2Q3NTBkNmFmZjQyMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_b46b80b46a014d16845d8f31dcf91acd",
+      "statement": "The GasBee KiCad project (hardware/schematics/GasBee/) is the hardware for the legacy ESP32-C3-based GasBee (ESP32-C3-MINI-1 MCU, HX711, TP4056 charger, MAX17261 fuel gauge, MCP1700 LDO, USB-C, SMBJ5.0A TVS), built and fabricated despite its DRC report showing 60 clearance violations; the current, actively-used GasBee nRF firmware generation instead runs on an off-the-shelf Seeed XIAO nRF52840 dev board with no corresponding custom KiCad PCB project in this repository.",
+      "evidence": [
+        {
+          "resource": "repo://hardware/schematics/GasBee/DRC.rpt#L1-L4",
+          "version": "repo-lines-v1:sha256:254de71aeff9ae2e1d7ebb3df0e56aa4fa95bf5cdeda043d1d32fca79023f2ad:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDdiZjc2Mjg4MGE3N2FlY2RmMWMxMmY1NzQ2ODY5MWFlYzg1YzdiYTNlZmUxZmFmYTcxNzUwZDg1YzFkYjM3NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWMyN2MyMTY5YzFlMDVhNDU2YjhiMTkyNzU1MjA2YWI3OTUzZDIxNDg0N2VkMzg3OTU1YzNhYWQ4MWE5NDdiOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGFiOThiYzkxZTBiZDBmNzI0ZDk4ZThiYmZjNjVlODQ4MzdlODU5ZDA1NTExMWYxMjJmYmZjYTM3ZDg3ZDkyNiJ9"
+        },
+        {
+          "resource": "repo://hardware/schematics/GasBee/GasBee.kicad_sch#L1-L20",
+          "version": "repo-lines-v1:sha256:a17e208bf04982d3788f5c9e8d638e2489458b4f4d5d91e7811e6ae64f5519e6:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUzYTA3N2RhZTI0OGVkYWU0ZjFjMDkxNmI2ZjIxZGE1ZmY4ODc4Y2RmOTZkZGQwZDY1OWEzMzg5NTcyZDMzMGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBmMGRkZWQ5MzIxYjlmZTcxNWVmYWVhOGU5MTVjMzk1Njg0MWI5MTMwZDNkMGZhMDcyYWJmZjUyYzAxYmQ0YTciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZhZjg5N2FkODQ1OTkwYjkxZmFmYjU5YzZiNWYzZWU4NjkyMjhiNWQ3MzM2NjRhN2QxNzMzZTU3MDBiZjk2NTkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_292626875def4b3180f1189075418a6f",
+      "statement": "The WoMoHome ESP Touch LCD 7 HAT KiCad project has no accompanying README; its only documented artifacts are a footprint-processing log (report.txt, showing one unresolved missing-footprint error on J4 and missing net warnings) and an ERC report with 3 errors and 1 warning, and it defines a custom placeholder symbol WoMoHome:SIM7600X-ESP32 (U3) whose exact role (onboard modem vs. connector-only) is not documented and must be read directly from the KiCad project.",
+      "evidence": [
+        {
+          "resource": "repo://hardware/schematics/WoMoHome%20ESP%20Touch%20LCD%207%20HAT/ERC.rpt",
+          "version": "repo-file-v1:sha256:7737918aa7d7d0a72f97172cd09ca084fce14325e96b4b5a43d42f0becb75edf"
+        },
+        {
+          "resource": "repo://hardware/schematics/WoMoHome%20ESP%20Touch%20LCD%207%20HAT/WoMoHome.kicad_sym#L1-L52",
+          "version": "repo-lines-v1:sha256:50508d8a58a22a2c7bedeb50dcca48cfe9079ad6d4540b9c14a270c0a7f37d95:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1ZDA3NTFlODMwZWIwZmU1OTkzMjYzNDA0NjE2MTU4NTFjYmQ5ZThiN2U0OTVhZjg4MThmZDFmZjc0N2Y2NjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE3M2Y3MTk5MjNmYzFlMDJmNjI0MzUzOTMzMDY4YWRmMWNkNTAyZTExODZjZDcwYTEyZGUzMDg3NWQyZjE4ZTkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ4N2U2YWZlYTE1NTIwYTViMmU0ZTQyOTVkMmY1MzRiMGExYjhiNWU4NjhjNTc4MmI4MDJhMjRjM2EwMWQ5MGMifQ"
+        },
+        {
+          "resource": "repo://hardware/schematics/WoMoHome%20ESP%20Touch%20LCD%207%20HAT/report.txt",
+          "version": "repo-file-v1:sha256:da412b53c9ce0480eac7e4a051523916e4331a682e26006fa154fb76daf7d065"
+        }
+      ]
+    },
+    {
+      "id": "claim_047fe8f26eba4ec099bd91cfa1ae5e39",
+      "statement": "RuuviTag Gas Phase 2a (schematic) is complete and verified (ERC = 3, all expected) while Phase 2b (PCB layout/routing/DRC), Phase 3 (documentation/BOM/Gerbers), and firmware are all not started, keeping the board clearly in planned/unbuilt status distinct from the built Sensorboard and GasBee ESP32-C3 boards.",
+      "evidence": [
+        {
+          "resource": "repo://hardware/schematics/ruuvitag_gas/README.md#L52-L59",
+          "version": "repo-lines-v1:sha256:611730ea6c0f4a85743eac8b9b16418370148da1c3e1d7b35ffb20bebc5b9e4b:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTYwZGExY2UzNDQzN2Y1ZGEzYTcyOWY2ZTM0NDYyYTcxNTM5MjQ1ODZkOGVkYWIwYzc1ZjYzNGYzMTBkNzI4ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDI1NGMwNzBmODFhNzQxMjEwN2E3OTRjNDEyOWQ2MTExYzhhOThkNTMyMzkxNmJhNDU3ZDliYTY4M2NlMmVhNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiM2ZhY2IwNTcxYjc3ZjlmYjA2MGEwYTExOGFjMGE5MmQ4MGI4MWJmNTFkZjM3Y2IyZDllMmUyNDkyYjE5NWZmZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://hardware/schematics/ruuvitag_gas/memory-bank/progress.md",
+          "version": "repo-file-v1:sha256:1f3b489a38ecd6cc9acc2ad103a917400f06174f9c7214bd16191bb370942f6b"
+        }
+      ]
+    },
+    {
+      "id": "claim_87a623a265184351bb5337be2fcbc9f5",
+      "statement": "RuuviTag Gas's Phase 2a hardware design gates both the HX711 and the load-cell bridge with a high-side P-MOSFET (Q2) driven by an N-MOSFET (Q1) tied to GPIO HX711_EN (P0.03), so the circuit draws effectively zero current when idle, deliberately differing from GasBee nRF's permanently-on 3V3-rail HX711 supply because RuuviTag Gas is powered from a CR2477 coin cell rather than USB/LiPo.",
+      "evidence": [
+        {
+          "resource": "repo://hardware/schematics/ruuvitag_gas/PHASE2_HX711.md#L59-L110",
+          "version": "repo-lines-v1:sha256:f249534f35b6ba334ac7d83ff7bcd4503b74b6a8c3624ccb7a5b465ad0be8ffa:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyMTFlMDBjNjQyODg0MTFiMzFjN2MwZWNhYTBlMzEzZmMzNjYxZjk0MTk5ODhmMTc5OGVkMWRiNmI5NzlhMWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkxMjJhZWVkMjk3OTlmYjg0OTQyNTFiMDQyM2U5MTUwZjI3Y2M5YTIyNWIzZGMwN2MxNjhjZDY1ZmJjZWZiZDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAwMWYyZWMxNzU5M2MxMDU0ZWI0NjM2N2Q4NDUzZWYyNGExNzNjZTk2YjcxMTdkOTFmOWE2OGQ0NGZlZjhiMDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc0OGVkNTRmYjljOWYzMGU1ZjUxZTlmYzM4YWE3M2RkYzAyMGI4NTllODkzMzg0N2YzMjM3MzQwOTAxOWVlZTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4a301a73ab6a4c499386ca05a586a585",
+      "statement": "The Schaudt LT 45X control panel is required for the EBL 262-3 power-distribution unit to operate at all (the EBL manual states its control inputs are driven exclusively by the attached LT/IT panel), and the panel connects to the EBL over Molex Micro-Fit headers whose 12V-Ein/12V-Aus pulse inputs drive the EBL's internal bistable high-side relay, alongside Netzkontrolle, battery-fühler, and Multimedia signal pins.",
+      "evidence": [
+        {
+          "resource": "repo://hardware/datasheets/EBL%20262-3.pdf",
+          "version": "repo-file-v1:sha256:5146fcbbddc33bb45090785dbd9d237c2234fee22e8e7dd807f551a42d3399d2"
+        },
+        {
+          "resource": "repo://hardware/datasheets/LT%2045x.pdf",
+          "version": "repo-file-v1:sha256:a7ba81a79d479a7b0a227e78a5b16838e71aecb335108e6398cce53fdb6a9255"
+        }
+      ]
+    },
+    {
+      "id": "claim_df63cc9219404df1b70d61bed6fe260f",
+      "statement": "The Sensorboard's J7 connector (10-pin Molex Micro-Fit 3.0, 43045-1012) is wired directly into the vehicle's original Schaudt EBL/LT45x control-panel interface: its BOM entry is labelled 'LT452 Malibu', and sensor_config.h independently confirms a 2026-08-30 reversed-polarity incident at 'Steckverbinder J7 (\"LT452 Malibu\", 10-pol. Molex Micro-Fit)' that hard-damaged GPIO13 and GPIO17, establishing that the Sensorboard physically and electrically replaces the LT45x panel's position and EBL-facing wiring rather than being an independent add-on.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L237-L245",
+          "version": "repo-lines-v1:sha256:a4a9908484da4f141075a7e30513061de08e9c2089fe4671ccdf020063bb995d:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWJjYWIwMzk3ZjJiY2VlYzczMTZmYTk0YWMzMzc5ZDVmNWM0ZTRkM2JmMGM3MThmOGI4ODY4MTM2ZGQ4Mjc4YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGNiMTgzYTYyZWY3ZjVmMjMxZTRiZTUzMTFjNjMzYmQzZGUzZjgzMzhmNGNjMzkxOGQ2YzFmY2NiN2RiN2IzMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjUyYTczMmI0OGQxMjUzNjkyZjUyOTMwMjJjYzdkYmQ3NTYxYjdkZWRjNzViYjM3ODQ4ZmRjZGQyMzkyYzlhNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDg0M2IzNTdjNjRlNTdmZTY2ZjAwZjA4ZmM4YWY4MDY1MmJkNjNhZjEwOTBlZjAwY2Q5NDRiYTQwMTE0ZDQ2MyJ9"
+        },
+        {
+          "resource": "repo://hardware/schematics/Sensorboard/production/SensorBoard_Rev_0.5_bom.csv",
+          "version": "repo-file-v1:sha256:0f5e3cbe41244456df3c4181b8654fa062892dd9a19a2b7fa6bdfdcb436722b8"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

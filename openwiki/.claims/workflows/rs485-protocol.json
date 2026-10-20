@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:1d24ce62a3cbf059e94dc152d5b145cd0d9c572cd667eb7a9000837011778f29",
+  "claims": [
+    {
+      "id": "claim_5b984aab456d41238c1b1666739d277b",
+      "statement": "Every RS485 topic-protocol frame is a single-line, CRLF-terminated, printable-ASCII JSON object carrying a type or cmd field plus a seq (u32) and ts (ms epoch), with an optional need_ack bool controlling whether the receiver must answer with an ACK.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L17-L21",
+          "version": "repo-lines-v1:sha256:5889431c6bd4fa6a60b3cc1ee9602c3ba20bf7e081a520b2aacd02943e6223f6:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDQ5NTk5YmIyZWY2OTg2YjUyN2RmODZjZmE2ZTUzZDI0ZWQwYmRkYmU1Y2M3YTkwMzg0YTRkNjQ3NmIwOGM3NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmU3NGFjNzY0M2IwOGFmMjZkMGI0ODQxMjczYjZlZmQ0NTc0YmVhMGRjMTQ5ZDYwODYzZGIwNGNjNGRlZWM3YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzBlZGYyYjJiNjRiYTA1MzBmM2M5MDFmZGIyYTdiODQ2Y2RhZGM2MzJmMWY0N2RlYjc1MjE3Y2ZlN2Y1YTMxNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDlhNDU2OTEwZjJhNDc1YTQ5N2JkMzAyMjZjNzFhZGM3YTQ1YWNkNjNlMzc4Y2RmYjM0NjYzYTIxYTFmNmU3NCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_2bab7e1fbb7b4ec59cb794f64d546592",
+      "statement": "The documented ACK frame shape ({\"type\":\"ack\",\"ack\":<seq>,\"status\":\"ok\"|\"err\",...} in display/CLAUDE.md) differs from what the Sensorboard firmware actually sends ({\"type\":\"cmd_ack\",\"ack_seq\":<seq>,\"status\":\"ok\"|\"error\",...} in espnow_modem.c).",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L21-L21",
+          "version": "repo-lines-v1:sha256:6e74ac7643b08af26d0b4841273b6efd4574bea0dc149d60863db04cc4deec7c:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmU3NGFjNzY0M2IwOGFmMjZkMGI0ODQxMjczYjZlZmQ0NTc0YmVhMGRjMTQ5ZDYwODYzZGIwNGNjNGRlZWM3YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmU3NGFjNzY0M2IwOGFmMjZkMGI0ODQxMjczYjZlZmQ0NTc0YmVhMGRjMTQ5ZDYwODYzZGIwNGNjNGRlZWM3YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTA5OTcxZTM4MDU2ZTlkNzNkNDgzMGY5MDZmYjQ0MzE0OGM2NjRjMTc0MGY4ZmUyMjRkYTdiZTcwMGUxZTRmNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDlhNDU2OTEwZjJhNDc1YTQ5N2JkMzAyMjZjNzFhZGM3YTQ1YWNkNjNlMzc4Y2RmYjM0NjYzYTIxYTFmNmU3NCJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L260-L272",
+          "version": "repo-lines-v1:sha256:85229a3382ba188ded3d43ceecb8c1c8d92d7db9f63ef29dd004958f34936e99:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMyNTY2NGI2ZjY4YWI0N2IyMmViOWM3ZmQ1NjNkZjYyMzA4MTQ4Njk5OTVkYzZjNDI3ZjliYWRjYzljMmQ2NzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFkZTI2OGM2M2E2MGMwZDM5YTIyODNjYzM0NGRlNTM2MGMzMDZjYmQwZGMwNzU3YmZhMTcxZGRhMzgyMzJjNWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5NDk3MzZlN2NkZDljNmExMzE1MWI3MTQzNWNlOGQ0ZmZkMDBkYTkzNmM4MWI5YWZjNzM0ODgzZTU4NWY1NzkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2b73ca8918f9451092025630c2bb1718",
+      "statement": "An incoming frame is treated as requiring an ACK whenever it carries a non-zero seq, even without an explicit need_ack:true; the explicit flag only overrides that default.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1590-L1605",
+          "version": "repo-lines-v1:sha256:d5db6634e22550ee0d4f3c23fdcc61b801e768f7c9c838698b2b4535a8643e2a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU4MDUwMTAyZWIxMTQ1OWRlYTllMGUwYmNhNDA5YmU3MTBlYzU5NTg1YTY1MTM4YmExOTM2OTU0NTk5MmE1OTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRjYjBmMGYzMTcxYjNhNzc0YzI2YTg1NWExYWQ0Y2VkMTVmOGU3NmZlMWM1ZDc5NDFmZjFmZGU5ZDRkODllMzQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a61d611bb7cf4add8b03903ee71b90b7",
+      "statement": "The RS485 topic protocol's documented wired physical layer is half-duplex RS485 (MAX3485) at 57600 baud 8N1 with automatic DE/RTS toggling; 115200 baud was tried and abandoned because it caused UART framing errors from DE-toggle timing, making 57600 8N1 the correct, current value and 115200 a resolved historical pitfall.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L18-L18",
+          "version": "repo-lines-v1:sha256:a83d4ab8e0676608e036748bf7af22243f23625f556e50c8bfd622cabc63f744:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTgzZDRhYjhlMDY3NjYwOGUwMzY3NDhiZjdhZjIyMjQzZjIzNjI1ZjU1NmU1MGM4YmZkNjIyY2FiYzYzZjc0NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTgzZDRhYjhlMDY3NjYwOGUwMzY3NDhiZjdhZjIyMjQzZjIzNjI1ZjU1NmU1MGM4YmZkNjIyY2FiYzYzZjc0NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODRlYmNmMzA1ZWQyMmFhMjIxZTMzZWRiMTViNWQ5MzYwM2RhYTVhZGYzY2Y3OGY4MjZhZWFhZGUzY2QwNzBmMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTg1ODJmNTUxNzA0NmIwN2M4ODNhYzk4OWNhZWViMmFkZTE2MDc1NDM2MDNjOTFmMTg1NzI5YzkyY2Y1NzVjZCJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L19-L19",
+          "version": "repo-lines-v1:sha256:bb721456a12adb8c00c46a17aec7a4377bdc79638c94cd4475240db15db1205c:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmI3MjE0NTZhMTJhZGI4YzAwYzQ2YTE3YWVjN2E0Mzc3YmRjNzk2MzhjOTRjZDQ0NzUyNDBkYjE1ZGIxMjA1YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmI3MjE0NTZhMTJhZGI4YzAwYzQ2YTE3YWVjN2E0Mzc3YmRjNzk2MzhjOTRjZDQ0NzUyNDBkYjE1ZGIxMjA1YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiM2RmMGI5ZGU2Zjk2NGMzNGYxMmQ2NDczZTcxYTJhZDY0MTdkNmQ1YjlhMDM3OTQ1OTYyNmVmZjgxZjczMmQwOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzIyYjk4ZWVhYzJiZjAwMjVmYzIxM2Q4MDUxYjUzZTI0NzBkODIwNWRhZmE4MWFmZWRiMGE0YWE3NDVmOGZhNiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_4410a2d3f24644988c74332829eb06e0",
+      "statement": "sensorboard/README.md and display/CLAUDE.md disagree with each other on the Sensorboard's own RS485 pin numbers (TX=GPIO9/RX=GPIO10/DE=GPIO8 vs TX=GPIO12/RX=GPIO11/DE-RTS=GPIO21) for the same wired link.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L19-L19",
+          "version": "repo-lines-v1:sha256:f78b69a5a1e86312840dec3811133501a9d1ee76dcd5f0648c0a8c7e7f23a823:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjc4YjY5YTVhMWU4NjMxMjg0MGRlYzM4MTExMzM1MDFhOWQxZWU3NmRjZDVmMDY0OGMwYThjN2U3ZjIzYTgyMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjc4YjY5YTVhMWU4NjMxMjg0MGRlYzM4MTExMzM1MDFhOWQxZWU3NmRjZDVmMDY0OGMwYThjN2U3ZjIzYTgyMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiM2ZiNzlkZTkyMjExOWI2OTEwOTVlNWEyNjY1MDk3YjAwODQzMjRkYWNjNThkZjZlOWRmODQ1NzM0N2ViNmU5OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmIxMTU1NzllNjRlZDdiMDcwYzkxZTE1YmEzNDI2Njc3YzAwMjdhZjA2M2NhYWFhZjJiMjgwNWUxNTJkY2QwYSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L19-L19",
+          "version": "repo-lines-v1:sha256:bb721456a12adb8c00c46a17aec7a4377bdc79638c94cd4475240db15db1205c:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmI3MjE0NTZhMTJhZGI4YzAwYzQ2YTE3YWVjN2E0Mzc3YmRjNzk2MzhjOTRjZDQ0NzUyNDBkYjE1ZGIxMjA1YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmI3MjE0NTZhMTJhZGI4YzAwYzQ2YTE3YWVjN2E0Mzc3YmRjNzk2MzhjOTRjZDQ0NzUyNDBkYjE1ZGIxMjA1YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiM2RmMGI5ZGU2Zjk2NGMzNGYxMmQ2NDczZTcxYTJhZDY0MTdkNmQ1YjlhMDM3OTQ1OTYyNmVmZjgxZjczMmQwOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzIyYjk4ZWVhYzJiZjAwMjVmYzIxM2Q4MDUxYjUzZTI0NzBkODIwNWRhZmE4MWFmZWRiMGE0YWE3NDVmOGZhNiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_781fb28797f24419a01850ff381a408c",
+      "statement": "The RS485 topic protocol's JSON frames now run over an ESP-NOW transport rather than a wired UART bus: the Sensorboard's network/espnow_modem.c (internal functions still prefixed rs485_*, a naming holdover from the former rs485_modem.c) builds and parses every frame and sends/receives bytes via network/espnow_transport.c; the legacy RS485 UART pins are no longer driven as a UART, and sensorboard/README.md's project-structure section still names now-nonexistent network/rs485_modem and network/womo_rs485 modules.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L164-L173",
+          "version": "repo-lines-v1:sha256:e00ecb6f111a5aa9445faa0182686eb25df3e0d7db150b6743b759db6814a5a5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhYmNjZDBlMWRlYThiMDBhZGRhNzFmMGQ5MmJiZjg3MWRhMTQ0YjAyYmNiNmNkMzA0Njc3M2MzMWM1ZjhmZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5M2IzYzZkZWM2OWRjZmZiYmE2NmFhYzhmOGMwYTBjODY3ODY4MDBkZjU2MDE4MzIwNmVkMDc5ZmE5Mjg0MzIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZlZGFmZDVkODg3MzM3YzVmMzFjOWFkMzQ5NTA4NzZhMGIwOTI3NTI3ZDBiN2ZmMzA3ZjNhYzEwNmUwOGVhNGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNmMGE3YzkwMTg3OTc1MjI4MTMzODRjN2ZlMjhhNDdhYWVkNjgyODIxYzFiYjQ1ZmZiZGI2N2MwNDgxNjBlYTIifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1-L50",
+          "version": "repo-lines-v1:sha256:69a68800128eb7d5e4024e89ff3c179a977bd16108e5a5713de1ff356bb81874:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY1ZTQxNzcyY2M4NzM4NDM0MWFlYjUwNmU3NTAyNTJiYTRhN2Y5M2U2NjgwZTNjMzZjODJhNWMwMWM3OTEwYWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ1NzdlNGY5YWI5MDllYjQyNWI1MGJkZmJhYzg5OWQ2NzMzOGY5ZGE5MjBhMmJkMjRlY2FhM2MwMjdhMGQyOTAifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_transport.c#L1-L50",
+          "version": "repo-lines-v1:sha256:e8e0d1e8da6ba63e4c85f1fcdfaeb8dc1bbd6e5ad23790855693527e7151a434:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFjYmJiMWM0NjkyM2U2Y2VlNTZkZDZkNDk4YTQ1MDA5ZTM1MzAwMDQ0YjEyMjM3MGU4M2YzZjk2M2EzMDc0YmEifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L83-L87",
+          "version": "repo-lines-v1:sha256:1eaca00345626348379085505fa1f07163de69dfe5058345824162593b5f3013:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDY0MzRmYzUwYTNkMTgyNDc3MzI2ZTRkMjA0M2UzZTQ1ZTZiMTE3NDA1YWYzZDU5Y2UzZTZhMzNiYWIyYzhkNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjIyMWJmNmUwNjI3ZDJlYzczYWNlYmE2NzM3NzhhMjM3YWMxOTExYjkxYzY0ZGJhODM4OWJjZDcxNTAxYjc3NiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGMyNmUzYjkzZjg1YWFkN2RlMmZjZTEwNjY5ZjcwYmI3YzM2YjY1NzRhMDc5ZGRmMDBlYWJiZDMzOTY1ZjE3ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTZjZGYzOWFiZTAxNGEwMzVmOGFhNjVhZmUzOGFkNjhmYmJmNjZmOTViNDg4M2UzYzcyZGU3YTAxZWJiYzU1MCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_3b6b223110a740f6a22bb5e02ddf86f9",
+      "statement": "Contrary to sensorboard/README.md and display/CLAUDE.md, which describe hello/hb as Sensorboard-to-Display heartbeat frames, the current espnow_modem.c only receives type:\"hb\"/\"hello\" frames (sent by the Display, per womo_config.h's WOMO_SENSOR_HEARTBEAT_INTERVAL_MS comment) and uses them purely as ESP-NOW peer-liveness signals, without the Sensorboard itself sending hello/hb.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L41-L45",
+          "version": "repo-lines-v1:sha256:c229080fbee7fa838cd03b23c2b86aa5d02a09dd1e90cc40acbf79ff94d179ec:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzkyZDlhM2FiZWE3ZjkxY2Q1MDA0MmFmMGM2ODAzZTNiZjQzNzMyYjYyNDVlZDExNzA1YWZkZDA0MzUzYjY2ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmY5MDUyYjEzODg0MjY5ZTNhNjZlMmY0OWZkZjhhYTEwMmJjOWI0M2VhOTM4Y2I1YTI0Y2Y5NzY5Mjg3YjM0NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzVjOWQ1OGFmOGY0NzdhMTdmOTc3OGI1MTYxZmE3YTU4YTE3Y2Q0MmRmNGI0MzA5OGZiMGRjYzhhZGY3NjNiYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWM5NmM0OWUwZjdkMDdmMWI2NTEyMmFlNzAzOTI0ZjYzZDc1ZDA3MzY1Y2UzZTBhMTE2YWNlMTZmMGFhNGFkMiJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1616-L1623",
+          "version": "repo-lines-v1:sha256:5448b5b46088983df2e9945a72714ea91a2b1b1609f9e175bdd842556120b781:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmRkYjFhMDQ5NmYzNTFkMDBhY2NiNGQ5NGIxYWUzM2I2MzEwMjU5MDA3MmUyMDgwMzY1M2VlZDBkMGYzYTkyOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTUyYjRjYmY2NzFjNWQ4ZTAyNGNmMjlmNjE5YTBkZDA4MTE1ZGQyMmZlNzE0MmI2Mzc0MjlkOTg2OWU5NmFjZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2FkMWMwMGM2NzNmMTBhNjBkNzFmYTY4MjZkMGNjYWI1ZjRjNzNlMzdmYmJjZmFlZmYxZmY3NjllZGZjOGU0YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWI0OTIwNTk2MDFiZTU5YzhiYjU5MjBjZTUxMTYwNDJmYjVjYmZjZTIwNGZhODAzZjIxZWYyOGZjYzZhZTZkNyJ9"
+        },
+        {
+          "resource": "repo://firmware/shared/womo_config.h#L29-L31",
+          "version": "repo-lines-v1:sha256:11dc2b058a540108d1777f56d68c9e305dc3c8f41f2a8f08048bca82bf554101:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTYxZDMyZjE0MDk2ODdmZGNkY2M3MTE4YTk0ZDE2M2NjOGU1OWE1MzNiNmRlY2FmNWI3ZTczZmYyNDFjNjY5MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzgxNmE5NGViMjFiZGY4NDYzODVkOWQ2NDlhZmI2ZDdmNzU3NGUzY2MzN2EzYTRhM2VmM2RkNTM5MTliMTJkZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODMyYTczNTRjZTMxMjQ4NDkzOTgxMTk2MThkY2M0MjM3YmMxZTNiYTIyMjUwZTg3YTk3ZDJjZTVlZmQxNzNiNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjFlNTFjNTdkYzE4M2E5YTM5ZWUzN2ZlMjBiNGY5MzQzYjYwMzA2YmI3NGJlY2Q5ZGVhNWNmMjkwNjcxZjM4YiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1a8863fdd6eb4e92861712443db500d2",
+      "statement": "The Sensorboard's TX scheduler runs a 100 ms tick that publishes at most one due topic per tick in round-robin order across a fixed topic list (ctrl, imu, bat, tank, hx, gas, bme_in, bme_out, elec); on-demand frames (ruuvi_scan, gasbee_scan, gasbee_cal_result) consume the same one-frame-per-tick budget and temporarily displace regular topics.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1387-L1399",
+          "version": "repo-lines-v1:sha256:7becdc4b2af4b7e3fd52ebc61058b0df64ba71672afc17ce5f383c00f77d4c80:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhZWIzMTlmYmQwODJiNDAxNWIzYzY4ODEyN2I2NjY1N2FmODQ1ZjAyNmNhZGFiYTUwNmU4OTAxMTZmNzYxMWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmYjY4YzU5MWE4YmNkMDNmNTRkOWYzMjgwMjZhMDBiMzUxODQ5ZjA5ZjgwODAyNDI2ZmIxYTdjYmYzNjk1M2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBkNmI4YWE2NDRhMzQwNDJmMzJlMjNmODFiNmVhNWUzMjljZGU5OWUyMDRjOGMxYTUzOGQxYzRjOWNiMTYyZmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMwOTA4MTdlZDJlZjA4OTk0ZGNiYmUxOGUxZDhkNWZlMTZiZDhlYjIwNTZhZThmOTFiNTdiMDNiYmY5NmFhZTQifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1656-L1729",
+          "version": "repo-lines-v1:sha256:c2d267bc4a55f273b604cb1baad1319882c36163215f440ac04f8999f29ee050:eyJzZWxlY3RlZExpbmVDb3VudCI6NzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhNGJhZjVlYzZhYWViYmE1ZDhjZGU2ODFlMTU1YjZmMDU3MTdhM2NhN2UxMWQ0ZDk5ZjQxNjEzNGM4MjdmNzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIwMjMzNGRhNzQ0NmU0NmRkY2ZjZGIzZGI0MTQ5MWE5YTE2NmQ0NjEzODg5NGViNDJmYzI2MGE5MjBmZTFkZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkwZmYwOTJlMWI2ZjU1MzgwZGQwNmE2ZTEyYzIyMTcyOWI1NjUxYmFkZGY1YWJhN2M1M2ExYWVhN2Q0Y2I2NGMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_26fb3d683a8448e8a1083a403a8af8ac",
+      "statement": "The Sensorboard becomes 'ready' either on an explicit cmd:\"display_ready\" or as soon as the ESP-NOW transport recognizes the Display as a known peer, whichever happens first; becoming ready triggers a one-time initial burst publishing every topic back-to-back (~20 ms apart) before the interval-based round robin takes over.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1669-L1676",
+          "version": "repo-lines-v1:sha256:19831814a109300762115e8aa64bbc1e24c3e16df8d88077602056ab6bd32e02:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTM4Y2UzOTY0MzU4YTJhZjQxOTIzZDQ0OWNlZDYwMmVjOGE2YzBhNzk1ZTg1NWZmZjE3ZDg3YjA3ZTdkYThjYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzlmODljN2QwYjg0YmVlYjkwYWNmZDg5NDExZTU4ZDc0MjJiNWQ5Mjg3ZGZlOTRkNGJlNDNlYTE4NzgxNGJjYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDEzNjA2YTdhNjAxNDNhNmMyNzNlZTE4MGNkMDhhYWZmMTY5MDMwOGJiZjRjODEzMTZhNDJjYzkwNTdkZjI0NyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L321-L347",
+          "version": "repo-lines-v1:sha256:c782bcf6e38d8b46077115c710bbd2229ffd36ec6d14008516529f84c6c7a804:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyYmUwNDFhMWMyNzE2NDMyNzJmYTViNTEzMjg5YTA4YzBjNWRmYTcxMzM2NGNkNWQ2ZDVmMTM4MzY4ZTUxYTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIwNWMxMDgwM2UwM2NmMjYzM2VjNDYzMGFjZDBmMzE2NzExNmUwZmYxNjA3Y2EzMTg2MTA5MDkyNTZkNGJlY2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJmYTFjZGJjY2ZiMTU4YjI3ODBmNDdlMTM4ZDBlZDE4MjMyN2FiMTAwYmNmZGY2ZWExOWNhNmNlNDUwNjc5ZTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_58a5ec7fea574b129c4994f46e09f374",
+      "statement": "After executing pwr_12v_on/off or radio_on/off, the Sensorboard resets ctrl's interval timer and republishes ctrl immediately (s_ctrl_immediate) so the Display reflects the new state without waiting for ctrl's normal interval.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L36-L36",
+          "version": "repo-lines-v1:sha256:dab3d52316e0205f8e3d9634ab1580f051166710b2270dd0bb74ad63a0a3cea5:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGFiM2Q1MjMxNmUwMjA1ZjhlM2Q5NjM0YWIxNTgwZjA1MTE2NjcxMGIyMjcwZGQwYmI3NGFkNjNhMGEzY2VhNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGFiM2Q1MjMxNmUwMjA1ZjhlM2Q5NjM0YWIxNTgwZjA1MTE2NjcxMGIyMjcwZGQwYmI3NGFkNjNhMGEzY2VhNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWU1MmJlZmZjZWRmZTBlYzBlOGEwZjAwYzE1M2FkODUzNzA1OTU0YWU0ZmZjZTk3ZGZjZTg1ZTc0OWMwZDRhOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWFhOWE0N2M1OTk4NGFhZThlMWM4NWQyMTFhMjkzNzg2NGZhMWIzNDc4MTIxODM2NmZlNjhmMmEwMmQ3ODQ4OSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1507-L1520",
+          "version": "repo-lines-v1:sha256:f75d5117a6412d793f3074856e3cd090e6233877edcc33cb785427f680e9ad27:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE3NDM4OTM0ZDdjYjM2YjA3OThkNjU0YWY2YzFkMzg3NWUwOWFiOTgyMzA4Yjk2ZWMzN2QwZjZjMTBmNTA2Y2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA5NjNjOTA2YTQ5YjM3MGM3YWM0ZGIyOTVmOTc1ZmJhOTUyOWE4ZmI5ZDZkY2RhZmFhYmQ3OTk0NGU4N2I1Y2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdlZThmOTk4MjdhMGNjMDA5ZTI4MTgxOGUyNzI2OWFlMDRhNDk3YjJmNTM5OTE3Mzg0OTAyMWQ2ZjE0ZDdjMTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJlZjJhMDQ1ZmUxZjBmMjEzODdhZTY0NjRjOWYzZTZkMWE5YzNkMDRhMjQ2ZWVlYjRmY2E0YTcyZWM2YmZmZGMifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1677-L1682",
+          "version": "repo-lines-v1:sha256:d43ab024a419880e8ed897a34180c64aac658aa96f7e3b905c8c67c674cf0301:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDUzM2U1Yjc1NGY1ZWEzZWVlMTRmZjM5NTg1NGJiNzZkN2NmNjZjOWQ5OGE2NTcxNzAwZTJmZTI1YWVkODk1MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTAwYTZjMTgzZDYyY2E5YWNhNDY3OWY3YTVjMTU3ZTkxOTkxYTAzOTNmMWZiMTM1NDg5NjkxNTk0NWE3NWUwZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTcyMTBjYTYyMDgyM2UwOGRmNjZmMGRkMTVkOWRiNjVmMzU2YWIzOWRiNjQzM2RkY2JkZjg1YTQ1YjFiZjcxOSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_577e998ef7174aeca95c6844cf8ec828",
+      "statement": "On the Display side, each received topic updates only its own slice of the merged sensor-data snapshot, leaving all other fields untouched, and unknown or missing JSON fields are tolerated rather than treated as errors.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L41-L41",
+          "version": "repo-lines-v1:sha256:12277c82beddad3e53c7bbc0fa84a4dce42dff2af42e14844a2eadd7c8ce427d:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTIyNzdjODJiZWRkYWQzZTUzYzdiYmMwZmE4NGE0ZGNlNDJkZmYyYWY0MmUxNDg0NGEyZWFkZDdjOGNlNDI3ZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTIyNzdjODJiZWRkYWQzZTUzYzdiYmMwZmE4NGE0ZGNlNDJkZmYyYWY0MmUxNDg0NGEyZWFkZDdjOGNlNDI3ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjRjZjk1OGUxZmY1YjNmZmY5MTcwY2NlZWEwMzJiZDBjYzQ1ZDBlZDJiYjU2NTNmYTk3NGRiMjZhNGZkYzhjMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGYxMTJmNWRiZjNkMWMxYWI0ZWQzOTA3ZmI5MGI5MGU4M2M5OWUxZWIzMjk1N2E0Mjk1MzRiMmI3MWUzOWM1MCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_aa5bb612d7a0497ba2b936668160f590",
+      "statement": "Pending need_ack commands are tracked in a fixed-size table (WOMO_SENSOR_MAX_PENDING_CMDS = 4 slots); a command exceeding WOMO_SENSOR_COMMAND_TIMEOUT_MS (3000 ms) logs a one-time warning, and the slot is force-freed after 3x that timeout (9 s) regardless of whether an ACK arrives, so a lost ACK cannot permanently exhaust the pending-command pool; a 5th concurrent need_ack send fails to register a slot but the frame is still sent.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L165-L226",
+          "version": "repo-lines-v1:sha256:7ff9b59f730901d66dd381e85596fea7ec658369d4e37ba0355d73d6e497e549:eyJzZWxlY3RlZExpbmVDb3VudCI6NjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyYWZmYTg1MzM2YTAzNzc1MDdkYzY2ZjcwYTNiMDE2OTMyZDE5MjE0OWE3OWM5YmEzNzlhMzRjNjNjMzdjZGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIwNWMxMDgwM2UwM2NmMjYzM2VjNDYzMGFjZDBmMzE2NzExNmUwZmYxNjA3Y2EzMTg2MTA5MDkyNTZkNGJlY2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM1ZmRlYzUyYTkwN2U2YzM2MGE4ZWYwN2NiOTVmNzYzOGZjMzBiYzhkZjYyOWY3OThlYzdhMTBhYTQ1MGQ2ZWQifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L254-L257",
+          "version": "repo-lines-v1:sha256:946cd49d096de9766700ee9161230771e3bc13f8ff0def756784a5cfcd7b36e8:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTE3OGI5OTJlMGJkMjhlZDNjZjVmNTEzZDM2MjRkNzU5NGE0MWNiMjcyM2M3ZDQ0ZDA1MmY5MWYxY2ZhZTYxYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmMxYjQzOTEzNDIzN2MzN2ZlNGYzOTExYWI3NWNjMmQyMDRiZTllNTZhZTBiOTdlOGJjYWRhNWMwOGY3MmE1ZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmUwNGQ5ZWM5MzBjNDRkYjgyYWJiNGI2NWU0MzE1N2Q2ZWYwN2NiNGM2NWFjZTM3OWZlNjFkM2ZiMGRjOTg3OSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjdmOWY0ZGJjNDkyNzc5MmM5ZDRjYjg5ZTYxNzU3YzkwNGFlODczNTJjYWIyMjU1MDU3ZDY2OTk2NDYwNjU2MSJ9"
+        },
+        {
+          "resource": "repo://firmware/shared/womo_config.h#L29-L37",
+          "version": "repo-lines-v1:sha256:8f14f703bccd5b726f170339e78e4e8aa878b03357cc471c3a67ba613d596266:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTYxZDMyZjE0MDk2ODdmZGNkY2M3MTE4YTk0ZDE2M2NjOGU1OWE1MzNiNmRlY2FmNWI3ZTczZmYyNDFjNjY5MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGNkMzIwMmRkNjFmNTdlMjdiYjEzMDZiYmMyNDA1NGNhNzE1OWRjZDBkMDkwZDI5ZGQyMzc1ZDI0MTZhYWVhOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODMyYTczNTRjZTMxMjQ4NDkzOTgxMTk2MThkY2M0MjM3YmMxZTNiYTIyMjUwZTg3YTk3ZDJjZTVlZmQxNzNiNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWFjZWRmNzNlMWU0Y2M0M2VlZjA4NTBmNjMzZGRkOWI3ZTVjMmYyNmEzMzQ4NDA0YjM4YWJlYzk4MzkwYWY1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_0d02e0a7c8de4f759268e7a7b4e13566",
+      "statement": "A pwr_12v_off command arms a deep-sleep-pending flag that only fires after that command's own ACK has been sent, guaranteeing the Display sees the command acknowledged before the Sensorboard enters deep sleep.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1511-L1515",
+          "version": "repo-lines-v1:sha256:eead2a31bacbabb032e8fabf71b2827e4b2e86680c7a16f9cc9151bae9aed2c8:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTJlNjczODZjOGY5MTc4NDg4NjVlMmY1NjcwNjVjNDgwYjNjMWJlYjIwMmFiYjlmZmVkMTMxZTYzMDBjNDI0OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWQ5MTRlMWIxNTQ0MjUyZDQ5MDlhZjkzNjcxZmM4MjVmZWQyMTk4ODcxODU1ZDkwYjYwMzdlMzliODI2NjIzYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiM2NkMjhkMGZlNzAwZTE3ZjRiMzFhYzAxZDgyOTNiZWVhMDYxMWM3N2FlMDJlODY1MjI5NDZkMmI3MjVjYjE1OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDU3NDZiZGZkMTJkYWM4MTRlYzUxMDQ2ODAxNDgyNTI3M2ZmMzI5YjAyYzgxYTFhYzFkYzRjNDY1N2MzOTYzZiJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1646-L1650",
+          "version": "repo-lines-v1:sha256:b52b4755185b27b697c1265451df2a7166b2efe1e47ff69f01e0a0c2069808b0:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTlhN2IwZTg0MDYwZWQxMDlmOWE1ZTdkMTI0OWRkYTkwOGU5ODBlYWEyZDgxZDZhMTBkOTU2MTAxN2FhYWRiNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWM2NjgwZmMwZDEwNDMyY2RlMmQ0Yzc5NTVmYWU4YTY2OWJmN2ViMjE4YThiMTAxOTdkMDkzMmU2MjEwM2IxMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTJmYmVjNjljOWYxNjY1NTE3MDBkY2NmMDM4NzE0MjE4ZTEzMTRhMzg2OGQ0YmE3NjQwOWQzYjg5YzMzMGVjZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_b9004e05c2264bfda044a85103c1b3b3",
+      "statement": "Topic intervals disagree across sensorboard/README.md, firmware/shared/womo_config.h, and display/CLAUDE.md for imu, bat, bme_in/bme_out, and elec (only ctrl, tank, hx, and gas agree across all three); since espnow_modem.c's s_topics[] table includes womo_config.h's interval macros directly, womo_config.h is the value that actually ships at runtime, not either prose table.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L23-L39",
+          "version": "repo-lines-v1:sha256:9c8bf76580416a5f8d655417a8b55a44cf6dc0ef17c2530a4a167731dab52401:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmOTA3MzBjOGFhZWJmODI5OWMzNjBmZmM2YzIwODY2NmJlYmM3MjMxZTViMmUxNTY4NzNkZmZkN2E0OTFlNTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjM2ZmYWRiZDgyZDJjOTBhNjBlMWVhZTk0ZjZkMzJhNTgyNjNkNWMyNmE0NWEzYjc4MTFkYTc1MGFhMDI1MGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZiMTE1NTc5ZTY0ZWQ3YjA3MGM5MWUxNWJhMzQyNjY3N2MwMDI3YWYwNjNjYWFhYWYyYjI4MDVlMTUyZGNkMGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU1YWY4NzIyYTA5Njk3ZTgzMWQ5NWE1ZTRjZTkyYzE4YTg4ZDMxOTU2NGI0YTM3MmJhNGUzZGViOWQxNmIxNzIifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L43-L58",
+          "version": "repo-lines-v1:sha256:f8002c263b27517864fd2b9dbda93c2d9c272ac37a3bfe8dfb1c0b524acf4551:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4N2YxZDQwM2NiNGY3ODc0Mzc5MzRiMDJmNDA0MTk2MTlhNTU2MDRmMDExNGE2NWJjZTRjMzQzMGU3NGViM2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4ZmE3MTYxZDFmZDQ3NzU5Yjk0NDQ4NDUwMGIzNDMxMTY3Y2Y2OWJhZDhjNjNkNjJmODNhN2Y1NTI3NTViMWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFkZDZlZmNiMGI3MDJmNTUxODVmMGI3MWYzMWI0ZGExMmQ1YWE3NmJiNzgyYWFkNjgxODdlNTQ0MjZlMzY1NmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI5YWI1OTQ4YjVkODY0NTI4NTliOTExYjc0NjNmOTczMGEyM2ZmYTk0NDJiN2EyNjYzYjk1ZDUwYWE5NjU3ZDkifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1387-L1399",
+          "version": "repo-lines-v1:sha256:7becdc4b2af4b7e3fd52ebc61058b0df64ba71672afc17ce5f383c00f77d4c80:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhZWIzMTlmYmQwODJiNDAxNWIzYzY4ODEyN2I2NjY1N2FmODQ1ZjAyNmNhZGFiYTUwNmU4OTAxMTZmNzYxMWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmYjY4YzU5MWE4YmNkMDNmNTRkOWYzMjgwMjZhMDBiMzUxODQ5ZjA5ZjgwODAyNDI2ZmIxYTdjYmYzNjk1M2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBkNmI4YWE2NDRhMzQwNDJmMzJlMjNmODFiNmVhNWUzMjljZGU5OWUyMDRjOGMxYTUzOGQxYzRjOWNiMTYyZmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMwOTA4MTdlZDJlZjA4OTk0ZGNiYmUxOGUxZDhkNWZlMTZiZDhlYjIwNTZhZThmOTFiNTdiMDNiYmY5NmFhZTQifQ"
+        },
+        {
+          "resource": "repo://firmware/shared/womo_config.h#L43-L50",
+          "version": "repo-lines-v1:sha256:13035894e3e6c2717530844d150a5ab6f609104f52460033bd21cae88058e540:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODQ3MmUxZjBkMjEyNmJhZTQ2OWNhZmQ5ZTUzYjkwYjkyZmM2NzQ5MDU4YTIxOTAyOTZkNmE5N2E4YjQ1ZjQ3YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmEwMjlkMWQwY2JkYmRmNzhhNmFhYWRjYzAzYTQzYjQ5YjgzYzNjN2Y3YmE1ODYxYjJiNjU2MGI4ZWU3YjcwOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODY1MmYxMmRlYWI2NjQ2ZTdjMDI5NGNlOTRmZWRhNDA3MDZhNzhlMjA2ODQxY2ZlNWE5N2RlYWZmNmVlNTVhZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTU5M2FiZDNiNmNhMzliNjQ3YjcwZmViMDVhN2U2YWVlYjc2M2IwZmEyNGY3MGIwYmY3YzBkZjY4ZjI3MGQzMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_434bfc01b50b4bff9de1bb99da4c28ed",
+      "statement": "sensorboard/README.md and display/CLAUDE.md disagree on hb and hello topic field lists (README's hb includes heap and lacks rx_seq/last_ack; README's hello includes board and ts which CLAUDE.md omits while CLAUDE.md adds rx_seq/last_ack), on tank's field list (CLAUDE.md omits the t1_l/t2_l and rate/rest_h consumption fields that README documents), and on where pressure-trend fields apply (CLAUDE.md lists press_trend_state/press_trend_hpa_h for bme_in, but README documents trend fields only for bme_out).",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L23-L39",
+          "version": "repo-lines-v1:sha256:9c8bf76580416a5f8d655417a8b55a44cf6dc0ef17c2530a4a167731dab52401:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmOTA3MzBjOGFhZWJmODI5OWMzNjBmZmM2YzIwODY2NmJlYmM3MjMxZTViMmUxNTY4NzNkZmZkN2E0OTFlNTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjM2ZmYWRiZDgyZDJjOTBhNjBlMWVhZTk0ZjZkMzJhNTgyNjNkNWMyNmE0NWEzYjc4MTFkYTc1MGFhMDI1MGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZiMTE1NTc5ZTY0ZWQ3YjA3MGM5MWUxNWJhMzQyNjY3N2MwMDI3YWYwNjNjYWFhYWYyYjI4MDVlMTUyZGNkMGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU1YWY4NzIyYTA5Njk3ZTgzMWQ5NWE1ZTRjZTkyYzE4YTg4ZDMxOTU2NGI0YTM3MmJhNGUzZGViOWQxNmIxNzIifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L43-L58",
+          "version": "repo-lines-v1:sha256:f8002c263b27517864fd2b9dbda93c2d9c272ac37a3bfe8dfb1c0b524acf4551:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4N2YxZDQwM2NiNGY3ODc0Mzc5MzRiMDJmNDA0MTk2MTlhNTU2MDRmMDExNGE2NWJjZTRjMzQzMGU3NGViM2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4ZmE3MTYxZDFmZDQ3NzU5Yjk0NDQ4NDUwMGIzNDMxMTY3Y2Y2OWJhZDhjNjNkNjJmODNhN2Y1NTI3NTViMWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFkZDZlZmNiMGI3MDJmNTUxODVmMGI3MWYzMWI0ZGExMmQ1YWE3NmJiNzgyYWFkNjgxODdlNTQ0MjZlMzY1NmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI5YWI1OTQ4YjVkODY0NTI4NTliOTExYjc0NjNmOTczMGEyM2ZmYTk0NDJiN2EyNjYzYjk1ZDUwYWE5NjU3ZDkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2e6e998e982944688dad8faf6cad1dc9",
+      "statement": "The Display-originated command set (display_ready, level_start/stop, tare_a/b, gas_bottle_replace, pwr_12v_on/off, radio_on/off, ruuvi_config, ruuvi_scan_request, gasbee_config, gasbee_scan_request, gasbee_cal_start/end, gasbee_cal, wifi_config) is acknowledged by the Sensorboard via ACK, but the Sensorboard's current command handler has removed level_start/level_stop support (fast-mode is now driven automatically by /api/imu polling), so those two still-documented commands now receive an 'unknown command' ACK failure.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L38-L38",
+          "version": "repo-lines-v1:sha256:0e40ce555580c2b67fd25a4301428870041a9a8fa61c845511fb7dcd092ad806:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGU0MGNlNTU1NTgwYzJiNjdmZDI1YTQzMDE0Mjg4NzAwNDFhOWE4ZmE2MWM4NDU1MTFmYjdkY2QwOTJhZDgwNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGU0MGNlNTU1NTgwYzJiNjdmZDI1YTQzMDE0Mjg4NzAwNDFhOWE4ZmE2MWM4NDU1MTFmYjdkY2QwOTJhZDgwNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiN2JiZGU4MjhmNTM0YmYxMThmNjViMmNjZGFhOWU3Y2EwY2Y5OTNlZTZlZDUwZjM3ZTUzMjM3OThmZGU3NTQ0NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmNmMzRkMzBmNzg5ZTc2YWJlMWU4ZDU1ZmE3ZWE4ODZjZGU3ZGU2ZmY3NGI4MGZiYTkyODkzZmY2OGY1OWJkYyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1413-L1416",
+          "version": "repo-lines-v1:sha256:7752f85fb01563edf2206551ef081c253c053374fe99aaa13cedad35305bda03:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTY5OTg2ZGRmN2Y1NmNlZTgwNmZkMDkwNWRhZTIxMDg3YjZmNmNlN2NlNWNhZGI2ZDFkMmU0NjcxMTNmYjY1YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMmIzMjNlNTdhZmE1ZTRlZDcwNWNlY2JhY2M3MmE1MjU1YjEyMWU5OTg1NDc0MWI1OTAwNjIyNDlmYzJjZTk5YSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDcwZTA0YWQyZGYwMTI5MDI3NWFjMWQxNTIzMDgxZDA5MGZhNzc2MTFhYjdjMjNlYWRlN2U4MDE4OWFjYWVkMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODRlNzFlNDdmZGRkNDg3NzIzMTdiYmZhOTM0NmUzOWQ1Mjk1YjMxMGFlODAxYWMzZTZmYjVmZTk4NjNlNzcxZSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_bd242f09e41445588a3f4390acdf9d5d",
+      "statement": "The Sensorboard can initiate an out-of-band wifi_pass_request frame toward the Display (need_ack:true) when it lacks usable WiFi credentials, asking the Display to prompt the user and respond with cmd:\"wifi_config\".",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L113-L113",
+          "version": "repo-lines-v1:sha256:3cd95ffbbb986cfcd231f3ee33a81f69eb13369c32db0c0d44be1d60fdfdb0c6:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2NkOTVmZmJiYjk4NmNmY2QyMzFmM2VlMzNhODFmNjllYjEzMzY5YzMyZGIwYzBkNDRiZTFkNjBmZGZkYjBjNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2NkOTVmZmJiYjk4NmNmY2QyMzFmM2VlMzNhODFmNjllYjEzMzY5YzMyZGIwYzBkNDRiZTFkNjBmZGZkYjBjNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiN2VhMjgxNWVhOWIxOTYyNjQwOGU5MTg4ZGRiMjY5NDA3MzgxNTI1NGVlNWRiZmM2MTQyMjYxZDAzYjY1MmMxOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWMxOTFiNzUzYzI2Mjc3Y2M2NzFmZmZlZjdjMTBiNWJhMDBmMzcxMDlmZTM3ODBkNDJhNDgxOWVhMWZmMDQyMiJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L278-L288",
+          "version": "repo-lines-v1:sha256:cb7c6f9ad38138c3ebd314aa24b81871f781106f3c7f7dbc1c9f2a06492e2519:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgxOTRhN2JlZWY0MWRlMDI3YWIwNjUwMDE3NDQ2YzBjZTk2M2RkMjg1NmNiNmRjOGFiOGI4NGRhYzBiMWU2ODAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU3MzI5NzI4NDhjZTAzZjcyZDgwNTlmNmM2ZWRhNDYzZjEyM2U5OTY3YzU5Yjg2OWMzYTUzZTdkNjRiOGFjMzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3YzQ0YzhlNjgwNjBhMmVhZGFhYjBmOWQwYjgzMjE1Yzk0NmNiMzQzMjM3NTg1MzAzZTkyOWQ3M2Y5MTlhOGEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

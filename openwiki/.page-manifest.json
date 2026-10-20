@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "pages": {
+    "/openwiki/AGENTS.md": {
+      "pageVersion": "sha256:1aecfa95954d9bed84c617ffe0338211d3032915b7cc9220f956b104c94b4da6",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/architecture/ble-sensor-nodes.md": {
+      "pageVersion": "sha256:3b18f56c36dfb586db17f65e3ac0718b656be9dffead80550b11ad6775bb51e4",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/architecture/display.md": {
+      "pageVersion": "sha256:7b3a4be2b3e1aa2ac6ed3c379ac70c19857d2a3cbcf1cb46ac863631d66b273c",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/architecture/overview.md": {
+      "pageVersion": "sha256:a25e8f16984a9e35159ed56328d8d2034b3fbc0c56be08d991b22b5087f27a13",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/architecture/router-and-connectivity.md": {
+      "pageVersion": "sha256:805c111c166fc03c3957c80247a07c6e71874e0dd2abff5932364d005afab7b0",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/architecture/sensorboard.md": {
+      "pageVersion": "sha256:e205ff093d2155c1ab52b3a295fedcccc50d1b8c0dda883a65ead16e15022053",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/architecture/website.md": {
+      "pageVersion": "sha256:8c620bc73c47e9f39376f657cd6faf4d0123ee138789da0b6294ddea64d01740",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/hardware/boards-and-kicad.md": {
+      "pageVersion": "sha256:9dec9a5cc477e168e3731636b38ef52d1fdd7a07511fc342c03cd63f88a5b93f",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/hardware/errata-and-open-decisions.md": {
+      "pageVersion": "sha256:23adaf479c9f8d5053bb1b4d90295bcbc28dec968980b2eacb3ce8d6a6735b86",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/integrations/external-services.md": {
+      "pageVersion": "sha256:10480e83e8599a43489239139baf1b501f0de5e434f5d46c20522f52800943f4",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/operations/build-flash-config.md": {
+      "pageVersion": "sha256:a0505092fcfb17c048cd8ee2ec2cbcd9d8530314a9ea86f5d201be56f4f0b68b",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/quickstart.md": {
+      "pageVersion": "sha256:510e77497ef396e4d3aacdad10d264b9e1a5b3f5c499bc4bebbba8bd6ab529c1",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/testing/hardware-bringup-tests.md": {
+      "pageVersion": "sha256:53f905772949c26e980688fdf30aaca514dd58b5c582ba8df6add0805271c9ff",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/workflows/ble-data-flow.md": {
+      "pageVersion": "sha256:b7dfb116f424d50d4a59ac827a37fc57b899ea1df1f20ce72d1ac16ec335665f",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/workflows/gas-calibration.md": {
+      "pageVersion": "sha256:1a7f70f50318bbe915061cec7df60978c6bbc24020945cc88cf7fe58ae3fd367",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/workflows/power-control.md": {
+      "pageVersion": "sha256:8b64020126434db81e4d4e0ed9de8d0224d69eb8906c3ff324baf34f202a3742",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    },
+    "/openwiki/workflows/rs485-protocol.md": {
+      "pageVersion": "sha256:1d24ce62a3cbf059e94dc152d5b145cd0d9c572cd667eb7a9000837011778f29",
+      "completedBy": "openwiki/0.7.2",
+      "completedRunId": "171d16dd-5989-4ceb-a877-8e8e7bfe6b43",
+      "gitHead": "687b5ac41f0db44a910c29f802c2700addad0b40",
+      "sourceFingerprint": "sha256:1de473a19117f6c1ea0597548ca7e4f861906ffca9edbdb98dd106dc64cd352a"
+    }
+  }
+}

@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:1a7f70f50318bbe915061cec7df60978c6bbc24020945cc88cf7fe58ae3fd367",
+  "claims": [
+    {
+      "id": "claim_0cfc2e52dfea4b209bcd7fbcb8ddd7e8",
+      "statement": "GasBee calibration uses a GATT connection only while the GasBee is in USB configuration mode and only for the duration of the Display's setup wizard; normal GasBee readout (weight/battery/status) is always passive BLE advertising scanning with no connection.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L63-L69",
+          "version": "repo-lines-v1:sha256:a95bc63dc411db82697a64e4c31546f7ceead3d6be8c39e5a3bf20ba2935909f:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzNkZGZjNjBkMjFiMGRhNmJhMjM5YzY2NDU5NDg3OTA5Yjg5OTgyZDVkYTZiNTgwMzUxMjAzMmIwOWUxYWNhMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWUzOTQ4NTI1MTMwYTgxMjgxMTE2NDQ3NDc1YzkyNTY4NmM1ZTQ2Y2NiYjBiYTkzYjg4ZGMwODllNjBhNjc5NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTZhYjE1NTBiZTY2YmJkMjVlZDc1ODdjZGU5MmRhMTlmMTVmZGE0MzM5ODFjZmVjMmY4OGQwMjk2MGI5MTNhMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjNhZTc3ZDkxYjEyODU1ZTcyNDE5NjYyNWE3Y2ZjMGRlYTE0MGUwMjQyYzg1NjEyODY1ODk2NGQ1NDhmNGY3MyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_gatt_cal.h#L9-L22",
+          "version": "repo-lines-v1:sha256:57b999da6ddf5254ead5a112ee88e5a3435e82f364fa78be98cd4d29f9070177:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MmE0MjkzODJiMmUxNDcxOGUwZTM3YjA1NzBhOGExNzAyOTkxZmNkODQ5OGNkODQwNjBhOGJmNGYwNTAxN2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiZTI2YmYwOTEyNTVjMzU0NzBiMjAxMTUyYmFiMTM0NTQxOGExMjZhZmQzZGJlY2IxY2Q3MjljYzQ1NjM5OTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRhMDljZDhkYWY2OWVhZDkwZWI4ODQzZTFlZTMwMGRkMTZiOTUxYmU0MTJmMzVlYTdmODk4YmU4YmM3NGE0MzIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d4fb4766c3754ddf903ae994bfda5132",
+      "statement": "Tapping 'Einrichten' for bottle A/B in the Display settings modal starts a gbw_state_t wizard state machine (GBW_SEARCH ... GBW_DONE) that is disabled while a wired HX711 cable scale is active.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/gui/womo_settings_modal.c#L137-L165",
+          "version": "repo-lines-v1:sha256:9d366d2f1e2cbd2e5fb8a56856b5eb2821940b037900a27dd4fe8aec9ab8b0b8:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBhZTU2Zjg3NDQyYzFhY2QxZDAyNmU4YThiZjY4ODE3YmU2OTg0ZjQwYjVkZmY0MDYwYmQxNjYyOGFjYmNkOTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY3ZWVhYTEyYTIzMmUzOTU2YmJkODdmYTY1NDgxNDIxNzFlMTkwYTllZTkzYTg4MDFlNDliYmQ0MDUxMWI5MDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImViMzA4ZTUzODEwMGY3M2YyZDE5NmJhMjhlNGNjODVkNzIyMWUzYjdlODRkNTQzOWQ1YzFkNzcyZmFiMTIyNjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhN2JjYWQyYmJiYzY5NjFhNzMwN2I5NDRmODU4NWUwMTBiNTUxOTAyYTM3N2FkYTRkYWY0NDQyNzhjMDY2ODEifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/gui/womo_settings_modal.c#L2017-L2033",
+          "version": "repo-lines-v1:sha256:4462ffa6e815fc2ff0590760e7751f533b933fc86717bf2f6e073ea6f8794b60:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyNGQ0ZGJkNzBlNTIyZDY4MmJkMmUzNmU5NjNmYWMxYzJmZWUxYTdmMWI5ZmJlYmFiNmM2NzIwNjg5ZDM3ODkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEwMTZlYTI2MmMzYmNlZjAwZmJlNWI3ZjI2NWI2OGVlZmViNTk0ZWFhNzgyOTAzYzk0MDQ2YjNkM2ZhN2FhYTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_bafbd37984ff4afe86e46a16c51f95a9",
+      "statement": "During search/zero/ref/verify wizard states, the Display polls the Sensorboard every GBW_POLL_MS (2s) with cmd 'gasbee_scan_request' and cfg_only=true; the Sensorboard filters its passive GasBee scan list to entries with config_mode set and seen within SENSOR_GASBEE_CFG_MAX_AGE_S (5s), so GasBees not currently on USB never appear to the wizard.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/gui/womo_settings_modal.c#L1495-L1497",
+          "version": "repo-lines-v1:sha256:3802dd0aa866918ea3dd2ac674fbd8e9da7d2e227953f62b076655c0fbf72a49:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjg0ZmU0NjkzM2UyMzAzOGI5ZmM0N2FjMTkyOWMzNjg4M2Y1YmFjMmFmZWZkZjBlOWE5MDJkMWI2NzU0YTQ4ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTFiNjJiMzhjYTM5MzZhZjgyMWExMjBhMmM4ODRjN2Y3ZmQ0YWViZTRhMzhlMjBkNDA0NjQ4YTE1YzNiZGE3YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTg5ZTJlNDcwOGU0YjMzMWIxYjFiNGU0N2M3ODM0ZTdhYjg0M2JkOWFlZGZjOTcxZGE5YTYyOWE3YTY1YjUzNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmEwZDgwOWYyOTlkZmM4Y2VjZDk3NWYzMzY0YzY4ZGZlZTg2ODcyZmJiNzAxOWVkNjlhMjFiYWQ2NGQ1ODk4NSJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/sensorboard/womo_sensorboard.c#L766-L778",
+          "version": "repo-lines-v1:sha256:f5ab4fbd2dc6b9e24969b3a46e4bcb37a8984bcf4886f3f69972ba569660aaaf:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyZTIzMTFiYTU1YjY4NmY3NzA5NjZkODYyOGIxMjg2YTVkY2VjN2MzMTc1N2Y5MDJkZDE0MTg2ZmJlZTdiMjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk4MjliZWZlODA4YWIxMjlhMWRmMWNmYjNjMmM4OTk1MjI4YzBkY2Q1MGY5ZjE4NDlhMzc2OTE5Nzk2YzAzOGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA0NTljYWM0MGFjMTBjNDYyY2ZlMTE2ZWNlZGU4ZjdkYTU5ZTA0NDA4MjYzNTg0MDRiZjhkOWEwZDEzNWIyM2MifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1299-L1313",
+          "version": "repo-lines-v1:sha256:0b308d43b63033c65502a8ceedc74acffa9bede2419ffbcdaf50591eaf7b2acd:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQwZmIxMzBhNjE3YThkMTIyMzQ5ZDhhM2ZlYzJhODM2ZWMyMDBhNDI5NjRhNGNiNzEzNDcwMTlhOWE2ZDdmOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM0OTBmNzk2NjQ1MGQ4YjkzZjhjYTQxYzRmOGYxMTNlOTM2ODAxMzk1NTBlNDVhZjc4ZWFjZWUxNzgyNzM1NWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg4ZjNmOGUwMzQ3ODQ5ZTU3ZGIxMmM3OTUyY2Q4OTJmMTc1NDY2YzhmNjQ5ZGQ5YmQzY2UzMmQ5MWYwYzc3NDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI2ZDI2MmU4YTlhNzdhNjgyNGIyNGUxMmM1MmZlMWYzMjBhODY2NjAzNmU2OGMwNTI4YWI1ODViYWI1NjRiMDUifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L377-L379",
+          "version": "repo-lines-v1:sha256:a18c9ae3d58d211c510545cad2434119cf9b01373b21fd8216cdedd6c53f3323:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGY0MjM4OTA2OGMwMGI0OTA5NGE0MDY1NjE0YWFmZGRhODY2M2ViZjlkZjlhODJiNWJiMTM3ZmJlMGNmNjllNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGIyNjRjNGQ5Y2Y1ZDIzMzRjYTk5ZTA2NTE1NDFlMWI4MGIxNmI5Y2EyZWU2NzI2MTA2NDdlYTZmZDQxOTI5MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzI2MjA1ZmVlZTkzNTBmMGZjMDRkOGEyYjIxNDIwNzQ0MjhkMGI5NzMzNDFiNzkxOTMwY2UyMzNjODdlMzI0ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmEzY2Y3MGNjYzhjMTRiOTMwMmI0OTc4MDljYTViZTQ4YWJhNWQ4MzJhNGI5NDUzYTUyMTk1MWRlMDgzNjQwMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_af6a58c95e6b4a218686e5895062eba7",
+      "statement": "The wizard requires exactly one GasBee in configuration mode to proceed from GBW_SEARCH to GBW_FOUND; zero entries keep waiting (timing out after GBW_SEARCH_TIMEOUT_MS=60s) and more than one entry shows a warning asking the user to unplug all but the target scale, since the UI never lets the user pick a MAC manually.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/gui/womo_settings_modal.c#L1495-L1497",
+          "version": "repo-lines-v1:sha256:3802dd0aa866918ea3dd2ac674fbd8e9da7d2e227953f62b076655c0fbf72a49:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjg0ZmU0NjkzM2UyMzAzOGI5ZmM0N2FjMTkyOWMzNjg4M2Y1YmFjMmFmZWZkZjBlOWE5MDJkMWI2NzU0YTQ4ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTFiNjJiMzhjYTM5MzZhZjgyMWExMjBhMmM4ODRjN2Y3ZmQ0YWViZTRhMzhlMjBkNDA0NjQ4YTE1YzNiZGE3YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTg5ZTJlNDcwOGU0YjMzMWIxYjFiNGU0N2M3ODM0ZTdhYjg0M2JkOWFlZGZjOTcxZGE5YTYyOWE3YTY1YjUzNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmEwZDgwOWYyOTlkZmM4Y2VjZDk3NWYzMzY0YzY4ZGZlZTg2ODcyZmJiNzAxOWVkNjlhMjFiYWQ2NGQ1ODk4NSJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/gui/womo_settings_modal.c#L1836-L1852",
+          "version": "repo-lines-v1:sha256:c79f17d274bc41658bf53c715bafa267c71a2d010f92408067c4e2d4d236c415:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkNWE1NTM0MTI2OWJmMjZjOGNjYmRiOTU3NmJkNmUxOTZiM2UxYjU3ZTA1MTVhZmRiY2IxNjZjNWJiNDBkYmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNjMTc2MzE5OTkxOWY4ZDE4ZTYxMWIwZjRkNDlmYzY1NGU3MWYyMGM2MzEwNjM3OWE4M2NhNDY3YWY2OGJiNWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIyMzBlYzM2MWRkYjYxMGIyMDQ5NzRhZWQ4ZDlhOWJiY2I3M2JhMzliZjk2NTJlZjUwNWRjNzM3NWVhOGE3MjEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ce13014327c8423991047818724a9668",
+      "statement": "Confirming a found GasBee sends cmd 'gasbee_config' with bottle_a_mac/bottle_b_mac to the Sensorboard, which persists both MACs via gasbee_ble_scanner_set_macs into NVS namespace gasbee_cfg (keys bottle_a_mac/bottle_b_mac); an empty string disables a slot, and assigning a MAC already used by the other slot clears it there.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/gui/womo_settings_modal.c#L1605-L1613",
+          "version": "repo-lines-v1:sha256:a009bd695d74d4acdcfb41e0f42f71ba55b9f4ff99b473b278fa5fee65140384:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGMzMDgwOTkwZDA3YmU1MjdjY2JiYWVlODIyNDc2MTc1YTkyOThmZDU1OGI5ZWE0YTU0ODMyOGM5YzU4NjRiNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDUxYTlmMTEyNWNiYzAxZDJkODQ5ZDc2M2JjYzZlMDdlODk0M2RlNTlhYjExYjY2YzEyMjUxZmM1ZGVmZGE2MyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzg4YmQzNzFkZmQ3NmUzZmY2MmU3ZTViYzQyNDE5ZDQ5NGRjMmVlYzNjZTliMzExOTUzMWQ5ZDEyZmQ0YWY5ZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDQ4ZDVmZmQwN2IyNWQ2YzU2NmM5YTBlMDcwNmQyNzdiYzY5MWI1Yjc0ZDkyZGZiZTlhZjE4NjJiZjNjYjE5MiJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/sensorboard/womo_sensorboard.c#L737-L755",
+          "version": "repo-lines-v1:sha256:cc7c4faf8b8cecb2d0b089044d0d567b42637a19864a35ccbb0e94a8806ea88d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIxOGFlODI2NWQzMTNhZGU2YTczZDIwMmQ4ZTU5ZjUwNTU2ZjQ1NTEwN2M0ZjZjMTNlM2VlMzE3MmNlOGJhOGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk4MjliZWZlODA4YWIxMjlhMWRmMWNmYjNjMmM4OTk1MjI4YzBkY2Q1MGY5ZjE4NDlhMzc2OTE5Nzk2YzAzOGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRhNjJiM2E3YmJmOGNiOWJiNmM5ZDE2ZTMwMzVhNzFlM2YwMjNiYzlkNGJkZjhkZjFmNzFjMDJlZjAyYjJjMDUifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_ble_scanner.c#L302-L331",
+          "version": "repo-lines-v1:sha256:c3fe49eb5c714a7fe11ae8d241c46a1c566db61d98a1425829af5df8b1f251ab:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkYzhiZDkyMjgxNzUzMmE4ZWViNmVjMzVhODA1NGQyYmYyMjQ0YmZlNmViYjQyYmE5ZDE3NWEyNTdlNzI1N2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhhZTFlNmQ2ODRkYjU0MWM5ZTI5MTE1MWRmODk5MDRiMmJlYjI5MWM3YzRkY2MwZTlhY2I2NmVmYWRhMjI4YWIifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L366-L368",
+          "version": "repo-lines-v1:sha256:e4ea0b886dc26ec887488281e98db5ccb3a4c327ddfb8ed062715088b66ee8b7:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmQ4NTNjNDFiM2MwMDcxMmZlMjNmYjlkMzA3ZTAwYjllNGNhOWY5OGI5NTc3YjY0NjBjODFlZWI5NTQ3MzE3YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDE3ZTE1MDc0NDViNWRmN2UyYjAyZDFlZDM1NWZiZTFmMjNiZTNiZjcyNzEyNjRlZDMwZWNjZTY3NDNlZWM4NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMWY5YWJkYjk5OWMxMzZlZTU5NzI1NzAyMTA5NDNiOTJjODdmODc3YTJmNzRmNjYzZmI0NzQ5M2YxNjRhYzBlOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGY5Mzk2NjBmYzI2NDAyNjZiMTY4YmE1OWIyMzczYzU2YTdlOWFmY2MzMzFjYzcyYTg4Y2ZjZTljN2YyMmY0NiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_827245d49a2d489b89e0c3098f660c4b",
+      "statement": "cmd 'gasbee_cal_start'/'gasbee_cal_end' bracket a per-slot calibration session on the Sensorboard: while active (capped at SENSOR_GASBEE_CAL_SESSION_MAX_S=900s as a safety bound), the bottle is treated as not-connected (no empty-bottle alarm) and its consumption-rate basis is reset; gasbee_cal_end clears this immediately and is sent by the Display both on success and on wizard cancel/close.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/gui/womo_settings_modal.c#L1532-L1539",
+          "version": "repo-lines-v1:sha256:80b90ee68819741930e78f8daf0e79ef33ee41f8b94a2db9916c3b89953bb21b:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjk0MWVkYTNmNmI0MWE5YTFiODU2NTBlNmZmNmY4YWRiYTU5NzFjOGM3NThhY2VkNWFiMjVjM2VlM2VhOTlkNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjhmM2UxNTQ4OGU3Y2JlODBkMTk4NTgwM2E5ZTFlZTMzNmMxMmYyYjRjMTY1Yzk1NjI0MWI4NDUzNmNlNDJlYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNGJjNGRlNmFhYzM1Nzk1ODVlYTRiZGI2Zjk5YTMzNTQ0NGI3NzVkZDgzMjFjNzJhM2RlODljZjVmNDAzODQ1ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDA5ZmE0Yjc0ZDEwMWVhZjY4OTI2MGNiMjJlNzdjOWJlZDEyYTY4ZTcxMDZhMTYxMmFmOTViNWU2ZjM4NGQ3NCJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1448-L1460",
+          "version": "repo-lines-v1:sha256:8c192f47cc6a0f61c2e436bb343abea83b0b14b07599ea538c7f138b0bebe6de:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwNmRhMzU0MzQyMGMyOWRkMGMzNGJhNTgzN2ZlZGE0MWI4MDIzOWQ2NGE4NjIxNGRkYmFjYTJhMjg3OWZmOWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJjYWJhM2VhM2NmZjY4ZTRkNjgyMzA1YjljMzk1YTcyMThmMDdiY2Y1N2JjYjdiMGQ2ZWVkNzljNjM3NGQzY2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5MzI0YWNhNDcyNjc2ZjQyNGI3N2IyZDAxOWMyYWY5ZWVmYzU1ZGE1ZDE1NDk1MWI5MDhkNzg3Yzk0MTVlZTEifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L640-L649",
+          "version": "repo-lines-v1:sha256:531971c47b9ce0b5e34594a7c5293319980c027b6e4642d8a7fc089c8c66997b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkzNzFiNWUzZjRlNGIyZjQwYTk4YTFkMmQ4MDlkOWZjZDNiNTE2ZmVlZmZjMTk0MTBhOGFhNTkyMmJhZjZhZTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI3M2I0YmNiMzcwMzFhOGVhZmUxMTlkMDk0NzVkYjNjNTE5Y2E0YjUzZjQwNGJkYjg2Y2M0YTE1NTMwZTM4YmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0ZDgyZTgzMTJlYjQ5ZDE0YWIwNDE5Mjc1ZWEzYWRhMGUxZmVjMjI0YWNkMmUwN2U4NDI2Y2VhOTI4M2IyN2IifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L382-L384",
+          "version": "repo-lines-v1:sha256:5d851c8fb349b88e705718a6d54e84b2681c9b7ec2214ba596730b7ef05a3559:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWFhMTkzNTg2MjY4NjZjNGRkYTAxOWZjOGZiNTViNzJlYTE4MjcwM2MyOWQzMWIwM2ExNmQ4NjY4N2U1NjQyOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzcwODZjMWJiNzJhMDFlOGZiNTY3ZjFhMDNkNjRhMDdjMTBkMzJmODdiMTlkNzBjMzAzYzk2MjExNjA1MzU5MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTk0MTlkNjUwNWE1YThlYTg3NjNlMTVjNWQwMTJkMjZhMmZlZjQwNGU3MzQ1ZTBiZGRkYzZlZmFkYTIzNmYzZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmQ5MjA5YjQ0ZjI1ZTdlYTc2YzVjNDRkNTgwOTliZThkM2M1NjM4MWU4NjA4ZDJkN2MzNTI2YjBkNTJmNDNhOSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_e4b2a115cbd5478e98d72bea792fcc75",
+      "statement": "Each calibration step sends cmd 'gasbee_cal' with mac, step ('zero'/'ref'), and for 'ref' a gram value; gasbee_gatt_cal_start is the sole code path that opens a GasBee GATT connection, refuses to start if the GasBee was not seen in config mode within SENSOR_GASBEE_CFG_MAX_AGE_S or if another step is already busy, and allows only one calibration connection at a time system-wide.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/gui/womo_settings_modal.c#L1570-L1602",
+          "version": "repo-lines-v1:sha256:088ab095ccd0e7325a20f0d5358ec70e2f4fb5af2b0f8ed39ce197acf0d8a484:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRiZTAxNGIzMDVlYjQxYmEwNjhkMWRjNWQ4ODk2NmJmMzFhOTgwYzU1MTllYTEwOTFmMGQ1NWQ3OWU0MmYwZWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE3OTZlMGRiNWU0ZGEyMTlmZGY2ZDMzMWZlMGJlOGZjMTFlZDZkNWZiMTZjYTRmOTU4Y2Q5ZTUyZGYyNGE2YmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVkZmVjZWFmYzRlMDJjYWQ3OGE2NTVhNmJkNWRjNDMwNjczNTgwZmFhYTkxYTlhMDk0MGY1MWU0ZjhkZjRiYmEifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/sensorboard/womo_sensorboard.c#L796-L814",
+          "version": "repo-lines-v1:sha256:d259f202c609aceae01c242bebb073ed21afbe1dd41f7f6da33ec451ff42e717:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRiM2FjZGYyZDczZDUzYzdhNWE3NDU4ZjgzYjJkMTc4NTcwNzE4NTk3ZWNjNWU1YTE0NTU3MjA2OWFiOGE3NGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk4MjliZWZlODA4YWIxMjlhMWRmMWNmYjNjMmM4OTk1MjI4YzBkY2Q1MGY5ZjE4NDlhMzc2OTE5Nzk2YzAzOGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNlYTlkMmUwMWEyODY5MjJjMDZmNTQ0OWU4NTE2ZTk2NTE1NDg0NzA4YWNmYTFjMWZhNGRmNjRjOTIxNjBlOTAifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_gatt_cal.c#L212-L230",
+          "version": "repo-lines-v1:sha256:78e2e4263c13ef6157ec07c426b363ce19f08ebba00417af6dd01cf8105f0d47:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAyZmY2MWEwM2FmZWEzN2FkMDZmY2UxYmMyZjQxYTNlMTJhMDU1ZjQyZDRjZjYyZmU3YzNkMDM2YTc4MzIwOWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjliZTg3ZTRkYzY5OGIzMjQ1YTk1ZGY5NTAwMGVmM2NhZGM0OGVhZjljM2JiMGVhOTNlNGVmZDkzZjJmYjIzYjgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRkMDU0NjY3ZGRmMDNlMTVjZGVlNmQxYzZlOTI5YzczMDk0N2RhNzc5MmU0ZmQyNjg4ZWM0NTRkNzhjNmJkNzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFiNThhODA5NTIzMzI4Y2IyMTViY2U4YjMyMTIyOGRlM2IyZWZkNWNjZDc0NTY1ZDY5NGMyN2Q3NWMyYWM1ZTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_07126905a7144c6d89b14eb81f98dd85",
+      "statement": "gasbee_gatt_cal connects by address/address-type from the scan list, discovers GATT service 4a5b6c7d-8e9f-0a1b-2c3d-4e5f60718293 by UUID then its characteristics, writes a single byte 0x01 to characteristic 0x2B11 for the zero step or a 4-byte little-endian uint32 gram value to 0x2B12 for the reference step, reports the result exactly once from the ATT write callback, and immediately terminates the connection regardless of outcome under a SENSOR_GASBEE_CAL_TIMEOUT_MS (15s) guard timer.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_gatt_cal.c#L116-L158",
+          "version": "repo-lines-v1:sha256:e03dfe95cb604b1eaf7750a6444a1f82d87f0de4feab4d2e716cfe52cd696b46:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNhNTdjNzhmZDI3MmVjZmZlZjNiZTcyN2EzMDQ5NTM0OTFlN2RhZmRiZDI2OTlmY2ZiMmY0NTFkODg5OTMxZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRiZTllZjk5NmExMDk4ODgwNDg4NWYyZGI4NTcwYTljNzBkMDg0NzFiZmU0MTIwZTY5NDI4YWRiOTFjODViZjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY4YTNjOGE3NDEzYjI2YWM3NDFhOTJkMTA5NGUyOTM1MmUxZjg3NzY4NGQwNjZkNjg1NGVmYzQwNDRkODczNWYifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_gatt_cal.c#L238-L269",
+          "version": "repo-lines-v1:sha256:f98f65d92272f72075296ff683c3c908027903af4f33ca9abeb3d308072c3b9b:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNlZmY5MTc4YWJjYmYxNDIyMzU2ZTY3M2E2MzA1NGNiNmQwYjZmYTY1ZTQzZDQ4YjZmOTRiYWMyNTRlN2JhNmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRhNmEzMzc0ODAzNzY4ZWY2MTYzNzZlMjVjM2E5Y2Q5NmVlZGNiOWY0NTAxY2NkNGQ3ZDk4YzY1OTU0ZWU5YzIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMyNzFjMWFkMDhhMWNmN2I5MmMxOTIzMWJiYjNkYzE5YTAzZGZkNDI1ZjY4OTU5OTMzMGYxZGFmMjBkMDRhMzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyMjQ3OGIwMDFkOWQxOWI5NjAxNzBhNjBjMzc2N2RmM2Y0ZjQxOThkYWZjZTY2NmE3ZGVlZWQ5MTY2YTEzOTIifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_gatt_cal.c#L41-L43",
+          "version": "repo-lines-v1:sha256:fb94cd267e824028db024f0334ca61a20c5c996ca93ad4bab2e23485ae26888f:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2JiMGZmMjI2ZGY0YTU5MzI2OWY4NDQ1N2FjOWJhMzZmZDI1NmRhYTZjNDFjZDM0MjdjZjRjYmRiNTU3ZjkyNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmYxNzIzMTc2YTBiOTE5NGMwMDk4YTllNDM4YjJlNTc2YTRmMTk4NDIyNWVmNmI4YTkwMWViNzBlMWM2MGVkNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWYyNGEyZDAxZmVlNzg2NTcwYTlmMTNmZWMwNmExZTI1ODg5OTI4ZDM1MmMwZWRiNjFiNTZiNTg4ODU0MmQzNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTliMGE5NmU1OTEyNzZmZGNkNTI4OTc1YzhlMmM1YzA1YjE3NDEyNjJmNWQ0OGVkNmNlYjEwMDYxNjFlNzk2OSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_gatt_cal.c#L59-L114",
+          "version": "repo-lines-v1:sha256:11d527ad7c0017c8cca3e22ecd67d39d35b9fbcb66f751cfb1886cebd90d29bf:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0N2ZkNzk1ZDM2ZTFhMjZjY2U0YmNkZGIyNmI4YzkxYTc4MWRkOGQzZjI4NmVkYWQ3NGVjNjg0MjZiYjI3YWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ0YjgxZTU3YmQ0MWU2ZWI1MDBkOTdjZjc3YTQ2MmFmN2IzYjEyNDNkNmZmYTk0N2ZjZTA2ZTk5YjZkZGQ2N2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ3OGM3NTAyN2RlZjMxZjUwZmVmYTA2NGY4ZDEzMTJmYmY0N2ZhMzA3MWIzZmNiNGIyMzc3ODg2NDM5YjIzN2MifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L380-L381",
+          "version": "repo-lines-v1:sha256:c4883a27fe5a89a6b4f4d0d18efc4ba263ff7527f029ab7b1cb0a13c4ed16dfe:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjJjNTYxYTUyZmJjMTgzNzIzOTMwODFiOTM1YzQ5NmRkNTQ0YWQxMzdhNjA2OGM3YzMxNGEyNDY4YTU1ZjE3ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzY0YTdjMTUzYjQ3MmVkZGIxYTc4MDk0MzhlMGI5MGUyZTZjY2RlMWJmOTI2ZTI3ZGY1ZGJiNTM2Mjg0NDI0YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTE4YzlhZTNkNThkMjExYzUxMDU0NWNhZDI0MzQxMTljZjliMDEzNzNiMjFmZDgyMTZjZGVkZDZjNTNmMzMyMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWQ4NTFjOGZiMzQ5Yjg4ZTcwNTcxOGE2ZDU0ZTg0YjI2ODFjOWI3ZWMyMjE0YmE1OTY3MzBiN2VmMDVhMzU1OSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_0480419399a448babd0fef81c758c2ee",
+      "statement": "A successful GATT write to 0x2B11/0x2B12 only confirms the GasBee accepted the write format, not that calibration is durably in effect; the Display verifies actual success purely through subsequent advertising, requiring flag bit 2 (calibrated) set, the sequence counter advanced by at least 2 measurement cycles since the reference write, and the reported weight within the greater of ±1% (GBW_TOL_REL) or ±50g (GBW_TOL_ABS_KG) of the entered reference weight, with a GBW_VERIFY_TIMEOUT_MS (20s) timeout leading to a retry.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/gui/womo_settings_modal.c#L1495-L1502",
+          "version": "repo-lines-v1:sha256:2f50bd2c72486a6957a86907cfa889deae3887b323a60210c27948684cd871c6:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjg0ZmU0NjkzM2UyMzAzOGI5ZmM0N2FjMTkyOWMzNjg4M2Y1YmFjMmFmZWZkZjBlOWE5MDJkMWI2NzU0YTQ4ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGMxZDJiY2FjNDgzYTc5MTEyMjhkM2E3ODQ1NjE0ODE3YmIwNWFjZTdlNTVjYjZkNTg3YTkzODg0M2JmN2E5YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTg5ZTJlNDcwOGU0YjMzMWIxYjFiNGU0N2M3ODM0ZTdhYjg0M2JkOWFlZGZjOTcxZGE5YTYyOWE3YTY1YjUzNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzAzNzJhMzNlYWM0NzJjNGY1Mzg1OTIzZGVhY2I2YjIxNGZhNzVmNzUxYmY1NzlhY2JmMTA0MjIwYzdkZjgwZSJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/gui/womo_settings_modal.c#L1858-L1888",
+          "version": "repo-lines-v1:sha256:4d48a187d12efc6afa642d05e4fe839a83ffe6f0cba31a0de73eef24670a8f61:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4MWM1ODBlNzE0ZjQzZGY1NGEzM2M0NWE5YjY3Nzk0YmM4MmQwNWI5YmViZGU3MTc0YThiMTQ2ZTAzNGY1NGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg5NGU5ODE3NDJlZWY3ZjBiZmMxYThkNWIzOTM0YzFmMDI3ZWQyZWI4MzM2OTk4Mjg1MDdkMTYxNWM0MzZlNWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_gatt_cal.h#L18-L22",
+          "version": "repo-lines-v1:sha256:01d68bba94d30470a02dbb43d23724ed0df65f9e2909e5f6d1f6aa9799764637:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzVhNGIzZGQ5MDcyMjlkOWI3M2I5YWJkY2E4NWRlZGY4NWY3YmEwMWFkODQ5NmZkZjllMjYzMWQyYTRkMjc4ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTcyYTQyOTM4MmIyZTE0NzE4ZTBlMzdiMDU3MGE4YTE3MDI5OTFmY2Q4NDk4Y2Q4NDA2MGE4YmY0ZjA1MDE3YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTk1YTRlNjYwNDNlN2NhOTdlMTllZmUzN2E2ZGJiYjQwYjBiMTIxN2QxYTVmMzY1ZGIxYzZiMWNhODk1Y2ExZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGEwOWNkOGRhZjY5ZWFkOTBlYjg4NDNlMWVlMzAwZGQxNmI5NTFiZTQxMmYzNWVhN2Y4OThiZThiYzc0YTQzMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_4c3e19eeaa874c15951c27f4212d892a",
+      "statement": "The GasBee switches into USB configuration mode within at most 2 seconds of VBUS detection, advertising continuously once per second (flag bit 3 set) and measuring every 5 seconds instead of its normal 300-second burst cycle; calibration characteristics 0x2B11-0x2B13 reject writes with ATT error 'Write Not Permitted' while on battery power, and unplugging USB disconnects any open GATT link and returns it to normal operation.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L63-L69",
+          "version": "repo-lines-v1:sha256:a95bc63dc411db82697a64e4c31546f7ceead3d6be8c39e5a3bf20ba2935909f:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzNkZGZjNjBkMjFiMGRhNmJhMjM5YzY2NDU5NDg3OTA5Yjg5OTgyZDVkYTZiNTgwMzUxMjAzMmIwOWUxYWNhMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWUzOTQ4NTI1MTMwYTgxMjgxMTE2NDQ3NDc1YzkyNTY4NmM1ZTQ2Y2NiYjBiYTkzYjg4ZGMwODllNjBhNjc5NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTZhYjE1NTBiZTY2YmJkMjVlZDc1ODdjZGU5MmRhMTlmMTVmZGE0MzM5ODFjZmVjMmY4OGQwMjk2MGI5MTNhMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjNhZTc3ZDkxYjEyODU1ZTcyNDE5NjYyNWE3Y2ZjMGRlYTE0MGUwMjQyYzg1NjEyODY1ODk2NGQ1NDhmNGY3MyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L371-L379",
+          "version": "repo-lines-v1:sha256:e21b779b0c1cd878cdd5f740cfc567a51d38faed31d678b412af75e14adc2db3:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmMyOWM2Y2Y1YjliZjRhNDkyOWQ5MDM3NmQ3NzQwMjU3MDZkZTIwODRjOTNhZTgwMmIyYmMwOTU2N2U1OTU0MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGIyNjRjNGQ5Y2Y1ZDIzMzRjYTk5ZTA2NTE1NDFlMWI4MGIxNmI5Y2EyZWU2NzI2MTA2NDdlYTZmZDQxOTI5MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjM5YzU3MDhkZjlhZTgzMDkyNGZmOGUzNDI3Y2NhMWJlZTUwMjNlMzY2OTViODI2NDdjNWNjMzA0NWVlYWRmMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmEzY2Y3MGNjYzhjMTRiOTMwMmI0OTc4MDljYTViZTQ4YWJhNWQ4MzJhNGI5NDUzYTUyMTk1MWRlMDgzNjQwMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_b7ae8852e8f647d7aae3bb910a963ce2",
+      "statement": "While a GATT connection to a GasBee is open for any reason (calibration or a third-party client), the GasBee suspends its advertising bursts entirely, so the Sensorboard's passive scanner sees no updates for that device until the connection ends.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L95-L99",
+          "version": "repo-lines-v1:sha256:49901f42f1104ad36ee4c7d34830ce5af0050a5fef023cbeff25d895fbb15819:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDY1ZWRmMjYwNGM1OWY4M2FlZDM4Y2ZlOTZjOTYxNzk2YWFmNGM5MmU1ZjJlYjFlNDE1Y2IyMjY1MzRjMmU3ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGY4NTE4MDhjYzM5MjAwZDI0ZTI3YzkyNTEzMjBkYmU2MTVhZTYzNzA3MTgyMTRmMmQxNTk3Y2E1NjhjMzQ4ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGY4ZjhkMGZhYWMxMDY3NWZlYWQ4YzdhMWE5NmJlNjZjMWQyNGM3OTQzZmJlMzBiNjI2OTlhMTlhMTQyYzgyNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDFmODc4M2IxMWY5OWFlZWQ2Yzk5NmEyNzVhNzllMmVjZWJlYjNmY2NjZDIwOGYzZTczOTY3N2JlNDEwZjc1OSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_8ba30fce7a734d6b9be22deebcd65be7",
+      "statement": "Sensorboard-local calibration failures are reported as negative codes (GASBEE_CAL_ERR_BUSY, GASBEE_CAL_ERR_NOT_FOUND, GASBEE_CAL_ERR_CONNECT, GASBEE_CAL_ERR_NO_SERVICE, GASBEE_CAL_ERR_TIMEOUT, GASBEE_CAL_ERR_DISCONNECT, GASBEE_CAL_ERR_ARG, GASBEE_CAL_ERR_BLE) while positive codes are ATT errors echoed from the GasBee itself (e.g. 0x03 not in configuration mode, 0x0D wrong length, 0x13 invalid value), all converted to human-readable text by gasbee_gatt_cal_result_str and forwarded to the Display in a gasbee_cal_result frame.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1366-L1375",
+          "version": "repo-lines-v1:sha256:aa3fc3c6eba357ad011c37e152e476b7f056f19bd2a912ea2430f6e817bc61e9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFhNTc3ZGE0ZTdmOGM1MzdiYTY4NGRmMGFmMGRjZTUwYzZkZmYwMzE5ODQyM2Q0NTJjMjM5ZjA3ZWQwNTZmMDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ2N2UwMDgyOGRmMDMxNTg3ZDI1ZjkxMjU0MmZmNzhlYWU2NmZhZmI4OWZlZjdkMzQ2MzU5YTg1ZDFiMWEwMjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJiYWNiYjBhOGJjZjc4NzIxODM0MDNjZWM2ZjYyMGQ1NDE5OWY1NzM2MGEyMzI4MmE3NjFkMTNkM2UzNjNkZTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJiNjAyN2JmODM2OWE1Zjk5MDI4MmJmYjRlOTM1NzI0NTQyYTQwOGNlODViMTA4MmJhODZhNTlhY2QxZmY0NDIifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_gatt_cal.c#L272-L288",
+          "version": "repo-lines-v1:sha256:d796c6e4e2070ae28b425ea8c6afc8b447e8e477ad658a6a3fc6bf74b49106ae:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUzY2VhMzMzNzc4NjY2MThlNWE5MjllYzgwNjVhMmI2MjUzY2Y1ZTlkMmYwZDMzMjJjMGY3OTgwZWZkYTQ2MDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk2NjQ1NjBmYjRlZjU4ZGFlMDNiYzMyZmFlMGMxN2EwNDhjMmE5ODRkMWJkYjg5NGYyMDUzZmQ5ZjI1NjM1YjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_gatt_cal.h#L36-L46",
+          "version": "repo-lines-v1:sha256:6a22af10a591d10d42f3f31ff141e5c367e216f744d8ba1c9e11312782931f26:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4YWNkMjVlNTAwMWU5ZWY4ODRiOThmZGZiMGU3MjZjM2E5ODI5ZjQzOGJiMGM5MTA1NjBjMjAxYzZhYzllNzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNjYzZhNTVkN2JhYmQwZjhiNjBlNGQ4MDk3MDVjMGRkMGUxMmM5ZTg2MTJlODVjNDdmNzkzZjE1ODdmYjg1ZjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI3MTRlZTA2ODBkYWJkOTYxNjdmZDljODFjYmU4MjE2NGUyN2U5NmQ0ODc4OGVjOGNmNjNhN2Q2NjA3NTNiNGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZiNWRkODM4MTM5MjVjNmExNGQ1ZWUxYWI1Y2NjNjk5Y2FkOGQ3YmIzMTMyZGE1MDg1ZWUwYjU0NTQzZDU3NWEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

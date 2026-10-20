@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:10480e83e8599a43489239139baf1b501f0de5e434f5d46c20522f52800943f4",
+  "claims": [
+    {
+      "id": "claim_11f397b2029f462f8eabd32530efa0fd",
+      "statement": "The Display firmware's womo_weather_http module fetches current weather and a 5-day forecast from Open-Meteo (https://api.open-meteo.com/v1/forecast) and pins ISRG Root X1 as the TLS trust anchor via cert_pem instead of the ESP-IDF certificate bundle.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/network/isrg_root_x1_pem.h#L1-L12",
+          "version": "repo-lines-v1:sha256:d379c1afc7bf85445fdb367cb1dde6cd1809c747a3965abd7d3e766cea433842:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZjN2UyMTExNDdkNDA0YWYyOGMyNzczMmI3Yzc0NTMwMzhlMGRiMTMwNTA0NWEzYmZlZDljNDU1YzEzZmE4ZDQifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_weather_http.c#L280-L287",
+          "version": "repo-lines-v1:sha256:4944522953eb650ef4d3b32f7f830016752b01198b9a67394ebe4e449f4efc67:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2VlNzc1ZWUxNThkYTUxOTg1YWFhNzE2MjQ4NmI1ZmM4YmNhMjI0YzZkMjQyZjJhN2M0Nzk0ZjgxYTdlNDYyMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWQ5ZTEyNTQ2NDI1NTc2ZDNkZWFlOGM5YjlkYmYxMjhkNWQ2ZGRhZjVkN2ZlODU3OTM0OTI3ZGVmZmEzYjlkZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDMxNTIwMGFkOGMyZDU2MjBiYzM2OTc3ZGIyMjU0NmNhZjgzZjFjYmE3MWJmZDJkYTcwMDE5NjJiYTM0Njg1OSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzlhZmI2MWI0Mzc2ZWMwNGNjYzBkZDU2OGQxODdmNDgzM2Q0YTA0NDdlMjUyMDU5YWEyYTZkNjZiNmI1N2Y3YiJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_weather_http.c#L603-L623",
+          "version": "repo-lines-v1:sha256:f787ed12d070070ea1191b1b2220592cf52f55fd35bcdf659d49ca6735c33028:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxNzE1MmY5ZjZlYzk3NDIxNjQ3YTMyMmY2ZDUwYjE2ZWQ4ZWM5NDQ1MTUwNTQyZTFhNTkyZWRlNjIzMGEzY2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcyZmM0NjU4MjI5MDhiZjI3ZTIyNjhiOTJmYmFjMTc2OTg0MDA1YWY5ZGQ4NmEzN2ZmNDdkMGE4MzM4Mjg4MDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_64b9907d3fc14ed098ecfe2642f7a2bb",
+      "statement": "womo_weather_http_start() creates a background task that fetches weather on a configurable interval (default 5 min, overridable via CONFIG_WOMO_OWM_UPDATE_MINUTES), retries after 30s on generic failure or 15 min on HTTP 429, and relies on GPS coordinates supplied via womo_weather_http_set_location() (pushed from router_poll_task) with NVS persistence of the last known position.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/main.c#L3101-L3102",
+          "version": "repo-lines-v1:sha256:e853e5edee973e626fb6fa5305125361dbd9cc6330277fe0e68ef6f4d1d40e30:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDlhZTJhOTc1Y2YxNTMzYTc1MDRkZWMzNjQ5MzIxYzg2MjRkY2MzZTU2NDMzNDVjOGFkNjY1Mjc3MTdlMWQ5NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGQzNDU2YTZjZjIxNzlkZjc4ZTkxMDBkNzNjOGE4YmMxODVmNTc3YzM1YzE0MTEwZjJlNmZhY2RhZDQ5NWE4NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNmZiYjFkMjY1MWIwYjg3MDYzOTVkODAzODkxM2RlN2Q0NjYwMDI2MDg0OGRkNzk2MWJjMGFmNmFmNmY0NTk4ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmYzYmUxNDU4MDZmODYyODIxNjY0MTQ3MTdlMWQ1MjI1YWI4Y2ZiYjU5NDRkMTU1ZWM4NGM0ZWZiOWUzMDJlMSJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_weather_http.c#L109-L246",
+          "version": "repo-lines-v1:sha256:c273d6a2759c757cfd29e870efa93f184e4cec93575e736afd334faa9e486dcd:eyJzZWxlY3RlZExpbmVDb3VudCI6MTM4LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmMmQyYWZiNGM1MzJlMWI2MzhlOTQ3YjRlNGM2ZDU5MTRiMTkzYTEwYzkwZTE5MzdjNWYwNmYzZjY4OTgxMWYzIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJhZGUyNjhjNjNhNjBjMGQzOWEyMjgzY2MzNDRkZTUzNjBjMzA2Y2JkMGRjMDc1N2JmYTE3MWRkYTM4MjMyYzViIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI5MmViODQ0YjJlZjA3ODliYjdiYzM0NzI0NTk1ZjAxMWE5MDQ1NDkwM2QyMzVmMWVlMjc1MmU4N2ZlOGEzMzJkIn0"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_weather_http.c#L351-L462",
+          "version": "repo-lines-v1:sha256:af9e5ff48a79c7ccc627f14816afbb036ee1c56331e2859fa349e447308576c0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEyLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmMjg2Y2RjNjJmZTc0MjU5ZTc4Y2RkOGNhODEzMjQwZDg2YTQ1MDBlYmM2NmNhMmRlZWIxMzcwZThkYWYxYWJmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI1OTU4Yzc3ZTAyYjdjYmIxYTJjNGUxOTI4MWRlMTU0OTQ0YTE2NmU4OWY0MWYwMjkzZjQ3N2ExYjMzNTgxOTJlIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIxODQ0YzY3MThlNTMzZTA5M2MwMTg2MmZkYzc4NWI5Mjc1ZDhkNzRiM2Q0Y2ZlN2MyMTQxNjM5NTFjYjBjMjM0In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_52ea2bc0384e439d910bf91cb65ebbbf",
+      "statement": "womo_geocode performs one-shot reverse geocoding requests against Nominatim (https://nominatim.openstreetmap.org/reverse) with a required identifying User-Agent header, also using ISRG Root X1 as the TLS trust anchor, and is rate-limited/triggered from main.c's geocode_trigger_if_needed based on Wi-Fi, time sync, and GPS movement.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/main.c#L636-L707",
+          "version": "repo-lines-v1:sha256:c082463ed421c8e03f04b2c3b4b42bb7da3a65e94c1c8e7e339c876151165e4a:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI4MmIxOGY1NGVjOGQwZDRjMTc5Njk5YmU2ODJiODE0ZGY0OTBjOWUxMzcwZDk1NjdiZmRmZDY1MDc1NzllZTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIwMjljYTIxMWIxNmUxMmMwMmJlODcyNTMyMGE4Yzk2ZGJiNjU5ZTA0Y2YwNmE1MmFjZGM5YTZhMzUyNDdiYzgifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_geocode.c#L142-L217",
+          "version": "repo-lines-v1:sha256:c7f73d2cd9acf1e7970ac2cd3ae6238e07c8084365fad444fdf0f77c2ecfc344:eyJzZWxlY3RlZExpbmVDb3VudCI6NzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlNGFiMzQyMzM3Y2I5MzBhNmY0YTg3MWU3YzY1MzFjMDFlYWNjMTIzODZmMzJhNDNlMGYyNzg4NGU0YzA3N2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk4MjliZWZlODA4YWIxMjlhMWRmMWNmYjNjMmM4OTk1MjI4YzBkY2Q1MGY5ZjE4NDlhMzc2OTE5Nzk2YzAzOGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM0NGQ3NzRlMGRjMjA3NzE5MzkxYjgwNDllYTQwOGM3YjE0NWQwZTU1MDJlNGUwYTUxYjQwMWRjYmJiOTE1NjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_442180dd3a764508bf93396d9cee5f69",
+      "statement": "womo_meteoalarm polls the Meteoalarm CAP warning feed (https://feeds.meteoalarm.org/api/v1/warnings/for-coordinates) using the GEANT TLS RSA 1 intermediate CA (stored in harica_root_pem.h despite its HARICA-referencing filename/identifier) as the TLS trust anchor, chosen because it is the leaf's direct issuer and needs less internal heap than the HARICA root.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/network/harica_root_pem.h#L1-L14",
+          "version": "repo-lines-v1:sha256:72ab70e686b59258bdaac057685cca59f4251eb713c32fd8297e3a729b40af97:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MmE0MjkzODJiMmUxNDcxOGUwZTM3YjA1NzBhOGExNzAyOTkxZmNkODQ5OGNkODQwNjBhOGJmNGYwNTAxN2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA5Mjk1MDgyNGE5NDY5MjQzMmIxNTgzYzE2NjY4ODU4NzdiZmEwOTM1ODg5N2E4MjYxOTY3ZTBlMGYwYzhlNGQifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_meteoalarm.c#L218-L267",
+          "version": "repo-lines-v1:sha256:19cfee452af3c8849548b09cef2ceef89fed868c36a85b95aa73452bdcb3c7fa:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjOTgyOTg1ZjkxN2MzNzAyNjU1M2IxMjdhYTEyYTQ1Njg5OTE4OThkZWMyY2RkNTZjMGMyMjhmMmVmZGU4MDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2YWYyMjBhZDJkMGEyNWZkMTFmYjgyYmMxNmNlOTZmZDliY2I2MTRkMTJiMDRkZTA0ZTQ2ZWU2OTFkM2IyYmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE1ODQzM2UxNjVkMjVmNTBjNzFhM2ZjOGVjNTFjMWZhNmExNGE0Y2YxZTZkNzc4YTIzYWU4MzU0OTkwMjVhMjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQzMjlhODk3ZWI5Yjg2MmVlZDdiYTU5N2Q4YWMxMjlhZWNiYjVjZjgyZDRiMzA1MTI1OGNlNDJmZjdhZGU0MTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6c7123e33a634cd6b1fbaa6cf78c990e",
+      "statement": "womo_meteoalarm filters warnings to Moderate/Severe/Extreme severities only (dropping Minor and unknown), caches up to 8 warnings with region/expiry, and main.c only opens an automatic warning popup when new warnings appear or severity increases versus the previous fetch, not on every periodic poll.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/main.c#L2858-L2895",
+          "version": "repo-lines-v1:sha256:09b9df96e50f682712e67878293431a2e05ca0ee2d13e43082c6f54c4fc14d4a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYzMjkyMDYxYWI1NGMzMTMxMjk2MWY4NmNkNDZkYjU3NTNkNzRkNDA4YjE0Yzg4NTZhNTdlMWIzOWM3ZDM3ZmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBlZTU0YzE1ZjYxNzM2MGNhZTQxOWJlYzgwYTk0Yzk3NjM4ZjgxNjMwMWM2MTZmNDc2NjViZjgyNDE5MGJiMzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVlMTEyN2I3YTFiOTJjZWI0N2I3ZTU3MGZiODIxZDQ1OWQwYTM3MzdjMGIzNDI1ZTNhNjEyMWM4ZDY0MzM4YmQifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_meteoalarm.c#L322-L400",
+          "version": "repo-lines-v1:sha256:b149b6f45b06b93b17a91729e345b54104b09a508d1b453c9bb3d283e8a6be98:eyJzZWxlY3RlZExpbmVDb3VudCI6NzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcxMGRkZTgyYjg1ODkxYTFkN2UzZGQ0YWFkYTY1MzQ1MTJiY2VjZjk4Mzg0ZDE2NDkwODFmZmU3MTA3NWNiZGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyZWY2NjcyOWQ3MmFjNWNlMmRhZTMzNTQ1MGI4ZTdjNmViYTQ4MjNkMThiMmE3YTc1M2MwMTM5ZGIyNmMyMTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBlMmYxZjY3OTdkNjY4M2U5NzBhZWE5NGUxY2YwYjc3ZmEyMjFjMDYxYTk1Y2VlYTk2OTBmNWIyOGZkYjI2ZGQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cef3cc447af240bdbadd0910c1bddc88",
+      "statement": "All outbound HTTPS requests in the Display firmware (Open-Meteo, Nominatim, Meteoalarm) are serialized through a single global semaphore (womo_http_mutex) because the ESP32-S3's internal SRAM cannot support concurrent TLS sessions, with esp_http_client_cleanup() required to run inside the mutex-held scope before release.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/network/womo_http_mutex.c#L1-L46",
+          "version": "repo-lines-v1:sha256:750511ff37ebf7af790733a670b99731304d950a9ac3e50bba82eee5f7a9da3c:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_meteoalarm.c#L252-L267",
+          "version": "repo-lines-v1:sha256:381e3c5a13535ddc95b883921645cdd259255ae0309c03545fb0dbee2593c286:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEwOGE1MDE0NzVjMzIzZTliOGQ0OTAwMzE0ZDlmOWFlZGFmYWJhZmM3MWVkYTkyMGU2NzY5MTQwNzIwODBhMTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2YWYyMjBhZDJkMGEyNWZkMTFmYjgyYmMxNmNlOTZmZDliY2I2MTRkMTJiMDRkZTA0ZTQ2ZWU2OTFkM2IyYmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFiY2I1ZjY3YjNlZTE0ZmYyMmZjOThhMmY0NDQzODUxZTJlNWNlMWNiNmMzZGZmMzZkZGEyOTQ4ZWY3ZTc4ODgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQzMjlhODk3ZWI5Yjg2MmVlZDdiYTU5N2Q4YWMxMjlhZWNiYjVjZjgyZDRiMzA1MTI1OGNlNDJmZjdhZGU0MTcifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_weather_http.c#L301-L312",
+          "version": "repo-lines-v1:sha256:8b5d2fb587c1984e4e5a6882e2007d69e661865d18e4204f6a17a81962bcf531:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEwOGE1MDE0NzVjMzIzZTliOGQ0OTAwMzE0ZDlmOWFlZGFmYWJhZmM3MWVkYTkyMGU2NzY5MTQwNzIwODBhMTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2YWYyMjBhZDJkMGEyNWZkMTFmYjgyYmMxNmNlOTZmZDliY2I2MTRkMTJiMDRkZTA0ZTQ2ZWU2OTFkM2IyYmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUwZTQ5OGZhOWQ1ZDkxZmI3ZGJhZDJiNmM5ZjU1YzNiNTQ3ODgyNDIwYTZjYTA0ZDRlZTJjMWJkOTIyM2JhYmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY2ZWM2NDk2OTUxNmY0NzJhOGUyODdiMjEwNDRmZmZkNmNmODdkNWQ4ZTMyZjdmY2U0MGU2ZmI3YjU3NzY5ZDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2df1ba9b1c7c48e58c5d4a40a22cf1e2",
+      "statement": "No openHAB or other home-automation hub integration (Items/Things, MQTT binding, REST binding, etc.) exists anywhere in this repository as implemented code; the Display firmware's README documents exactly three outbound internet integrations (Open-Meteo, Nominatim, Meteoalarm) plus local-LAN router HTTP, with no mention of openHAB or any automation-hub binding.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/README.md#L32-L39",
+          "version": "repo-lines-v1:sha256:c8ccce1c8a0fe27efd1356705a93a02ecf0bc225bc666a6f79c02a5555453aa9:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzk4ZjAzMWEyOTVhMTI2ZTk5NmEwYzY4MWRkNWU2YWVlMDQwNzVjZTY4ODJlM2YzZTUyZjU5MTljYmU2MGE2ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiN2ZiNDMxM2YwOWY3NzEwMzhmODk1Mjc2MTBhMGY0OWE5OGI5MDk2ZjdmMjEyMmQ3ZjVkNzllMGIxN2VhZjZmNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWQ0ZjU0MjJjYTBiMzMyMDYyZWM1ZDliMDcxMTRhYTg3MTE2OWUyMjIzMDkzNGI3YTA4OGFkOTEwOTQwY2FiZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDY5OGJkNzYwM2Q4NjdlY2M1MzRlMmQzZjhjNTI1ZDU3NDU0NGIyMmIzMjM2ZDk3NmFlZDNkYTdjODg3Mzk3YyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_cba5201bb8364b769ccf6cf358cd6dc1",
+      "statement": "Die Marketing-/Doku-Website betreibt mit website/netlify/functions/counter.mjs eine eigenständige Netlify Function (erreichbar unter /api/counter), die bei POST-Aufrufen über @netlify/blobs einen reinen, nicht-atomaren Seitenaufrufzähler inkrementiert; dies ist eine Cloud-Integration der Website mit der Netlify-Blobs-Plattform und unabhängig von den drei Internet-Integrationen der Display-Firmware.",
+      "evidence": [
+        {
+          "resource": "repo://website/netlify/functions/counter.mjs#L1-L16",
+          "version": "repo-lines-v1:sha256:38dd9e39678c53a5d62604b441c4592adab8961f76cfa34e2a0f208228e6f029:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlZDg2NTNkMjQ2ODI2YmI2NTVlN2QxZjdkZmQ4MzU3YjhlZDdhYzcyY2FkNjQ4YmZhYTVjOTA5MmEyMzdlMWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVmMTkxOWEwMTdkYmExZTUzYzc0MWQyOGYwNzAwZDM0OWE2ZWJhOWIxYzJjZDZlYTA2NzQyOWIwZWUyYjM2NDgifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

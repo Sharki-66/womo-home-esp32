@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:805c111c166fc03c3957c80247a07c6e71874e0dd2abff5932364d005afab7b0",
+  "claims": [
+    {
+      "id": "claim_5c481446f5aa40349c04402e230b10fd",
+      "statement": "The Teltonika RUTX11 router is a commercial OpenWrt-based device (configured via UCI/ubus, not built from this repository) that is the third physical node of the WoMoHome system, connected to the vehicle's 12V system via two relays with flyback diode and trailing delay, and using a roof antenna with 2x Wi-Fi, 2x LTE, and 1x GNSS element.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L11-L13",
+          "version": "repo-lines-v1:sha256:eab523bf3e92b27c34fcf5ab375567aab70bfe818b458f2b8add8f869033f70d:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDM2MTRiYzNjOWE4ODRjODVkMTUxMzM3MTE3MmFlNzM2NWMzN2Y1ODlhNjljY2UxNGZiNzkyMDQzMWZjMTYxZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTdiOTdmMGJlOWMyOGMxZjcxYzBmNzY4M2M0NWI3ZjUwODViM2I3YWMyNDNlOGE4NjYyNTM0MjlmNzg3MGI2ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTUxZDYzMzdiMDc0MDY0Yzc1ODViY2IwMjYxOWI0NjI1OGQyYTM2ODEzZjA5YmFjZTA0MmJjYjk2NTkzYTcyOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzBlZGYyYjJiNjRiYTA1MzBmM2M5MDFmZGIyYTdiODQ2Y2RhZGM2MzJmMWY0N2RlYjc1MjE3Y2ZlN2Y1YTMxNSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_ab397b12e0fd4a54b277d72bfb3a7edd",
+      "statement": "Only the Display (not the Sensorboard) manages the RUTX11 router's UCI/ubus API; the Sensorboard's own Wi-Fi connection is used only for NTP sync and its local HTTP dashboard, never to reach the router's management API.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L52-L52",
+          "version": "repo-lines-v1:sha256:c470855954fecd3742a81b84872c39a355f1751693af683c928a3c499371b50b:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzQ3MDg1NTk1NGZlY2QzNzQyYTgxYjg0ODcyYzM5YTM1NWYxNzUxNjkzYWY2ODNjOTI4YTNjNDk5MzcxYjUwYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzQ3MDg1NTk1NGZlY2QzNzQyYTgxYjg0ODcyYzM5YTM1NWYxNzUxNjkzYWY2ODNjOTI4YTNjNDk5MzcxYjUwYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWM4YzIyMjdmNjQzZDMyMDczMTQ4YmNmNmE5ODdhZWUxMDk2M2YxZWE5ZmFkZDUyMGQyYWVjZDc4NGM0MWJhYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDI0YzJjZGEzODQ2ZGYwOTE1OGVlZDQ2MGYzYmNjY2JlMDMyMzYyYjRlMDBmZjE4ZmE2YzA5NzA2ZGQzZjA4OSJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_router_uci.c#L7-L19",
+          "version": "repo-lines-v1:sha256:01c2857eb258853434c9c9e1f60262ffac0b4453a70e56a737866e8579f64332:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MmE0MjkzODJiMmUxNDcxOGUwZTM3YjA1NzBhOGExNzAyOTkxZmNkODQ5OGNkODQwNjBhOGJmNGYwNTAxN2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY2OWJmMTVhMjIzYjZkMWM1OGNmMDE1M2M5Zjc2NWRmNTAzMDA0ZTIyMjI4NzRmMWY5MGM4YTYwYmNjYzg4NDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVhMzJjMjhjNGU5MWE2ZDUyNDkyOGEyNmE4MGYzMzgzYjJmNjkyMGIxMDU2MzQzNTY0MWRkMmRkMzg0YTk3MDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_81044740e8af43ebb61fbf4aacd8420a",
+      "statement": "womo_router_uci.c communicates with the RUTX11 via JSON-RPC 2.0 over HTTP POST to the router's /ubus endpoint (default IP 192.168.55.1), using a mutex-serialized synchronous client that logs in for a ubus_rpc_session token (300s server timeout, refreshed 30s before expiry) and auto-relogs on permission errors.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/network/womo_router_uci.c#L1-L77",
+          "version": "repo-lines-v1:sha256:0988056b3be63d01beefac8a61948338c971ac1438e50a3611045ff64e8da1f6:eyJzZWxlY3RlZExpbmVDb3VudCI6NzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyZDY5ZGI3YjE1OGVmNTk1YjFmMTg5OGQzNzQyOTVkYzBkYzIwZDdkZDgyMmMwOTNjYjVmYzM1MmRjZGE0OWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ4ZThhYjFlNzZmNmFlYWE1ZGI0MzAwZmMxZjRlNTcyMDczODJkNWY5NWYxZTUzYzVmZTI0MTg3MGQ0MmEzMTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_554ab332117f4a83a7c55a74d65f07c9",
+      "statement": "womo_router_is_reachable() checks only whether the ubus login/session succeeds, independent of whether the Wi-Fi STA uplink is currently connected, so a 'router reachable' status does not imply internet connectivity.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/network/womo_router_uci.h#L111-L119",
+          "version": "repo-lines-v1:sha256:18a0e8aa55d291b81c9e1ac52e219a3a128633225eb99e2910d11f1af30fcb5f:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWFmMjJjZjA3MzI1OTJjMjQ3MTQxY2JlNjFlZmExMTAxMjYxMmY1YTMxMjJiOWFmOWJiYWY1MmY1NzI0ZDE5NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTExMWRiZjE4YjZiNTdhMDFlMTg4YTgwZWE3ODUwNjU1ODEwZjdhMzExZTE2ODQ4ZjI0ZTU5MjU5OTExOWRlOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWQ2MzM4MmFiN2ZlZjE0NTkyZTI5MjJiNWEwOGQyNzY2YWJhODY4YjQ3MjA2NzRiMWNjZjA3M2VjMzAyNTA0NyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjBjYmRkNTkwZWVhNTU5OTg0ODliM2M0ODQ0ZDM5OGZmNjE1MjgxZTBlOTVhOTY3MTE0ZGY1N2VhMmE5OTgzZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_830d20eb6fbd42fb9ce620e2f0b8cbe9",
+      "statement": "A dedicated router_poll_task in main.c polls the router's Wi-Fi/LTE/AP status every 15 seconds (ROUTER_POLL_INTERVAL_MS=15000) and the data-pass volume roughly every 30 minutes (ROUTER_DATAPASS_POLL_CYCLES), writing results into mutex-protected snapshot globals; on Wi-Fi loss it clears cached Wi-Fi/LTE state and resets its poll counter for fast reconnect pickup.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/main.c#L184-L196",
+          "version": "repo-lines-v1:sha256:172dd066c41123624ae2bc17c7d59e7e39a97d562abba72cfe79b12ac39dbab3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM1NDExYTdmYmYwYWZlZTJhMGFjNzZiMWY4ZThmMzFjNGE0ZGJlNTA3MGI0YWQ2YTNhMTI3ZThjNTM5OTEwOGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYyMjBjZTBlZmIwMjc5ZmZlODNjMjY0ZTYzMjMzYjVlZGI1ZmIxZDE1YzgwZDIzOWVhZmRlNzMzMmI3NTBjOTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI3NmM0MWNiYjBlYjA5ZmVlOTdhMjE2YWJlOGQ0NGQ3NGM1YmI1OTAzYTk4ODQzODcwNjYzOGNjMDdiMTM3NjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMxNjU5NzRmYTJhYTJjM2QyNTAxZmJiYjk5ZjA5NzE0YThkYzE2MTdjN2RiNDBlOTQ0YWI5M2RhYmIxYWQ1YjUifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/main.c#L2946-L3056",
+          "version": "repo-lines-v1:sha256:faf9b5d47a83895a2293171e36f9e06b839ee1c9e4b9a42cc206201cd4c7aca6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTExLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIwNjkyZjUzNGU0NWFhZDZhZjVmZDg0MmU5ZTI4MDRjMjk1ZDhmZTBlNmY5MDBlNDUyNDMwNmI1OTQ3OTYxY2VkIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJmY2VjN2FhNjQzMGFlMTdkYmQxZDJiMGJiNmE5YmQyNWQ4NTFlMTMyNjhhMGZhNTc5ZTUyYzY1ZTY1Mjk5NGJiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI4ZjZlNGNhNTA4MGIwY2I4NGMyNmE0ZWEwMzY5NGFhZjA2YmEwNjE1ZGUxNzMzNjc1ODY2OTY4NGI4YjE5ZmM0IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIxNTU4YTBhZDg4NGVjMGRlOWE0ODM4M2Q5YzU3NjdiMzA5YzdiYWFjMzYyNzMyMWIxMDcwYjkwZWNhMWVmYmRhIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_b0da3c952c4e479e82df189c023b34bc",
+      "statement": "GPS, LTE, and Wi-Fi status are not transmitted over the Sensorboard-Display link (named 'RS485' in source/docs); the periodic ctrl topic from the Sensorboard only carries pwr_on/radio_on/ac_present, and router-derived data is written into the Display's merged snapshot exclusively by router_poll_task, independent of the Sensorboard link.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L27-L27",
+          "version": "repo-lines-v1:sha256:94d838a1c7a800fa3a33b5fa1c430a550a4604880c2852694c87e867d8cb1cf5:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTRkODM4YTFjN2E4MDBmYTNhMzNiNWZhMWM0MzBhNTUwYTQ2MDQ4ODBjMjg1MjY5NGM4N2U4NjdkOGNiMWNmNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTRkODM4YTFjN2E4MDBmYTNhMzNiNWZhMWM0MzBhNTUwYTQ2MDQ4ODBjMjg1MjY5NGM4N2U4NjdkOGNiMWNmNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMWRlYWMxNzgwMGFiNjQ4YzQzMzkwNzA0OWNlNWQzY2YwMDJmNzY4OWQyMTI1NjczZWNiYWFjYTExODM2NzY5MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWIxYjZkZWZkMjIwNzYxNDVmYjZiNDEzNDgyMjM2ODRhMjY2MjU2MzBmYTI0MTNhNDQ3ZWJkZmEzMmMwMDNhYSJ9"
+        },
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L37-L37",
+          "version": "repo-lines-v1:sha256:80a3cb31226cf1c9723a65ad7267f67cf8548397fcbdd2c6fa22faadaf3540a9:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODBhM2NiMzEyMjZjZjFjOTcyM2E2NWFkNzI2N2Y2N2NmODU0ODM5N2ZjYmRkMmM2ZmEyMmZhYWRhZjM1NDBhOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODBhM2NiMzEyMjZjZjFjOTcyM2E2NWFkNzI2N2Y2N2NmODU0ODM5N2ZjYmRkMmM2ZmEyMmZhYWRhZjM1NDBhOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjdjNTAxOTAzMjU3NWUyZGQ5OTgxYTdlZTkzZTgyYzE5NTM4YjE1ZDU4MzRhOGEzN2UzZGRmNzgxOGE5NTcxMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjRjZjk1OGUxZmY1YjNmZmY5MTcwY2NlZWEwMzJiZDBjYzQ1ZDBlZDJiYjU2NTNmYTk3NGRiMjZhNGZkYzhjMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_ceaa99f7d2ff4187abaa4f451000dc43",
+      "statement": "The Display's connectivity modal is a 640x420px, 3-column LVGL panel (HotSpot/AP | WLAN | LTE); WLAN and LTE columns show a status LED, connection name/signal, and an on/off switch (womo_router_wifi_set_sta/womo_router_wifi_enable_sta for WLAN, womo_router_lte_enable for LTE), each with a 45s cooldown (SWITCH_COOLDOWN_MS) after toggling before the next toggle is accepted.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L46-L51",
+          "version": "repo-lines-v1:sha256:16a9ded504bc4371b33c23098a0ddbfa543eae904e47c446c456051446f6c947:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGI3NTFkNTQwOWIyZmIxOWQzZDBhNjI2ODM0OGJiNjI3Yzg1OTkzOGZmZWU2ZDIwYjVmMmY1NjU5ZDg1ZWMwZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmQ5NDNlZTVlZDdhN2VmNDA2ZWUxYWNmMTE3ZTM2NDk2Mjg5Nzg3MGMxOTJlMDZiYTVkNzNiMTA3MDVhOTczZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjA1YzRjYjgyNTdlY2EwODUyOTAxZjI5Njg5YzM0MDhlYWVhYzQwMzA0MTk1Y2Q2N2VjMjEyNWI3NzYwOTQ2MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmQwNDYyNzlkOTM2MWY0MTZhOThlNTdlZDljM2U2YjI5MDg2Mzg3YmUyYzM0ZTgxM2E3YWY2MWE1OWY0NmU4MyJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/gui/womo_connectivity_modal.c#L1503-L1554",
+          "version": "repo-lines-v1:sha256:6f40e98809afa5f3f17f62269a8796d0c2d8311990f244bca3cd97107c3d3a40:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkZGRhOTIzNTYyZjg3ZTkyODU1ODkwNmM5NmY1NTU2MDg1Y2E5MTJjN2Y1ZjFhMjMzYjA2M2IxMzk0OTE0NDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkZGRhOTIzNTYyZjg3ZTkyODU1ODkwNmM5NmY1NTU2MDg1Y2E5MTJjN2Y1ZjFhMjMzYjA2M2IxMzk0OTE0NDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ3MzM3NDUwMGZjZDI1MjRkOTg2NTdhNjgyYTUyNDE5N2Q3YzIxNDEwNGZlOTljYTcxNjYxZGQyMzNkY2E4ZjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQyODA0ZGVmYTE1NWY5MjhiNDg3ZWJmY2E2NmU3NGEwMGEyMGYwMTFlNmM0ZDFlZmM5YmViNDRmNTUzZDA1NjAifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/gui/womo_connectivity_modal.c#L36-L36",
+          "version": "repo-lines-v1:sha256:b188cb2fedf1a46cdfb670b2ecc924c2d1a571ac158d4fc30f0bbcbfd080e343:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjE4OGNiMmZlZGYxYTQ2Y2RmYjY3MGIyZWNjOTI0YzJkMWE1NzFhYzE1OGQ0ZmMzMGYwYmJjYmZkMDgwZTM0MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjE4OGNiMmZlZGYxYTQ2Y2RmYjY3MGIyZWNjOTI0YzJkMWE1NzFhYzE1OGQ0ZmMzMGYwYmJjYmZkMDgwZTM0MyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjM4ZGQzZTZkNDlkZmNmNDczNzZiODJkYzg3MzZjMTVmNTRiNjVlMzViNjBkOTIyNzY3ZmVjNGQ4NTgyZmFlMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWVhY2RlN2YwMjE4MjdiYjRkMzZlNDgxODZiYzk2MmU3YzJhNDM1MzBlZTkyOWQ0MzQyNjBiMjkxYTczNTQ4YiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_b95086f7a86d470c96df1674be5d79bb",
+      "statement": "The AP/HotSpot column in the connectivity modal is purely informational with no on/off switch, showing SSID, connected client count, and a device list (hostname from DHCP lease, fallback MAC); the AP must never be disabled by software because it is the sole communication channel between the ESP32 boards and the router, and no code path in womo_connectivity_modal.c, womo_router_uci.c, or the standalone router-webui tool provides a way to disable it.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L48-L48",
+          "version": "repo-lines-v1:sha256:d61f5a4f613bfd9a7e04d4c52dffae59b87176d632c9031d511b452d749c3ee0:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDYxZjVhNGY2MTNiZmQ5YTdlMDRkNGM1MmRmZmFlNTliODcxNzZkNjMyYzkwMzFkNTExYjQ1MmQ3NDljM2VlMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDYxZjVhNGY2MTNiZmQ5YTdlMDRkNGM1MmRmZmFlNTliODcxNzZkNjMyYzkwMzFkNTExYjQ1MmQ3NDljM2VlMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzVkZWY2YzM1ZjlmMTY2ODhkMzcxMWQ0YWYxODA5ZDJhYmM0MDI2MjFjM2Y1ZGZlMWRiNmUzYjE0YzZhYWEwNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWM4YzIyMjdmNjQzZDMyMDczMTQ4YmNmNmE5ODdhZWUxMDk2M2YxZWE5ZmFkZDUyMGQyYWVjZDc4NGM0MWJhYyJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_router_uci.h#L237-L251",
+          "version": "repo-lines-v1:sha256:0d26315670862039e17fcacfa0b7299d16737f66832c4e91a8efba995d46edef:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI5YTg1MjcxYTdiZmNkNDgwOWU1Nzc1Y2NiMjRlMDk0ZWY2ZDlhOTM2MWM2ZDdhN2NmZGI4MjA1NzM0YjkyYmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNkMGQ4MmIxMTgxNDBlMzVlMzdkMTM0NjM2YmQwMDQ5M2M0MzJkOGRhZDJiYjUyNzJiM2M1ZTQ3NDBiZmVjZmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ2NGNiYjc3OWNkNDE0NjNjMTBhMjVhOWM1OGVkY2JjNzgzNjE3MDA4NWNhNDFlNzA3YWZlMzgwZmUzMjExYWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRiZWIyMGEyYmU3ODdhNTNlN2YxMTViNGMyZmUyNzMzNDUyN2M3ZmZjZGJlMDkxOGUxNjc5ZjE1YTdlMGZhNGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2c3cbc7a1ddc42908ce91905b149cebd",
+      "statement": "womo_router_wifi_scan() scans only the router's AP/Master-mode Wi-Fi interfaces and explicitly excludes any actively-associated Client/STA interface (device_scan_would_disrupt: mode=='Client' with a non-empty, non-zero BSSID), because scanning an actively connected uplink radio forces a cross-channel hardware scan that was observed to freeze the router's connection on 2026-08-30 (RUTX11, radio0/wlan0=AP, radio1/wlan1=connected STA); an unassociated STA interface is unaffected and scanned normally.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L50-L50",
+          "version": "repo-lines-v1:sha256:dbdd8bdec9e1cc3eacdd9f99ae433684923fccf9bb27e39b7d4f1820fc3e1672:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGJkZDhiZGVjOWUxY2MzZWFjZGQ5Zjk5YWU0MzM2ODQ5MjNmY2NmOWJiMjdlMzliN2Q0ZjE4MjBmYzNlMTY3MiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGJkZDhiZGVjOWUxY2MzZWFjZGQ5Zjk5YWU0MzM2ODQ5MjNmY2NmOWJiMjdlMzliN2Q0ZjE4MjBmYzNlMTY3MiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDI2NTQyZjJhZGUxN2RlMDkwOGZlMDhmNTkyYzZhZWQwNWUxZTVlNjZkNWZkN2VhMjNlZjlmMGY3YTVkN2Y3MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOGU0YjE3ZWUzZGE5MTI5NTMyYmViYWI0YzFiYTc2OGIyYTBjNWQ1M2ZhMzZkZTQ2ZDlmOTBlY2Q3ODRhYjRkNiJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_router_uci.c#L1125-L1163",
+          "version": "repo-lines-v1:sha256:ffd7096c1028b47148a35849d584e288bc6ccbbe52146474b661c49380a9f4b7:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQyZTQyZGI2ZWFkZGU3ZjBlYjJhMDg1MmNhNjdlZGRhNmJhOGUxNjBkZDFmY2QyMjUxN2U4ZDQzM2M0MmI0NzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFkZTI2OGM2M2E2MGMwZDM5YTIyODNjYzM0NGRlNTM2MGMzMDZjYmQwZGMwNzU3YmZhMTcxZGRhMzgyMzJjNWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJjMDM3NjM4MGI5OTlhMDllYTA2NDg4MzU5YmJlMDFlZWQ5MDE4NjU1NjU0NjIxMDA3MGI4ZmMzNzMyOWFhZTUifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_router_uci.c#L1197-L1260",
+          "version": "repo-lines-v1:sha256:8f867265b59f084b726014b578807eb4cc25877bb0a2dce5f53d94cca4a92c98:eyJzZWxlY3RlZExpbmVDb3VudCI6NjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3ZTIxOGMwNjI5N2NmZjdjMDM3ZjM1M2U0YzZjYmE1YWY1MmVlMDY5OTE4ZDkyMGFkYjE0MjU5OGEyYzljMzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU4ZTFlMDc2ZTQ5NzFkOGYwNDBiNDg1MjA1ZDk2YjI0NDkzOTI4MzU0YWNiYmVjZmY2YjQxNWRhOGIzNWQyYmUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_99a1481580fb4252a54ff5a90069b2ea",
+      "statement": "womo_router_wifi_set_sta() automatically selects between two fixed RUTX11 STA sections based on the target network's channel (>=36 => 5GHz on radio1, independent of the AP; else 2.4GHz on radio0, combined with the AP on the same channel), enabling the chosen section and disabling the other.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/network/womo_router_uci.c#L1297-L1327",
+          "version": "repo-lines-v1:sha256:06c81f94683f7e4f64564b15138ac8dd5f3767dfd2ed3df000469d0723c37c3c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMyNGIzZjI0ZDg2MDg4NjcwMGViODBmNDBmMThmNDZlMjczOTgwMWRkN2FiYjg5NWE2M2M1NzczOTFjODM3NmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjOGM3YTJiN2I5ZDE0OTYzNzIxOTk1YzczM2QzNWFjOWE2OTAyYzJmNDNhZjdiMTNmMTg3OTU2ZmYzZThiZDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ3MDI2ZWRkYjZkM2Q4Y2M1MTZmNTRhZTM4ZmJhZmYxZjA3ZTRiMTYyYmQ0OTg3YWU5NGE2MzhjZTg5MjVlMzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZmMGJkNTMwODU2Yzk4MzYyNzk5NzdlZDg0OTA2ZjcwYzcxYzFjNDQxMTU0NzdkYjE3YmYyYWMyYmNmYzhmYzAifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_router_uci.h#L85-L94",
+          "version": "repo-lines-v1:sha256:a2a611eb848d7c730ee2590ca6162cf615d444123922199b0784ccaf41347135:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg2OTRhZDM3N2YxYjQ4YmEwZDM4NTI2ZmUyYzhlZTE2Y2I1N2Q2MjQ1ODJjOGYxNGU1NjgxYjY5OWYwNDM2NjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQwZjIxYjUwM2RmZTZjNTZmYTA0NTA4YzNlY2JlN2Q5YTljOTBhZTcwOThhNjhjYTFhNDE0NDU5Y2RhMDA1YWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_02257406971949009b18248159d537ac",
+      "statement": "womo_router_wifi_scan() deduplicates scan results by SSID, keeping only the strongest-signal entry per network when the same SSID appears from multiple access points or bands.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/network/womo_router_uci.c#L1264-L1293",
+          "version": "repo-lines-v1:sha256:ad69dac54a2c02bd981d91da7a264dc50b8d4087406fa7c9b40e13cb3b4f6f33:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgzZTYwYjBlNmY5ZjQ2Y2U1NDIwNTA5OGZmMTAyNDliNjdlMWVmOWQyNmMxNzVmMDdhNmM2OWQ0MGQ5NDQwZmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU4ZTFlMDc2ZTQ5NzFkOGYwNDBiNDg1MjA1ZDk2YjI0NDkzOTI4MzU0YWNiYmVjZmY2YjQxNWRhOGIzNWQyYmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ3MDI2ZWRkYjZkM2Q4Y2M1MTZmNTRhZTM4ZmJhZmYxZjA3ZTRiMTYyYmQ0OTg3YWU5NGE2MzhjZTg5MjVlMzcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_994979bc313b4c32bc284858a7d6012e",
+      "statement": "Router Wi-Fi credentials used by the connectivity modal are cached in the Display's NVS namespace 'rtr_wifi' (max 20 entries, most-recently-used order), pre-filling saved passwords when a known SSID is selected from the scan dropdown.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L53-L53",
+          "version": "repo-lines-v1:sha256:285028279d13457ef5a3cd595dc00c5cdaf92dfcf9355598813e9ca4629a808d:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjg1MDI4Mjc5ZDEzNDU3ZWY1YTNjZDU5NWRjMDBjNWNkYWY5MmRmY2Y5MzU1NTk4ODEzZTljYTQ2MjlhODA4ZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjg1MDI4Mjc5ZDEzNDU3ZWY1YTNjZDU5NWRjMDBjNWNkYWY5MmRmY2Y5MzU1NTk4ODEzZTljYTQ2MjlhODA4ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmE5ZTA1MjU5NWU2NDIzNmJkZGQ1Mzg3NzFkNGY0NDEzNDRiNjU2YzM4NDI2NWI0OWY2OWUyNGI0MTIxMzg3ZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2U5MmFiZDc3MTY1ZDFlMWY2MTM2NjIxNmU4NWJkOGMxM2EwMmZmOWQ3ZDQ4YWFhNGQ3OTQ5ZTgwYzMwNzFmOCJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/gui/womo_connectivity_modal.c#L33-L44",
+          "version": "repo-lines-v1:sha256:3411f26620d49b18334d92608529712c3fcf2ab5d8ceb3625d4bdfe34fa832db:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZmYmViZWQ5Zjc4ZDAwN2IzZWI4MGZjNWViNjdiN2E1MDU2YTk3OWE1MWY1YmE5OWE4YjdhN2RhYmY5NDQwNGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMyM2M5YzA1ODBmZWY4MGI3NmY0ZTdjMTAxMWFmN2E3OGVhYjA1MzMxYjY0Y2JjMzI5ZmQ3ZDkxZWY2Nzk4ZmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRlZThmZjQ0YWNhY2RmZDkwMGRmNDNmMTM5M2IwYTU3MTBkNDI2MzU0YTkyZGEzZjI1NzA4Mzc3MTc5YzA0ZGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNkMmY2ZWQzZjBjN2Q0MjY2ZDAyYTJlZjkxNTQ0NTM1YWU3NmExOThiZDQxZWRlMzBkMGNlNTBjMjk4YWZjNjcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_30ae67a88ad34a308529f97f05b4b0a3",
+      "statement": "The tools/router-webui/womo_router.html standalone dashboard talks directly to the RUTX11's /ubus endpoint from the browser using the same JSON-RPC 2.0 session-login pattern as the Display firmware (login, cached session token ~4:30min, auto re-login on permission error), auto-refreshing every 15s, and likewise has no AP disable switch.",
+      "evidence": [
+        {
+          "resource": "repo://tools/router-webui/womo_router.html#L211-L268",
+          "version": "repo-lines-v1:sha256:59aabdc3ff196ad37148d520826cfc063e0a1d82699489455c526bbd888a0e20:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNmMTRhMzIxMjBjMDM0ZWFmYzc2ZDQxMzgxNjZiZWI4YzdhOTY4YTM2MzNhMDAwOGU3NGY0MDZkZDlkMjEyNmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU4NDdhNmYyOWZhNTA4YTUwMzk1MmMxMTU1NmNjNzc1OTUyNGExNzlhMTUzZDNiYWIwM2NkZTI1NmFhMzAwYTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjExOTk1MDA3YTUxNmM1ZGE5ZWUyNmEyZjJmYjY3MmYwYzM3NTY2YWNlM2UyOWFkMGMwMjY3ODIyM2ViNzVjYmUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0ceeae5942c44d01919d9a923f89dc77",
+      "statement": "deploy.sh installs the router-webui tool under /etc/womo/ instead of /www because on the RUTX11 /www is a read-only SquashFS mount with no overlay, while only /etc/ is backed by the writable JFFS2 overlay; it serves the content via a dedicated second uhttpd instance (uhttpd.womo) on port 8080 rather than the stock web root, and appends /etc/womo/ to /etc/sysupgrade.conf so RutOS's settings-keep mechanism (which otherwise only preserves /etc/config/* and the standard package list) preserves it across firmware sysupgrades.",
+      "evidence": [
+        {
+          "resource": "repo://tools/router-webui/deploy.sh#L1-L21",
+          "version": "repo-lines-v1:sha256:a9865c719c8d91cd80accd5c771f3becb1f00e1f3b5f12a23feb3765ef639e65:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkOTVmYzA0YTgwYzk1MmY0OWNlNDE4ODYyN2M1M2IwZmJlOGM0NDA0MWI5NTJkNTkyYWNkMWRlOTk4NjE0NjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMyZThmMDVmMzlmZmJmNjhhMDQ0ZGRmYjE1Mzk1NzZlYzg3YjA5NDE5YzQ5Yjg1ZTA2NjUzNmI4MDZlOTRjYzciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRmY2E2NDkxYmZkMjJmYzE0NDY1ZTJmNDA3MmE5OWJhMWRjZGJkYjZiOTU4MDJjYjcwODYwNjE2NzA2ZTM4YjYifQ"
+        },
+        {
+          "resource": "repo://tools/router-webui/deploy.sh#L416-L436",
+          "version": "repo-lines-v1:sha256:927de50e4f4d829cba61dd18b8b112c34fc0d51c0b13febe5180727a5aad9781:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZkMWVmYjRlNTE4NTE4OWNiMWRiNzI4YjQzZGU3Zjg1YWUzZGE3M2MxNzE5ODY2NmMzMjkzM2QyNmU5ODFmNDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2YTU0YWJhZmQyYTMwOTY4MDkzZDA4NDFhN2Q5NDNhZTQ2MjM0OWE0YmRiNGEzYTZhNWZkZThmOTg5ZjgzNmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI0MTdmYzEwZWFhMmZmNmU3ZDE3MTZmYmIzY2U3YmU1MTVlNmQ0YTJjZGQxNDhhZWRkODI2MzYyN2E0OTFkY2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNjMTQwNmY1NWMyNDY5MTBlZmU3NTk1OGFkNmM4MzA5N2VjODM2NTI5NjI4YzY3MDU4ODRhZGI5YTQ1MWI3ZjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_681cc5decf6d45788f5db27643f2fc91",
+      "statement": "deploy.sh installs CGI proxy scripts under /etc/womo/cgi-bin/ (ubus reverse-proxy to localhost, lte wrapping gsmctl, clients parsing iwinfo assoclist + dhcp.leases, simswitch triggering sim_switch, datapass scraping pass.telekom.de over the qmimux0 LTE interface) plus a poll.sh that writes AP/Wi-Fi/LTE/GPS status atomically to /etc/womo/status.json, driven by a cron job running poll.sh every 15s and datapass.sh every 30 minutes plus once at boot via /etc/rc.local.",
+      "evidence": [
+        {
+          "resource": "repo://tools/router-webui/deploy.sh#L383-L414",
+          "version": "repo-lines-v1:sha256:522a60cb8b8f30e03e6d6ace1d1d8d225871f2f2e42e892fbedf1d8539a3f9f1:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRmMTVlNmRhMzI2ZjFmYWM1YmVkOTgyMDhhYjcyMTJmOTI0YWRmMGI5MzJkNjEyNGExZDFkNzE2ODk1NDUyYzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmM2ZiNTBkMTJhZWI1YzFjNTBjODA2MmM2ZmY1Njk4ZjY1NDYxZTAxMzc1MmM2YzIxYTFhNWYxYThiMDU2ZWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUxMmE5OGQ5ZDQ0MGNlNGNlZTZmYzUwZWU4ZThkMDU5NzRkZTllODc1MTg5YjZmZjI3MzZhMzkzOGM2MThmNWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFiZDc5N2M1MDViMmViYjFjNTk2MjZkMThjNWNjYmNkNTE4Yzc4ZDc3MDViZDAxYzliMzE0NmNhNWFhODFlMGQifQ"
+        },
+        {
+          "resource": "repo://tools/router-webui/deploy.sh#L88-L321",
+          "version": "repo-lines-v1:sha256:efd86cc941449d9de2b4f3d4768f73cb6f639bff42ef949ae2a651a4d5281aca:eyJzZWxlY3RlZExpbmVDb3VudCI6MjM0LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJjMGRhZWUyZDMzOGVhMDI0MjMwMzhkMDg4MGNiYTQ2YzU0ZDJkNGIwMTZkYmZhNWRhNDg0NThjZDY0YWQ1ZjgxIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MDc0NTFhOGEwYjFlNDA1M2Y1ZjYxZWIyOGY1MGI0MzRhZWEwYzg3NDI2MzEwM2EzYWQ2NzcxNTdhYWM3YTRkIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIzMWNlMWFhMTE2OTVkOWI1MTU3MGRhMTVmMjM5ZDcwZDJmNWNhZDU4YTc4NTBkMmE4ZGE5Y2VkNTg2MWQ0ODMyIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJhODUwYmZjMjg3OGFlMzZmZmYyY2RkMWY3YzcyOGZjY2Q0MDYzNDJhMTIxOTM4NGU5NWNlMjRkNDNkMDZhN2QwIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_97f2aa24147a47cba02418493cf08cb8",
+      "statement": "The admin password for the deployed router-webui is embedded into the HTML at deploy time by replacing a __ROUTER_PASS__ placeholder with a JSON-escaped string via a python3 json.dumps call, rather than being typed in-browser.",
+      "evidence": [
+        {
+          "resource": "repo://tools/router-webui/deploy.sh#L48-L56",
+          "version": "repo-lines-v1:sha256:4632653a27dfd6931cf8750fc848c0419f7057d288c66e7a3e00dc27d27af4ce:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGZhYTYyYzhjYmEzNzU0NjcxNWM2YjczYjlmMWE3MDU2NjdkYzJhMmIyYmY1ZjI0Y2FhMjZiNjlhNDc5ZjQyMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDQzZjk1NmY0N2FhNTgwNjkyMGZjYjJlZjVhM2RjZWUzY2Y4ZDhhYTYyNDczOTkxNmZlMDBkMTU2Y2I4M2NmOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzdiNGRlM2YyMDZhNzEzODFmMWU0NDZlMDhhMDYyNWVjMmYxZWY2MmE4MmQzZmVhNjA3NGY5ZDE1ZDExNzFhOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmM3ZDMwMDJlOWQ1Y2IxY2JiM2NhMmMyNzRkZmNjOTQxOTljZjczNTdkZGIwM2M5ZDFhMTRhNTZkYzMyZWQ4OCJ9"
+        },
+        {
+          "resource": "repo://tools/router-webui/womo_router.html#L218-L218",
+          "version": "repo-lines-v1:sha256:c0407440d5e67a53421f81ac5d6f1f850393a8273348704db0c559be5db3806b:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzA0MDc0NDBkNWU2N2E1MzQyMWY4MWFjNWQ2ZjFmODUwMzkzYTgyNzMzNDg3MDRkYjBjNTU5YmU1ZGIzODA2YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzA0MDc0NDBkNWU2N2E1MzQyMWY4MWFjNWQ2ZjFmODUwMzkzYTgyNzMzNDg3MDRkYjBjNTU5YmU1ZGIzODA2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGRmOGIyZDlhMzJmZDRiYjBlNmYyZDc0NzRlODMyMjhhMjJlOTBkZjBmOThlNTQzNmIwNTc1ZjI3ZjNiYjQ3ZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWVlYTk3NDg4MzFhNDFjMzViOGQ3NDc5ZWNiNzE2NjVkYjZiNDIxOTFlMzQ1ZDAyNWM4ZjRmZDU1MGQ1MWRhNyJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

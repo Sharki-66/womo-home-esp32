@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:b7dfb116f424d50d4a59ac827a37fc57b899ea1df1f20ce72d1ac16ec335665f",
+  "claims": [
+    {
+      "id": "claim_624fabf7452a49cd91221da4b08d6ddc",
+      "statement": "The GasBee nRF BLE advertising payload (Format v1, Manufacturer Specific Data under Company-ID 0xFFFF) consists of exactly 7 bytes: format version (byte 0), gross weight as int16 LE in 10 g units without tare (bytes 1-2, 0x8000 = invalid), battery voltage as uint16 LE in mV (bytes 3-4, 0xFFFF = invalid), a sequence counter incremented per measurement cycle (byte 5), and a flags byte (byte 6: bit0 HX711 ok, bit1 charging, bit2 calibrated, bit3 configuration mode, bits4-7 reserved) — no other fields exist in this format.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L75-L93",
+          "version": "repo-lines-v1:sha256:8535ece88035d83cd71ce442bbd6df360b5761be90787968090d92fa033e4c40:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkMmRlZDk0ZTljMWJhMmViYTQ0YTlkMWJmNWRlMTQyMTM4YTk0MzdkY2E3OTBhNzgyODYxYzA4OTIwNTk0YjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg2MDRkNmRlMzdjZmE5NDM2OWQzZjBiMWZjMWY3YTUwNjQ2NWU4MWE3NjQxZDU5Yzg3NDk4N2ZjMzRkNzUxMTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUwOWM1MDRhZjE4MGEwMmEyYTcxM2M2YTFhOTdmYzkyYTFhOWM1YzJhNmRjYWFiNTVjYTk4YTcyZjRhNDFmOGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM3NmYwYjUyNDc0NjQ1M2I1MzdhOTYxZTlhNTAyYmIwYzQ5YWFjZGQ1NjRhMWMwOGJjMzRlNDY2NTFjMjQ3ZWQifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L62-L78",
+          "version": "repo-lines-v1:sha256:b37d9f9eaeff9441de9761985322be389bbfbe702caf6ed5e43705849ec17b64:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ4YTJkNjFjYjQzYmU4ODcyMjJiZGQxMjgzMTE1M2EwMTE4YmI5MWE4ZTdkYWM0NDFkZDNkZTY4NjYyMDA4NzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjljMzhkMmJjNTI0YzMzYjYxNmI5NTMxNmIyYjdiZjg4NzBjMDM0MWI4MDFiYWExODk2ZDZlM2UzOWE3ZTRhNWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI5YWI1OTQ4YjVkODY0NTI4NTliOTExYjc0NjNmOTczMGEyM2ZmYTk0NDJiN2EyNjYzYjk1ZDUwYWE5NjU3ZDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE1NWFhNGJmMGNhY2QwMGQxNTlkYWUxY2QzYzc3MjAxYjBkZjljMzRjOTM3N2YxNGE4MzgzOGMzMmFjYmMxZWMifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_ble_scanner.c#L13-L28",
+          "version": "repo-lines-v1:sha256:31b89f236293af72cf6044d3b16a26c816af513cecf221c53289f2eaedaca46b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNjI1MTNmMzZmMDIwNjA3MWJkZjJlNjE0ZDNjYzMzYTJlYmQ5ZDBlOWJmODI4NGFhOTVmMzVkZjFjY2E5YWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MmE0MjkzODJiMmUxNDcxOGUwZTM3YjA1NzBhOGExNzAyOTkxZmNkODQ5OGNkODQwNjBhOGJmNGYwNTAxN2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRlZWVlMGVjOGZhODk1YTY0NjI5ZDRjNTBlYjM0MGQwNDJjN2RhODU2OWE4YjVmNDAzNTRiY2U4YmM0ZGY2ZmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMyYTUxYTBjZmYxYWQzYTM0NWFjZTA1YWM4YWM5NTU4Mzg1MTllY2ZjNzFkYjkyMDllMzA3NDc3MDdjMTM2NWIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3c6ec2c379be46c68dd68c6ebd72f5f3",
+      "statement": "The GasBee measures on a 5-minute cycle (1-minute in test mode) and then transmits a burst of 10 identical-sequence advertising packets spaced 1 second apart, followed by radio silence; while attached to USB it switches within 2 seconds to a continuous once-per-second, connectable configuration mode with 5-second measurement cadence and sets flag bit 3.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L53-L73",
+          "version": "repo-lines-v1:sha256:1631292fdb57ea872ab76691a1c87fc14a1d954a70816d2fd986b3a39d46c708:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU1Nzg5NzBlNTg2OTFhNzVlYTczMjM5M2FjY2FjOTk5YTBiOTc2YmExMGI4NDg1NzRiNmNlNGRjODgxYjIxMmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4MDVhYzFmZjU3MWUzODJlNmIyMWEwZTAyNTc3YmQ0NzZkOTBiNDY1NGZkNjA3ZmUzYTNjMDgxYTRiYzAyYzQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBmZTYzZTYwZjM0YzFiMmFlYTkyM2I3NGJmNjYxYzYxMWZlNWY5ZjgyOGUwZmRmZGZkYTg4MzM5NjhlNzliMTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJjZTYzMTJhMzExOTEyYmFkYWVhYWI2Y2U1NDExNDAyZmIwZmFkMDZmOWM1MDBjZThmNjRjZjU2ZGVlNDVmYTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d2f65805d65d401482b88edcbfea23a8",
+      "statement": "ble_manager.c is the sole owner of the Sensorboard's NimBLE stack: it initializes NimBLE once, runs a passive scan with filter_duplicates=0 so periodic Ruuvi/GasBee re-advertisements are not suppressed, dispatches every discovery event to up to four registered advertisement handlers, and automatically restarts scanning after any GATT connect or disconnect.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/network/ble_manager.c#L10-L86",
+          "version": "repo-lines-v1:sha256:071762f6b9b9fa430077a07bba856dd72dcb2cf2077da963604be7abb5903c76:eyJzZWxlY3RlZExpbmVDb3VudCI6NzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRhNGQ0M2NhMmE0OWU3NDg4NDhlNTJjNTA5MTdmZmRiMGExYjU5N2RjOTM5MDZiZmFkNDEzNmM5Yjc1NjdhN2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhkYjVlOGJjMDkzZmIxZjRkOGQxZTZjYWYwOGUxMTcwYTIwOGJhMTkzNWRjZmM2NjVhYmM1MGUyNzI1N2UxZDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg5Nzg3ZGI0NWZlNjllODNmMmI3MTBjMDUzMzJmYTVjNjRjMjVkZGVmYzg2Nzc1OThlYjhhODNhNDJkYTVmYmYifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/ble_manager.h#L26-L62",
+          "version": "repo-lines-v1:sha256:7a5653b0c4d37a9bd09a447fc5e7ee3a0aa3533f3fdcb7b278dbe5a1c4c0b081:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhiM2VjZTkwN2U0YjBmYmQ3NTBhZTNhOTE2ZWUzODdjNjcyMDk5OTcwMjNiMjg5MjdlMjA2ZTFlMmU5MzU3ZWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjODJmYmExNjQ2ZGNjMjBhNmZmNWIzMmJiMDliZjQ1YWZkMjZmYjdlNDA3NDc1Y2NlYWEwZDIwNWU2ODhkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE3ODVlNzEyMTM3MWJlNzFjYzUwMzAzNjU2OTJkM2Y0YTA4MGNkNGRlZDAzOGI3MTM0MjcyN2M0ZDEzOGJmMGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNjOTNiZGUwNTZhMTk5OGY5Y2Y5ODc1NGYwOTcyMDIxMTI0ZTFiYzU3ZmE5MmVlNGM3YzNjM2E2MWYwN2Y5M2EifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8d4e79968f544df3b84ba63f85c40063",
+      "statement": "gasbee_ble_scanner.c identifies GasBee advertisements by Complete Local Name \"GasBee\" plus Manufacturer Data Company-ID 0xFFFF with format version 1 (dropping unknown versions), routes packets to bottle slot A or B purely by matching the advertiser's BLE address against MAC filters loaded from NVS namespace gasbee_cfg and configurable at runtime via RS485 cmd:\"gasbee_config\", and de-duplicates each 10-packet burst by only evaluating the first packet of a sequence number different from the last one seen.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L64-L69",
+          "version": "repo-lines-v1:sha256:83ebb967a151633c1d35d6f1924006a2a41de7408c947bac157e32168d8707e2:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTFmYTVhMmZlZDQwMWUxYzcyYjFhMzY4MTA4YjI4YzRkNDE1NGE2ODU2OWY5OGY2OWZjOWMyNzg4YzEzOGFiNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTU5OWQ3OTg0NDYzNjdlYWZhNmI2YzY5YTVmOWM1MDJiNDUyOGJiMmFhYTgxYTY4NTFlNDFlY2M1ZjhiOGQxYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDNlZGQ2OTQ4MTU1ZTU5YmI4MGUxODJkYzY0N2EzNWY2NTBmZjY2YWUwYWEzMTY0MTU2NmVhOTMzMDMwYjA1ZSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_ble_scanner.c#L1-L28",
+          "version": "repo-lines-v1:sha256:c2a9ae43a4f0f09c38ed481fd1bedcfc92a7a23cf611779dfb4fb8d46992fb0f:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MmE0MjkzODJiMmUxNDcxOGUwZTM3YjA1NzBhOGExNzAyOTkxZmNkODQ5OGNkODQwNjBhOGJmNGYwNTAxN2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMyYTUxYTBjZmYxYWQzYTM0NWFjZTA1YWM4YWM5NTU4Mzg1MTllY2ZjNzFkYjkyMDllMzA3NDc3MDdjMTM2NWIifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_ble_scanner.h#L9-L21",
+          "version": "repo-lines-v1:sha256:d095db4248a766e9fcaf6a7356daf74b109193ca6c97f463e056e6d2025cf542:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MmE0MjkzODJiMmUxNDcxOGUwZTM3YjA1NzBhOGExNzAyOTkxZmNkODQ5OGNkODQwNjBhOGJmNGYwNTAxN2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiZTI2YmYwOTEyNTVjMzU0NzBiMjAxMTUyYmFiMTM0NTQxOGExMjZhZmQzZGJlY2IxY2Q3MjljYzQ1NjM5OTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxZjM2MjVmOTA1NWZkNDY2NTAzYjdmNzQzYTgwOGQ3NGVmNjhjYzFkNzhjZjQ5Nzc4YzhiNzQzNmFjOWQ3MjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_805ebd528fbd4240a62dcd206ecd9fad",
+      "statement": "gasbee_ble_scanner.c independently maintains an unfiltered scan list of every GasBee seen in range (gasbee_scan_entry_t), which the Display queries via RS485 cmd:\"gasbee_scan_request\" to build a bottle A/B assignment UI; a cfg_only mode restricts the list to GasBees currently in USB configuration mode.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L86-L88",
+          "version": "repo-lines-v1:sha256:fee7893c5a7925c615e6936fd7399114ead8001e2836a5484c3af8a3ec1f41a4:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGE0MDkwOGEwZTBlMTUyN2ZkNGNiNDhkNjI2ZWRlMDQ0YTc5ZGY5YzEyMDYzOGU1MWVjZGExMmU4M2Y1MGY3MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWUwM2VmYTQxZmU3MWNlYzUxZjRmZDg2YWQ2OWYyMTk1MWMzYTZjMzgwY2ViM2Q3M2FlOGM5MTM0Nzk4NzJkNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzg3MGFhZGIxNWFmYjJlNTRlMzE2OTE4ZGEzODc1NmVkM2ZlNDhmMzI0Mzg0NzVlYmY3MDU2ZWFhZDExY2RlNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmI0YmNiYzQwMDdhMjg5ZDc4ZTc2NDc4NzQ3ZWVhNmQyZTkwZjIzYTE4NDdkOGU1N2VmYmE5MDhmZjhiNDAyZCJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/gasbee_ble_scanner.h#L48-L93",
+          "version": "repo-lines-v1:sha256:271c270b516a331c63d9abecef2c76ea96514e7c7a1cda03201fa567f3cb333c:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxOTEwYTE2MzJjZWFkMjRjNTliMWFiYTliNTI1MjAyMDVlNGMwNGQwYzk2NmZjMWVlZDE3ZGRjNDAxMmRiZjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwZDZkOTViYTg2NzZkYzVjNGYyZWUyOTA5NDMwZGU3ODBhMTAzM2Y0YmYwNzU4NmMyYTk0MTA2MzlmNTQ2NDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIyNzY3ZWZkZjMyZTk0NTliMTk5MDhmNWY0NzNlYTk5ZDU5MGZkZWJhYmJiZDVlNGM5YzEyNWUxNjUwYzJiZDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg3YjRkZTQ3OTc4M2ZkMzI0OTA2NzRjY2VmYTY3Yzg5MjQwODI2YmJkNWE1OTZiZjkxZTZiMDY4M2E4YTJjOWUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_aaf7481e08ab47a5b547300db3f8c211",
+      "statement": "The Sensorboard only ever opens a GATT connection to a GasBee for calibration (zero-point, reference weight, raw offset/scale) and tare commands while that GasBee is on USB in configuration mode, handled by gasbee_gatt_cal.c which connects by MAC, writes the characteristic, and disconnects immediately; normal weight/battery/status ingestion is done exclusively via passive advertising scan, never GATT, and while a GATT connection is open the GasBee sends no advertising bursts so no new weight values are received during that time.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L95-L99",
+          "version": "repo-lines-v1:sha256:49901f42f1104ad36ee4c7d34830ce5af0050a5fef023cbeff25d895fbb15819:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDY1ZWRmMjYwNGM1OWY4M2FlZDM4Y2ZlOTZjOTYxNzk2YWFmNGM5MmU1ZjJlYjFlNDE1Y2IyMjY1MzRjMmU3ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGY4NTE4MDhjYzM5MjAwZDI0ZTI3YzkyNTEzMjBkYmU2MTVhZTYzNzA3MTgyMTRmMmQxNTk3Y2E1NjhjMzQ4ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGY4ZjhkMGZhYWMxMDY3NWZlYWQ4YzdhMWE5NmJlNjZjMWQyNGM3OTQzZmJlMzBiNjI2OTlhMTlhMTQyYzgyNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDFmODc4M2IxMWY5OWFlZWQ2Yzk5NmEyNzVhNzllMmVjZWJlYjNmY2NjZDIwOGYzZTczOTY3N2JlNDEwZjc1OSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L64-L88",
+          "version": "repo-lines-v1:sha256:810acca6c1c4f5d133825bb35c5ad66f56126e5b46349cba74c1f1bc70246bcb:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExZmE1YTJmZWQ0MDFlMWM3MmIxYTM2ODEwOGIyOGM0ZDQxNTRhNjg1NjlmOThmNjlmYzljMjc4OGMxMzhhYjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlMDNlZmE0MWZlNzFjZWM1MWY0ZmQ4NmFkNjlmMjE5NTFjM2E2YzM4MGNlYjNkNzNhZThjOTEzNDc5ODcyZDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU1OTlkNzk4NDQ2MzY3ZWFmYTZiNmM2OWE1ZjljNTAyYjQ1MjhiYjJhYWE4MWE2ODUxZTQxZWNjNWY4YjhkMWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJiNGJjYmM0MDA3YTI4OWQ3OGU3NjQ3ODc0N2VlYTZkMmU5MGYyM2ExODQ3ZDhlNTdlZmJhOTA4ZmY4YjQwMmQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0091b6c0fb9548468824d4c907cf8e04",
+      "statement": "gas_source.c arbitrates the gas-weight source for every downstream publisher (hx topic, gas topic, HTTP dashboard) with HX711-cable-has-priority as an unconditional invariant: if hx711_app_get_snapshot() reports at least one valid channel, the wired HX711 is used for both channels and GasBee is not consulted at all; only when no wired HX711 data is present are the configured GasBee slots checked for freshness (valid and within SENSOR_GASBEE_STALE_MS of the last new sequence number); if neither source is available the result is GAS_SRC_NONE (nc on both channels).",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/sensors/gas_source.c#L52-L74",
+          "version": "repo-lines-v1:sha256:1db6942ac62e1ebce88bdbda8f0a9e12b43b414140e7fd121bb00bcc3803d95e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ2OWE2MmJhOTJmMTc1OTk3YjBiNDRkMWZiZTI5YjU5MjAwYWUzNGMyNDMwNGU3NDEyMmVhYjZiNDVlYTAwMWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjExYmQwODA0NDhlMzU4NGE5ODM2OWQ2YzE5M2JlYjUxM2VkNThkMWM4MTZkYmE4OWNkZmViMmQ5NmFjYmRmYzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0OTE4YjNmZDg1M2QzNzRhODA2OWEzNjFhNzAxMjE2OWU2YjQ4MjY4ZThiNGNlYTUxYTFhN2M1NDI4MTkxNjcifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensors/gas_source.h#L9-L25",
+          "version": "repo-lines-v1:sha256:a59907f0f1cebc084bc7a045c4a679a7c5d1287b817e344ca766d4d9d8ab1773:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MmE0MjkzODJiMmUxNDcxOGUwZTM3YjA1NzBhOGExNzAyOTkxZmNkODQ5OGNkODQwNjBhOGJmNGYwNTAxN2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiZTI2YmYwOTEyNTVjMzU0NzBiMjAxMTUyYmFiMTM0NTQxOGExMjZhZmQzZGJlY2IxY2Q3MjljYzQ1NjM5OTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBhNDgzOWFjMzNiNmU5MTNmMDkwMzQyM2QzOWM0OTMxZjI2NmFiNGJjOTRmNDJlYTJlODUxNTc2NjhjZjdkYTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f042e4bc917248b39ed42288dba4c726",
+      "statement": "A missing/disconnected load cell while the wired HX711 module itself is present is not detectable by the firmware and is explicitly an unsupported mixed-operation configuration; in the field a Sensorboard either has the complete wired HX711 scale or relies entirely on GasBee BLE, never a mix.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L80-L80",
+          "version": "repo-lines-v1:sha256:70b375f1422189f5e239700a165f4f1657facdb68c724f79642109ddaf759920:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzBiMzc1ZjE0MjIxODlmNWUyMzk3MDBhMTY1ZjRmMTY1N2ZhY2RiNjhjNzI0Zjc5NjQyMTA5ZGRhZjc1OTkyMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzBiMzc1ZjE0MjIxODlmNWUyMzk3MDBhMTY1ZjRmMTY1N2ZhY2RiNjhjNzI0Zjc5NjQyMTA5ZGRhZjc1OTkyMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGVlM2VjMmIzNDRmZjg3NzdhYmU5Y2RjMzE0YTgxYzhmZTlmMzZlMjFkMjYxYjFmNWI1ODEzMTc1OTdlMDQ1OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGUxN2Y3MDdkOGMyZjRjYjJlMTQzYjg1MTkwNDllNTJlOWQ4ZTZjMTY5YmQ5OWYzODJhNTE2MzA0MTIyNzAwNyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensors/gas_source.h#L14-L21",
+          "version": "repo-lines-v1:sha256:9906248d53ecd800ac7abfd433e7ee2b3bd8125676a49404786c57253e22dbf4:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzFiYzUwODVkNGVkNGViM2I3MzAwZmM3ZjZhNmFjZTM1NTMwMTA4ODFkOGVjODcyMTU3MjBkYjY4NGY2YTRiOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDVkOWI3NTUxYzEzZjUyOWI2OTlkZWMyODE0YzU1ODAzZTViNTM4NTJjZWI5Y2FkMWYwNzhiM2Y2NTBmNmMwZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjliNmQ4YWViN2IxZmNjMDZlNGQ4NDlmZTYzYzgzNDA2MjRiODE3NWIwZmU0ODEyMTE5NjJkNjk3ZDcyNDBmNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGUxZTJiMTlhOGRlODU1MzFlZWMxMDAzOTYyNjUxMDNlNmZiMzA0NzM2OTllOWNlYjk0ZmE1YzMxOTA4NDNkYiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_9a7a1d1a7e9e4aa6bb7d0fe09c320047",
+      "statement": "gas_source.c treats a GasBee reading as invalid for arbitration purposes unless both the GasBee's own weight_valid flag and its calibrated flag (advertising flag bit 2) are true, because an uncalibrated raw weight from a GasBee is not a meaningful gas reading even though data is being received.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/sensors/gas_source.c#L45-L47",
+          "version": "repo-lines-v1:sha256:d68d6cbdd59cb023cce3cd969663f453351e422d17d7738a8437c5fe134c44b4:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmQ3OTBjMTk1Y2NjYTBkNWVhNTA2ZGE3NThiNjkyMGFhZDJkNzI1MzQzZWYwMzViZjgxYWIwZTEwYWM1ZTM2NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiN2JjNDJhNWE5NmYwNmIwODlkMWFlMTEwNjg3YjNkZWJiNmJhMmRmZTU3ZmY4ZmI5OTZlMmZkNWE3Nzc0MmYyYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTRkZDZmYThhY2ZiNDI4MjIwMzk2NDE3NmMxM2I1Zjg2MjcyMDk4MDI0N2RjMDFkY2ZkYmRlZWMzNTYzOTIxYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTc3ODVmNjBkMzcwYmFjNmY5NWEwZTIwZWI3MDRlZWNhNTE5NjM2N2ZjZWQwODZhODczZTJiM2JiNWFjNzZkZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_b6602cea60004591b39d270c18834d24",
+      "statement": "Switching the active gas source between HX711 and GasBee in either direction resets the consumption-rate (rate1h/rate2h) baseline in rs485_modem, preventing a raw weight jump between two physically different scales from being misread as a consumption spike or surge.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L80-L80",
+          "version": "repo-lines-v1:sha256:70b375f1422189f5e239700a165f4f1657facdb68c724f79642109ddaf759920:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzBiMzc1ZjE0MjIxODlmNWUyMzk3MDBhMTY1ZjRmMTY1N2ZhY2RiNjhjNzI0Zjc5NjQyMTA5ZGRhZjc1OTkyMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzBiMzc1ZjE0MjIxODlmNWUyMzk3MDBhMTY1ZjRmMTY1N2ZhY2RiNjhjNzI0Zjc5NjQyMTA5ZGRhZjc1OTkyMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGVlM2VjMmIzNDRmZjg3NzdhYmU5Y2RjMzE0YTgxYzhmZTlmMzZlMjFkMjYxYjFmNWI1ODEzMTc1OTdlMDQ1OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGUxN2Y3MDdkOGMyZjRjYjJlMTQzYjg1MTkwNDllNTJlOWQ4ZTZjMTY5YmQ5OWYzODJhNTE2MzA0MTIyNzAwNyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L959-L969",
+          "version": "repo-lines-v1:sha256:58f54ac211bfcd416b79dcae617df01395cbe279e3ffa167c4bbb18146644c77:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5OTc5Njk3NzIyZDlmZGYwZjA3Y2RhOWM0MjA2OGQ4NGZkODI5OGM1NDE0NTFlZDg3YzY1NTRkZDE1YmUyZjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ1MmQ5NjYxZjc5ZTVjODU0NGQ1MjNhY2FmYTg2Mjk1ZTg5NjkyMzQ3Y2RmMjQ2ODAzNTM0ZDdkNDMwYTY2MmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQxNmE1YjVhMzI3Y2JjMGZlYzdjM2QyY2U0MTA4NjkzZDE4NzU1OTQxMmRkYjdmMTg0MTc2OWQ4MzExZDQzYjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9626d3f387174d56a9053fe4f57ddd6b",
+      "statement": "The gas topic's nc_a/nc_b (\"not connected\"/unknown) state and the \"leer\" (empty bottle) state are distinct: for a wired HX711, any reading below SENSOR_GAS_NO_BOTTLE_THRESHOLD_KG (1 kg) is reported as nc because a disconnected load cell cannot be distinguished from a genuinely unloaded scale, whereas for GasBee BLE a valid, calibrated reading below that same threshold is reported as an empty bottle (0% fill, triggering the Display's gas-empty alarm) rather than nc, since a BLE reading marked valid and calibrated has no equivalent cable-disconnect ambiguity.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L82-L82",
+          "version": "repo-lines-v1:sha256:5e79c6bd5f2eba16c314ee4fb71a439447d16a1cd5500a71ca4b75f7a9b3870a:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWU3OWM2YmQ1ZjJlYmExNmMzMTRlZTRmYjcxYTQzOTQ0N2QxNmExY2Q1NTAwYTcxY2E0Yjc1ZjdhOWIzODcwYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWU3OWM2YmQ1ZjJlYmExNmMzMTRlZTRmYjcxYTQzOTQ0N2QxNmExY2Q1NTAwYTcxY2E0Yjc1ZjdhOWIzODcwYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTU1YWE0YmYwY2FjZDAwZDE1OWRhZTFjZDNjNzcyMDFiMGRmOWMzNGM5Mzc3ZjE0YTgzODM4YzMyYWNiYzFlYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzg3MGFhZGIxNWFmYjJlNTRlMzE2OTE4ZGEzODc1NmVkM2ZlNDhmMzI0Mzg0NzVlYmY3MDU2ZWFhZDExY2RlNCJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L978-L987",
+          "version": "repo-lines-v1:sha256:fbdc22a88f9c7d3fedfdc535cd8777704edb069fc08067ad33b10d1d6f61ae87:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMzMmQ2N2IzNjAzZGI5YWU5ZWNhMjQwMGJlNzMxMTFkOTY4ZDM5M2ZkZTk3NzQyNDQyYjFlNDRhY2Q5N2RiZmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIwODRlMWE2ZWJhZTY2NTA1MTE4MTBmZjcyYjhmYWUwOGM1MzA5ZmZhOWEwNjFmZGVhOTUyNzQ1NzAxZjA0YjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM1NjE1NzkzNzFlZjE1MTNiM2UzNjhhNzJlNzNlNTU5NmRjMmFiYzI3YWE0NTU0ZWZiNmM2NGI3ODc5ZGI0NzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ2ZTViZTdhMmFlNzg2MWY5NTUwMGFhOWFjNmUxYmZhMjc4MzM2OGUwODVmYmM0NWE1MmIxMTUzYjllMTdmOWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6a57bc78cf0349fd8a5c4165f6bcf012",
+      "statement": "An empty/below-threshold bottle reading is never selected as the active bottle for the gas topic's \"active\" field and is never captured as a new full-bottle reference value, preventing a temporarily empty or disconnected reading from corrupting the stored full-bottle calibration reference.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L989-L1009",
+          "version": "repo-lines-v1:sha256:2a92ded8452c9c62280e0092175a45ea06ed0f4812c57cbdb96a24f13226b91e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE5MTlmOTUyZTE1ZDQ2ZDMyMzEyMjhkMWRjYTMxM2NlYjRkNmVhNmJjY2VmMDMzYmIxNGE4MzQ4NDI0NWZkZGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg3NDdjYTdkYjlkZTRlNWZmYmY3NTA0ZjIwZmQxZmI4NTVlM2IwYzdmZWQ0YTIwYTYyYzg1MDA5MjkxMzkzOTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjllZjZjYjQ0OGY4NzI4Y2JhMWYxN2JkNWQzOWYyMGI5NjY3ZGQ1OGY1ODQ3ZDRmZDQ4MzUwMGFkNDc5NmRmNzMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c9391dad99f740dc85d4f792ef0af438",
+      "statement": "The RS485 hx and gas topics, published by rs485_modem.c from gas_source_get_snapshot(), and the Sensorboard's own HTTP dashboard endpoints (/api/data, /dashboard.html) backed by the same snapshot functions are the only two consumers of GasBee/Ruuvi BLE-derived sensor data in the repository; no openHAB, MQTT broker, or other home-automation hub subscribes to this data anywhere in the codebase.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L115-L129",
+          "version": "repo-lines-v1:sha256:47541b2c70e651ad34c6cac00e304fc775e6e4c204ca705f0fdb3b75c872b363:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjMTYxMjQ4Zjg3MDEzMzQxNDY3MTZmNWM1N2IyMDFjNjI4NDVhMThmMGM1MWIxYmE1YTU3OGNiOGQ4NDk4NTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmZmQwYjgyYTg2YzFjYWEyMTdiMGUyMjAxYjkzMzY2MGQxNTkzODgxZWU4ODA4Mjk0ZjU0ODQ3ODRlODllNjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU2ZDQ2MmQzZmVjYWQyN2E5ZDQxOGQ2NGU2MTU3ZTdlNDE3ZmIzZDcxZjc4YjNiMDM0MmM4ODVhZjVmMDc4MmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI2NDgwNDY4N2RhMjNkYzU3ODIxNWU4NjI0YmVlYzI2YzhlZjU5MTMxNGQ5NjM2YjBiZDhlMjY4NzdlOWViODIifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L922-L945",
+          "version": "repo-lines-v1:sha256:d4e8188db82ecee774d6da62971665acb5e4a67ac8a9660b62f5cb8ba2825054:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwZTllNjMyMWI0MjJlYmIzYTkxYjU0MGYwNmNhNmM3ZGM3ZmU4NjRhMGVmNjllYmQ3MzZjMDk3NjY0Yjg3OWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI3ODUwZGFmYzdiNzNhYzZhNTllNjdkNzFlMmNlNWRmNDJlNGIxYWZiY2EwMmZmMWU3NTM5ZmJiY2I2NjZiNjgifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}
