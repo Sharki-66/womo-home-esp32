@@ -1,5 +1,9 @@
 # Active Context — WoMoHome Display
 
+## Bugfix: Stack-Overflow om_task + lwIP-Assert (2026-10-20, gebaut ungetestet)
+
+Log: `stack overflow in task om_task`, im nächsten Boot `assert tcp_slowtmr ... persist ticking with empty send buffer`. `om_task` (Open-Meteo, `womo_weather_http.c`) hatte nur 4096 Byte Stack für HTTPS/TLS; andere HTTPS-Tasks 6–8 KB. Auf 8192 (PSRAM) erhöht, Stack-Reserve wird nach jeder Abfrage gemessen (`ESP_LOGW` < 1 KB, sonst `ESP_LOGD`). Vermutung: lwIP-Assert ist Folgeschaden (unerkannter Überlauf, Canary-Check nur beim Taskwechsel, lwIP-Strukturen ebenfalls im PSRAM). Falls der Assert wiederkommt: `CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK` temporär aktivieren und weitersuchen.
+
 ## Einstellungs-Modal umgebaut (2026-10-19, gebaut, noch nicht auf Hardware getestet)
 
 Tabs jetzt AP | Sensoren | Grenzwerte | System (AP = Starttab, `enum TAB_*`). Sprache und RTC-Info sind in den System-Tab gewandert (zwei Spalten: Töne + Sprache | Zeit / RTC, `system_time_info_refresh()`). „RTC / Temp / Gas“ heißt jetzt „Sensoren“ (`build_tab_sensoren`, Ruuvi + GasBee nach oben gerückt, Platz für weitere Sensoren). Alle Texte der umgebauten Tabs über `womo_locale` (neue `STR_SET_TAB_*`, `STR_TIME_*`, `STR_SENS_*`, `STR_ON/OFF`), Live-Update in `settings_locale_cb()`. Die Ton-Buttons lesen ihren Zustand jetzt aus dem Buzzer-Modul statt aus dem Button-Text. Noch hart codiert: Statustexte Ruuvi/GasBee/Assistent, AP-Tab, Popups.

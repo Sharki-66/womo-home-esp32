@@ -44,7 +44,11 @@ static bool   s_nvs_loaded = false;
 #define TAG "weather_http"
 
 #define WEATHER_HTTP_BUFFER_SIZE 8192
-#define WEATHER_HTTP_TASK_STACK 4096
+/* TLS-Handshake (mbedTLS) in esp_http_client_perform() braucht deutlich mehr
+ * als 4 KB – mit 4096 trat "stack overflow in task om_task" auf (2026-10-20).
+ * Stack liegt im PSRAM, belastet internen RAM nicht. */
+#define WEATHER_HTTP_TASK_STACK 8192
+#define WEATHER_HTTP_STACK_WARN_BYTES 1024
 #define WEATHER_HTTP_TASK_PRIO   4
 #define WEATHER_HTTP_INITIAL_DELAY_MS 3000
 
@@ -310,6 +314,14 @@ static esp_err_t weather_http_perform_request(weather_http_response_t *response)
     int status = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
     womo_http_mutex_release();
+
+    /* Stack-Reserve nach TLS-Spitze messen (Bytes, ESP-IDF zählt in Bytes) */
+    UBaseType_t stack_free = uxTaskGetStackHighWaterMark(NULL);
+    if (stack_free < WEATHER_HTTP_STACK_WARN_BYTES) {
+        ESP_LOGW(TAG, "om_task Stack knapp: min. frei %u Byte", (unsigned)stack_free);
+    } else {
+        ESP_LOGD(TAG, "om_task Stack min. frei %u Byte", (unsigned)stack_free);
+    }
 
     if (err != ESP_OK) {
         weather_http_log_heap("http_perform_failed");
