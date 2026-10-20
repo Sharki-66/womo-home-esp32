@@ -28,7 +28,7 @@ Wer mit dem Wohnmobil unterwegs ist, kennt das Problem: Wie viel Gas ist noch in
 - **Innenraumklima** – Temperatur, Luftfeuchte, Luftqualität (IAQ)
 - **Außenklima** – Temperatur, Luftfeuchte, Luftdrucktrend
 - **Wettervorhersage** – (todo) Aktuelles Wetter und 3-Tage-Prognose vom Internet
-- **Unwetterwarnungen** – Automatisch vom europäischen Meteoalarm-System
+- **Unwetterwarnungen** – Eigene Auswertung der Open-Meteo-Vorhersage nach den Warnkriterien des DWD (Wind, Starkregen, Dauerregen, Schnee, Gewitter, Glatteis, Frost, Hitze), weltweit, keine amtliche Warnung
 
 ### Navigation & Lage
 - **GPS-Position** – Standort, Geschwindigkeit, Höhe über dem Router

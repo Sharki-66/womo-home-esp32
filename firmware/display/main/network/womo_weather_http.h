@@ -8,6 +8,7 @@
 #define WOMO_WEATHER_HTTP_H
 
 #include "esp_err.h"
+#include "womo_weather_warn.h"
 #include <stdbool.h>
 
 #ifdef __cplusplus
@@ -102,6 +103,14 @@ void womo_weather_http_set_location(double lat, double lon);
  * completes.
  */
 void womo_weather_http_set_forecast_callback(womo_weather_forecast_callback_t cb, void *user_data);
+
+/**
+ * @brief Callback für die eigene Unwetter-Auswertung registrieren.
+ *
+ * Wird nach jedem erfolgreichen Abruf aus dem Wetter-Task aufgerufen
+ * (auch ohne Warnungen, dann count == 0). Auswertung siehe womo_weather_warn.h.
+ */
+void womo_weather_http_set_warn_callback(womo_weather_warn_cb_t cb, void *user_data);
 
 #ifdef __cplusplus
 }

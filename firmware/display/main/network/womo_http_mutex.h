@@ -9,7 +9,7 @@
  * @brief Globaler Mutex für HTTPS-Requests (TLS-Session-Serialisierung).
  *
  * Auf dem ESP32-S3 reicht der Heap nicht für parallele TLS-Handshakes.
- * Jeder HTTP(S)-Client (Weather, Geocode, Meteoalarm) muss diesen Mutex
+ * Jeder HTTP(S)-Client (Weather, Geocode, Router) muss diesen Mutex
  * halten, bevor er esp_http_client_perform() aufruft.
  *
  * Hinweis: Router-UCI (HTTP, kein TLS) braucht den Mutex NICHT.

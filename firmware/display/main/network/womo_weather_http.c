@@ -63,6 +63,8 @@ typedef struct {
     void *user_data;
     womo_weather_forecast_callback_t forecast_callback;
     void *forecast_user_data;
+    womo_weather_warn_cb_t warn_callback;
+    void *warn_user_data;
     TaskHandle_t task_handle;
     bool stop_requested;
 } weather_http_ctx_t;
@@ -70,8 +72,10 @@ typedef struct {
 static weather_http_ctx_t s_ctx = {0};
 static int s_last_http_status = 0;  /* letzter HTTP-Statuscode aus perform_request */
 
-static esp_err_t weather_http_fetch(womo_weather_http_data_t *out_data, womo_weather_forecast_t *out_forecast);
-static esp_err_t weather_http_parse_json(const char *json, womo_weather_http_data_t *out_data, womo_weather_forecast_t *out_forecast);
+static esp_err_t weather_http_fetch(womo_weather_http_data_t *out_data, womo_weather_forecast_t *out_forecast,
+                                    womo_weather_hourly_t *out_hourly);
+static esp_err_t weather_http_parse_json(const char *json, womo_weather_http_data_t *out_data,
+                                         womo_weather_forecast_t *out_forecast, womo_weather_hourly_t *out_hourly);
 static esp_err_t weather_http_build_url(char *out_url, size_t max_len);
 static void weather_http_task(void *arg);
 static esp_err_t weather_http_perform_request(weather_http_response_t *response);
@@ -206,7 +210,9 @@ static void weather_http_task(void *arg)
 
         womo_weather_http_data_t data = {0};
         womo_weather_forecast_t forecast = {0};
-        esp_err_t err = weather_http_fetch(&data, &forecast);
+        /* Stundenwerte + Auswertung im Heap (PSRAM), nicht auf dem Task-Stack */
+        womo_weather_hourly_t *hourly = heap_caps_calloc(1, sizeof(*hourly), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        esp_err_t err = weather_http_fetch(&data, &forecast, hourly);
         if (err == ESP_OK && data.valid) {
             if (s_ctx.callback) {
                 s_ctx.callback(&data, s_ctx.user_data);
@@ -214,7 +220,18 @@ static void weather_http_task(void *arg)
             if (forecast.valid && s_ctx.forecast_callback) {
                 s_ctx.forecast_callback(&forecast, s_ctx.forecast_user_data);
             }
+            if (hourly && hourly->valid && s_ctx.warn_callback) {
+                womo_weather_warn_result_t *warn = heap_caps_calloc(1, sizeof(*warn),
+                                                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+                if (warn) {
+                    womo_weather_warn_evaluate(hourly, warn);
+                    s_ctx.warn_callback(warn, s_ctx.warn_user_data);
+                    heap_caps_free(warn);
+                }
+            }
+            heap_caps_free(hourly);
         } else {
+            heap_caps_free(hourly);
             /* HTTP 429: Rate-Limit – langes Backoff damit Open-Meteo sich erholt */
             if (s_last_http_status == 429) {
                 ESP_LOGW(TAG, "Weather fetch failed (%s) – rate limited (429), retry in 15 min",
@@ -249,7 +266,8 @@ static void weather_http_task(void *arg)
     vTaskDelete(NULL);
 }
 
-static esp_err_t weather_http_fetch(womo_weather_http_data_t *out_data, womo_weather_forecast_t *out_forecast)
+static esp_err_t weather_http_fetch(womo_weather_http_data_t *out_data, womo_weather_forecast_t *out_forecast,
+                                    womo_weather_hourly_t *out_hourly)
 {
     if (!out_data) {
         return ESP_ERR_INVALID_ARG;
@@ -268,14 +286,14 @@ static esp_err_t weather_http_fetch(womo_weather_http_data_t *out_data, womo_wea
     }
 
     response->buffer[response->length] = '\0';
-    err = weather_http_parse_json(response->buffer, out_data, out_forecast);
+    err = weather_http_parse_json(response->buffer, out_data, out_forecast, out_hourly);
     free(response);
     return err;
 }
 
 static esp_err_t weather_http_perform_request(weather_http_response_t *response)
 {
-    char url[512];
+    char url[640];
     esp_err_t err = weather_http_build_url(url, sizeof(url));
     if (err != ESP_OK) {
         return err;
@@ -453,6 +471,12 @@ void womo_weather_http_set_forecast_callback(womo_weather_forecast_callback_t cb
     s_ctx.forecast_user_data = user_data;
 }
 
+void womo_weather_http_set_warn_callback(womo_weather_warn_cb_t cb, void *user_data)
+{
+    s_ctx.warn_callback = cb;
+    s_ctx.warn_user_data = user_data;
+}
+
 void womo_weather_http_set_location(double lat, double lon)
 {
     char lat_buf[16], lon_buf[16];
@@ -508,7 +532,57 @@ static const char* weather_http_wmo_desc(int code)
     }
 }
 
-static esp_err_t weather_http_parse_json(const char *json, womo_weather_http_data_t *out_data, womo_weather_forecast_t *out_forecast)
+/* Zahl aus JSON-Array, null/fehlend → NAN */
+static float json_array_float(const cJSON *arr, int i)
+{
+    const cJSON *it = cJSON_GetArrayItem(arr, i);
+    return cJSON_IsNumber(it) ? (float)it->valuedouble : NAN;
+}
+
+/* Stundenwerte (hourly, forecast_hours=24) für die Unwetter-Auswertung */
+static void weather_http_parse_hourly(const cJSON *root, womo_weather_hourly_t *out)
+{
+    memset(out, 0, sizeof(*out));
+    out->elevation_m = NAN;
+
+    const cJSON *elev = cJSON_GetObjectItem(root, "elevation");
+    if (cJSON_IsNumber(elev)) out->elevation_m = (float)elev->valuedouble;
+
+    const cJSON *hourly = cJSON_GetObjectItem(root, "hourly");
+    if (!cJSON_IsObject(hourly)) {
+        ESP_LOGW(TAG, "Keine Stundenwerte in Antwort – Unwetter-Auswertung entfällt");
+        return;
+    }
+    const cJSON *times = cJSON_GetObjectItem(hourly, "time");
+    const cJSON *gust  = cJSON_GetObjectItem(hourly, "wind_gusts_10m");
+    const cJSON *prec  = cJSON_GetObjectItem(hourly, "precipitation");
+    const cJSON *snow  = cJSON_GetObjectItem(hourly, "snowfall");
+    const cJSON *temp  = cJSON_GetObjectItem(hourly, "temperature_2m");
+    const cJSON *feels = cJSON_GetObjectItem(hourly, "apparent_temperature");
+    const cJSON *code  = cJSON_GetObjectItem(hourly, "weather_code");
+
+    int n = cJSON_GetArraySize(times);
+    if (n > WOMO_WEATHER_HOURLY_MAX) n = WOMO_WEATHER_HOURLY_MAX;
+
+    for (int i = 0; i < n; i++) {
+        const cJSON *t = cJSON_GetArrayItem(times, i);
+        if (cJSON_IsString(t)) {
+            strlcpy(out->time[i], t->valuestring, sizeof(out->time[i]));
+        }
+        out->gust_kmh[i]  = json_array_float(gust, i);
+        out->precip_mm[i] = json_array_float(prec, i);
+        out->snow_cm[i]   = json_array_float(snow, i);
+        out->temp_c[i]    = json_array_float(temp, i);
+        out->feels_c[i]   = json_array_float(feels, i);
+        float c = json_array_float(code, i);
+        out->code[i] = isnan(c) ? -1 : (int16_t)c;
+    }
+    out->count = (uint8_t)n;
+    out->valid = (n > 0);
+}
+
+static esp_err_t weather_http_parse_json(const char *json, womo_weather_http_data_t *out_data,
+                                         womo_weather_forecast_t *out_forecast, womo_weather_hourly_t *out_hourly)
 {
     if (!json || !out_data) {
         return ESP_ERR_INVALID_ARG;
@@ -608,6 +682,10 @@ static esp_err_t weather_http_parse_json(const char *json, womo_weather_http_dat
         }
     }
 
+    if (out_hourly) {
+        weather_http_parse_hourly(root, out_hourly);
+    }
+
     cJSON_Delete(root);
     return data.valid ? ESP_OK : ESP_FAIL;
 }
@@ -625,6 +703,8 @@ static esp_err_t weather_http_build_url(char *out_url, size_t max_len)
                            "https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s"
                            "&current=temperature_2m,weather_code,is_day,pressure_msl,relative_humidity_2m,wind_speed_10m"
                            "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,sunshine_duration"
+                           "&hourly=wind_gusts_10m,precipitation,snowfall,weather_code,temperature_2m,apparent_temperature"
+                           "&forecast_hours=24"
                            "&timezone=auto&forecast_days=5",
                            latitude, longitude);
     if (written < 0 || (size_t)written >= max_len) {

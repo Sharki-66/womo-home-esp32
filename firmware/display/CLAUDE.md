@@ -62,6 +62,12 @@
 - **Sensoren** (früher „RTC / Temp / Gas“, RTC-Teil liegt jetzt im System-Tab): Ruuvi wie unten beschrieben, zusätzlich Abschnitt „Gaswaage (GasBee)“ mit Zeilen Flasche A/B: Akku-% (rot < 20 % ohne Laden oder „nicht kalibriert“, „(USB)“ im Konfigurationsmodus), Button **„Einrichten“** startet den geführten Assistenten (`gbw_*` in `womo_settings_modal.c`): GasBee an USB stecken → genau eine mit `cfg` gefunden → übernehmen (Display-NVS `womo_gasbee_cfg` + `cmd:"gasbee_config"`) → optional kalibrieren (Waage leer → Gewicht in Gramm eingeben → Prüfung am Advertising) → „USB abziehen“. Keine MAC-Auswahl für den Nutzer. Ergebnisse aus RX-/Timer-Task landen in einem Abholfach und werden im LVGL-Timer `rtc_poll_timer_cb` (100 ms) ausgewertet – kein `lvgl_port_lock()` in fremden Tasks. Bei `hx711.is_wired` (Kabelwaage aktiv) sind die Buttons gesperrt. Gemeinsame Statuszeile für Ruuvi und GasBee.
 - Ruuvi-Tag-Konfiguration (Abschnitt im Tab Sensoren). Pro Slot (Innen/Außen): MAC-Anzeige + Batteriespannung als `Batt 3.00V (min 2.5V)` (falls Ruuvi statt verkabeltem BME aktiv; Warnschwelle temperaturabhängig wie Ruuvi Station: < −20 °C 2,0 V, −20…0 °C 2,3 V, sonst 2,5 V; Quelle ruuvi.com/battery-usage; kein Prozent, da Knopfzelle CR2477 flache Kennlinie hat), "Scan"-Button fordert per `ruuvi_scan_request` die aktuelle Tag-Liste vom Sensorboard an und zeigt sie zur Auswahl in einem Popup (analog zum WLAN-Scan im AP-Tab). Auswahl/Löschen speichert sofort in Display-NVS (`womo_ruuvi_cfg`) und sendet `cmd:"ruuvi_config"` ans Sensorboard.
 
+## Wetter / Unwetter (Display)
+
+- Wetter nur von Open-Meteo (`womo_weather_http.c`, Task `om_task`, alle 5 min): `current`, `daily` (5 Tage) und `hourly` (24 h: Böen, Niederschlag, Schnee, Temperatur, gefühlte Temperatur, WMO-Code).
+- Unwetter: **eigene Auswertung** der Stundenwerte in `womo_weather_warn.c` nach den DWD-Warnkriterien (Schwellwerte als `WW_*` in `womo_weather_warn.h`, Quelle dort verlinkt). Keine amtliche Warnung, Hinweis wird im Modal/Popup angezeigt. Stufe 1 nur im Forecast-Modal, ab Stufe 2 Badge + Auto-Popup.
+- Meteoalarm wurde 2026-10-20 entfernt (alter Endpunkt `for-coordinates` existierte nicht → HTTP 404; MeteoGate-EDR liefert nur ganze Länder, bis ~850 KB pro Abruf).
+
 ## Display-Stack (LVGL)
 
 - LVGL **v9.x** als Managed Component (`lvgl/lvgl: ^9.2.0`, aktuell aufgelöst auf 9.5.0, `espressif/esp_lvgl_port: ^2`)

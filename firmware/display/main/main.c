@@ -22,7 +22,7 @@
 #include "gui/womo_fonts_german.h"
 #include "network/womo_wifi.h"
 #include "network/womo_weather_http.h"
-#include "network/womo_meteoalarm.h"
+#include "network/womo_weather_warn.h"
 #include "network/womo_geocode.h"
 #include "network/womo_router_uci.h"
 #include "network/womo_http_mutex.h"
@@ -148,10 +148,9 @@ static lv_obj_t *imu_zero_modal = NULL;     // IMU calibration modal
 static womo_weather_t *weather_widget = NULL; // Weather widget
 static womo_battery_t *main_battery = NULL;   // Battery 1 widget
 static womo_battery_t *secondary_battery = NULL; // Battery 2 widget
-/* Meteoalarm ─────────────────────────────────────────────────────── */
-static bool  meteoalarm_started = false;        // Task einmalig gestartet
+/* Wetter / Unwetter-Auswertung ────────────────────────────────────── */
 static bool  weather_started   = false;         // Task einmalig gestartet
-static lv_obj_t *meteoalarm_popup = NULL;       // aktuelles Warnungs-Popup (NULL = geschlossen)
+static lv_obj_t *weather_warn_popup = NULL;     // aktuelles Warnungs-Popup (NULL = geschlossen)
 static lv_timer_t *ui_update_timer = NULL; // Periodic UI/IMU refresh timer
 static int64_t last_time_sync_try_us = 0; // Throttle multi-source time sync attempts
 static const uint32_t UI_UPDATE_INTERVAL_DEFAULT_MS = 500;
@@ -194,6 +193,8 @@ static TaskHandle_t              s_router_poll_handle = NULL;
  * entsprechend selten abfragen (120 × 15s = 30 min), plus einmal sofort
  * nach Verbindungsaufbau. */
 #define ROUTER_DATAPASS_POLL_CYCLES (30 * 60 * 1000 / ROUTER_POLL_INTERVAL_MS)
+/* Health-Log (Heap + Stack-Reserve) etwa alle 10 min für Langzeittests */
+#define HEAP_LOG_POLL_CYCLES        (10 * 60 * 1000 / ROUTER_POLL_INTERVAL_MS)
 
 // Gas bottle widgets
 static womo_gas_bottle_t *gas_bottle_a = NULL; // Gas bottle A (HX711 channel A)
@@ -289,7 +290,7 @@ static const char *press_trend_arrow(const char *state);
 static void openweather_update_cb(const womo_weather_http_data_t *data, void *user_data);
 static void forecast_update_cb(const womo_weather_forecast_t *forecast, void *user_data);
 static void weather_widget_click_cb(lv_event_t *e);
-static void meteoalarm_update_cb(const womo_meteoalarm_result_t *result, void *user_data);
+static void weather_warn_update_cb(const womo_weather_warn_result_t *result, void *user_data);
 static womo_weather_condition_t map_openweather_condition(int weather_id, bool is_night);
 static womo_weather_condition_t map_day_condition_to_night(womo_weather_condition_t condition);
 static void update_connectivity_label(void);
@@ -2489,11 +2490,6 @@ static void time_update_timer_cb(lv_timer_t *timer)
             weather_started = false;
             ESP_LOGI(TAG, "WiFi getrennt – Wetter-Task gestoppt, Neustart beim Reconnect");
         }
-        if (meteoalarm_started) {
-            womo_meteoalarm_stop();
-            meteoalarm_started = false;
-            ESP_LOGI(TAG, "WiFi getrennt – Meteoalarm-Task gestoppt, Neustart beim Reconnect");
-        }
     }
     last_wifi_was_connected = wifi_now;
 
@@ -2504,17 +2500,8 @@ static void time_update_timer_cb(lv_timer_t *timer)
             ESP_LOGW(TAG, "Online weather updates disabled: %s", esp_err_to_name(weather_err));
         } else {
             womo_weather_http_set_forecast_callback(forecast_update_cb, NULL);
+            womo_weather_http_set_warn_callback(weather_warn_update_cb, NULL);
             weather_started = true;
-        }
-    }
-
-    // Meteoalarm: nach WiFi + Zeitsync starten (wie Wetter)
-    if (!meteoalarm_started && wifi_now && womo_time_is_synced()) {
-        esp_err_t ma_err = womo_meteoalarm_start(meteoalarm_update_cb, NULL);
-        if (ma_err != ESP_OK) {
-            ESP_LOGW(TAG, "Meteoalarm-Task nicht gestartet: %s", esp_err_to_name(ma_err));
-        } else {
-            meteoalarm_started = true;
         }
     }
 
@@ -2742,93 +2729,71 @@ static void forecast_update_cb(const womo_weather_forecast_t *forecast, void *us
     }
 }
 
-/* ── Meteoalarm: gespeicherte Warnungen für das Popup ─────────── */
-static womo_meteoalarm_result_t s_meteoalarm_latest = {0};
+/* ── Unwetter-Auswertung: gespeicherte Warnungen für Popup/Modal ─ */
+static womo_weather_warn_result_t s_weather_warn_latest = {0};
 
 /* Event-Callback zum Schließen des Popups (OK-Button) */
-static void meteoalarm_popup_close_cb(lv_event_t *e)
+static void weather_warn_popup_close_cb(lv_event_t *e)
 {
     (void)e;
-    if (meteoalarm_popup) {
-        lv_msgbox_close(meteoalarm_popup);
-        meteoalarm_popup = NULL;
+    if (weather_warn_popup) {
+        lv_msgbox_close(weather_warn_popup);
+        weather_warn_popup = NULL;
     }
 }
 
-/* Schließt das offene Meteoalarm-Popup (falls vorhanden) */
-static void meteoalarm_popup_close(void)
+/* Schließt das offene Warnungs-Popup (falls vorhanden) */
+static void weather_warn_popup_close(void)
 {
-    if (meteoalarm_popup) {
-        lv_msgbox_close(meteoalarm_popup);
-        meteoalarm_popup = NULL;
+    if (weather_warn_popup) {
+        lv_msgbox_close(weather_warn_popup);
+        weather_warn_popup = NULL;
     }
 }
 
-/* Öffnet ein Popup mit den aktuellen Warnungen */
-static void meteoalarm_popup_open(void)
+/* Öffnet ein Popup mit den Warnungen ab Stufe 2 (Stufe 1 nur im Forecast-Modal) */
+static void weather_warn_popup_open(void)
 {
-    if (meteoalarm_popup) {
+    if (weather_warn_popup) {
         /* Bereits offen – schließen und neu aufbauen */
-        meteoalarm_popup_close();
+        weather_warn_popup_close();
     }
 
-    /* Nachrichten-Text aufbauen */
-    static char msg_buf[512];
+    static char msg_buf[640];
     msg_buf[0] = '\0';
 
-    /* Standort/Region als erste Zeile:
-     * 1) Meteoalarm-Region aus API (Warngebiet z.B. "Chiemgauer Alpen")
-     * 2) Fallback: Geocode-Ortsname (z.B. "Schleching, Bayern") */
-    const char *region_src = NULL;
-    if (s_meteoalarm_latest.region[0]) {
-        region_src = s_meteoalarm_latest.region;
-    } else if (location_last_text[0]) {
-        region_src = location_last_text;
-    }
-    if (region_src) {
+    /* Standort als erste Zeile (Geocode-Ortsname) */
+    if (location_last_text[0]) {
         char loc_line[144];
-        snprintf(loc_line, sizeof(loc_line), "Standort: %s\n\n", region_src);
+        snprintf(loc_line, sizeof(loc_line), womo_locale_get_string(STR_WARN_LOCATION),
+                 location_last_text);
         strlcat(msg_buf, loc_line, sizeof(msg_buf));
+        strlcat(msg_buf, "\n\n", sizeof(msg_buf));
     }
 
-    if (s_meteoalarm_latest.count == 0) {
-        strlcat(msg_buf, "Keine aktiven Warnungen.", sizeof(msg_buf));
-    } else {
-        for (uint8_t i = 0; i < s_meteoalarm_latest.count; i++) {
-            const womo_meteoalarm_warning_t *w = &s_meteoalarm_latest.warnings[i];
-            const char *sev_mark;
-            if (w->severity >= WOMO_WARN_SEV_SEVERE) {
-                sev_mark = "! ";     // Rot / Extreme+Severe
-            } else {
-                sev_mark = "* ";     // Orange / Moderate
-            }
-            char line[200];
-            if (w->region[0] && w->expires[0]) {
-                snprintf(line, sizeof(line), "%s%s\n%s | bis %s\n\n",
-                         sev_mark, w->headline, w->region, w->expires);
-            } else if (w->region[0]) {
-                snprintf(line, sizeof(line), "%s%s\n%s\n\n",
-                         sev_mark, w->headline, w->region);
-            } else if (w->expires[0]) {
-                snprintf(line, sizeof(line), "%s%s\nbis %s\n\n",
-                         sev_mark, w->headline, w->expires);
-            } else {
-                snprintf(line, sizeof(line), "%s%s\n\n", sev_mark, w->headline);
-            }
-            strlcat(msg_buf, line, sizeof(msg_buf));
-        }
+    for (uint8_t i = 0; i < s_weather_warn_latest.count; i++) {
+        const womo_weather_warning_t *w = &s_weather_warn_latest.warnings[i];
+        if (w->severity < WOMO_WARN_SEV_MODERATE) continue;
+        char title[64], when[32], line[112];
+        womo_weather_warn_format(w, title, sizeof(title), when, sizeof(when));
+        snprintf(line, sizeof(line), "%s %s\n%s\n\n",
+                 (w->severity >= WOMO_WARN_SEV_SEVERE) ? "!" : "*", title, when);
+        strlcat(msg_buf, line, sizeof(msg_buf));
     }
+    strlcat(msg_buf, womo_locale_get_string(STR_WARN_SOURCE), sizeof(msg_buf));
 
-    /* LVGL v9: lv_msgbox_create(parent) – Titel, Text und Buttons separat setzen */
-    meteoalarm_popup = lv_msgbox_create(NULL);
-    lv_msgbox_add_title(meteoalarm_popup, "Unwetterwarnungen (www.meteoalarm.org)");
-    lv_msgbox_add_text(meteoalarm_popup, msg_buf);
-    lv_obj_t *ok_btn = lv_msgbox_add_footer_button(meteoalarm_popup, "OK");
-    lv_obj_set_width(meteoalarm_popup, 520);
-    lv_obj_center(meteoalarm_popup);
+    /* LVGL v9: lv_msgbox_create(parent) – Titel, Text und Buttons separat setzen.
+     * German-Font für Umlaute (Böen, Glätte, Wärmebelastung) */
+    weather_warn_popup = lv_msgbox_create(NULL);
+    lv_obj_set_style_text_font(weather_warn_popup, &lv_font_montserrat_14_german, 0);
+    lv_msgbox_add_title(weather_warn_popup, womo_locale_get_string(STR_WARN_POPUP_TITLE));
+    lv_msgbox_add_text(weather_warn_popup, msg_buf);
+    lv_obj_t *ok_btn = lv_msgbox_add_footer_button(weather_warn_popup, "OK");
+    lv_obj_set_width(weather_warn_popup, 520);
+    lv_obj_center(weather_warn_popup);
 
     /* Schließen per OK-Button */
-    lv_obj_add_event_cb(ok_btn, meteoalarm_popup_close_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(ok_btn, weather_warn_popup_close_cb, LV_EVENT_CLICKED, NULL);
 }
 
 /* Click-Handler auf dem Wetter-Widget */
@@ -2848,47 +2813,46 @@ static void weather_widget_click_cb(lv_event_t *e)
                 st->sunrise_hour, st->sunrise_minute,
                 st->sunset_hour,  st->sunset_minute);
         }
-        /* Letzte bekannte Meteoalarm-Warnungen eintragen */
+        /* Letzte bekannte Warnungen eintragen (inkl. Stufe 1) */
         womo_forecast_modal_set_warnings(
-            s_meteoalarm_latest.valid ? &s_meteoalarm_latest : NULL);
+            s_weather_warn_latest.valid ? &s_weather_warn_latest : NULL);
     }
 }
 
-/* Meteoalarm-Callback (kommt aus FreeRTOS-Task → braucht LVGL-Lock) */
-static void meteoalarm_update_cb(const womo_meteoalarm_result_t *result, void *user_data)
+/* Unwetter-Callback (kommt aus dem Wetter-Task → braucht LVGL-Lock) */
+static void weather_warn_update_cb(const womo_weather_warn_result_t *result, void *user_data)
 {
     (void)user_data;
     if (!result) return;
 
-    ESP_LOGI(TAG, "Meteoalarm: valid=%d count=%u max_sev=%u",
-             result->valid, result->count, result->max_severity);
+    ESP_LOGI(TAG, "Unwetter: valid=%d count=%u major=%u max_sev=%u",
+             result->valid, result->count, result->count_major, result->max_severity);
 
-    uint8_t prev_max_sev = s_meteoalarm_latest.max_severity;
-    uint8_t prev_count   = s_meteoalarm_latest.count;
+    /* Badge und Popup nur ab Stufe 2; Stufe 1 erscheint nur im Forecast-Modal */
+    uint8_t major_sev    = (result->max_severity >= WOMO_WARN_SEV_MODERATE) ? result->max_severity : 0;
+    uint8_t prev_major   = s_weather_warn_latest.count_major;
+    uint8_t prev_max_sev = s_weather_warn_latest.max_severity;
 
-    /* Snapshot speichern (für späteres Popup-Öffnen).
-     * Keine Region aus alten Fetches behalten – das Wohnmobil bewegt sich,
-     * der Fallback auf location_last_text (Geocode, GPS-aktuell) ist korrekt. */
-    s_meteoalarm_latest = *result;
+    /* Snapshot speichern (für Popup und Forecast-Modal) */
+    s_weather_warn_latest = *result;
 
-    /* Auto-Popup: nur wenn neue Warnungen aufgetaucht sind oder Schwere
-     * gestiegen ist (nicht bei bloßem Verschwinden oder unverand. Stand) */
-    bool auto_open = result->count > 0 &&
-                     result->max_severity >= WOMO_WARN_SEV_MODERATE &&
-                     (prev_count == 0 || result->max_severity > prev_max_sev);
+    /* Auto-Popup: nur wenn Warnungen ab Stufe 2 neu auftauchen oder die Stufe
+     * steigt (nicht bei bloßem Verschwinden oder unverändertem Stand) */
+    bool auto_open = result->count_major > 0 &&
+                     (prev_major == 0 || result->max_severity > prev_max_sev);
 
     if (!weather_widget) return;
 
     if (lvgl_port_lock(0)) {
-        womo_weather_set_warnings(weather_widget, result->count, result->max_severity);
+        womo_weather_set_warnings(weather_widget, result->count_major, major_sev);
         /* Forecast-Modal live aktualisieren wenn es gerade offen ist */
         if (womo_forecast_modal_is_open()) {
             womo_forecast_modal_set_warnings(result);
         }
         if (auto_open) {
-            ESP_LOGI(TAG, "Meteoalarm Auto-Popup (count=%u sev=%u)",
-                     result->count, result->max_severity);
-            meteoalarm_popup_open();
+            ESP_LOGI(TAG, "Unwetter Auto-Popup (major=%u sev=%u)",
+                     result->count_major, result->max_severity);
+            weather_warn_popup_open();
         }
         lvgl_port_unlock();
     }
@@ -2986,7 +2950,7 @@ static void router_poll_task(void *arg)
         poll_count++;
         if (--heap_log_countdown <= 0) {
             log_runtime_heap_stats();
-            heap_log_countdown = 2;  /* Bei 30s Pollintervall etwa jede Minute */
+            heap_log_countdown = HEAP_LOG_POLL_CYCLES;
         }
         womo_router_wifi_status_t wifi_tmp = {0};
         womo_router_lte_status_t  lte_tmp  = {0};
@@ -3100,8 +3064,6 @@ static void router_poll_task(void *arg)
 
             /* Wetter-Modul mit aktuellen GPS-Koordinaten versorgen */
             womo_weather_http_set_location(gps_tmp.latitude, gps_tmp.longitude);
-            /* Meteoalarm mit gleichen Koordinaten versorgen */
-            womo_meteoalarm_set_location(gps_tmp.latitude, gps_tmp.longitude);
 
             /* Sonnenzeiten berechnen + Theme und Forecast-Modal aktualisieren */
             if (womo_time_update_location(gps_tmp.latitude, gps_tmp.longitude)) {
@@ -3962,10 +3924,25 @@ static void log_runtime_heap_stats(void)
 {
     /* Nur internen SRAM abfragen – PSRAM-Traversierung (MALLOC_CAP_SPIRAM/8BIT)
      * blockiert den QSPI-Bus und stört den RGB-Bounce-Buffer-DMA → Display-Flackern. */
-    (void)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    (void)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    (void)heap_caps_get_free_size(MALLOC_CAP_DMA);
-    (void)heap_caps_get_largest_free_block(MALLOC_CAP_DMA);
+    size_t internal_free    = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    size_t internal_min     = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    size_t dma_free         = heap_caps_get_free_size(MALLOC_CAP_DMA);
+    size_t dma_largest      = heap_caps_get_largest_free_block(MALLOC_CAP_DMA);
+
+    /* Minimale Stack-Reserve seit Taskstart (Bytes) */
+    unsigned poll_stack  = (unsigned)uxTaskGetStackHighWaterMark(NULL);
+    unsigned retry_stack = wifi_autoretry_handle
+                         ? (unsigned)uxTaskGetStackHighWaterMark(wifi_autoretry_handle) : 0;
+
+    /* WARN, damit die Zeile trotz LOG_LEVEL_MAIN=WARN im Langzeitlog erscheint */
+    ESP_LOGW(TAG,
+             "Health up=%.1fh internal_free=%u largest=%u min=%u dma_free=%u dma_largest=%u "
+             "stack_min router_poll=%u wifi_autoretry=%u",
+             (double)esp_timer_get_time() / 3600e6,
+             (unsigned)internal_free, (unsigned)internal_largest, (unsigned)internal_min,
+             (unsigned)dma_free, (unsigned)dma_largest,
+             poll_stack, retry_stack);
 }
 
 // Timer-Callbacks für asynchronen RS485-Send (blockiert nicht den LVGL-Thread)
@@ -4108,7 +4085,7 @@ void app_main()
     esp_log_level_set("esp_netif_lwip",   LOG_LEVEL_WIFI);
     esp_log_level_set("esp_netif_handlers", LOG_LEVEL_WIFI);
     esp_log_level_set("weather_http",     LOG_LEVEL_WEATHER_HTTP);
-    esp_log_level_set("meteoalarm",       LOG_LEVEL_METEOALARM);
+    esp_log_level_set("weather_warn",     LOG_LEVEL_WEATHER_WARN);
     esp_log_level_set("geocode",          LOG_LEVEL_GEOCODE);
     esp_log_level_set("router_uci",       LOG_LEVEL_ROUTER_UCI);
     esp_log_level_set("http_mutex",       LOG_LEVEL_HTTP_MUTEX);

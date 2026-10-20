@@ -15,6 +15,7 @@
 - **Strom (elec)**: INA226 — Spannung, Strom, Leistung zwischen Batterie-Widgets
 - **IMU**: BNO055 Neigungswinkel (Pitch/Roll), Kalibrierungsanzeige
 - **Wetter/Klima**: BME680 (innen, IAQ) + BME280 (außen, Drucktrend)
+- **Online-Wetter**: Open-Meteo (aktuell, 5 Tage, 24 h Stundenwerte); Unwetter als eigene Auswertung nach DWD-Kriterien (`womo_weather_warn`), Meteoalarm entfernt (2026-10-20, auf Hardware noch ungetestet)
 - **GPS**: Koordinaten + GNSS-Status vom RUTX11 (HTTP-Poll)
 - **Systemstatus-Label**: 2-Stufen (MANUAL, SENSOR), Acknowledge per Touch
 

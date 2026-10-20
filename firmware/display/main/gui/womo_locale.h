@@ -149,6 +149,43 @@ typedef enum {
     STR_SENS_BOTTLE_B,
     STR_SENS_SCAN_BTN,
     STR_SENS_SETUP_BTN,
+    // Unwetter-Auswertung (womo_weather_warn) – Bezeichnungen nach DWD
+    STR_WARN_WIND_GUSTS,
+    STR_WARN_WIND_STORM,
+    STR_WARN_WIND_STORM_SEVERE,
+    STR_WARN_WIND_HURRICANE_LIKE,
+    STR_WARN_WIND_HURRICANE,
+    STR_WARN_WIND_EXTREME,
+    STR_WARN_RAIN_HEAVY,
+    STR_WARN_RAIN_HEAVY_SEVERE,
+    STR_WARN_RAIN_HEAVY_EXTREME,
+    STR_WARN_RAIN_LONG,
+    STR_WARN_RAIN_LONG_SEVERE,
+    STR_WARN_RAIN_LONG_EXTREME,
+    STR_WARN_SNOW_LIGHT,
+    STR_WARN_SNOW,
+    STR_WARN_SNOW_SEVERE,
+    STR_WARN_SNOW_EXTREME,
+    STR_WARN_THUNDER,
+    STR_WARN_THUNDER_HAIL,
+    STR_WARN_ICE,
+    STR_WARN_ICE_GLAZE,
+    STR_WARN_FROST,
+    STR_WARN_FROST_SEVERE,
+    STR_WARN_HEAT,
+    STR_WARN_HEAT_EXTREME,
+    STR_WARN_FMT_UPTO,       // Format: Name, Wert (%.0f), Einheit
+    STR_WARN_FMT_SUM,        // Format: Name, Wert (%.0f), Einheit, Stunden (%u)
+    STR_WARN_FMT_DOWNTO,     // Format: Name, Wert (%.0f)
+    STR_WARN_FMT_FEELS,      // Format: Name, Wert (%.0f)
+    // Unwetter – Anzeige (Forecast-Modal, Popup)
+    STR_WARN_NONE,
+    STR_WARN_HDR_ONE,        // Format: Anzahl (%u)
+    STR_WARN_HDR_MANY,       // Format: Anzahl (%u)
+    STR_WARN_MORE,           // Format: Anzahl (%u)
+    STR_WARN_SOURCE,
+    STR_WARN_POPUP_TITLE,
+    STR_WARN_LOCATION,       // Format: Ortsname (%s)
     // Max value
     STR_MAX
 } womo_string_id_t;

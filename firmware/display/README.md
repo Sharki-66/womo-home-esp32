@@ -19,7 +19,7 @@ ESP-IDF v5.5.2 · LVGL v9.5 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 - **Batterien**: 2× Balken mit Spannung, Warnung bei Unterspannung
 - **Tanks**: Frischwasser + Grauwasser mit Füllstand, Verbrauchsrate, Restdauer
 - **Gas**: 2× Flaschengewicht, aktiver Verbrauch, Restdauer
-- **Wetter**: Aktuelles WMO-Symbol + Temperatur (Open-Meteo), Tipp auf Icon → 5-Tage-Vorhersage-Modal; Auto-Popup bei Unwetterwarnungen (Meteoalarm)
+- **Wetter**: Aktuelles WMO-Symbol + Temperatur (Open-Meteo), Tipp auf Icon → 5-Tage-Vorhersage-Modal; eigene Unwetter-Auswertung aus den Open-Meteo-Stundenwerten (DWD-Warnkriterien, keine amtliche Warnung): Stufe 1 nur im Modal, ab Stufe 2 Badge am Wetter-Icon + Auto-Popup
 - **Sonnenauf-/-untergang**: Berechnung aus GPS-Position (womo_sun_calc), Anzeige im Hauptscreen
 - **Konnektivität**: Modal mit AP-Status, WLAN-Scan/Connect, LTE Ein/Aus (Router UCI)
 - **Router-LEDs**: Separate Statusanzeige für WLAN/LTE/GPS-Empfang des Routers
@@ -33,9 +33,8 @@ ESP-IDF v5.5.2 · LVGL v9.5 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 
 | Dienst | Zweck | TLS |
 |---|---|---|
-| Open-Meteo | Aktuelles Wetter + 5-Tage-Vorhersage | ISRG Root X1 (PEM, eingebettet) |
+| Open-Meteo | Aktuelles Wetter, 5-Tage-Vorhersage, 24 Stundenwerte für die Unwetter-Auswertung | ISRG Root X1 (PEM, eingebettet) |
 | Nominatim | Reverse Geocoding | ISRG Root X1 (PEM, eingebettet) |
-| Meteoalarm | Unwetterwarnungen | GEANT TLS RSA 1 (PEM, eingebettet) |
 | Teltonika RUTX11 | WLAN/LTE/GPS-Steuerung | HTTP (LAN) |
 
 ## Projektstruktur
@@ -62,14 +61,13 @@ main/
 │   └── buzzer                  Piezo-Buzzer (Warn/Alarm-Töne)
 ├── network/
 │   ├── womo_wifi               STA-Verbindung + NVS-Passwort-Speicher (RUTX11)
-│   ├── womo_weather_http       Open-Meteo API (aktuell + 5-Tage daily)
+│   ├── womo_weather_http       Open-Meteo API (aktuell + 5-Tage daily + 24 h hourly)
+│   ├── womo_weather_warn       Unwetter-Auswertung aus Stundenwerten (DWD-Kriterien)
 │   ├── womo_geocode            Nominatim Reverse Geocoding
-│   ├── womo_meteoalarm         Meteoalarm CAP-Feed
 │   ├── womo_router_uci         RUTX11 UCI JSON-RPC
 │   ├── womo_buzzer_http        HTTP-Endpunkt für externen Buzzer-Trigger
 │   ├── womo_http_mutex         TLS-Session-Serialisierung
-│   ├── isrg_root_x1_pem.h     Let's Encrypt Root-Zertifikat
-│   └── harica_root_pem.h       GEANT TLS RSA 1 (Meteoalarm)
+│   └── isrg_root_x1_pem.h     Let's Encrypt Root-Zertifikat
 ├── rs485/
 │   └── womo_rs485_display      RS485-Empfang/Senden, JSON-Parsing, Merge-Snapshot
 ├── storage/
