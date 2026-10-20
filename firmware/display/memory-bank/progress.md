@@ -15,7 +15,7 @@
 - **Strom (elec)**: INA226 — Spannung, Strom, Leistung zwischen Batterie-Widgets
 - **IMU**: BNO055 Neigungswinkel (Pitch/Roll), Kalibrierungsanzeige
 - **Wetter/Klima**: BME680 (innen, IAQ) + BME280 (außen, Drucktrend)
-- **Online-Wetter**: Open-Meteo (aktuell, 5 Tage, 24 h Stundenwerte); Unwetter als eigene Auswertung nach DWD-Kriterien (`womo_weather_warn`), Meteoalarm entfernt (2026-10-20, auf Hardware noch ungetestet)
+- **Online-Wetter**: Open-Meteo (aktuell, 5 Tage, 24 h Stundenwerte); Unwetter als eigene Auswertung nach DWD-Kriterien (`womo_weather_warn`), Meteoalarm entfernt (2026-10-20, auf Hardware getestet)
 - **GPS**: Koordinaten + GNSS-Status vom RUTX11 (HTTP-Poll)
 - **Systemstatus-Label**: 2-Stufen (MANUAL, SENSOR), Acknowledge per Touch
 
@@ -31,6 +31,7 @@
 - Router-LED-Button: blau wenn RUTX11 erreichbar, rot + nicht klickbar wenn nicht
 - WLAN/LTE-Switch deaktiviert + Badge wenn RUTX11 nicht erreichbar
 - Known-Network-Pool: NVS `rtr_wifi` (max. 20 MRU), Passwort-Vorausfüllung
+- Router-WebUI (`tools/router-webui/`): Modem-Schutz gegen gestapelte `gsmctl`-Aufrufe, Log-Schnappschuss bei Modem-Ausfall (2026-10-20, auf Router geprüft)
 
 ### Settings-Modal (5 Tabs)
 - Sprache (DE/EN)
@@ -60,3 +61,5 @@
 - LVGL Font `lv_font_montserrat_8` nicht aktiviert (kleinste verfügbare Schrift: 12 px)
 - Icons werden als PNG geladen aus SPIFFS → Ladezeit beim Bootup
 - RS485 bei 115200 Baud: Framing-Fehler durch DE/RTS-Toggle-Timing → fest auf 57600
+- RUTX11: pausierter congstar-Tarif kann Modem-Neustarts auslösen; Ursache landet künftig in `/etc/womo/log/modem_down_*.log`
+- RUTX11: `simslot` in `status.json` leer (`AT+QUIMSLOT?` ohne Ziffer)
