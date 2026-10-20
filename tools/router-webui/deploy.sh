@@ -12,6 +12,15 @@
 # Verwendung:
 #   ./deploy.sh [router-ip]             Standard: 192.168.55.1
 #   ./deploy.sh 192.168.55.1 root       (anderer SSH-User)
+#
+# Modem-Schutz (nach Vorfall 2026-10-20: gestapelte poll.sh-Läufe
+# und ~90 Zombie-gsmctl verhinderten die Modem-Erholung):
+#   - poll.sh läuft nie parallel (Sperre /tmp/womo_poll.lock)
+#   - jedes gsmctl mit Zeitlimit (BusyBox timeout, falls vorhanden)
+#   - kein gsmctl solange ubus-Objekt gsm.modem0 fehlt → lte.modem="down"
+#   - cgi-bin/lte liest nur den Cache, kein eigener Modemzugriff
+#   - Modem-Ausfall → Log-Schnappschuss in /etc/womo/log/ (max. 5,
+#     übersteht Reboot)
 # ============================================================
 set -e
 
@@ -109,29 +118,16 @@ rm -f "$TMPF"
 CGISCRIPT
 echo "  → /etc/womo/cgi-bin/ubus (ubus-Proxy)"
 
-# CGI-LTE: ruft gsmctl direkt auf (läuft als root, kein ubus file/exec nötig)
+# CGI-LTE: liefert nur den LTE-Teil aus dem poll.sh-Cache. Kein eigener gsmctl-
+# Aufruf mehr – paralleler Modemzugriff aus der WebUI hat hängende gsmctl begünstigt.
 $SSH 'cat > /etc/womo/cgi-bin/lte && chmod +x /etc/womo/cgi-bin/lte' << 'CGISCRIPT'
 #!/bin/sh
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 export PATH
 printf "Content-Type: application/json\r\n\r\n"
-GSMCTL=$(command -v gsmctl 2>/dev/null || echo '')
-if [ -z "$GSMCTL" ]; then
-  printf '{"error":"gsmctl not found"}\n'
-  exit 0
-fi
-OP=$("$GSMCTL" -o 2>/dev/null | tr -d '\n\r')
-TYPE=$("$GSMCTL" -t 2>/dev/null | tr -d '\n\r')
-DISABLED=$(uci get network.mob1s1a1.disabled 2>/dev/null | tr -d '\n\r')
-# gsmctl -q gibt mehrzeilig aus: "RSSI: -44\nRSRP: -75\nSINR: 23\nRSRQ: -7"
-QOUT=$("$GSMCTL" -q 2>/dev/null)
-RSSI=$(echo "$QOUT" | awk '/RSSI:/{match($0,/-?[0-9]+/); print substr($0,RSTART,RLENGTH); exit}')
-RSRP=$(echo "$QOUT" | awk '/RSRP:/{match($0,/-?[0-9]+/); print substr($0,RSTART,RLENGTH); exit}')
-SINR=$(echo "$QOUT" | awk '/SINR:/{match($0,/-?[0-9]+/); print substr($0,RSTART,RLENGTH); exit}')
-printf '{"op":"%s","type":"%s","rssi":"%s","rsrp":"%s","sinr":"%s","disabled":"%s"}\n' \
-  "$OP" "$TYPE" "${RSSI:--}" "${RSRP:--}" "${SINR:--}" "${DISABLED:-0}"
+jsonfilter -i /etc/womo/status.json -e '@.lte' 2>/dev/null || printf '{"error":"not ready"}\n'
 CGISCRIPT
-echo "  → /etc/womo/cgi-bin/lte (gsmctl-Wrapper)"
+echo "  → /etc/womo/cgi-bin/lte (liest Cache aus status.json)"
 
 # CGI-Clients: iwinfo assoclist + dhcp.leases → JSON (läuft als root, kein ubus file/exec nötig)
 $SSH 'cat > /etc/womo/cgi-bin/clients && chmod +x /etc/womo/cgi-bin/clients' << 'CGISCRIPT'
@@ -188,9 +184,49 @@ $SSH 'cat > /etc/womo/poll.sh && chmod +x /etc/womo/poll.sh' << 'POLLSCRIPT'
 #!/bin/sh
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 export PATH
+
+# Sperre: nie zwei Läufe gleichzeitig (Cron alle 15 s + cgi-bin/poll). Ohne Sperre
+# stapelten sich bei hängendem Modem die Läufe. mkdir ist atomar; verwaiste Sperre
+# (Prozess tot) wird übernommen.
+LOCK=/tmp/womo_poll.lock
+if ! mkdir "$LOCK" 2>/dev/null; then
+  OLD=$(cat "$LOCK/pid" 2>/dev/null)
+  if [ -n "$OLD" ] && kill -0 "$OLD" 2>/dev/null; then exit 0; fi
+  rm -rf "$LOCK"
+  mkdir "$LOCK" 2>/dev/null || exit 0
+fi
+echo $$ > "$LOCK/pid"
+
 TMP=$(mktemp /tmp/womo_poll_XXXXXX)
 T_GPS=$(mktemp); T_LTE=$(mktemp)
-trap 'rm -f "$TMP" "$T_GPS" "$T_LTE"' EXIT
+trap 'rm -f "$TMP" "$T_GPS" "$T_LTE"; rm -rf "$LOCK"' EXIT
+
+# gsmctl mit Zeitlimit. BusyBox-timeout gibt es je nach Version als
+# "timeout N" oder "timeout -t N"; fehlt es, ohne Limit (Sperre greift trotzdem).
+if timeout 1 true 2>/dev/null; then
+  gsm() { timeout 8 gsmctl "$@"; }
+elif timeout -t 1 true 2>/dev/null; then
+  gsm() { timeout -t 8 gsmctl "$@"; }
+else
+  gsm() { gsmctl "$@"; }
+fi
+
+# Modem vorhanden? gsmd registriert gsm.modem0 erst nach erfolgreicher Init.
+# Solange es fehlt: keine AT-Anfragen (modem_trackd startet das Modem gerade neu).
+MODEM_UP=1
+ubus list gsm.modem0 >/dev/null 2>&1 || MODEM_UP=0
+
+# Übergang up→down: Log-Schnappschuss persistent sichern (RAM-Log geht beim Reboot
+# verloren). Nicht in den ersten 3 min nach Boot – dort fährt das Modem noch hoch.
+STATE=/tmp/womo_modem_up
+PREV=$(cat "$STATE" 2>/dev/null || echo 1)
+echo "$MODEM_UP" > "$STATE"
+UPTIME_S=$(cut -d. -f1 /proc/uptime)
+if [ "$MODEM_UP" = 0 ] && [ "$PREV" = 1 ] && [ "$UPTIME_S" -gt 180 ]; then
+  mkdir -p /etc/womo/log
+  logread | tail -n 300 > "/etc/womo/log/modem_down_$(date +%Y%m%d_%H%M%S).log"
+  ls -1t /etc/womo/log/modem_down_*.log 2>/dev/null | tail -n +6 | xargs rm -f
+fi
 
 # ── UCI (Config, kein Hardware-IO – sofort) ──────────────────────────
 AP_SSID=$(uci get wireless.@wifi-iface[0].ssid     2>/dev/null | tr -d '"\n\r\\')
@@ -233,10 +269,12 @@ done
 # LTE: gsmctl sequential (Modem-Seriellport verträgt keinen parallelen Zugriff)
 # läuft aber parallel zum GPS-Block oben
 {
-  QOUT=$(gsmctl -q 2>/dev/null)
-  LTE_OP=$(  gsmctl -o              2>/dev/null | tr -d '\n\r')
-  LTE_TYPE=$(gsmctl -t              2>/dev/null | tr -d '\n\r')
-  LTE_SIM=$( gsmctl -A 'AT+QUIMSLOT?' 2>/dev/null | grep -oE '[12]' | head -1)
+  if [ "$MODEM_UP" = 1 ]; then
+    QOUT=$(gsm -q 2>/dev/null)
+    LTE_OP=$(  gsm -o              2>/dev/null | tr -d '\n\r')
+    LTE_TYPE=$(gsm -t              2>/dev/null | tr -d '\n\r')
+    LTE_SIM=$( gsm -A 'AT+QUIMSLOT?' 2>/dev/null | grep -oE '[12]' | head -1)
+  fi
   printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
     "$LTE_OP" "$LTE_TYPE" \
     "$(echo "$QOUT" | awk '/RSSI:/{match($0,/-?[0-9]+/);print substr($0,RSTART,RLENGTH);exit}')" \
@@ -297,10 +335,10 @@ LTE_SIMSLOT=$( sed -n '6p' "$T_LTE")
 # ── JSON atomar schreiben ─────────────────────────────────────────────
 json_str() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 TS=$(date +%s)
-printf '{"ts":%s,"ap":{"enabled":%s,"ssid":"%s","chan":"%s","cnt":%s},"wifi":{"enabled":%s,"ssid":"%s","signal":"%s","bssid":"%s","chan":"%s","connected":%s},"lte":{"op":"%s","type":"%s","rssi":"%s","rsrp":"%s","sinr":"%s","disabled":"%s","simslot":"%s"},"gps":{"fix":"%s","lat":"%s","lon":"%s","alt":"%s","speed":"%s","sats":"%s"}}\n' \
+printf '{"ts":%s,"ap":{"enabled":%s,"ssid":"%s","chan":"%s","cnt":%s},"wifi":{"enabled":%s,"ssid":"%s","signal":"%s","bssid":"%s","chan":"%s","connected":%s},"lte":{"modem":"%s","op":"%s","type":"%s","rssi":"%s","rsrp":"%s","sinr":"%s","disabled":"%s","simslot":"%s"},"gps":{"fix":"%s","lat":"%s","lon":"%s","alt":"%s","speed":"%s","sats":"%s"}}\n' \
   "$TS" "$AP_EN" "$(json_str "$AP_SSID")" "$AP_CHAN" "${AP_CNT:-0}" \
   "$STA_EN" "$(json_str "$STA_SSID")" "${STA_SIG:-}" "${STA_BSSID:-}" "${STA_CHAN:-}" "$STA_CON" \
-  "$(json_str "$LTE_OP")" "$(json_str "$LTE_TYPE")" "${LTE_RSSI:--}" "${LTE_RSRP:--}" "${LTE_SINR:--}" "${LTE_DIS:-0}" "${LTE_SIMSLOT:-}" \
+  "$([ "$MODEM_UP" = 1 ] && echo up || echo down)" "$(json_str "$LTE_OP")" "$(json_str "$LTE_TYPE")" "${LTE_RSSI:--}" "${LTE_RSRP:--}" "${LTE_SINR:--}" "${LTE_DIS:-0}" "${LTE_SIMSLOT:-}" \
   "$GPS_FIX" "${GPS_LAT:-}" "${GPS_LON:-}" "${GPS_ALT:-}" "${GPS_SPD:-}" "${GPS_SAT:-}" \
   > "$TMP" && mv "$TMP" /etc/womo/status.json && chmod 644 /etc/womo/status.json
 POLLSCRIPT
@@ -397,6 +435,22 @@ echo "  → Cron: poll.sh alle 15 s, datapass.sh alle 30 min"
 # Erstes poll.sh + datapass.sh sofort ausführen, damit beide JSON-Dateien existieren
 $SSH '/etc/womo/poll.sh; /etc/womo/datapass.sh'
 echo "  → Erster Poll + Datenvolumen-Abfrage ausgeführt"
+
+# Plausibilität Modem-Erkennung: Name gsm.modem0 stammt aus der modem_trackd-
+# Fehlermeldung. Antwortet das Modem, das Objekt fehlt aber, würde poll.sh LTE
+# fälschlich als "down" melden → hier sichtbar machen.
+$SSH '
+  if ubus list gsm.modem0 >/dev/null 2>&1; then
+    echo "  → Modem-Erkennung: ubus gsm.modem0 vorhanden ✓"
+  elif gsmctl -o >/dev/null 2>&1; then
+    echo "  ⚠ gsmctl antwortet, aber ubus gsm.modem0 fehlt – Modem-Erkennung in poll.sh anpassen!"
+    ubus list | grep -i gsm | sed "s/^/      /"
+  else
+    echo "  ⚠ Modem antwortet derzeit nicht (gsm.modem0 fehlt) – LTE wird als down gemeldet"
+  fi
+  T=$(timeout 1 true 2>/dev/null && echo "timeout N" || (timeout -t 1 true 2>/dev/null && echo "timeout -t N") || echo "keins")
+  echo "  → BusyBox-timeout: ${T}"
+'
 
 # Boot-Aufruf: datapass.sh einmal nach dem Systemstart, mit Verzögerung, damit die
 # LTE-Verbindung erst steht (rc.local läuft bereits ganz am Ende des Boot-Vorgangs,
