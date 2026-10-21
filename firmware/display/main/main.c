@@ -65,6 +65,7 @@ static const char *PLACEHOLDER_GPS = "GPS : ---";
 #define QUIET_TOUCH_TIMEOUT_MS (5 * 60 * 1000)
 
 #include "gui/womo_thresholds.h"
+#include "gui/womo_tariff.h"
 /* lodepng nicht mehr benötigt – Screenshot schreibt BMP ohne Zwischenpuffer */
 
 // Default thresholds werden jetzt über womo_thresholds.h verwaltet (veränderbar via Einstellungen)
@@ -260,12 +261,25 @@ typedef enum {
     SENSOR_ERR_SRC_BAT,
     SENSOR_ERR_SRC_RS485,  // RS485 Timeout / Verbindungsverlust
     SENSOR_ERR_SRC_IAQ,    // Luftqualität (BME680 indoor IAQ)
+    SENSOR_ERR_SRC_TARIFF, // Mobilfunk-Tarif läuft ab / abgelaufen (womo_tariff)
+    SENSOR_ERR_SRC_DATA,   // Mobilfunk-Restvolumen unter Schwelle (womo_tariff)
     SENSOR_ERR_SRC_MAX
 } sensor_err_src_t;
 
 static const char * const sensor_err_src_name[SENSOR_ERR_SRC_MAX] = {
-    "Gas", "Wasser", "Abw.", "Bat", "Sensor", "IAQ"
+    "Gas", "Wasser", "Abw.", "Bat", "Sensor", "IAQ", "Tarif", "Daten"
 };
+
+// Tarif-Quellen zeigen Termin bzw. Prozent statt eines festen Namens (Text aus womo_locale)
+static char sensor_err_tariff_text[24] = "";
+static char sensor_err_data_text[24] = "";
+
+static const char *sensor_err_src_label(int idx)
+{
+    if (idx == SENSOR_ERR_SRC_TARIFF && sensor_err_tariff_text[0]) return sensor_err_tariff_text;
+    if (idx == SENSOR_ERR_SRC_DATA && sensor_err_data_text[0]) return sensor_err_data_text;
+    return sensor_err_src_name[idx];
+}
 
 typedef struct {
     womo_status_level_t current;   // Aktuell evaluierter Level (jeden Tick neu berechnet)
@@ -276,7 +290,7 @@ typedef struct {
 
 static sensor_err_state_t sensor_err_states[SENSOR_ERR_SRC_MAX] = {0};
 static int sensor_err_display_idx = -1;
-static char sensor_detail_text[32] = "";
+static char sensor_detail_text[40] = "";  // Name (max. 23, Tarif-Texte) + "+N"
 static portMUX_TYPE system_status_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
 // RS485 data callback
@@ -1351,6 +1365,9 @@ static void ui_update_timer_cb(lv_timer_t *timer)
     bool rs485_timeout_snapshot = false;
     bool rs485_waiting_snapshot = false;
     bool rs485_invalid_snapshot = false;
+    // Tarif-Termin ins NVS: hier (LVGL, interner Stack), nicht im router_poll_task (PSRAM-Stack),
+    // und vor dem frühen return weiter unten, damit es auch ohne Sensordaten passiert
+    womo_tariff_flush();
     // Per-Sensor-Quellen-Level für Stapel zurücksetzen (globale States)
     for (int _si = 0; _si < SENSOR_ERR_SRC_MAX; _si++) {
         sensor_err_states[_si].current = WOMO_STATUS_OK;
@@ -2231,6 +2248,40 @@ gas_done:
         }
     }
 
+    // Mobilfunk-Tarif: Ablauf-Hinweis + Restvolumen (Termin/Volumen aus router_poll_task,
+    // Einstellungen im Tab LTE). Nur mit plausibler Uhrzeit (RTC/NTP/GPS).
+    {
+        static womo_tariff_phase_t s_prev_tariff_phase = WOMO_TARIFF_OK;
+        struct tm now_tm = {0};
+        womo_tariff_state_t ts;
+        const bool tariff_ok = womo_time_get(&now_tm) == ESP_OK &&
+                               now_tm.tm_year >= (2024 - 1900) &&
+                               womo_tariff_evaluate(&now_tm, &ts);
+        if (tariff_ok) {
+            if (ts.phase == WOMO_TARIFF_SOON) {
+                snprintf(sensor_err_tariff_text, sizeof(sensor_err_tariff_text),
+                         womo_locale_get_string(STR_TARIFF_SRC_SOON),
+                         (unsigned)(ts.due % 100), (unsigned)(ts.due / 100 % 100));
+            } else if (ts.phase == WOMO_TARIFF_EXPIRED) {
+                snprintf(sensor_err_tariff_text, sizeof(sensor_err_tariff_text), "%s",
+                         womo_locale_get_string(STR_TARIFF_SRC_EXPIRED));
+            }
+            if (ts.phase != WOMO_TARIFF_OK) {
+                sensor_err_states[SENSOR_ERR_SRC_TARIFF].current = WOMO_STATUS_WARNING;
+            }
+            // "läuft ab" quittiert → "abgelaufen" soll trotzdem erneut melden
+            if (ts.phase > s_prev_tariff_phase && s_prev_tariff_phase != WOMO_TARIFF_OK) {
+                sensor_err_states[SENSOR_ERR_SRC_TARIFF].acked = WOMO_STATUS_OK;
+            }
+            s_prev_tariff_phase = ts.phase;
+        }
+        if (tariff_ok && ts.volume_low) {
+            snprintf(sensor_err_data_text, sizeof(sensor_err_data_text),
+                     womo_locale_get_string(STR_TARIFF_SRC_DATA), (unsigned)ts.volume_pct);
+            sensor_err_states[SENSOR_ERR_SRC_DATA].current = WOMO_STATUS_WARNING;
+        }
+    }
+
     // Sensor-Fehler-Stapel: Latching + Debounce
     //
     // current (pro Tick evaluiert) steuert den Latch:
@@ -2278,10 +2329,10 @@ gas_done:
         sensor_err_display_idx = stack_show_idx;
         if (stack_pending > 1) {
             snprintf(sensor_detail_text, sizeof(sensor_detail_text), "%s+%d",
-                     sensor_err_src_name[stack_show_idx], stack_pending - 1);
+                     sensor_err_src_label(stack_show_idx), stack_pending - 1);
         } else {
             snprintf(sensor_detail_text, sizeof(sensor_detail_text), "%s",
-                     sensor_err_src_name[stack_show_idx]);
+                     sensor_err_src_label(stack_show_idx));
         }
         system_status_apply_sensor_level(stack_max);
     } else {
@@ -3008,8 +3059,14 @@ static void router_poll_task(void *arg)
             womo_router_datapass_t dp_tmp = {0};
             esp_err_t dp_err = womo_router_get_data_pass(&dp_tmp);
             if (dp_err == ESP_OK) {
-                ESP_LOGI(TAG, "Datenvolumen: %s/%s %s, gültig bis %s",
-                         dp_tmp.remaining, dp_tmp.total, dp_tmp.unit, dp_tmp.valid_until);
+                ESP_LOGI(TAG, "Datenvolumen: %s/%s %s, gültig bis %s (%s)",
+                         dp_tmp.remaining, dp_tmp.total, dp_tmp.unit, dp_tmp.valid_until,
+                         dp_tmp.valid_until_iso);
+                /* Ablauf-Hinweis + Volumenwarnung; ohne ISO-Datum (alter Router-Stand)
+                 * bleibt der letzte bekannte Termin erhalten */
+                const uint32_t due = womo_tariff_parse_iso(dp_tmp.valid_until_iso);
+                if (due) womo_tariff_set_auto_due(due);
+                womo_tariff_set_volume(dp_tmp.remaining, dp_tmp.total);
                 if (s_router_mutex) {
                     xSemaphoreTake(s_router_mutex, portMAX_DELAY);
                     s_router_datapass = dp_tmp;
@@ -3610,7 +3667,7 @@ static void status_label_event_cb(lv_event_t *event)
         sensor_err_states[sensor_err_display_idx].acked =
             sensor_err_states[sensor_err_display_idx].latched;
         ESP_LOGI(TAG, "Sensorstatus '%s' (Level=%d) quittiert",
-                 sensor_err_src_name[sensor_err_display_idx],
+                 sensor_err_src_label(sensor_err_display_idx),
                  sensor_err_states[sensor_err_display_idx].acked);
     }
 
@@ -3632,10 +3689,10 @@ static void status_label_event_cb(lv_event_t *event)
         sensor_err_display_idx = next_idx;
         if (pending_count > 1) {
             snprintf(sensor_detail_text, sizeof(sensor_detail_text), "%s+%d",
-                     sensor_err_src_name[next_idx], pending_count - 1);
+                     sensor_err_src_label(next_idx), pending_count - 1);
         } else {
             snprintf(sensor_detail_text, sizeof(sensor_detail_text), "%s",
-                     sensor_err_src_name[next_idx]);
+                     sensor_err_src_label(next_idx));
         }
         system_status_apply_sensor_level(stack_max);
     } else {
@@ -4219,6 +4276,7 @@ void app_main()
         womo_locale_init();
         womo_locale_register_change_cb(on_locale_changed);
         womo_thresholds_init();
+        womo_tariff_init();
         womo_thresholds_register_change_cb(on_thresholds_changed);
 
     // Create title - höher positioniert

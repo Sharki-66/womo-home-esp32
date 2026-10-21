@@ -383,12 +383,21 @@ TOTAL=$(echo "$HTML" | grep -o 'start-volume">[^<]*'           | head -1 | sed '
 UNIT=$(echo "$HTML"  | grep -o 'volume-unit">[^<]*'            | head -1 | sed 's/.*">//' | tr -d '[:space:]')
 SPEED=$(echo "$HTML" | grep -o 'Download-Speed:[^<]*'          | head -1 | sed 's/Download-Speed: *//' | tr -d '\r\n')
 VALID=$(echo "$HTML" | grep -o 'Gültig bis:[^<]*'              | head -1 | sed 's/Gültig bis: *//'     | tr -d '\r\n')
+# "16. November 2026" → "2026-11-16" für die Ablauf-Warnung im Display; leer wenn unbekannt
+VALID_ISO=$(echo "$VALID" | awk '{
+  n = split("Januar Februar März April Mai Juni Juli August September Oktober November Dezember", M, " ")
+  # Tag/Jahr nur Ziffern: die Seite liefert ein geschütztes Leerzeichen (C2 A0) vor dem Tag
+  d = $1; gsub(/[^0-9]/, "", d)
+  y = $3; gsub(/[^0-9]/, "", y)
+  for (i = 1; i <= n; i++) if ($2 == M[i] && d != "" && length(y) == 4)
+    printf "%04d-%02d-%02d", y, i, d
+}')
 
 if [ -z "$REMAINING" ]; then
   printf '{"error":"parse_failed","ts":%s}\n' "$(date +%s)" > "$TMP"
 else
-  printf '{"remaining":"%s","total":"%s","unit":"%s","speed":"%s","valid_until":"%s","ts":%s}\n' \
-    "$REMAINING" "$TOTAL" "$UNIT" "$SPEED" "$VALID" "$(date +%s)" > "$TMP"
+  printf '{"remaining":"%s","total":"%s","unit":"%s","speed":"%s","valid_until":"%s","valid_until_iso":"%s","ts":%s}\n' \
+    "$REMAINING" "$TOTAL" "$UNIT" "$SPEED" "$VALID" "$VALID_ISO" "$(date +%s)" > "$TMP"
 fi
 mv "$TMP" /etc/womo/datapass.json
 chmod 644 /etc/womo/datapass.json

@@ -26,6 +26,7 @@ ESP-IDF v5.5.2 · LVGL v9.5 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 - **Steuerung**: 12V Bordnetz + Multimedia per RS485-Kommandos ans Sensorboard
 - **Fehler-Management**: Fehler-Stack mit Latching, Quittierung per Touch, Buzzer-Alarm (Warn/Alarm-Ton bei neuen unquittier­ten Fehlern)
 - **Einstellungs-Modal**: Schwellwerte für Tank/Batterie/Gas konfigurierbar, Speicherung in NVS
+- **Mobilfunk-Tarif**: Warnung vor Tarifablauf und bei wenig Restvolumen im Fehler-Stack; Termin automatisch aus pass.telekom.de (Router-WebUI-Tool) oder manuell mit Rhythmus (4 Wochen / 30 Tage / 1 Monat), Einstellungen im Tab LTE
 - **Screenshot**: Long-Press unten links → PNG auf SD-Karte
 - **Tag/Nacht**: Automatischer Themenwechsel (Sonnenauf-/-untergang), Backlight-Steuerung
 
@@ -53,7 +54,8 @@ main/
 │   ├── womo_forecast_modal     5-Tage-Vorhersage Modal (Open-Meteo daily)
 │   ├── womo_connectivity_modal WLAN/LTE/AP-Steuerung
 │   ├── womo_router_leds_modal  Router-LED-Statusanzeige
-│   ├── womo_settings_modal     Einstellungs-Modal: Tabs AP | Sensoren | Grenzwerte | System
+│   ├── womo_settings_modal     Einstellungs-Modal: Tabs AP | Sensoren | Grenzwerte | LTE | System
+│   ├── womo_tariff             Mobilfunk-Tarif: Ablauf-/Volumenwarnung (NVS-Persistenz)
 │   └── womo_thresholds         Schwellwert-Verwaltung (NVS-Persistenz)
 ├── hardware/
 │   ├── waveshare_rgb_lcd_port  LCD + Touch + CH422G Init

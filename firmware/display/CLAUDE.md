@@ -56,11 +56,21 @@
 
 ## Einstellungen-Modal (Display)
 
-- Tabs: AP | Sensoren | Grenzwerte | System (Reihenfolge `enum TAB_*`, AP ist Starttab), 640×420 px Panel (`womo_settings_modal.c`).
+- Tabs: AP | Sensoren | Grenzwerte | LTE | System (Reihenfolge `enum TAB_*`, AP ist Starttab), 640×420 px Panel (`womo_settings_modal.c`).
 - **Alle Texte über `womo_locale`** (`womo_locale_get_string`, DE/EN), auch Tab-Titel. Bei Sprachwechsel aktualisiert `settings_locale_cb()` alle gemerkten Labels (Tab-Texte per `lv_tabview_set_tab_text`). Titel/Labels mit Umlauten in den `*_german`-Fonts. Neue Texte immer als `STR_*` in `womo_locale.h/.c` anlegen, nie hart codieren.
 - **System**: Zwei Spalten. Links Töne (Systemtöne, Touch-Klick) und Sprache (Deutsch/English), rechts Zeit / RTC (Zeitquelle, letzte Sync, Batteriestatus der Display-RTC-Knopfzelle; `system_time_info_refresh()`).
 - **Sensoren** (früher „RTC / Temp / Gas“, RTC-Teil liegt jetzt im System-Tab): Ruuvi wie unten beschrieben, zusätzlich Abschnitt „Gaswaage (GasBee)“ mit Zeilen Flasche A/B: Akku-% (rot < 20 % ohne Laden oder „nicht kalibriert“, „(USB)“ im Konfigurationsmodus), Button **„Einrichten“** startet den geführten Assistenten (`gbw_*` in `womo_settings_modal.c`): GasBee an USB stecken → genau eine mit `cfg` gefunden → übernehmen (Display-NVS `womo_gasbee_cfg` + `cmd:"gasbee_config"`) → optional kalibrieren (Waage leer → Gewicht in Gramm eingeben → Prüfung am Advertising) → „USB abziehen“. Keine MAC-Auswahl für den Nutzer. Ergebnisse aus RX-/Timer-Task landen in einem Abholfach und werden im LVGL-Timer `rtc_poll_timer_cb` (100 ms) ausgewertet – kein `lvgl_port_lock()` in fremden Tasks. Bei `hx711.is_wired` (Kabelwaage aktiv) sind die Buttons gesperrt. Gemeinsame Statuszeile für Ruuvi und GasBee.
 - Ruuvi-Tag-Konfiguration (Abschnitt im Tab Sensoren). Pro Slot (Innen/Außen): MAC-Anzeige + Batteriespannung als `Batt 3.00V (min 2.5V)` (falls Ruuvi statt verkabeltem BME aktiv; Warnschwelle temperaturabhängig wie Ruuvi Station: < −20 °C 2,0 V, −20…0 °C 2,3 V, sonst 2,5 V; Quelle ruuvi.com/battery-usage; kein Prozent, da Knopfzelle CR2477 flache Kennlinie hat), "Scan"-Button fordert per `ruuvi_scan_request` die aktuelle Tag-Liste vom Sensorboard an und zeigt sie zur Auswahl in einem Popup (analog zum WLAN-Scan im AP-Tab). Auswahl/Löschen speichert sofort in Display-NVS (`womo_ruuvi_cfg`) und sendet `cmd:"ruuvi_config"` ans Sensorboard.
+
+- **LTE** (Mobilfunk-Tarif, Logik in `gui/womo_tariff.c/h`, NVS `womo_tariff`): Hinweis vor Ablauf (0–14 Tage, 0 = aus, Standard 3), Warnung Restvolumen (0–50 % in 5er-Schritten, 0 = aus, Standard 10), manueller Termin (−/+ Tag, „Heute aufgeladen“ = heute + Rhythmus, X löscht) mit Rhythmus 4 Wochen / 30 Tage / 1 Monat. Darunter der automatische Termin aus pass.telekom.de (X verwirft ihn, z. B. nach Tarifwechsel) und „Nächster Ablauf“.
+
+## Mobilfunk-Tarif (Display)
+
+- Quelle automatisch: `valid_until_iso` aus `datapass.json` (Router wandelt „16. November 2026“ in `datapass.sh` um, siehe `tools/router-webui/deploy.sh`). `router_poll_task` → `womo_tariff_set_auto_due()` + `womo_tariff_set_volume()`. Letzter automatischer Termin bleibt im NVS, damit „abgelaufen“ auch ohne Datenverbindung (pausierter Tarif) erkannt wird. Hat Vorrang vor dem manuellen Termin.
+- Quelle manuell (Tarife ohne pass.telekom.de): Termin + Rhythmus, rollt nach Ablauf selbst weiter (ob verlängert wurde ist unbekannt → kein „abgelaufen“).
+- Auswertung in `ui_update_timer_cb` nur mit plausibler Uhrzeit (Jahr ≥ 2024). Zwei Quellen im Fehler-Stapel, beide nur WARNING: `SENSOR_ERR_SRC_TARIFF` („Tarif bis 16.11.“ / „Tarif abgelaufen“, Übergang läuft ab → abgelaufen meldet trotz Quittierung erneut) und `SENSOR_ERR_SRC_DATA` („Daten 8%“). Texte über `STR_TARIFF_SRC_*`.
+- Datum intern als JJJJMMTT (`uint32_t`), Rechnung in ganzen Tagen ohne Zeitzone. „Gültig bis“ schließt den Tag ein.
+- **Kein NVS aus `router_poll_task`** (Stack im PSRAM, NVS schaltet den Flash-Cache ab → Assert `s_task_stack_is_sane_when_cache_frozen`). `womo_tariff_set_auto_due()` setzt nur RAM + Dirty-Flag, `womo_tariff_flush()` schreibt am Anfang von `ui_update_timer_cb` (LVGL, interner Stack).
 
 ## Wetter / Unwetter (Display)
 

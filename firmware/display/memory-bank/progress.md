@@ -31,6 +31,7 @@
 - Router-LED-Button: blau wenn RUTX11 erreichbar, rot + nicht klickbar wenn nicht
 - WLAN/LTE-Switch deaktiviert + Badge wenn RUTX11 nicht erreichbar
 - Known-Network-Pool: NVS `rtr_wifi` (max. 20 MRU), Passwort-Vorausfüllung
+- Mobilfunk-Tarif: Warnung vor Ablauf + bei wenig Restvolumen (Fehler-Stack, Tab LTE, `womo_tariff`), automatisch über pass.telekom.de oder manueller Termin (2026-10-21, auf Hardware getestet)
 - Router-WebUI (`tools/router-webui/`): Modem-Schutz gegen gestapelte `gsmctl`-Aufrufe, Log-Schnappschuss bei Modem-Ausfall (2026-10-20, auf Router geprüft)
 
 ### Settings-Modal (5 Tabs)

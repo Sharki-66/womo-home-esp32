@@ -1,5 +1,9 @@
 # Active Context — WoMoHome Display
 
+## Mobilfunk-Tarif: Ablauf- und Volumenwarnung (2026-10-21, auf Hardware getestet)
+
+Neues Modul `gui/womo_tariff.c/h` (NVS `womo_tariff`), neuer Einstellungs-Tab LTE (zwischen Grenzwerte und System), zwei Fehlerquellen `SENSOR_ERR_SRC_TARIFF`/`SENSOR_ERR_SRC_DATA` (nur WARNING, Text dynamisch über `sensor_err_src_label()`). Termin automatisch aus `valid_until_iso` (neu in `datapass.sh`, Router muss neu deployt werden) oder manuell mit Rhythmus 4 Wochen / 30 Tage / 1 Monat – gedacht auch für andere Tarife. Datumslogik mit Stub-Headern auf dem PC getestet (Monatsende, Schaltjahr, Rollen, Vorlauf aus, Volumen). Erster Flash: Boot-Schleife (NVS-Schreiben aus `router_poll_task` mit PSRAM-Stack) → behoben, NVS nur noch über `womo_tariff_flush()` im LVGL-Tick. Router: `valid_until` beginnt mit geschütztem Leerzeichen (C2 A0) → awk filtert Ziffern. Offen: Tab-Layout auf dem Display prüfen, Statuszeilen-Länge prüfen.
+
 ## Bugfix: Tag-Hintergrund bei Nacht-Schrift (2026-10-21, gebaut ungetestet)
 
 Symptom: nachts helle Schrift, aber Tag-Hintergrund; nach Neustart weg, Ursache nicht per Log belegt. Härtung: `time_update_timer_cb` (`main.c`) merkt `last_applied_mode` erst nach erfolgreichem `load_background_image()` (sonst Retry jede Sekunde) und zieht Hintergrundbild + Bildschirmfarbe einmal pro Minute nach. `womo_theme_get_twilight_color()` prüft Jahr ≥ 2024 und liefert bei ungültiger Zeit die Farbe des aktuellen Modus statt pauschal Tag (ohne Cache). Außerdem: WLAN-Treiber-Tag `wifi` auf `LOG_LEVEL_WIFI` (DELBA-Infos weg).
