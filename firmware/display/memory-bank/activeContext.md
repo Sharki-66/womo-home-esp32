@@ -1,8 +1,12 @@
 # Active Context — WoMoHome Display
 
+## Git-Stand (2026-10-21)
+
+Branch `openwiki-test` aufgelöst: Inhalt über PR #18 (Tarif, Unwetter, Fixes, Router-Modem-Schutz) und PR #19 (LTE-Tasten) in `main` gemergt, Branch lokal + remote gelöscht. Weiterarbeit direkt auf `main`; eigener Branch + PR nur bei grundlegenden Design-/Systementscheidungen.
+
 ## Mobilfunk-Tarif: Ablauf- und Volumenwarnung (2026-10-21, auf Hardware getestet)
 
-Neues Modul `gui/womo_tariff.c/h` (NVS `womo_tariff`), neuer Einstellungs-Tab LTE (zwischen Grenzwerte und System), zwei Fehlerquellen `SENSOR_ERR_SRC_TARIFF`/`SENSOR_ERR_SRC_DATA` (nur WARNING, Text dynamisch über `sensor_err_src_label()`). Termin automatisch aus `valid_until_iso` (neu in `datapass.sh`, Router muss neu deployt werden) oder manuell mit Rhythmus 4 Wochen / 30 Tage / 1 Monat – gedacht auch für andere Tarife. Datumslogik mit Stub-Headern auf dem PC getestet (Monatsende, Schaltjahr, Rollen, Vorlauf aus, Volumen). Erster Flash: Boot-Schleife (NVS-Schreiben aus `router_poll_task` mit PSRAM-Stack) → behoben, NVS nur noch über `womo_tariff_flush()` im LVGL-Tick. Router: `valid_until` beginnt mit geschütztem Leerzeichen (C2 A0) → awk filtert Ziffern. Offen: Tab-Layout auf dem Display prüfen, Statuszeilen-Länge prüfen.
+Neues Modul `gui/womo_tariff.c/h` (NVS `womo_tariff`), neuer Einstellungs-Tab LTE (zwischen Grenzwerte und System), zwei Fehlerquellen `SENSOR_ERR_SRC_TARIFF`/`SENSOR_ERR_SRC_DATA` (nur WARNING, Text dynamisch über `sensor_err_src_label()`). Termin automatisch aus `valid_until_iso` (neu in `datapass.sh`, Router muss neu deployt werden) oder manuell mit Rhythmus 4 Wochen / 30 Tage / 1 Monat – gedacht auch für andere Tarife. Datumslogik mit Stub-Headern auf dem PC getestet (Monatsende, Schaltjahr, Rollen, Vorlauf aus, Volumen). Nachtrag: −/+/✕-Tasten im LTE-Tab auf Grenzwert-Stil umgestellt (26×26, Symbol in Standardschrift; `lte_make_sym_btn`). Erster Flash: Boot-Schleife (NVS-Schreiben aus `router_poll_task` mit PSRAM-Stack) → behoben, NVS nur noch über `womo_tariff_flush()` im LVGL-Tick. Router: `valid_until` beginnt mit geschütztem Leerzeichen (C2 A0) → awk filtert Ziffern. Offen: Tab-Layout auf dem Display prüfen, Statuszeilen-Länge prüfen.
 
 ## Bugfix: Tag-Hintergrund bei Nacht-Schrift (2026-10-21, gebaut ungetestet)
 
@@ -12,7 +16,7 @@ Symptom: nachts helle Schrift, aber Tag-Hintergrund; nach Neustart weg, Ursache 
 
 Symptom: Display/WebUI ohne LTE, `gsmctl` „Couldn't retrieve data“. Befund: Modem in GPIO-Neustartschleife (`modem_trackd`), Ports als `ttyUSB37–39` statt `ttyUSB1–3` → `gsmd` scheiterte; dazu ~90 Zombie-`gsmctl` und gestapelte `poll.sh` (keine Sperre). Wahrscheinlicher Auslöser: congstar-Tarif war pausiert (keine Datenverbindung → RutOS startet Modem neu), unser Polling verhinderte die Erholung. Nicht belegbar, RAM-Log durch Reboot verloren. Reboot + Aufladung behoben.
 
-Fix in `tools/router-webui/deploy.sh` (Commit 857ae71, gepusht auf `openwiki-test`): Sperre `/tmp/womo_poll.lock`, `gsmctl` mit `timeout 8`, kein Modemzugriff ohne ubus `gsm.modem0` (`lte.modem` = up/down in `status.json`), `cgi-bin/lte` liest nur Cache, Log-Schnappschuss bei Modem-Ausfall nach `/etc/womo/log/` (max. 5). Geprüft: Sperre greift, `gsm.modem0` existiert im Normalbetrieb. Verbliebene 5 Zombie-`gsmctl` stammen von `rpcd` (RutOS), stabil.
+Fix in `tools/router-webui/deploy.sh` (Commit 857ae71, über PR #18 in `main`): Sperre `/tmp/womo_poll.lock`, `gsmctl` mit `timeout 8`, kein Modemzugriff ohne ubus `gsm.modem0` (`lte.modem` = up/down in `status.json`), `cgi-bin/lte` liest nur Cache, Log-Schnappschuss bei Modem-Ausfall nach `/etc/womo/log/` (max. 5). Geprüft: Sperre greift, `gsm.modem0` existiert im Normalbetrieb. Verbliebene 5 Zombie-`gsmctl` stammen von `rpcd` (RutOS), stabil.
 
 Offen: `simslot` leer (`AT+QUIMSLOT?` liefert keine Ziffer). Display wertet `lte.modem` noch nicht aus (Option: „Modem nicht erreichbar“ im Konnektivitäts-Modal).
 

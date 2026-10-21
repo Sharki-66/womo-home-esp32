@@ -21,13 +21,13 @@
 ```
 Display:     RGB 800×480, 2 Framebuffer in PSRAM (Direct Mode + Avoid-Tearing)
 Bounce-Buffer: 4 Zeilen × 800 px × 2 Byte × 2 = 12,8 KB DMA-SRAM
-LVGL-Task:   Core 1, Stack 16 KB in PSRAM, Priorität 4
+LVGL-Task:   Core 1, Stack 16 KB intern (MALLOC_CAP_INTERNAL, lvgl_port.c), Priorität 4
 Fonts:       lv_font_montserrat_12/14/16/20/24/28/32/48 (alle aktiviert)
 ```
 
 ## Speicherstrategie
 
-- **PSRAM**: Framebuffer, LVGL-Heap, Icon-Bilddaten (PNG-Decode-Buffer), LVGL-Task-Stack
+- **PSRAM**: Framebuffer, LVGL-Heap, Icon-Bilddaten (PNG-Decode-Buffer), Stacks von `router_poll_task` u. a. (`xTaskCreateWithCaps`, kein NVS darin)
 - **SRAM**: DMA Bounce-Buffer, kritische ISR-Pfade, kleine statische Puffer
 - Große `malloc`-Aufrufe → `heap_caps_malloc(size, MALLOC_CAP_SPIRAM)`
 
@@ -36,7 +36,7 @@ Fonts:       lv_font_montserrat_12/14/16/20/24/28/32/48 (alle aktiviert)
 | Modul | Funktion |
 |---|---|
 | `womo_wifi` | ESP32-eigene STA-Verbindung, Scan, Known-Network-Pool (NVS `wifi_cfg`) |
-| `womo_router_uci` | RUTX11 HTTP/UCI JSON-RPC: WiFi-, LTE-, AP-Status, Steuerung |
+| `womo_router_uci` | RUTX11 HTTP/UCI JSON-RPC: WiFi-, LTE-, AP-Status, Steuerung; `datapass.json` (Port 8080, Router-WebUI-Tool) |
 | `womo_buzzer_http` | HTTP-Request an Sensorboard-Buzzer-Endpoint |
 
 ## Build & Flash
@@ -63,6 +63,7 @@ Flash und Monitor: VS Code Tasks „Flash Display" / „Monitor Display".
 | Datei | Inhalt |
 |---|---|
 | `main/gui/womo_thresholds.h` | Konfigurierbare Schwellwerte (NVS-gespeichert) |
+| `main/gui/womo_tariff.h` | Tarif-Defaults (Vorlauf 3 Tage, Volumen 10 %), Rhythmus-Enum |
 | `main/gui/womo_theme.h` | `womo_status_level_t` Enum, Theme-Farben |
 | `firmware/shared/womo_config.h` | Geteilte Konstanten (RS485-Baudrate, Topics) |
 | `sdkconfig` | ESP-IDF Konfiguration (PSRAM, UART, WiFi-Stack) |

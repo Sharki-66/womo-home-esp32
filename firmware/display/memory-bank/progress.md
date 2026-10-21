@@ -34,12 +34,12 @@
 - Mobilfunk-Tarif: Warnung vor Ablauf + bei wenig Restvolumen (Fehler-Stack, Tab LTE, `womo_tariff`), automatisch über pass.telekom.de oder manueller Termin (2026-10-21, auf Hardware getestet)
 - Router-WebUI (`tools/router-webui/`): Modem-Schutz gegen gestapelte `gsmctl`-Aufrufe, Log-Schnappschuss bei Modem-Ausfall (2026-10-20, auf Router geprüft)
 
-### Settings-Modal (5 Tabs)
-- Sprache (DE/EN)
-- RTC (Uhrzeit/Datum setzen)
-- Grenzwerte (Schwellwerte für alle Sensoren, NVS-gespeichert)
-- System (Helligkeit, Buzzer-Lautstärke)
+### Settings-Modal (5 Tabs: AP | Sensoren | Grenzwerte | LTE | System)
 - AP-Konfiguration: ESP32-eigene WiFi-Credentials (NVS `womo_ap_cfg`)
+- Sensoren: Ruuvi-Tags, GasBee-Einrichten-Assistent
+- Grenzwerte (Schwellwerte für Tanks/Gas, NVS `womo_thr`)
+- LTE: Mobilfunk-Tarif (Vorlauf, Volumenschwelle, manueller Termin, Rhythmus; NVS `womo_tariff`)
+- System: Töne, Sprache (DE/EN), Zeit / RTC
 
 ### Boot-Verhalten
 - WiFi-Autoretry bevorzugt gespeicherte AP-Konfiguration aus NVS
@@ -56,6 +56,7 @@
 - **GasBee-Status im Hauptbildschirm**: Akku/Quelle bisher nur im Einstellungs-Tab „Sensoren“ sichtbar (2026-10-17), nicht am Gas-Widget
 - **Drucktrend-Anzeige**: BME280 Drucktrend visuell (aktuell nur Text)
 - **OTA-Update**: Firmware-Update über WLAN
+- **LTE-Modemstatus im Display**: `lte.modem` (up/down aus `status.json`) wird noch nicht ausgewertet, z. B. „Modem nicht erreichbar“ im Konnektivitäts-Modal
 
 ## Bekannte Probleme / Einschränkungen
 
