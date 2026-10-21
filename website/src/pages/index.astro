@@ -222,6 +222,10 @@ import Layout from '../layouts/Layout.astro';
         Alle Quellen sind öffentlich verfügbar. Mit etwas Elektronikkenntnissen
         lässt sich das System vollständig selbst aufbauen.
       </p>
+      <div class="max-w-2xl mx-auto -mt-10 mb-16 rounded-xl border border-amber-400/30 bg-amber-400/5 px-5 py-4 text-sm text-gray-400 text-center">
+        ⚠️ Nachbau und Einbau auf eigene Gefahr. Eingriffe in die Fahrzeugelektrik nur mit entsprechender Sachkunde.
+        <a href="/impressum#haftungsausschluss" class="text-amber-400 hover:underline whitespace-nowrap">→ Haftungsausschluss</a>
+      </div>
       <div class="grid md:grid-cols-2 gap-12 items-start">
         <!-- Hardware-Liste -->
         <div>
@@ -392,6 +396,11 @@ import Layout from '../layouts/Layout.astro';
             link: { href: "https://espressif.github.io/esptool-js/", label: "→ ESP Web Flasher öffnen" }
           },
           {
+            q: "Wer haftet, wenn beim Einbau etwas kaputtgeht?",
+            a: "WoMoHome ist ein privates Hobbyprojekt – Nachbau, Einbau und Nutzung erfolgen auf eigene Gefahr. Für Schäden an Fahrzeug, Batterien oder Geräten übernehme ich im gesetzlich zulässigen Rahmen keine Haftung.",
+            link: { href: "/impressum#haftungsausschluss", label: "→ Haftungsausschluss im Impressum" }
+          },
+          {
             q: "Wird das Projekt weiterentwickelt?",
             a: "Ja. Aktuell laufende Projekte: eigene Platine für die GasBee sowie Kalibrierung von Batterie- und Tankmessung über die Oberfläche statt fester Werte."
           }
@@ -465,7 +474,8 @@ import Layout from '../layouts/Layout.astro';
     <p class="mb-2">© {new Date().getFullYear()} Hajo Harms · Alle Rechte vorbehalten</p>
     <p>
       <a href="/impressum" class="hover:text-amber-400 transition">Impressum</a> ·
-      <a href="/datenschutz" class="hover:text-amber-400 transition">Datenschutz</a>
+      <a href="/datenschutz" class="hover:text-amber-400 transition">Datenschutz</a> ·
+      <a href="/impressum#haftungsausschluss" class="hover:text-amber-400 transition">Haftungsausschluss</a>
     </p>
     <p id="visits" class="mt-2 text-xs text-gray-600"></p>
     <script is:inline>
