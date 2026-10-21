@@ -28,7 +28,7 @@
 #define LOG_LEVEL_SENSORBOARD          ESP_LOG_WARN   // sensorboard/womo_sensorboard.c
 
 // ── Netzwerk ─────────────────────────────────────────────────────────────────────────
-#define LOG_LEVEL_WIFI           ESP_LOG_WARN   // network/womo_wifi.c + ESP-IDF Netz (esp_netif etc.)
+#define LOG_LEVEL_WIFI           ESP_LOG_WARN   // network/womo_wifi.c + ESP-IDF Netz (WLAN-Treiber "wifi", esp_netif etc.)
 #define LOG_LEVEL_WEATHER_HTTP   ESP_LOG_WARN   // network/womo_weather_http.c
 #define LOG_LEVEL_WEATHER_WARN   ESP_LOG_WARN   // network/womo_weather_warn.c
 #define LOG_LEVEL_GEOCODE        ESP_LOG_WARN   // network/womo_geocode.c

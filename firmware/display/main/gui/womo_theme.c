@@ -235,10 +235,12 @@ lv_color_t womo_theme_get_twilight_color(void)
 {
     struct tm timeinfo;
     
-    // Get current time
-    if (womo_time_get(&timeinfo) != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to get time for twilight color, using day color");
-        return WOMO_COLOR_DAY_NORMAL;
+    // Ohne gültige Zeit (auch 1970 nach Reset): Farbe passend zum aktuellen Mode,
+    // nicht pauschal Tag, und nichts cachen – sonst bleibt die falsche Farbe hängen.
+    if (womo_time_get(&timeinfo) != ESP_OK || timeinfo.tm_year < (2024 - 1900)) {
+        ESP_LOGW(TAG, "Time invalid for twilight color, using mode color (mode=%d)", current_mode);
+        return (current_mode == WOMO_THEME_DAY || current_mode == WOMO_THEME_SUNRISE)
+               ? WOMO_COLOR_DAY_NORMAL : WOMO_COLOR_NIGHT_NORMAL;
     }
     
     uint8_t hour = timeinfo.tm_hour;

@@ -2547,14 +2547,30 @@ static void time_update_timer_cb(lv_timer_t *timer)
         static womo_theme_mode_t last_applied_mode = (womo_theme_mode_t)-1;
         womo_theme_mode_t new_mode = womo_theme_update(womo_theme_get_status());
 
+        /* Einmal pro Minute Hintergrund nachziehen: fängt verpasste Wechsel ab
+         * (z. B. Bildschirmfarbe bei ungültiger Zeit gesetzt) und führt die
+         * Dämmerungsfarbe minütlich nach. load_background_image() ist bei
+         * unverändertem Tag/Nacht-Zustand ein No-op. */
+        static int last_bg_check_min = -1;
+
         if (new_mode != last_applied_mode) {
             bool is_day_now = theme_mode_is_daylike(new_mode);
             ESP_LOGI(TAG, "Theme mode %d → %d (%s)",
                      last_applied_mode, new_mode,
                      is_day_now ? "day" : "night");
-            last_applied_mode = new_mode;
-            load_background_image(lv_scr_act(), is_day_now);
+            /* Mode erst als angewandt merken, wenn das Hintergrundbild wirklich
+             * gesetzt wurde – sonst nächste Sekunde erneut versuchen. */
+            if (load_background_image(lv_scr_act(), is_day_now)) {
+                last_applied_mode = new_mode;
+            } else {
+                ESP_LOGW(TAG, "Theme-Wechsel unvollständig, Wiederholung in 1 s");
+            }
             apply_text_theme_colors();
+            womo_theme_apply_to_screen(NULL);
+            last_bg_check_min = timeinfo.tm_min;
+        } else if (timeinfo.tm_min != last_bg_check_min) {
+            last_bg_check_min = timeinfo.tm_min;
+            load_background_image(lv_scr_act(), theme_mode_is_daylike(new_mode));
             womo_theme_apply_to_screen(NULL);
         }
     }
@@ -4082,6 +4098,7 @@ void app_main()
     esp_log_level_set("womo_display",     LOG_LEVEL_DISPLAY_HW);
     esp_log_level_set("sensorboard",    LOG_LEVEL_SENSORBOARD);
     esp_log_level_set("womo_wifi",        LOG_LEVEL_WIFI);
+    esp_log_level_set("wifi",             LOG_LEVEL_WIFI);   // WLAN-Treiber (ADDBA/DELBA-Infos)
     esp_log_level_set("esp_netif_lwip",   LOG_LEVEL_WIFI);
     esp_log_level_set("esp_netif_handlers", LOG_LEVEL_WIFI);
     esp_log_level_set("weather_http",     LOG_LEVEL_WEATHER_HTTP);

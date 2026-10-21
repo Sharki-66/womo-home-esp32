@@ -1,5 +1,9 @@
 # Active Context — WoMoHome Display
 
+## Bugfix: Tag-Hintergrund bei Nacht-Schrift (2026-10-21, gebaut ungetestet)
+
+Symptom: nachts helle Schrift, aber Tag-Hintergrund; nach Neustart weg, Ursache nicht per Log belegt. Härtung: `time_update_timer_cb` (`main.c`) merkt `last_applied_mode` erst nach erfolgreichem `load_background_image()` (sonst Retry jede Sekunde) und zieht Hintergrundbild + Bildschirmfarbe einmal pro Minute nach. `womo_theme_get_twilight_color()` prüft Jahr ≥ 2024 und liefert bei ungültiger Zeit die Farbe des aktuellen Modus statt pauschal Tag (ohne Cache). Außerdem: WLAN-Treiber-Tag `wifi` auf `LOG_LEVEL_WIFI` (DELBA-Infos weg).
+
 ## RUTX11-Modem-Ausfall + Router-WebUI-Härtung (2026-10-20, deployt, auf Router geprüft)
 
 Symptom: Display/WebUI ohne LTE, `gsmctl` „Couldn't retrieve data“. Befund: Modem in GPIO-Neustartschleife (`modem_trackd`), Ports als `ttyUSB37–39` statt `ttyUSB1–3` → `gsmd` scheiterte; dazu ~90 Zombie-`gsmctl` und gestapelte `poll.sh` (keine Sperre). Wahrscheinlicher Auslöser: congstar-Tarif war pausiert (keine Datenverbindung → RutOS startet Modem neu), unser Polling verhinderte die Erholung. Nicht belegbar, RAM-Log durch Reboot verloren. Reboot + Aufladung behoben.
