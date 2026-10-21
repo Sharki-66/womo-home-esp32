@@ -2410,6 +2410,25 @@ static lv_obj_t *lte_make_btn(lv_obj_t *tab, int x, int y, int w, uint32_t color
     return btn;
 }
 
+/* −/+/✕-Taste im Stil der Grenzwert-Zeilen (make_thresh_row): 26×26, Symbol in Standardschrift */
+static lv_obj_t *lte_make_sym_btn(lv_obj_t *tab, int x, int y, uint32_t color,
+                                  const char *symbol, lv_event_cb_t cb, void *user_data)
+{
+    lv_obj_t *btn = lv_btn_create(tab);
+    lv_obj_set_size(btn, 26, 26);
+    lv_obj_set_pos(btn, x, y);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(color), 0);
+    lv_obj_set_style_radius(btn, 4, 0);
+    lv_obj_set_style_border_width(btn, 0, 0);
+    lv_obj_set_style_pad_all(btn, 0, 0);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, user_data);
+    lv_obj_t *lbl = lv_label_create(btn);
+    lv_label_set_text(lbl, symbol);
+    lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+    lv_obj_center(lbl);
+    return btn;
+}
+
 static lv_obj_t *lte_make_label(lv_obj_t *tab, int x, int y, int w, uint32_t color)
 {
     lv_obj_t *lbl = lv_label_create(tab);
@@ -2423,14 +2442,14 @@ static lv_obj_t *lte_make_label(lv_obj_t *tab, int x, int y, int w, uint32_t col
 /* Zeile: Name | − Wert + */
 static void lte_make_step_row(lv_obj_t *tab, int y, int row, womo_string_id_t name)
 {
-    enum { xMINUS = 210, xVAL = 244, wVAL = 110, xPLUS = 358 };
+    enum { xMINUS = 210, xVAL = 238, wVAL = 110, xPLUS = 350 };
     s_lte.name[row] = lte_make_label(tab, 0, y + 6, 200, 0x222222);
     lv_label_set_text(s_lte.name[row], womo_locale_get_string(name));
-    lte_make_btn(tab, xMINUS, y, 30, 0x757575, LV_SYMBOL_MINUS, lte_step_cb, (void *)(intptr_t)row);
+    lte_make_sym_btn(tab, xMINUS, y + 2, 0x757575, LV_SYMBOL_MINUS, lte_step_cb, (void *)(intptr_t)row);
     s_lte.val[row] = lte_make_label(tab, xVAL, y + 6, wVAL, 0x1565C0);
     lv_obj_set_style_text_align(s_lte.val[row], LV_TEXT_ALIGN_CENTER, 0);
-    lte_make_btn(tab, xPLUS, y, 30, 0x2E7D32, LV_SYMBOL_PLUS, lte_step_cb,
-                 (void *)(intptr_t)(row | LTE_STEP_PLUS));
+    lte_make_sym_btn(tab, xPLUS, y + 2, 0x2E7D32, LV_SYMBOL_PLUS, lte_step_cb,
+                     (void *)(intptr_t)(row | LTE_STEP_PLUS));
 }
 
 static void build_tab_lte(lv_obj_t *tab)
@@ -2442,7 +2461,7 @@ static void build_tab_lte(lv_obj_t *tab)
     lte_make_step_row(tab, 40,  LTE_ROW_LEAD,   STR_TARIFF_LEAD);
     lte_make_step_row(tab, 80,  LTE_ROW_VOLUME, STR_TARIFF_VOLUME);
     lte_make_step_row(tab, 120, LTE_ROW_MANUAL, STR_TARIFF_MANUAL);
-    lte_make_btn(tab, 396, 120, 30, 0x757575, LV_SYMBOL_CLOSE, lte_clear_cb, (void *)(intptr_t)0);
+    lte_make_sym_btn(tab, 396, 122, 0x757575, LV_SYMBOL_CLOSE, lte_clear_cb, (void *)(intptr_t)0);
     s_lte.today_btn = lte_make_btn(tab, 436, 120, w - 436, 0x1565C0,
                                    womo_locale_get_string(STR_TARIFF_TODAY_BTN), lte_today_cb, NULL);
 
@@ -2452,7 +2471,7 @@ static void build_tab_lte(lv_obj_t *tab)
 
     make_section_sep_at(tab, 0, 206, w);
     s_lte.auto_lbl = lte_make_label(tab, 0, 220, w - 44, 0x444444);
-    lte_make_btn(tab, w - 30, 214, 30, 0x757575, LV_SYMBOL_CLOSE, lte_clear_cb, (void *)(intptr_t)1);
+    lte_make_sym_btn(tab, w - 26, 216, 0x757575, LV_SYMBOL_CLOSE, lte_clear_cb, (void *)(intptr_t)1);
     s_lte.next_lbl = lte_make_label(tab, 0, 256, w, 0x222222);
     lv_obj_set_style_text_font(s_lte.next_lbl, &lv_font_montserrat_16_german, 0);
 
