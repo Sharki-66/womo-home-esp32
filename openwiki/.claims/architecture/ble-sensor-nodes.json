@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:3b18f56c36dfb586db17f65e3ac0718b656be9dffead80550b11ad6775bb51e4",
+  "claims": [
+    {
+      "id": "claim_68d448b3e4844dd3b8a58334ea7300bc",
+      "statement": "GasBee nRF (Seeed XIAO nRF52840 Sense) is the current, active gas-bottle scale firmware/hardware, replacing the ESP32-C3-based firmware/gasbee; the Sensorboard consumes it exclusively via passive BLE advertising scan (gasbee_ble_scanner.c -> sensors/gas_source.c) and never connects to it in normal operation.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L1-L4",
+          "version": "repo-lines-v1:sha256:503b5d578d38e51428fbae979cf1608f15c89a2beadf5b6c3a86ceed3a327e07:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGQwOGMxYTViNTgzODRmMGQ2Nzc4NjhmYmJjZWRkMWVlMTdkN2Y1NTZiNmI0OTc4Yzk3MmFmNmY4ZjIzNGM4NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDU4MmQ0ZTA5MDAxMzBhMWM3NjYxMWE4N2MzNjYwZDY5MTUwYWZjOTNkYzc1MWE5MDdlMTkwZjRmOGUxMmI5YiJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/systemPatterns.md#L112-L113",
+          "version": "repo-lines-v1:sha256:aeef176d56e334ca2341e5dfeae2472a7a0b37c44d0abe425410dc151e4e440a:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTg5MmI3Y2ViZjdjYmU1MWNkZmFlMzcwYjBhZWJkOTkxNGU4YzAzMWFiMDEwNzc5NDEwMzVhMTRhN2M2Y2IyOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTlmZjc5YzA2Y2RlYzViZmMyM2QyMmUyM2Y3NDA5MDdlOTZkZmNmOWEzMGM1YmQyNjBiNmIxNzRiM2M4MjQyMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMWZlZDZjM2RjMTY0YWEwMzg2Y2FhZGQxY2YyNWJjYzM3MDBiYjczZTVmMTczZjNkODgxNmM0MGUxOGJlZTY3NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGJhN2Y3MGQzYmU4ZGZiZTViZGVjNGZkN2M4OGMxN2YxMTE4Y2U3MTI0YzJhMWU2ZDBkYzA5OGI5OTYzYjIzNiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_c1b8e60bbdad4bf48420c7230c4de770",
+      "statement": "The ESP32-C3 GasBee (firmware/gasbee) is legacy: the Sensorboard no longer uses it, and its only remaining purpose is the custom GATT service for third-party BLE clients (e.g. phone apps), since it has no advertising-based data path and requires a connection to read values.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee/main/ble_gas.c#L250-L270",
+          "version": "repo-lines-v1:sha256:2941f25bef6c616b2b3a36161e9e3868b964051c36d9b8e531c3a8a85d9349eb:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE0NWU0NjBkNjRjYjMzNDRjNDcyZDVhZGJhOTI1NmRkZDRkNmY1YTU5OWViODc4NmI4OWI5OGEzMzQ2NGE0YTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFkZTI2OGM2M2E2MGMwZDM5YTIyODNjYzM0NGRlNTM2MGMzMDZjYmQwZGMwNzU3YmZhMTcxZGRhMzgyMzJjNWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM5ODM2ZDZjMDgxYmU5ODAzMTdhY2M0NzM1MjBjNWM4ZTdlY2Q1NmFlNWRkNTcxZjI2OGU3ODA0ZDBmZGY3Y2MifQ"
+        },
+        {
+          "resource": "repo://firmware/gasbee/main/ble_gas.c#L46-L71",
+          "version": "repo-lines-v1:sha256:1cf1618dd8f36a3165dfa44bb364c6fcf96dadd9935d2119ac48122fe1521052:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM0MGMyYjYxMjBkNGI1ZWM0YjljN2Q5N2M2Mzc5NWM0NzQwYTNlNjI4MjYxMTMyZjZhNmZjMjlkNmU4ZTRlYTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImViN2ViNjg5NWQ1OTI1ZDBlYWRiY2Y4ODU3OWZkM2NiZDgwNGM3OGQyNThiNDYzOGZjM2M1ZDYwZWNjNGU1M2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNkZjhkY2FiZTIxYjQ2MTVjM2JiNDZiMDAzNmU1YTk4YjBjZDg0NTAxNzlmZWNiMGFjYTQwMjAxNDNjNzA3NTgifQ"
+        },
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L1-L3",
+          "version": "repo-lines-v1:sha256:e74ed2674c401b2d30d0536ab77d42407094527dcbccf0a565c036467504c9f3:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGQwOGMxYTViNTgzODRmMGQ2Nzc4NjhmYmJjZWRkMWVlMTdkN2Y1NTZiNmI0OTc4Yzk3MmFmNmY4ZjIzNGM4NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzhlMmEwMzk4MTk0YWU5OWQ1Y2Q1MGNlNjQ2YjI4M2YzYjA3YzVmMGFmZmEyYzdjODIyOWViNGQ5OTNkOWUzNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDQ0OWViMTk5ZTc1YWNlNThlMWYwNTllY2I5MjAwYTA1MTZkYTBlMzdiNDBkNDYwYjU2NTJiMmUxN2U3OTlkMCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_cd3588bf205d40ad93507bf98bce81ff",
+      "statement": "GasBee nRF powers the HX711 from the XIAO's 3V3 rail (DOUT=P0.28/D2, PD_SCK=P0.29/D3), limits LiPo charge current to approximately 100mA by holding HICHG (P0.13) permanently low via a gpio-hog, and has not yet measured the actual charge current on hardware.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L24-L29",
+          "version": "repo-lines-v1:sha256:ae8fb449ff6e4994aa1f038059ab863e161b8b9cbabd64420d3b22cace9beb76:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTY1YjJiYTUwMWI1YTI1YTgzMmM5NTJhYTU3MWMzNjdjNmU4MTRlODY4NmNlNmFmMTIzYWQ3NmUyNTIyYTc5ZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2FiNGVlOTBjOTc0YTFkZDc2NDdhNjlkNTFlMTM2OTJhOGMzNTRiNzEwMTY1NDVlMTg0ZTg3MTcyMDI1NjJlOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjk1N2FkODkyOGY0MzI4ZDQzOWQ0ZWU5NWRlNmE5MmQzMTcwNzZiYmM1ZTdhM2I1N2Q4ZDYyNTEyN2M4MmRlYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzA4YjM5MWRlOGE2YzcwNmJiMjkzODcwMGJmMTNhZDVmNzlkNjJkODczMzViNjcwMWU5YTEyMGViZmU3OTk1MCJ9"
+        },
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L9-L19",
+          "version": "repo-lines-v1:sha256:74a67caacddf944fa7bd0e4acbf861969fd40f686a7e90a7175714cb6f674383:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlMjIyMzBmNGY3NzAyN2ZjMTFkMTljZWUyMmQ4YTgzNDg1N2M0NzYwZDhkNjhkOGY2YzE5ZTFkY2MwZGYzZWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEyYTljMTc5N2FjN2ViNWJiODJmMzNkYmQzMWNmOGIzOTU1MjIxNTc0M2ZhYzBmZjk2NDY0MjkwNmQ1NGJlN2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdhZDI3ZTI0YzczZDlhYjdmNTdiMWEwMDljMjk0M2I1ZGM4ZDFlMTZiMmJlODBlZmVjMzBiNTlhNmY3MGVhZDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk2MzEyMTUwMjBjODY0NTg3NjEzZmQ0NWJmZGRjNjRjZThiYmU2MzM3YjMzODc5OTM2ODg3NTQ1YzZhZmNlNTMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_10120552f5e3438eb123090b5ee06b60",
+      "statement": "GasBee nRF runs a measurement cycle every CONFIG_GASBEE_MEASURE_INTERVAL_S (default 300s, 60s in test mode): wake HX711 and discard 4 conversions, average 5 samples, power down the HX711, read battery/charge status, then send a 10-packet advertising burst spaced 1s apart followed by radio silence until the next cycle.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L53-L61",
+          "version": "repo-lines-v1:sha256:747c190d99c197276faf34c0f91106afd1b8b7fffe5021937d1e43c91774e60c:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTU3ODk3MGU1ODY5MWE3NWVhNzMyMzkzYWNjYWM5OTlhMGI5NzZiYTEwYjg0ODU3NGI2Y2U0ZGM4ODFiMjEyZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjg2NTkwODM4ZDQxODAzMjc3YTc3MjgwOWRjNmI3ZTQ3ZWJkZjVkNTQ4YWZmNzJkNjM2YTFjNTY3ZWVjNGRkNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGZlNjNlNjBmMzRjMWIyYWVhOTIzYjc0YmY2NjFjNjExZmU1ZjlmODI4ZTBmZGZkZmRhODgzMzk2OGU3OWIxMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzRhYzUyYzY0ZTNlYmYxY2E5ZDU0NzE3MWQxY2IyZTI1YjUyZWViOGY2ZmM4MzYxYjIyYzdhY2Y4NGI1OWQ5YyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_273730d19b954ca78f0fbaa7238d66e8",
+      "statement": "GasBee nRF enters USB configuration mode within 2 seconds of detecting VBUS (polled via nrf_power_usbregstatus_vbusdet_get): it advertises every second and is connectable, measures every 5s, sets advertising flag bit 3, and only accepts writes to calibration characteristics 0x2B11-0x2B13 in this mode (ATT 'Write Not Permitted' otherwise); unplugging USB disconnects any client and returns it to the 5-minute battery cadence.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L63-L73",
+          "version": "repo-lines-v1:sha256:75dc28b660e290b71ba19eeba3f73e4002c6fe58c02f623d70dece8b8bdafcd3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjczZGRmYzYwZDIxYjBkYTZiYTIzOWM2NjQ1OTQ4NzkwOWI4OTk4MmQ1ZGE2YjU4MDM1MTIwMzJiMDllMWFjYTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4MDVhYzFmZjU3MWUzODJlNmIyMWEwZTAyNTc3YmQ0NzZkOTBiNDY1NGZkNjA3ZmUzYTNjMDgxYTRiYzAyYzQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU2YWIxNTUwYmU2NmJiZDI1ZWQ3NTg3Y2RlOTJkYTE5ZjE1ZmRhNDMzOTgxY2ZlYzJmODhkMDI5NjBiOTEzYTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJjZTYzMTJhMzExOTEyYmFkYWVhYWI2Y2U1NDExNDAyZmIwZmFkMDZmOWM1MDBjZThmNjRjZjU2ZGVlNDVmYTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9c0d72d5178e4286aaffadf26840ceec",
+      "statement": "GasBee nRF's BLE advertising format v1 encodes format version, gross (untared) weight in 10g units, battery voltage in mV, a per-cycle sequence counter shared by all 10 burst packets, and a status flag byte (HX711 ok, charging, calibrated, configuration mode); tare, net gas weight, fill percentage, and battery percentage are computed by the Sensorboard, not the node.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L75-L93",
+          "version": "repo-lines-v1:sha256:8535ece88035d83cd71ce442bbd6df360b5761be90787968090d92fa033e4c40:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkMmRlZDk0ZTljMWJhMmViYTQ0YTlkMWJmNWRlMTQyMTM4YTk0MzdkY2E3OTBhNzgyODYxYzA4OTIwNTk0YjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg2MDRkNmRlMzdjZmE5NDM2OWQzZjBiMWZjMWY3YTUwNjQ2NWU4MWE3NjQxZDU5Yzg3NDk4N2ZjMzRkNzUxMTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUwOWM1MDRhZjE4MGEwMmEyYTcxM2M2YTFhOTdmYzkyYTFhOWM1YzJhNmRjYWFiNTVjYTk4YTcyZjRhNDFmOGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM3NmYwYjUyNDc0NjQ1M2I1MzdhOTYxZTlhNTAyYmIwYzQ5YWFjZGQ1NjRhMWMwOGJjMzRlNDY2NTFjMjQ3ZWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0735f611cbd94f7a8557baef7ae9acf8",
+      "statement": "GasBee nRF's GATT service (compatible superset of the ESP32-C3 GATT layout plus a 0x2B04 battery-voltage characteristic and 0x2B11-0x2B13 calibration characteristics) is not used by the Sensorboard; it remains connectable for third-party clients, and while a GATT client is connected the node suspends its advertising bursts, so the Sensorboard receives no updates until disconnect.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L95-L116",
+          "version": "repo-lines-v1:sha256:4a291f625d1875866f171b6cdd6211daa4ec8070a87f21ef050a34e133002ed6:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ2NWVkZjI2MDRjNTlmODNhZWQzOGNmZTk2Yzk2MTc5NmFhZjRjOTJlNWYyZWIxZTQxNWNiMjI2NTM0YzJlN2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM2NmYxYzQ0ZTZhNzYyNWZkNDY4MTJlNTQ3YmE2NTA3OGM1Zjg2OWJmMTYyOGVlMzdjNTRiMGEwZjZlZDQ5NDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBmOGY4ZDBmYWFjMTA2NzVmZWFkOGM3YTFhOTZiZTY2YzFkMjRjNzk0M2ZiZTMwYjYyNjk5YTE5YTE0MmM4MjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY1ZTk4Y2Y5ZWQ5MGNlZjBlMTJiOTEzOGM0MWM5MTUyNGRhODMwYzkyZjc0Zjg4NmQ1MGVmZjRjYjMyNWMwOGMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0feeea18412a457481206f3567b443be",
+      "statement": "GasBee nRF calibration (offset, scale) is stored per device in NVS and survives reset/firmware updates; without stored values it falls back to compile-time defaults in gasbee_config.h and reports flag bit 2 = 0 (not calibrated), and a write to the tare characteristic 0x2B10 latches the next measured gross weight as the new tare, unlike the ESP32-C3 GasBee where tare only zeroed the offset without a true zero-point measurement.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L207-L239",
+          "version": "repo-lines-v1:sha256:cfa060de0d4b9dde190051f346a13231575b6998b4158b692530cc9a463a2a9c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYzVkYzViODE3ODkzNGEwYWU3NTk1NDE4MTc0N2JkNDA4MzI5YjllYTU4OWEyNzE1YjYzNmUzYjVmMzgzNDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0ZDI5ZjQ2M2MwMzc3NWZjYjNiODcyYWExN2I0OTQ2ZGY1ZWM1MGQzN2IzYjhkMTg4ZjRmNjMyODhlNmM0MTciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMxNGRkODU4OGVjNzE4ZDVlYjBiZDUzYzY4NTNkYzdkZmUxZjY3MTNjZWVjN2E1ZjdmZWZlYWQ5NTEzNTY3NmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5ZTJlNGVmMTM5YmM1ZDljNDc2ZGQ4MjJhYzIzOGNiYzg3N2MwMTIzODM5ZDU3Y2JkNDQ1YTM3OTlmODlkMzQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b609bd5f1261401d920fac259f8e93bb",
+      "statement": "The legacy ESP32-C3 GasBee averages 5 HX711 samples every 5 seconds on a single channel (GPIO4 DOUT / GPIO5 SCK), advertises at a fixed 500ms interval, and exposes a GATT-only data path (0x2B01 weight, 0x2B02 fill%, 0x2B03 net gas, 0x2B10 tare) with no battery-voltage characteristic and no advertising-encoded sensor data.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee/main/ble_gas.c#L99-L131",
+          "version": "repo-lines-v1:sha256:28e051c041e22b02fceefb13a1c37b02a9dd884dc03a39a790523868b6a52844:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg2OWQyYWY2YTY0ZmI4ZGEyOGNmZTdiYzI4NzY1OTBhNWZlMzRlNzA0ODQyMDMyOTQ3NWI0YjhhMjgyODBmZjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhMWQxYTYzMzkwMjI5Yzc5ODM0N2U4M2EwNDA1NDQxYzk0MDAwMzUyODRhZDE2OGMxYmY2Y2RmMWQ3MGEzNzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYxM2Q4NGMxOTM4OGM1ZmRmNTJiYjY4YjdiY2RmY2Y2N2M5ZTdhYTk0MmNhOTg1YjZjMjAzYjk0NzNlY2U5ODkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY1OWZjNjJkMmUzMDE3NzFkOWU5NjAyMDU2N2VkNWYxNTk5NTlmMDljMjY1ZTE3NDE4YjRiODJhZDEwY2UxNGQifQ"
+        },
+        {
+          "resource": "repo://firmware/gasbee/main/gasbee_config.h#L14-L53",
+          "version": "repo-lines-v1:sha256:1323ae1246f5ac3a97f96c3a6d1aa0081651f0c4e2a6005434710a5c08cb8b3b:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5NmIxMDMwNDg0MTE0MWI4NTg4ZDgyZDYwOGFjNDdjYjRhNjYxN2U1ZmY2Y2NmMTMxNzdjZjk4OTUwZmFmZDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5ODIxZDk3ZjNlYTM1ZjY2MDk2YWNjZWIxZGMyYzJjYzU1NjIxYTBiMzllYjZkYzM4YWIzZTZhY2U3OWY1MWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY1ZGQyYjQ1OTMxN2Y4ZTc4NmJhNTBlOTQ1NmM1ZTY2ODVhNDcyNjQ4MDhmZTQxYjc0Y2VkZDU5NjFmYmQwNDAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE5YWEzNTYwNzE3YzNkYmI2YTU4ZjRlMGMyNWI2YTRhZTFmYjgyYzUyNTEwNDlmZDlhYmJkNzBmYjFhY2I2ODEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9159e7fd79664837ba35fac338774645",
+      "statement": "RuuviTag Gas is a hardware fork of RuuviTag Rev.B8 intended to eventually replace the ESP32-C3 GasBee with an nRF52832-based gas-bottle beacon, but as of the current state it is hardware-fork-in-progress (Phase 2 schematic done, PCB layout not started) and firmware work has not begun, making it a distinct future project rather than an alternative to the shipping GasBee nRF.",
+      "evidence": [
+        {
+          "resource": "repo://hardware/schematics/ruuvitag_gas/README.md#L1-L30",
+          "version": "repo-lines-v1:sha256:b5ca4b010e3758ab5e7a1586c1475ef8e9e60271dae0617412fe251d61fd8e50:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkOTAzNmQwYmI0ZWZhYTI4YWQ3NzlhZDQ1ODc1YmQ3NWUxMzUxYTZlYmNjNTE1MjkxN2Y5YTc5MWM0MmFiZWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwNjIxYjE1NTFhOTk4M2Y2MGY0MGE4OTEzZWVhYzE2NmRmOWE1NTQ2NTJlMTc2ZmU3ZjIwMGZhMjcwOTFhYmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiYzk0NjMyZWYwNWViYzIyODI0YzI1NTM2MTY5ZDdhYWMwNGQzYTg3ZTcwYWE5N2U1MzhjNzAzYzQ5NjY4YjMifQ"
+        },
+        {
+          "resource": "repo://hardware/schematics/ruuvitag_gas/README.md#L52-L58",
+          "version": "repo-lines-v1:sha256:80afc5e1c553b1f6644884b3c27987641e9faa03a802e9f426862d72e487acb8:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTYwZGExY2UzNDQzN2Y1ZGEzYTcyOWY2ZTM0NDYyYTcxNTM5MjQ1ODZkOGVkYWIwYzc1ZjYzNGYzMTBkNzI4ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmRhNGMyMGM0YmMyYTQ3NWE1OTBiZDcwMGE3Y2M4MjZjYTkyMjg2ODk5MmJiOTBlYjQyZjc0MTA2ZmE5Njk2MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiM2ZhY2IwNTcxYjc3ZjlmYjA2MGEwYTExOGFjMGE5MmQ4MGI4MWJmNTFkZjM3Y2IyZDllMmUyNDkyYjE5NWZmZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjEsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDI1NGMwNzBmODFhNzQxMjEwN2E3OTRjNDEyOWQ2MTExYzhhOThkNTMyMzkxNmJhNDU3ZDliYTY4M2NlMmVhNSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_5c52592703c446b1a0003a91b0683b38",
+      "statement": "RuuviTag Gas's planned design removes the Rev.B8 pressure/accelerometer/temperature sensors (DPS310, LIS2DH12, TMP117) and their SPI bus, keeps SHTC3 for temperature/humidity, and adds an HX711 load-cell ADC gated by a dedicated high-side P-MOSFET load switch (HX711_EN on P0.03) so the HX711 and bridge draw near-zero current when idle, a design chosen specifically because the GasBee nRF's always-on 3V3-fed HX711 approach is unacceptable against RuuviTag's CR2477 coin-cell budget.",
+      "evidence": [
+        {
+          "resource": "repo://hardware/schematics/ruuvitag_gas/PHASE2_HX711.md#L59-L84",
+          "version": "repo-lines-v1:sha256:ac59e78639bbc16a5a8214de848058addc3b46e66d0c30c1f5a16d0aaa8e6fd1:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyMTFlMDBjNjQyODg0MTFiMzFjN2MwZWNhYTBlMzEzZmMzNjYxZjk0MTk5ODhmMTc5OGVkMWRiNmI5NzlhMWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiZjk2MDM4YzY3MTliODE1NWM0MzkzMGYxYzY3YmM2YjFhYWFmYThhMTE5YmZiNmQ2MmY2MTU2Yzc1ZjRhNmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAwMWYyZWMxNzU5M2MxMDU0ZWI0NjM2N2Q4NDUzZWYyNGExNzNjZTk2YjcxMTdkOTFmOWE2OGQ0NGZlZjhiMDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAwMWYyZWMxNzU5M2MxMDU0ZWI0NjM2N2Q4NDUzZWYyNGExNzNjZTk2YjcxMTdkOTFmOWE2OGQ0NGZlZjhiMDEifQ"
+        },
+        {
+          "resource": "repo://hardware/schematics/ruuvitag_gas/README.md#L12-L24",
+          "version": "repo-lines-v1:sha256:5cebe78b1ea2bf0f8d34410ac5d5c9716be593932bd846dae7d9cce9277b316f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQzNjE0YmMzYzlhODg0Yzg1ZDE1MTMzNzExNzJhZTczNjVjMzdmNTg5YTY5Y2NlMTRmYjc5MjA0MzFmYzE2MWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEzNTk5N2EzNTBlNTQ0YTk2YTk3MWM4YTJlMTEyNTQxMWJlNjJhOTM2MTUyZmFjMGQwNmNmZDRkNDhjYjY5M2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA3NjI1NDRlYjRiOWZjMzk3N2YxZmE0OWEzNmYyMTIwMWIwYzAwMDI3YzI4NDAwNTdkYmE1ZGM1ODdkODM1NTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBmZDZlMzRmYjYxNTE0OGNmMDE2NTRlOWVmNjE0Yzg1OTliZjU5YWFiMzgyNjAxODRmMzc4NDBhMDZiNTkyZDcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4588755f0b924ca8b908cb6a726f7668",
+      "statement": "Stock RuuviTag tags broadcasting Ruuvi Data Format 5 (RAWv2) serve as an indoor/outdoor climate fallback: the Sensorboard's ruuvi_ble_scanner decodes them as a passive-scan handler on the shared ble_manager radio, routes two slots (indoor/outdoor) by a runtime-configurable MAC filter persisted in NVS, extracts temp/humidity/pressure/battery fields, and always yields precedence to a wired BME680/BME280 sensor for the same location.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/systemPatterns.md#L104-L110",
+          "version": "repo-lines-v1:sha256:dd7d9af0bb62bb287742639af448a6d1712407736c4b5db7cf60b74fc7b09328:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzU0YzA4NjA5M2U4ZWYyMjE3ZGEwZjVjYzAzZmExNDU2ZTNmMmUyOTQyYTY1N2EyOTU3ODc0Y2ZiNWJkODU0YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWE4YTg5MDRlZmFjZGIwNjAxMGY3MWIzNjgzYjE0NGNiYWUzZWY3NzZlMGIyYjc2OWE5NDY0MzZlNTQ1MWQyYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjY3MWU5OWE3NzJiYWM1NDllYjBhMDlhYjA4YTQ1ZWFhMjhhYWQ2ZWEwODk0YjBmNGQ5NWJkYjBjNjc1NTc3NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2U4OWU5Yjc2NjM4MDJmNGY0OGFjMmQxYTEwY2U4OGY2NzIzNjQ4ZTgzODNhZGY4YTc5MmVlYzgyNjg5MDZlNiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_56c334d05e2f40e3be4d421545a96a1c",
+      "statement": "All BLE sensor nodes documented here (GasBee ESP32-C3, GasBee nRF, planned RuuviTag Gas, stock Ruuvi DF5) share a single Sensorboard NimBLE radio operating in passive-scan mode; any transient connection to a node (legacy GasBee GATT client, or GasBee nRF calibration/third-party client) blocks that node's advertising bursts and the Sensorboard sees no fresh data from it until the connection ends.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L95-L99",
+          "version": "repo-lines-v1:sha256:49901f42f1104ad36ee4c7d34830ce5af0050a5fef023cbeff25d895fbb15819:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDY1ZWRmMjYwNGM1OWY4M2FlZDM4Y2ZlOTZjOTYxNzk2YWFmNGM5MmU1ZjJlYjFlNDE1Y2IyMjY1MzRjMmU3ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGY4NTE4MDhjYzM5MjAwZDI0ZTI3YzkyNTEzMjBkYmU2MTVhZTYzNzA3MTgyMTRmMmQxNTk3Y2E1NjhjMzQ4ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGY4ZjhkMGZhYWMxMDY3NWZlYWQ4YzdhMWE5NmJlNjZjMWQyNGM3OTQzZmJlMzBiNjI2OTlhMTlhMTQyYzgyNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDFmODc4M2IxMWY5OWFlZWQ2Yzk5NmEyNzVhNzllMmVjZWJlYjNmY2NjZDIwOGYzZTczOTY3N2JlNDEwZjc1OSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L164-L170",
+          "version": "repo-lines-v1:sha256:614c8f7cfd299448667db5d56fff179fa0d8f542fe4bb5e8ac8545be428ae3d9:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmFiY2NkMGUxZGVhOGIwMGFkZGE3MWYwZDkyYmJmODcxZGExNDRiMDJiY2I2Y2QzMDQ2NzczYzMxYzVmOGZmZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2Y1N2ZjZGE2OWViYTY4N2ZmNDc0NjJkOTk2ODliNTg2ZTk3N2E2N2JjMjk0OTdmOGIyNzllNzNhNjBhYjRkZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmVkYWZkNWQ4ODczMzdjNWYzMWM5YWQzNDk1MDg3NmEwYjA5Mjc1MjdkMGI3ZmYzMDdmM2FjMTA2ZTA4ZWE0YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGY5ZWM0NjdmYjIxNTIyMDQ1ZjdhMjVmODIzODU4NWU2ZGNmNDUyOWE4OThjZGEyZmRiOTM0OWEyM2E0NGY0NSJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

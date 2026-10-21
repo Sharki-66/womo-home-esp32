@@ -24,6 +24,7 @@
 #define GEOCODE_HTTP_BUFFER_SIZE 4096
 // Stack etwas größer, da cJSON + HTTP-Pipeline sonst Stack-Overflow riskieren
 #define GEOCODE_TASK_STACK       7168
+#define GEOCODE_STACK_WARN_BYTES 1024
 #define GEOCODE_TASK_PRIO        4
 
 typedef struct {
@@ -178,6 +179,14 @@ static esp_err_t geocode_perform_request(geocode_response_t *response)
     int status = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
     womo_http_mutex_release();
+
+    /* Stack-Reserve nach TLS-Spitze messen (Bytes) */
+    UBaseType_t stack_free = uxTaskGetStackHighWaterMark(NULL);
+    if (stack_free < GEOCODE_STACK_WARN_BYTES) {
+        ESP_LOGW(TAG, "geocode Stack knapp: min. frei %u Byte", (unsigned)stack_free);
+    } else {
+        ESP_LOGD(TAG, "geocode Stack min. frei %u Byte", (unsigned)stack_free);
+    }
 
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "HTTP request failed: %s", esp_err_to_name(err));

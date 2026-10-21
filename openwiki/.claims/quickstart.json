@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:510e77497ef396e4d3aacdad10d264b9e1a5b3f5c499bc4bebbba8bd6ab529c1",
+  "claims": [
+    {
+      "id": "claim_bdc3658d2b5b4de488c397a4f80ce697",
+      "statement": "WoMoHome is a private hobby project: a DIY vehicle computer for a Fiat Ducato-based motorhome, built from three physical nodes (Sensorboard, Display, Teltonika RUTX11 router) plus battery-powered BLE gas-scale peripherals, replacing the vehicle's original Schaudt-style EBL control panel.",
+      "evidence": [
+        {
+          "resource": "repo://CLAUDE.md#L32-L42",
+          "version": "repo-lines-v1:sha256:8fcfc74ce06b96b1e3d1905fb7b2d92b4d868741256a70505ac6193302de5554:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjYWZhNjYwZDA2NGE0YWVkNWFjYTlhMDRmZTkzNjliZWZjNTA0ZmFjNmRlZThjN2QyNjFlOTkyYmE0MjRhNDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFjYzc0N2Y4YWVmMjk1ZGZjNGI3MDIwMTc5MmQxNjljYzU4MWQ2YjI3NGRhZjU4NGFjM2ZmYWNlMjczNTg1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAwMWYyZWMxNzU5M2MxMDU0ZWI0NjM2N2Q4NDUzZWYyNGExNzNjZTk2YjcxMTdkOTFmOWE2OGQ0NGZlZjhiMDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNkNDU3NTU0MTM3ZTMxZjVmZGEzMzk2NDZjYTQ1OTFiODVjMjkzOGZlZGNjYjhhMGY4ZTM2YTg5MjVhZmJhYTkifQ"
+        },
+        {
+          "resource": "repo://README.md#L1-L52",
+          "version": "repo-lines-v1:sha256:02fcb4bd9d4785cc641ab60865df6f30563a3f6bebc024c56ba94a1f607be64d:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRiYTYyN2QwOWNiY2YyYmQ2MDRmNDcxZDI5ZWVkNjVhZDI1MDZiN2YyYjM1M2VhNDZkMGExNDQ1Y2FmNTNlZDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNkNzM0MGUxMDRmNzUzNGMyNDczODJiNzdjOGJlYzFlYjQxNTVjZjI5MjE2YWQwMDAyZGJmZTZhN2Y1YTFjNDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI1ZGMzMjAwZmZiOTVlMWVhMmQ3NGNlODdjODQyOGJmMjFiOGFmZWEzNjJlODc2NDQ0YzlhNWI5ZDcxMzFjMGIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b7d9afe69d4f466488efdbf27600a083",
+      "statement": "The project's firmware was largely produced via AI-assisted ('vibe coded') iteration rather than an upfront hand-designed specification, and the codebase/documentation (comments, commit messages, working-rule files, firmware READMEs) is primarily German-language while CLAUDE.md mandates German for communication, commits, and code comments.",
+      "evidence": [
+        {
+          "resource": "repo://CLAUDE.md#L75-L81",
+          "version": "repo-lines-v1:sha256:3151634ffec5f36195f7e77d92461fa49072a8ec216a945f619f50a7376da384:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzI5MjAyYzczYzRjYmY4MDk5ZTliOWNhYWJkNDJkYzgyZmQ1NjhkODA5OTkyYzNlMDIxNTk5ZmNjYmQ5Njg0MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjFhNDUyNDBiM2QwNjM2YTk5NDUxYTMwZTMzNmRkYjdlZWQ2YThjNGFlNWI1ZjRhMTE3YmI0ZGQwZThjOTkyMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTliNDhjMWM5M2FmNjMyZDBkNTRmMzc1ZjM0YmU2M2JmZTA4NGRhMjFkYmY5OGQ4OWYyYzUxNzRmNGY1NjZlYSJ9"
+        },
+        {
+          "resource": "repo://README.md#L88-L88",
+          "version": "repo-lines-v1:sha256:3483c4f9cb58568768b4b8a5a560c9d34e31113077bba4265a97e1b5c74c0b04:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzQ4M2M0ZjljYjU4NTY4NzY4YjRiOGE1YTU2MGM5ZDM0ZTMxMTEzMDc3YmJhNDI2NWE5N2UxYjVjNzRjMGIwNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzQ4M2M0ZjljYjU4NTY4NzY4YjRiOGE1YTU2MGM5ZDM0ZTMxMTEzMDc3YmJhNDI2NWE5N2UxYjVjNzRjMGIwNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmM5N2VhZTliNWU0ODBhODcxY2I3YWNhODQ0NzliNzMxYmFiMmNmZTM1NTU5YmMxNGNkZmMyZWFmNjMxNTBkMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmMwOTZkODcxZDkzMDllOGQ2YWY5NWYwNjQxYTNhNjY4NzcwOTk4NzIzYTM2N2UwYjNlMDc5ZTE1MDIzNWZkZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_fabf0ce67cd043979c88047a39dbd61b",
+      "statement": "Per the project's CLAUDE.md working rules, firmware build/flash/monitor actions are started only by the human developer via VS Code tasks; coding agents are expected to explain these steps rather than execute flashing commands themselves.",
+      "evidence": [
+        {
+          "resource": "repo://CLAUDE.md#L53-L54",
+          "version": "repo-lines-v1:sha256:1b7caaa552c8f52626ca2845359aabd51f00e39c88c3268c6aa4f05cbfe76e28:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzVlYmMwMTdlOTZkYzhmZjg0YTQ3YjI3NTc0NjQyNDNjYTljZDZjZWM4NjUyMzdhMjUyN2FmMGY2YzEyNzMwMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTUzYWEwODkzNTk4NzVjNjBlZDE5ZjMwMmY4ZWJiNDllNGM0ZWExZGEyOGI3MDNkOGFhMDBlMThiYWI1NjYyOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjllODRkYjAzMGFiZWUwYTJmOWUzZDliNjA1NDliOWM5YWRkOTBlNzc1NTVjYmY1M2VhZjcwMDgyMjlhYzQ0NyJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

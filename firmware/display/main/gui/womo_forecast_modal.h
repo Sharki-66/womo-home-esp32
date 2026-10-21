@@ -16,7 +16,7 @@
 
 #include "lvgl.h"
 #include "womo_weather_http.h"
-#include "network/womo_meteoalarm.h"
+#include "network/womo_weather_warn.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,13 +62,13 @@ void womo_forecast_modal_set_location(const char *location,
                                       uint8_t ss_h, uint8_t ss_m);
 
 /**
- * @brief Meteoalarm-Warnungen im Modal aktualisieren.
+ * @brief Unwetter-Warnungen (eigene Auswertung) im Modal aktualisieren.
  *
  * Kann vor oder nach womo_forecast_modal_show() aufgerufen werden.
- * Das Modal zeigt die Warnungen unten im Warnbereich an.
+ * Das Modal zeigt alle Warnungen inkl. Stufe 1 unten im Warnbereich an.
  * Wird mit NULL oder result->count==0 aufgerufen → "Keine Warnungen".
  */
-void womo_forecast_modal_set_warnings(const womo_meteoalarm_result_t *result);
+void womo_forecast_modal_set_warnings(const womo_weather_warn_result_t *result);
 
 #ifdef __cplusplus
 }

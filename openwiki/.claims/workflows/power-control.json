@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:8b64020126434db81e4d4e0ed9de8d0224d69eb8906c3ff324baf34f202a3742",
+  "claims": [
+    {
+      "id": "claim_5a72ebe543ac4a269bb2cebc1a26edf4",
+      "statement": "GPIO11 and GPIO12 drive a bistable (latching) 12V house-battery relay via short coil pulses and must otherwise idle LOW, since an accidental pulse would switch the house battery on/off the 12V bus.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/CLAUDE.md#L16-L18",
+          "version": "repo-lines-v1:sha256:c94cce0dd159c86e423fb64ce472f399af19a8dfc85942f21ce0c053036bb8f5:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzA0ZTdmYTIwMGFjMzM3ZjhkMWQ3OWFiODVjY2NlYTYyOTdiMGFkNzM5MjNlY2MxZTA4YWVmN2M4YjdhZDI4NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmRjOTZhYzU4Y2Y5ZTRmMDI2ZmRkYWQ3MTI4ZGUyY2YyNmNjMmRiOGU2NDFlNmE2NjVhZDc1YjUzNDAzN2ViZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjliOGU4YTNjMjQ5MDIwMjFmNGQ3YmZkMDJhOWQ0N2JkZWFiNTQ3MTllYTBmNzVlMjNkMDQ0OTQ0YmRhYWM2MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGM2ZmYwNjNkODYwYTYxYzA5NTViZWE1ODBlOGQ2ZDBmZTVjZmUxYzFkOGJjMDFiYTUxZDNlZmUyMWUzZGU1MCJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/app_main.c#L110-L126",
+          "version": "repo-lines-v1:sha256:bb9e126a4d4ff46d76f87db7d0e32049129780fdd8e418bfc196a92cf45a03e1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1M2U5YjVkMTk1OTY0MjQyMzg3Njk5NTg3MTU2MGE2YWUyNDRjM2M5MDI3ZWZiYjZhNmUxMGIyNWNmMTdlODAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmOTQyYjYyYWU2MzU1ZTIwODEyNzhjMDIzN2Q0NjMzYmJjZjI4Y2Y0NDFhMjEzY2UxNzNjOWNlOGEzMThkYzkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJiNGM1ZGJhNDRlYTU1ZDAzOTIzNjA3Y2MxNGI0NGJlYzQ1N2I4MjNiZDY2ZGZlMjJjMTA5N2JiZTBmNTM4NDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM2MjI0YmNhMDc5MWEzYzhmMDNkNmIxNjUwNjMwMjgwN2M5ZTAyMzU1ZjY3OWMxNjcwZmNmNWFhOWE5ODBiZTMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9a87ca70014a4d2f853174ad3d5cd773",
+      "statement": "The cmd dispatcher in network/espnow_modem.c handles pwr_12v_on/pwr_12v_off/radio_on/radio_off: pwr_12v_on pulses GPIO11, pwr_12v_off pulses GPIO12 and forces radio off, radio_on is rejected with ESP_ERR_INVALID_STATE unless the 12V rail is on, and radio_off always sets GPIO13 LOW.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1507-L1521",
+          "version": "repo-lines-v1:sha256:9f39262d6b17cfbd3405d71cc488fa818126fdd6f2943ee89043da2588d48251:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE3NDM4OTM0ZDdjYjM2YjA3OThkNjU0YWY2YzFkMzg3NWUwOWFiOTgyMzA4Yjk2ZWMzN2QwZjZjMTBmNTA2Y2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjMTNhMDZiM2RmMjgzMjRlNTQxY2Q2MTRmODA4MWRmNGFkNGI3YjUxNTg3NjM5NTQ2YjVlYWFmOTZjYWZjNDMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdlZThmOTk4MjdhMGNjMDA5ZTI4MTgxOGUyNzI2OWFlMDRhNDk3YjJmNTM5OTE3Mzg0OTAyMWQ2ZjE0ZDdjMTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY0OWM2YmJmOTA3M2I1YTI5MTA1ZjVlZGQ3NGEyOWE4MTBjYmNkNmIxZWJkMmE4OTRkNzdiZjM1ODY3ODc4YzYifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L600-L631",
+          "version": "repo-lines-v1:sha256:33691daa6eacd212c654f8e4ed0ee1268ecdd4b3d5259eb65c781c1dba56740e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEyNGYzY2MxYmUwYTk2ZmQxYjJhODAyNzY5MTQ2ODQ5Njc3NDczYmNlODk5OWJhMDBmY2M1MjFjOTBjZWY2ZTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA0NjY3NDFjMTlkYTk2M2ZlMWYzZDc2NzU4YmM5NjdlMmRmN2YzMjY3YWE3MGU5YTc4ZDg3NmRmNjE1YmQ1NWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIwYzhhMzY5ZGYxM2JlNWViMjJlZDYxOTU5MWJiN2E5MDgzNmM3YTFiNTM4Y2M2YzZhNzhkYzMxYzA2OTUyMzYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8dbf25837c994ba8a66b2aedd9ca6c1b",
+      "statement": "A single constant SENSOR_PWR_12V_PULSE_MS (500 ms) is used identically for the boot EIN-pulse, the runtime command pulse, and the deep-sleep AUS-pulse; 100 ms was previously tried and found insufficient to reliably switch the physical relay.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/app_main.c#L110-L126",
+          "version": "repo-lines-v1:sha256:bb9e126a4d4ff46d76f87db7d0e32049129780fdd8e418bfc196a92cf45a03e1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1M2U5YjVkMTk1OTY0MjQyMzg3Njk5NTg3MTU2MGE2YWUyNDRjM2M5MDI3ZWZiYjZhNmUxMGIyNWNmMTdlODAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmOTQyYjYyYWU2MzU1ZTIwODEyNzhjMDIzN2Q0NjMzYmJjZjI4Y2Y0NDFhMjEzY2UxNzNjOWNlOGEzMThkYzkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJiNGM1ZGJhNDRlYTU1ZDAzOTIzNjA3Y2MxNGI0NGJlYzQ1N2I4MjNiZDY2ZGZlMjJjMTA5N2JiZTBmNTM4NDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM2MjI0YmNhMDc5MWEzYzhmMDNkNmIxNjUwNjMwMjgwN2M5ZTAyMzU1ZjY3OWMxNjcwZmNmNWFhOWE5ODBiZTMifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/hal/deep_sleep.c#L173-L183",
+          "version": "repo-lines-v1:sha256:f0d590a2639deadcb0b441b76ead2f55ebf692a28ad32df37b56ca8298341652:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI0ZDNmMDU5OTcxNDVkOWIwODIyOGJmMDU4MGYxMzE4ZmU3ZTYzMDAwNDM1ZmQ4ZDgxZDMxZGNlNmJkMTRkYmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5NmEzN2NjMzBhN2QwNzc0ODIxNmUwZDc4MGVlZTU2ZDRlMzA3OWU5NGEwYjBmZWVmN2NlMTVjMzBmYzVlZmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1MjEwMjhhNjgxNmRkNjY2OWE1ZWE3YTQ0YjMxMzg4NmI3ZTRiN2I0MTExMWY0ZjdlOTAzMzg3OGNhODFkNGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5N2ViZDg4MDkxMmIyMDg2OGI1Y2M4NmE5NTE0ZjVkY2UwMzdmNjZmN2ZjMTI1ZDIwNjdlZDlmYWY4ODlmNDEifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L600-L608",
+          "version": "repo-lines-v1:sha256:f054753468e02e09508f6b76c65dd24a4c8728e7a3d71a555bf46211eb85b234:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTI0ZjNjYzFiZTBhOTZmZDFiMmE4MDI3NjkxNDY4NDk2Nzc0NzNiY2U4OTk5YmEwMGZjYzUyMWM5MGNlZjZlNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjBmOWE2ZmNmZjhjODhmNTkyOTg0NjVhMjViZDVhZWIxMWUwZjg0ODUyNDE5ZGVmYzk0M2ZjYmJlZTkxNDVjNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDQ2Njc0MWMxOWRhOTYzZmUxZjNkNzY3NThiYzk2N2UyZGY3ZjMyNjdhYTcwZTlhNzhkODc2ZGY2MTViZDU1ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2NjZTdkMjFiYzlhNzFjNmQyMWM1NGI5Y2FkMzYyOTM3ZGRiMmZmMzEyMGQ0OTIyYjRhNjI3MTFkZjNmY2NiNiJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L217-L224",
+          "version": "repo-lines-v1:sha256:93da91d334572d7f4c998992f9eeaa59510afd7e061dbb8de69f04b5c78cdcc5:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjNlNmNlNDA5ZjgyMWYxMmExYzYwNzc4MzVkMDBjZGRjOTc2MWU5ZmJjN2ZkYTg1YjQ2ZWNmZTg5YjFhZTg3MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTllZThmOTNmNzRhMjUyNzlhMDI2NWI2NDMwN2FjZGU1NGE1NTQ1OWUyYzY4N2I1OGY3NWJkZGM2YzIxODVjMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDAxY2ZhMzg1NTUxNzg4NTM4MzNhNGQwOTQ1ZGI0MDJjOWNhMjY2MDBlY2U2ZDY3OWEyMTM3MjE1YzUyM2M3YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzFjYzU4M2E2Yjc0NjBlNjZhOTk2MjkzNzNhZTE2N2YyZThkOTM2NGE5MTEwMmIzNTM5ZmViZDUwM2ZlODQwMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_c2b744e3eb774ed289adff60e2c3c119",
+      "statement": "Issuing pwr_12v_off schedules a deep-sleep entry after the command ACK is sent, and deep_sleep_enter() independently re-pulses GPIO12 before putting the board to sleep, i.e. the OFF relay pulse is effectively fired twice (once from the command handler, once from the sleep path).",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/hal/deep_sleep.c#L173-L183",
+          "version": "repo-lines-v1:sha256:f0d590a2639deadcb0b441b76ead2f55ebf692a28ad32df37b56ca8298341652:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI0ZDNmMDU5OTcxNDVkOWIwODIyOGJmMDU4MGYxMzE4ZmU3ZTYzMDAwNDM1ZmQ4ZDgxZDMxZGNlNmJkMTRkYmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5NmEzN2NjMzBhN2QwNzc0ODIxNmUwZDc4MGVlZTU2ZDRlMzA3OWU5NGEwYjBmZWVmN2NlMTVjMzBmYzVlZmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1MjEwMjhhNjgxNmRkNjY2OWE1ZWE3YTQ0YjMxMzg4NmI3ZTRiN2I0MTExMWY0ZjdlOTAzMzg3OGNhODFkNGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5N2ViZDg4MDkxMmIyMDg2OGI1Y2M4NmE5NTE0ZjVkY2UwMzdmNjZmN2ZjMTI1ZDIwNjdlZDlmYWY4ODlmNDEifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1511-L1515",
+          "version": "repo-lines-v1:sha256:eead2a31bacbabb032e8fabf71b2827e4b2e86680c7a16f9cc9151bae9aed2c8:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTJlNjczODZjOGY5MTc4NDg4NjVlMmY1NjcwNjVjNDgwYjNjMWJlYjIwMmFiYjlmZmVkMTMxZTYzMDBjNDI0OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWQ5MTRlMWIxNTQ0MjUyZDQ5MDlhZjkzNjcxZmM4MjVmZWQyMTk4ODcxODU1ZDkwYjYwMzdlMzliODI2NjIzYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiM2NkMjhkMGZlNzAwZTE3ZjRiMzFhYzAxZDgyOTNiZWVhMDYxMWM3N2FlMDJlODY1MjI5NDZkMmI3MjVjYjE1OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDU3NDZiZGZkMTJkYWM4MTRlYzUxMDQ2ODAxNDgyNTI3M2ZmMzI5YjAyYzgxYTFhYzFkYzRjNDY1N2MzOTYzZiJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L1646-L1650",
+          "version": "repo-lines-v1:sha256:b52b4755185b27b697c1265451df2a7166b2efe1e47ff69f01e0a0c2069808b0:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTlhN2IwZTg0MDYwZWQxMDlmOWE1ZTdkMTI0OWRkYTkwOGU5ODBlYWEyZDgxZDZhMTBkOTU2MTAxN2FhYWRiNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWM2NjgwZmMwZDEwNDMyY2RlMmQ0Yzc5NTVmYWU4YTY2OWJmN2ViMjE4YThiMTAxOTdkMDkzMmU2MjEwM2IxMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTJmYmVjNjljOWYxNjY1NTE3MDBkY2NmMDM4NzE0MjE4ZTEzMTRhMzg2OGQ0YmE3NjQwOWQzYjg5YzMzMGVjZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_5d17407209414834b436d683e164ec65",
+      "statement": "The ctrl topic's pwr_on field reports the GPIO14 sense-measured 12V rail state when SENSOR_PWR_12V_SENSE_ENABLE is set, but continues reporting the last commanded state for SENSOR_PWR_12V_SENSE_GRACE_MS (2500 ms) after any relay pulse before trusting the sense pin; polarity is controlled by SENSOR_PWR_12V_SENSE_ACTIVE_HIGH, which firmware comments mark as unverified by measurement.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L559-L593",
+          "version": "repo-lines-v1:sha256:940f988b439911fc7686c5d6776664db9be6f13df4d6c42fe3a687714a68958d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkZTM2N2I0ZWI1ZTVkYzIzM2MyY2NiNzhlOWRhMjM4MTdiODllZGNkNWEzYmViOGQ4OTIwMzRiYTA5ODI5ZDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZiMDM1MjMxZDVjNDExYjc3MzlkNDFjOTM4NjA4ZmQ0OGQ2MTU0Zjk0MzY4MGM3NTNlMTU4YjkyNTcyODVlYmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNkZjk0MGNjMjc1YmYwMjVmZDNkZWQxMjk5MmY1OWZlMzZiMzhkNTYyZDAwMzIzM2Y3NDA5ZmNhMDk0ZWQ2NDcifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L226-L236",
+          "version": "repo-lines-v1:sha256:5a8edc7e28bb1937dced6316b9a761fa2eac297545dfd53ea7131cf31dbe1113:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYxODkzODM3ZGE3MTNkOGU1ZTI5MjA2YTQzNzYzYWY5NzdkMzY1ODcwOTEzZTE2MDQ4MmQ3NDNhMjM1OWFlZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEyMTVjMjNkYTgxZjJmMzgzYTAxZWQ1ZmNhY2JlMjg4ZTQyYzVkMmU4NTUyMTk3OTBlNzk1MDhmYTM3M2E1ZjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU5YjRhNTk2YWQyMzczYmM0NDkyMDMwZWUxNGNjNDBiZGIyMzNmYWU1ZWM3Mzg3NGY5Zjk0YzQyY2Y3ODA5ODUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRiODA5ZmQwMTM0MGQ2Mjg5OGY3YTA2Njg2MWJiNjJlZWFiNThlMzE2OWUxMTAxZWQ1ZDQ2ZDRlZTgyNTg2MjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_df6eede5d9044a15b4f3412e98b51519",
+      "statement": "Known hardware design bug (found 2026-09): relay driver transistors Q1/Q2 on connector J7 are populated as IRLML2244 P-channel high-side FETs that assert +12V on the relay-coil pins, but the EBL expects a low-side pull-to-GND signal; as a result the relay never switches regardless of pulse length or sense-pin state. Proposed, not-yet-verified fix is to replace Q1/Q2 with IRLML6244 N-channel FETs (same SOT-23 footprint).",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/CLAUDE.md#L18-L18",
+          "version": "repo-lines-v1:sha256:fdc96ac58cf9e4f026fddad7128de2cf26cc2db8e641e6a665ad75b534037ebd:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmRjOTZhYzU4Y2Y5ZTRmMDI2ZmRkYWQ3MTI4ZGUyY2YyNmNjMmRiOGU2NDFlNmE2NjVhZDc1YjUzNDAzN2ViZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmRjOTZhYzU4Y2Y5ZTRmMDI2ZmRkYWQ3MTI4ZGUyY2YyNmNjMmRiOGU2NDFlNmE2NjVhZDc1YjUzNDAzN2ViZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjE3MzgwZjVjZjc4M2NkNWU2OTcyZjVjYzg1YTc4MjBlZjEwYmQ4MTA1MGEyMzA0MTQ0MGE0OGE4ZjA5OGYxZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGM2ZmYwNjNkODYwYTYxYzA5NTViZWE1ODBlOGQ2ZDBmZTVjZmUxYzFkOGJjMDFiYTUxZDNlZmUyMWUzZGU1MCJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L108-L111",
+          "version": "repo-lines-v1:sha256:dabff0eafa8fcf345e6a1db1fcc8b4fc6256a006e8d62f3a800c6ee037365ec3:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjE2NzljMmVmNGRiNmJkN2Q4NDRhZGJlMjNmYTJjZTM2OGY4ZWU0NjcxMTM1ZTI4YWYyNTA2M2FhNTMzMjU4NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiY2I3NDVmOTQwYmNhMzdmYjQ0YWE5MDAwN2YzODk3NzFkN2YwMTNmMzgwM2ZlMjg0ZTIwNmU1YzZlYjZlZTVlZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTQwYWMwOTVmNDM0ZmFlMjk0OTk4YjlmYTE0NjZmNjY5OGRmZmY2NWJjZmZmNzY1ODAxZjkyZDA3ODliMDE1YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTZkNDYyZDNmZWNhZDI3YTlkNDE4ZDY0ZTYxNTdlN2U0MTdmYjNkNzFmNzhiM2IwMzQyYzg4NWFmNWYwNzgyZiJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L41-L45",
+          "version": "repo-lines-v1:sha256:695ee2ab2569eb6f81cea567534ff9e8a40320b10bf690a4949d07711dd7eec6:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWQ4YThhOTE3MjQwODk1YzgyZjQzZDZmZDc0OTM5ZGI3ZmJiMDk5ZWZlNTZiN2FjYjE3MjgzMGY3ZjM5NDcyYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWY2NWI1Y2YyZGY1NGFkN2RkNWZhNWM2MTFlOWRhMGU4ZjM5YzMzMWFiNzQxNWEwY2I2MGZjNTgwZTliNmRmZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjZlZjZlZmIxNDIzNzk1MTM1MjRhNmUzZmVjNzZhNjNjMGQxODY0MTNhOTBhNjY5ZDM1ZTg5NDE5ZGU0YjNkMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzNkM2VkY2I0NjlmNTViZGNlOTFmYmI4MzIzOWZhZmQ3ZGYxZWY1MzAxZWRjODFjZDY0Y2MxZWYyZTE3NjYxMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_5479ee06255e49efa745f1b779aa37a3",
+      "statement": "A separate, more severe physical-damage incident on 2026-08-30 (reversed-polarity mating of connector J7) hard-shorted the GPIO13 (multimedia) output stage and exposed GPIO17 (light) to a swapped 12V control signal; GPIO18 (pump) was unaffected. The 12V house-battery control lines GPIO11/GPIO12 are also routed through J7 and are suspected, but not yet conclusively verified, to be damaged from the same incident, making this specific physical board unusable for normal operation pending a new PCB revision, independent of the Q1/Q2 design bug.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L237-L245",
+          "version": "repo-lines-v1:sha256:a4a9908484da4f141075a7e30513061de08e9c2089fe4671ccdf020063bb995d:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWJjYWIwMzk3ZjJiY2VlYzczMTZmYTk0YWMzMzc5ZDVmNWM0ZTRkM2JmMGM3MThmOGI4ODY4MTM2ZGQ4Mjc4YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGNiMTgzYTYyZWY3ZjVmMjMxZTRiZTUzMTFjNjMzYmQzZGUzZjgzMzhmNGNjMzkxOGQ2YzFmY2NiN2RiN2IzMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjUyYTczMmI0OGQxMjUzNjkyZjUyOTMwMjJjYzdkYmQ3NTYxYjdkZWRjNzViYjM3ODQ4ZmRjZGQyMzkyYzlhNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDg0M2IzNTdjNjRlNTdmZTY2ZjAwZjA4ZmM4YWY4MDY1MmJkNjNhZjEwOTBlZjAwY2Q5NDRiYTQwMTE0ZDQ2MyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L52-L52",
+          "version": "repo-lines-v1:sha256:7b8b06bf65f6ff73264b6efb71448b3db0f801da56c800f5c23eacbed6dc8faa:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2I4YjA2YmY2NWY2ZmY3MzI2NGI2ZWZiNzE0NDhiM2RiMGY4MDFkYTU2YzgwMGY1YzIzZWFjYmVkNmRjOGZhYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiN2I4YjA2YmY2NWY2ZmY3MzI2NGI2ZWZiNzE0NDhiM2RiMGY4MDFkYTU2YzgwMGY1YzIzZWFjYmVkNmRjOGZhYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTdiMTYzMWU5OGEyMzcyMzQyMTg5M2ZlMmI5YjE1MjgwMTllMDYyNGI0ZjdlNjM1ZDE0YzFlZTUxMjE2NjE4NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDAwZmM1NDdjNzg4ZGM1NGI0OTM2YjFkYmQ3ZWMyOTlhZjczOTk0NDEyOGNjMTM5NjE5MzA2MDcwMGYzYzg3OSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_4d379623df25443d8268a7951d049ca5",
+      "statement": "A previously fixed firmware defect (2026-08-30) caused GPIO11/GPIO12 (and GPIO17 during debugging) to remain frozen at their pre-sleep level after every touch wakeup because gpio_hold_dis() was missing for these pins in app_main.c; the fix makes gpio_hold_dis(GPIO11)/gpio_hold_dis(GPIO12) unconditional at the start of app_main(), before any later gpio_set_level() calls take effect.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/app_main.c#L138-L150",
+          "version": "repo-lines-v1:sha256:5a322a19e38fea37812e926b978f909b42491bd6c56d2b1010a6a1827075e03d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiNjBiZTYxOTkyODAwNTAwZDNkMmJkODQ4M2Y2M2IyMjQ5MDA5YmJhMGEwYmQwYjJhYjUwYmZkYTQ2ODg5ZGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI5ZGFiMGU2OTYwMTQ2MmQ5ZDYyMDg2OGI3ZDQyODk3YzdhNGFjODFhYWRlNDUyY2M2MjliYTYxYjlkZjU4ZGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA5NDRjZThlNjdhYTBiNzU0ZGY4ZmI4MTlmY2VmM2UzYmVhNDYxODUxNzIzY2U0MmIxYWIwYTdjOGY0M2U3NTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRkNzU2MTI1ZDdiZDQxODcxY2E3ODM4YzdmOTUxMTY0MDYzZjNlMWI0ODM0OTVmY2M2NmVlMjFhODYwM2UzZTYifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L51-L51",
+          "version": "repo-lines-v1:sha256:b426996ef42d60bcd9a8c1ae35ee0e7f10102d2a0cc11b60ea81a8e0963a5312:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjQyNjk5NmVmNDJkNjBiY2Q5YThjMWFlMzVlZTBlN2YxMDEwMmQyYTBjYzExYjYwZWE4MWE4ZTA5NjNhNTMxMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjQyNjk5NmVmNDJkNjBiY2Q5YThjMWFlMzVlZTBlN2YxMDEwMmQyYTBjYzExYjYwZWE4MWE4ZTA5NjNhNTMxMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGQ1M2NlYzdhZDI4NTI1YzlmY2U2MzZlMzY4N2ZlMjM1NGEwOWYyOTA1NTcyNmI1YjIyYWUyNWE1ZDQ4NDY5YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjc5NWY0Mjk4MmRhN2YwODRmNmNkOWYyMGFmMDRjYjhhMzBkNWNlNTA1M2EwOWIyOGM3MjRhZDJiN2EyYzIxMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_0ab8ea727ea1462cb44d73a48a367940",
+      "statement": "deep_sleep_enter_cold() freezes GPIO11/GPIO12 LOW without issuing any relay pulse (unlike deep_sleep_enter(), which pulses GPIO12 before sleeping), because the bistable relay's actual state is unknown/unchanged at that boot-time code path and an unintended pulse must be avoided.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/hal/deep_sleep.c#L105-L123",
+          "version": "repo-lines-v1:sha256:c66cc49a3bacd7040dc0d0d0f4d81f87cd9d68331062dc3f5bdddf72e180a973:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUxY2Q2MWMyMGE2MDk0MDc5MmE5ZmM0MDU1MzNiN2NmYzk1YWRiNDVmOWI2NDFkODI3OWUwZTI2MjhiOTExYjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMzZjdmNGU0NDg1MjU2YTU4ZjcxZDdiZGM0YzliMWQwOTA0NWRjMTc3MjA2ZTMwMmQ2NjUwNDFlOWYxMzNmNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQwYmFlMzZmZWJjMmQzMDc3MDI5ZjNmZGEwMGUxZGVmNmRiYTJkNzY3NjU0MTNlODNkNjIyYzBkMDQxYmE2M2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUwZDM1YzczMDUyYmY1MmU2ZTQyZmI0NDA2N2E5NzEzNTczZTI1NWIzOTNhY2JkNzA0MGI0ODIwN2M1YTU0M2MifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1025846e6636431c974286e16c674888",
+      "statement": "There is no automatic under-voltage protection for the 12V house-battery circuit: the sensorboard only switches the relay on explicit display command (pwr_12v_on/off), and a software-based low-voltage disconnect comparable to an EBL Batteriewächter cutoff is an open, unimplemented feature.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L39-L39",
+          "version": "repo-lines-v1:sha256:36bbfb907ca0281144dadb626acb93c95f96c61ce51115b2bbe5493f0b1bedb7:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzZiYmZiOTA3Y2EwMjgxMTQ0ZGFkYjYyNmFjYjkzYzk1Zjk2YzYxY2U1MTExNWIyYmJlNTQ5M2YwYjFiZWRiNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzZiYmZiOTA3Y2EwMjgxMTQ0ZGFkYjYyNmFjYjkzYzk1Zjk2YzYxY2U1MTExNWIyYmJlNTQ5M2YwYjFiZWRiNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGEzNmI0NDcxNTg0ZjhjZmIwZGJjMjlhMGY0NThhMTY4MmNlYzg1NzU4ZTc4ZGM1NmM1YzE1NGMwYTczOTU2NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDllZjMxNjY0MWUyYTRiMjQ2M2I1ODQzNmNkMWJlODVmNjk4ZGMyNmNkYzc0NzEyNGRlYjFlZDY5NWFkN2UwZCJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

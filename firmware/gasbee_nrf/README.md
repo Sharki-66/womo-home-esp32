@@ -10,6 +10,8 @@ Ersatz für [firmware/gasbee](../gasbee/) (ESP32-C3). Wiegt die Gasflasche mit e
 | Bootloader (geliefert) | UF2 Bootloader 0.6.1, SoftDevice S140 7.3.0 (aus `INFO_UF2.TXT`). Die Firmware liegt ab 0x27000 und nutzt den Zephyr-/SDC-Controller, nicht die SoftDevice. |
 | ADC | HX711, Kanal A, Gain 128 |
 | Versorgung HX711 | **3V3 vom XIAO**. Die GPIOs des nRF52840 sind nicht 5-V-tolerant. |
+| HX711-Modul | Grünes Standardmodul: VSUP und DVDD an VCC, die Wägezelle (E+) wird über den PNP Q2 (S9015) als Regler des HX711 versorgt, gesteuert über `BASE`. Im Power-Down des HX711 sind HX711 und Messbrücke abgeschaltet. |
+| AVDD (E+) | Spannungsteiler 20 kΩ von AVDD nach VFB und 8,2 kΩ von VFB nach GND (wie im SparkFun-Schaltplan `hardware/datasheets/SparkFun_HX711_Load_Cell_v11.pdf`). Daraus ergibt sich ein Sollwert von **AVDD = 1,25 V × (20k + 8,2k) / 8,2k ≈ 4,3 V**. Die Formel „(R1+R2)/R1" auf dem SparkFun-Plan passt nicht zur gezeichneten Schaltung. An 3,3 V schaltet Q2 deshalb voll durch, an E+ liegen dann ca. 3,1–3,3 V (nicht gemessen). Die Kalibrierung ist davon unabhängig, weil der HX711 ratiometrisch misst. |
 | Programmierung | USB, UF2-Bootloader (Adafruit), kein SWD nötig |
 | Akku | LiPo 1 Zelle 3,7 V / 1000 mAh an den Pads BAT+/BAT− (Unterseite). Geladen wird über USB-C vom Laderegler BQ25101 auf dem Board, ohne externe Beschaltung. |
 | Ladestrom | ca. **100 mA** (0,1C): P0.13 (`HICHG`) per `gpio-hog` fest Low, damit liegen R12 und R18 (je 2,7 kΩ) parallel an ISET. Hochohmig wären es ca. 50 mA. **Nicht High setzen.** Nachgemessen ist der Wert noch nicht. |

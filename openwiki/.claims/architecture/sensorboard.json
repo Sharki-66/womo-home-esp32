@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:e205ff093d2155c1ab52b3a295fedcccc50d1b8c0dda883a65ead16e15022053",
+  "claims": [
+    {
+      "id": "claim_b30c7c94c15046b59079c280b017a49e",
+      "statement": "The Sensorboard runs ESP-IDF v5.5.2 on an ESP32-S3-WROOM-1 (N16R8) module and acts as the vehicle-side data-acquisition node, reading BNO055/BME680/BME280/HX711/INA226/PCF8523 sensors, driving power-control GPIOs, scanning BLE peripherals, and serving a local web dashboard.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L1-L21",
+          "version": "repo-lines-v1:sha256:35a9da6d4679af2477ecd76445e5600e27b8c1eeca2c20b8604d6a66b5f42af8:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFmY2IxMGFhM2JkZmM2OWRkM2M5YTcyN2I5NmZmZGIwZjVjZTVjNmZjM2U0ZGVkZjNiYTMzYWM1NzM0OTc2ZDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBiMmY5YTlmMDA4OGE3ZTU4MzhlZmM5NjQxODg3ZWE3NWIyZTdkMTRlY2I0ZWMyNWI1YWRkZDA3MGZlMmMwNjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc1ZjA5ZTUwZWY0NmIzNmZkODdhZmEwOGEwZjI5YmMxM2JiZTc5OTNkYmFkNTA3OTNiZmEwZGJjZmYyOWE5YTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4a6cc185f52f43c093a10a7f305d95e5",
+      "statement": "The Display-link transport has migrated from a wired RS485 UART (TX=GPIO9, RX=GPIO10, DE=GPIO8) to an ESP-NOW wireless transport (network/espnow_modem.c, network/espnow_transport.c); GPIO8 is only held LOW as a legacy floating-pin guard, while README.md/CLAUDE.md/memory-bank still describe the topic protocol under the historical RS485 name.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/app_main.c#L23-L23",
+          "version": "repo-lines-v1:sha256:95f00ce0f1c33173213d13b4c829ae27c129e70a3b3a281d5356ca74b786e4d2:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTVmMDBjZTBmMWMzMzE3MzIxM2QxM2I0YzgyOWFlMjdjMTI5ZTcwYTNiM2EyODFkNTM1NmNhNzRiNzg2ZTRkMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTVmMDBjZTBmMWMzMzE3MzIxM2QxM2I0YzgyOWFlMjdjMTI5ZTcwYTNiM2EyODFkNTM1NmNhNzRiNzg2ZTRkMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzMxZjU2YjM1ZjcwZjUzZmZkZTVkMzg5OWE5NWNhMjcyYjgxZmVmOGI2YzdmYmM0OWY0NjUyNGI3YWIyYWVkOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOWVlNzczNmQ1Y2YxNDgzNDZhMWEyMDNmOTEwYTQyODgxYmQyNTZlODA4Y2VkOWYzNzJmNzQ4NjA5NTM3MDhmOCJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_transport.h#L17-L48",
+          "version": "repo-lines-v1:sha256:98f90cb2e343121b1afd39452b8a6df745e7c3eb734bf6c82980bcd73cb1bad6:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzYzA0Zjc2ZjU0ZTE3M2JhMjRiOGFjYmUxY2QyZWNjNTI2OWQxNzIzOTJhN2U3ZTAyZGVhM2QxNmJkYzE2ZTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE3ODVlNzEyMTM3MWJlNzFjYzUwMzAzNjU2OTJkM2Y0YTA4MGNkNGRlZDAzOGI3MTM0MjcyN2M0ZDEzOGJmMGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNjOTNiZGUwNTZhMTk5OGY5Y2Y5ODc1NGYwOTcyMDIxMTI0ZTFiYzU3ZmE5MmVlNGM3YzNjM2E2MWYwN2Y5M2EifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L83-L87",
+          "version": "repo-lines-v1:sha256:1eaca00345626348379085505fa1f07163de69dfe5058345824162593b5f3013:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDY0MzRmYzUwYTNkMTgyNDc3MzI2ZTRkMjA0M2UzZTQ1ZTZiMTE3NDA1YWYzZDU5Y2UzZTZhMzNiYWIyYzhkNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjIyMWJmNmUwNjI3ZDJlYzczYWNlYmE2NzM3NzhhMjM3YWMxOTExYjkxYzY0ZGJhODM4OWJjZDcxNTAxYjc3NiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGMyNmUzYjkzZjg1YWFkN2RlMmZjZTEwNjY5ZjcwYmI3YzM2YjY1NzRhMDc5ZGRmMDBlYWJiZDMzOTY1ZjE3ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTZjZGYzOWFiZTAxNGEwMzVmOGFhNjVhZmUzOGFkNjhmYmJmNjZmOTViNDg4M2UzYzcyZGU3YTAxZWJiYzU1MCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_b5c2f7f85f784c6fadd0e31c7ea23386",
+      "statement": "I2C devices are addressed as BNO055=0x28, BME680(indoor)=0x76, BME280/BME260(outdoor)=0x77, INA226=0x40 (A0/A1=GND), PCF8523=0x68, all on a shared 100 kHz bus at SDA=GPIO16, SCL=GPIO15.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L9-L20",
+          "version": "repo-lines-v1:sha256:73ab3a4c9ee56129fc283e49fc0a1f80059dc31dfce0713122038c9ccac7b542:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmMjQyMDI0YThlM2Y1NjljNmE0MTk1ODJmYWE4NWQzZjFjZjA2ZGQwOTRiZjQ0NWZhNjAwNDljNzMxYTM5MDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3M2IzOGJhNDUyNmVhOGFjY2Y1MjU1ODljZmQ0MTkyMmE3MDE1NDg0OTUwOTkxMmQ4NjI5MDJjY2IwNWM5NjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRjNWJmZTFiZWZmNGI3M2Q4YTI2M2Q2NjlmZWRlMGVlYzMzZjhmNmUwZmVmMmExODE1MjM0Nzk1MjM3OTJlM2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYyOTdiZTFjM2Y2ZTRkOGM4NjE3ZjM2MGE4YWRjZGZmNTcwNjk2MzUyY2YzOGJmNGY2YzVmZjE2NGQ1NzM4M2IifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L118-L137",
+          "version": "repo-lines-v1:sha256:47cb0a1310f0e5ea0ec41b36cead44938a6edbbd197b0ffd26f3312ea2e5fb17:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY0YmI4MWJiNTNjZWVjYTc1MDAyYzkzYzQ1NTQ2OTZkYjEyNWU4N2U5YzZmYjExOGUwMzBiZmJiMTdiMzBkZjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE0YTU1ZWU0NzE5MTdmMzc2NTc3ODQ4Y2NiMmFhODQwN2Q0NzEzZDJkZTlmOTQ3OGQ2NDZmZmM1NmNkOWMyMTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFjODA1Yjc4YTAyYzZiZjkxOTg1YWJiNGU3MDFmZTQ5YmJhZWI1MDk5YTljNDQzZTI1OGI4ZWQ4Y2JjZjRiNzMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNmY2RmOWJmMDE0NGJhMGIxM2FlODlmM2Q3OTlhYmIzZDJmYTNhMTVjNjQ3NjU4NzViNWI0YWFhMzdhNjU5ZDYifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L56-L62",
+          "version": "repo-lines-v1:sha256:3a0d717fae57c3bd26ef9e9aaba401d7ffabc76b61649ab873589c130479a533:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjhkOWYwZTUxNGI3ODc3OWJjODdiODUxOTU0YzVlMWU2M2FlMjYyMTdiZTFlOGIwNjMyZmIyZTczYjAxZmQ5OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMmJkN2VjMThmY2ZjOTA5YTU2NzM4ZDNlMzA3ODFkZDdhM2Y0ODI5MDkwYjhlZTJjYmNhOTA1YjdiZmJmMTZkOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGE3ZWU1NzYwYjdhOTQ0MjVjYTYyOTk0NWQ1OGY1NWUwMWQwODQzM2E3MDA4ZDFhODY4OWRiN2I2NDVlNTgzOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTlkOGJiMjc5MzBlOGI3MTZiNzZlNjNlMGU2M2ZmYTA4OTQ2MjAyMmUwOTkzZDExODA4YWFjZDBiMzJlZGFjYSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_59dfffa216d04b85bb5d260633fdaa80",
+      "statement": "Battery and tank analog inputs are fixed to GPIO4/ADC channel 3 (Battery1/vehicle), GPIO5/channel 4 (Battery2/house), GPIO1/channel 0 (Tank1 fresh, 100L), GPIO2/channel 1 (Tank2 grey, 92L); batteries use a 100kΩ/22kΩ divider (factor 122/22) while tank sensors (Votronic, 0-1V) connect directly to the ADC.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L34-L38",
+          "version": "repo-lines-v1:sha256:5d4df1c13793b54c5bd02e72aa995a10fcec06c2bdb353aba8975cefa75d63df:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGUwNjYwMWE3NTg1ZDdmOTNiOGEzZWZmOWQzYThhZjFlNTVhYjllMWY0ZTU4YjQ3MTI4MzY3YzU1YjAyMjZlZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTI5NTlkZmI4MzYxZTNlNWVhYmRmMWU2MjNjYTliNmQ1NjYwMzM4YTQxMDgzYTJhMjc4MmZhOTBhMzdmY2IzMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjhhYTk3ODg1ZjJiZTU5ODU4NjRjMmE2N2Y1NWJiZTc5NTBlYWU1MmZhZTE1OTcxNjkwOWUyMGY5MGM1M2E3NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjU3MTFkODQ0NzVlM2RhYWE5ZmYyYmRiNjIzN2RlZGIzMGQzNTkzZDkzNTYwMzU5MGM3Y2I2ZDcwNjJlODM5MCJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L142-L172",
+          "version": "repo-lines-v1:sha256:c284acbf79bfc05626206a55a6a0db914e8f7ba7412e7cfd99bade9fa1a33630:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVlZGY1ZDRmNWRkMmE3ODRjZjA1NGMzNjY3ZGRiYWQ4ZjdiMjg1OTY1ZDRmOGI1OTNmZDZiNzNlNTg5ODdlMDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlYThlODdiNGE1ODkxNTA1ODBhYzEwNjVhZTAzZTEzZjZjZDdlZmI5NWM2NDM2NDA0MWRjMDM3ODMzMzM5NGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU1MTBkZjIzZmRjMzA5ZmU3ZDcxY2RkMDI0YWEzYTZhNDljYmE1M2E0YTdhNzA4OGViN2ZkZTQ2ZmVjOWUwYmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc2Y2EwMjkyYTJjMzQ1Y2YzZjQ4ZDFjOGZlYTI4YzI0NDUwOTZkZjgzNTI3NTAxNjQ1MTFkYjlmZGUyNjQ5YTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b6e0fd10ec784998b6c4060c746ba9f5",
+      "statement": "HX711 dual-channel load cells for gas bottle weight use DOUT=GPIO47 and SCK=GPIO45, and the HX711 cable module always takes priority over BLE GasBee readings when present.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L80-L80",
+          "version": "repo-lines-v1:sha256:70b375f1422189f5e239700a165f4f1657facdb68c724f79642109ddaf759920:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzBiMzc1ZjE0MjIxODlmNWUyMzk3MDBhMTY1ZjRmMTY1N2ZhY2RiNjhjNzI0Zjc5NjQyMTA5ZGRhZjc1OTkyMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzBiMzc1ZjE0MjIxODlmNWUyMzk3MDBhMTY1ZjRmMTY1N2ZhY2RiNjhjNzI0Zjc5NjQyMTA5ZGRhZjc1OTkyMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGVlM2VjMmIzNDRmZjg3NzdhYmU5Y2RjMzE0YTgxYzhmZTlmMzZlMjFkMjYxYjFmNWI1ODEzMTc1OTdlMDQ1OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGUxN2Y3MDdkOGMyZjRjYjJlMTQzYjg1MTkwNDllNTJlOWQ4ZTZjMTY5YmQ5OWYzODJhNTE2MzA0MTIyNzAwNyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L67-L68",
+          "version": "repo-lines-v1:sha256:4f978e26977f03e2e743a278b0b2fb0b25e562db82a42c5a4f396c76d4a629bc:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjVhN2NjYjRiNTM4ZmRjNWNkYTJjNTlhNzgzM2EzMDI2MDJjZGY5ZGNlYTRkMDAwZjY2ZWExZTUxMWZkMDcyYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTE3YTQ0ODVlMGQyNjYyMTcwZDY3YTE1YTk2NjZhMTdmNThhZjhjOWUyMjZhMmJmMTdhMzdmNTcxYjAyMDY1MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzI5MWZjYWQ3MDEwZmIwMzEwMDQyY2U2ZGMxMzE1Mjk0ZjYwNDE3NjViNzgwNGJjNGQwZWUyOTJhMWNjYzRkNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmZiZTliZDY5NmI5ZDYwZGRhN2I2MDg2NGRlN2QwNGJhZDBkYjUwMDc2ODJmOTYzYWM1MzNlNWFiZDkwMzY1ZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_55992b233c3e4fefa0c7e901c2adf311",
+      "statement": "GPIO35, GPIO36, and GPIO37 must never be used as general I/O because the N16R8 module's octal PSRAM is internally wired to them.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/CLAUDE.md#L15-L15",
+          "version": "repo-lines-v1:sha256:b7c33782541f0e3356f63a86f69782cfc0242ed396d2e7ffbb23ef74707bda86:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjdjMzM3ODI1NDFmMGUzMzU2ZjYzYTg2ZjY5NzgyY2ZjMDI0MmVkMzk2ZDJlN2ZmYmIyM2VmNzQ3MDdiZGE4NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjdjMzM3ODI1NDFmMGUzMzU2ZjYzYTg2ZjY5NzgyY2ZjMDI0MmVkMzk2ZDJlN2ZmYmIyM2VmNzQ3MDdiZGE4NiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGRlZjFjNTI0NGYyYzIxNjczMDM0NjM0NmE4Yjk0OTcxOTQ2MjM0MGIwYWZiY2JiYzA2MzYyOTJmZDdiZGQzNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzk0Y2NlMGRkMTU5Yzg2ZTQyM2ZiNjRjZTQ3MmYzOTlhZjE5YThkZmM4NTk0MmYyMWNlMGMwNTMwMzZiYjhmNSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L29-L32",
+          "version": "repo-lines-v1:sha256:7c76eb3213525a59d12b763379dee620a26b991c9f66f9d3a817d52d94eb8af1:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGVkZWE2NDkwYWNiYjU5NmU2NjE0ZTc0OTU4MTIwODVmOTUzMWM1YWZhNWVjNzRiZDRjZWQ3MGQzN2ZjMTg3MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjRhNWFjYzI0MjEzZTZhYmE1MzEzY2EyODIxZTc2NWE3NjA1NDAxMzE0ZGNjYjY0ZDBlY2RmZGIzZjNhMzIxZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGQxZTk0MGQ2MDc5YzRjNTM2YjY4ZDgwZDNlMzY5OGUyMWUzMzA4ODhlOGY2MzE4NTc1ZTBmYzdiOTI4YWNiZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzZkM2Q5MDU2MTcwMjVmMzdhMjQwNjA1NjI3YWVhYzkxZTJkMTRiNmFhNTRmOTg4MzJlYTIzZTMyODYyNzBlNyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_e9bcfa7bdf864be9a86d065de360960f",
+      "statement": "The 12V house-battery bus is switched by a bistable relay via GPIO11 (ON) / GPIO12 (OFF), each pulsed for SENSOR_PWR_12V_PULSE_MS (500 ms) from a single shared constant used at boot, at runtime, and on deep-sleep entry; both pins must idle LOW since an accidental pulse toggles the bus.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/CLAUDE.md#L16-L17",
+          "version": "repo-lines-v1:sha256:2670dae14a5d9d232129a9ec570bc4ed40bb07a1dd9b5c9ed44416358cf5ef33:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzA0ZTdmYTIwMGFjMzM3ZjhkMWQ3OWFiODVjY2NlYTYyOTdiMGFkNzM5MjNlY2MxZTA4YWVmN2M4YjdhZDI4NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWRhNmY1OTQyMTFlZjk4ODljY2RjNmZjMDJkYjAyY2UwYTdjMjc3N2Q0MTFiZDg0OTExNzhkYzRlOTYwMmJjOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjliOGU4YTNjMjQ5MDIwMjFmNGQ3YmZkMDJhOWQ0N2JkZWFiNTQ3MTllYTBmNzVlMjNkMDQ0OTQ0YmRhYWM2MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWM1NGM0N2M0NDZkNzY5NDcyM2ZhODM1YTMzYTY3NzkwNGY2MGFhMGRiZWI5ZmQ0MGQ4MzViMjQxNTQxMWQ2YyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L208-L224",
+          "version": "repo-lines-v1:sha256:0dd3e5b991b934f17bbccf0d3dbbb48d42b96921c8bea2f1166fcb5546a382b8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNlMDEyMjUxOWJmYjU2MGE1OThjZmI2ODQ3YzdmOWMxMjAzYjFlYzE4OGIxMTg0MTkyNTk3ODg4YjcxMDg4OGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU5ZWU4ZjkzZjc0YTI1Mjc5YTAyNjViNjQzMDdhY2RlNTRhNTU0NTllMmM2ODdiNThmNzViZGRjNmMyMTg1YzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM3ZTlkZTIwMTk2ODlkOGM4ZWRkNTc2NTJlMDAyNGNiMTUyMmRlNGYyNzg0NjM4MDYxYjE0YTY0MDI2ZjhkNDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMxY2M1ODNhNmI3NDYwZTY2YTk5NjI5MzczYWUxNjdmMmU4ZDkzNjRhOTExMDJiMzUzOWZlYmQ1MDNmZTg0MDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2d391b3ded784afdbef31c51453c0da3",
+      "statement": "GPIO14 reports the measured 12V house-battery bus state for the ctrl.pwr_on field once SENSOR_PWR_12V_SENSE_ENABLE is set; for 2.5s (SENSOR_PWR_12V_SENSE_GRACE_MS) after each relay pulse the commanded state is reported instead of the raw sense reading, and the sense pin's active polarity is an unverified TODO in source.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L226-L236",
+          "version": "repo-lines-v1:sha256:5a8edc7e28bb1937dced6316b9a761fa2eac297545dfd53ea7131cf31dbe1113:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYxODkzODM3ZGE3MTNkOGU1ZTI5MjA2YTQzNzYzYWY5NzdkMzY1ODcwOTEzZTE2MDQ4MmQ3NDNhMjM1OWFlZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEyMTVjMjNkYTgxZjJmMzgzYTAxZWQ1ZmNhY2JlMjg4ZTQyYzVkMmU4NTUyMTk3OTBlNzk1MDhmYTM3M2E1ZjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU5YjRhNTk2YWQyMzczYmM0NDkyMDMwZWUxNGNjNDBiZGIyMzNmYWU1ZWM3Mzg3NGY5Zjk0YzQyY2Y3ODA5ODUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRiODA5ZmQwMTM0MGQ2Mjg5OGY3YTA2Njg2MWJiNjJlZWFiNThlMzE2OWUxMTAxZWQ1ZDQ2ZDRlZTgyNTg2MjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_72d9ab8bc30c44338cefb2cd5b37670c",
+      "statement": "A known hardware bug (2026-09) populates the J7 relay driver FETs Q1/Q2 for 12V ON/OFF as P-channel high-side switches (IRLML2244) where the EBL expects an N-channel low-side pull-to-GND, so the 12V relay does not switch regardless of pulse length or sense wiring; the identified fix is a same-footprint swap to IRLML6244, not yet verified on hardware.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L226-L245",
+          "version": "repo-lines-v1:sha256:d539e360276f9a0bd7e40f17df50abe7985dab0eca0cee93e370374b9c18772e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYxODkzODM3ZGE3MTNkOGU1ZTI5MjA2YTQzNzYzYWY5NzdkMzY1ODcwOTEzZTE2MDQ4MmQ3NDNhMjM1OWFlZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjYjE4M2E2MmVmN2Y1ZjIzMWU0YmU1MzExYzYzM2JkM2RlM2Y4MzM4ZjRjYzM5MThkNmMxZmNjYjdkYjdiMzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU5YjRhNTk2YWQyMzczYmM0NDkyMDMwZWUxNGNjNDBiZGIyMzNmYWU1ZWM3Mzg3NGY5Zjk0YzQyY2Y3ODA5ODUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ4NDNiMzU3YzY0ZTU3ZmU2NmYwMGYwOGZjOGFmODA2NTJiZDYzYWYxMDkwZWYwMGNkOTQ0YmE0MDExNGQ0NjMifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L45-L45",
+          "version": "repo-lines-v1:sha256:ef65b5cf2df54ad7dd5fa5c611e9da0e8f39c331ab7415a0cb60fc580e9b6dfe:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWY2NWI1Y2YyZGY1NGFkN2RkNWZhNWM2MTFlOWRhMGU4ZjM5YzMzMWFiNzQxNWEwY2I2MGZjNTgwZTliNmRmZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWY2NWI1Y2YyZGY1NGFkN2RkNWZhNWM2MTFlOWRhMGU4ZjM5YzMzMWFiNzQxNWEwY2I2MGZjNTgwZTliNmRmZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDhmYzMxNDg4ZmNlZmE0ZWI0OWJkNzNjOTBjZGU2MmQ5MmZjODk3MWExMjJlMWJlODQ2MjU0OTIyNWVmOTNiNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzNkM2VkY2I0NjlmNTViZGNlOTFmYmI4MzIzOWZhZmQ3ZGYxZWY1MzAxZWRjODFjZDY0Y2MxZWYyZTE3NjYxMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_4fe6d87574b94d2f97254b0b6f92eeb3",
+      "statement": "A reversed-polarity incident at connector J7 on an earlier board revision caused real hardware damage to GPIO13 (multimedia output driver, hard-shorted) and GPIO17 (light, via a swapped 12V control signal); GPIO18 (pump) survived the same incident, no firmware workaround exists, and the current sensor_config.h pin assignments apply only to the replacement board revision.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L237-L245",
+          "version": "repo-lines-v1:sha256:a4a9908484da4f141075a7e30513061de08e9c2089fe4671ccdf020063bb995d:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWJjYWIwMzk3ZjJiY2VlYzczMTZmYTk0YWMzMzc5ZDVmNWM0ZTRkM2JmMGM3MThmOGI4ODY4MTM2ZGQ4Mjc4YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGNiMTgzYTYyZWY3ZjVmMjMxZTRiZTUzMTFjNjMzYmQzZGUzZjgzMzhmNGNjMzkxOGQ2YzFmY2NiN2RiN2IzMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjUyYTczMmI0OGQxMjUzNjkyZjUyOTMwMjJjYzdkYmQ3NTYxYjdkZWRjNzViYjM3ODQ4ZmRjZGQyMzkyYzlhNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDg0M2IzNTdjNjRlNTdmZTY2ZjAwZjA4ZmM4YWY4MDY1MmJkNjNhZjEwOTBlZjAwY2Q5NDRiYTQwMTE0ZDQ2MyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L52-L52",
+          "version": "repo-lines-v1:sha256:7b8b06bf65f6ff73264b6efb71448b3db0f801da56c800f5c23eacbed6dc8faa:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2I4YjA2YmY2NWY2ZmY3MzI2NGI2ZWZiNzE0NDhiM2RiMGY4MDFkYTU2YzgwMGY1YzIzZWFjYmVkNmRjOGZhYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiN2I4YjA2YmY2NWY2ZmY3MzI2NGI2ZWZiNzE0NDhiM2RiMGY4MDFkYTU2YzgwMGY1YzIzZWFjYmVkNmRjOGZhYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTdiMTYzMWU5OGEyMzcyMzQyMTg5M2ZlMmI5YjE1MjgwMTllMDYyNGI0ZjdlNjM1ZDE0YzFlZTUxMjE2NjE4NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDAwZmM1NDdjNzg4ZGM1NGI0OTM2YjFkYmQ3ZWMyOTlhZjczOTk0NDEyOGNjMTM5NjE5MzA2MDcwMGYzYzg3OSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_4f4956676c2e4d59ac4e8ad39a880806",
+      "statement": "Display 5V power (GPIO7) uses a safety-critical polarity on the current board revision: HIGH drives an N-MOSFET pre-driver Q5 that in turn drives the P-MOSFET Q4, so HIGH=ON and LOW/Hi-Z=OFF, inverting the polarity of the original single-FET design where driving the pin HIGH caused a ~300mA through-current.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/CLAUDE.md#L14-L14",
+          "version": "repo-lines-v1:sha256:3dac598e98080c36f9bada69187802da67b01d0813cdf683a428ed5cfe6315af:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2RhYzU5OGU5ODA4MGMzNmY5YmFkYTY5MTg3ODAyZGE2N2IwMWQwODEzY2RmNjgzYTQyOGVkNWNmZTYzMTVhZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2RhYzU5OGU5ODA4MGMzNmY5YmFkYTY5MTg3ODAyZGE2N2IwMWQwODEzY2RmNjgzYTQyOGVkNWNmZTYzMTVhZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmYwNDRjNzBjNjQzMDA2YWVlNmUxMWMxNDY4YmVmZDFhNmRhNmMxNjAwMWUyY2M0MGMyYThhMTA2Njc4MWEyYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjE3MzgwZjVjZjc4M2NkNWU2OTcyZjVjYzg1YTc4MjBlZjEwYmQ4MTA1MGEyMzA0MTQ0MGE0OGE4ZjA5OGYxZSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L257-L263",
+          "version": "repo-lines-v1:sha256:43d3bc1a62acd4f48c7a5664dc974582a5c7bda4b69875d2603037d8b9279222:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDY0MzRmYzUwYTNkMTgyNDc3MzI2ZTRkMjA0M2UzZTQ1ZTZiMTE3NDA1YWYzZDU5Y2UzZTZhMzNiYWIyYzhkNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmZkNWQxNzBlNDE3NTE3MTFhODBmNWE3YmUxN2Y1MTlmNzNhZTNjY2I1YTNlMDVjNTgwODAzZGZhMDY5YjNmZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjJiM2FmMTYzMDY2MWQ5NmIzOWU2YmM4ZTIzMTY0ODgyZjc2ZTgyMmQ4Mzc4ZGRiNTYwMzhjYzViMGE0NmZiYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTllZThjZTlkYTIzNzQ4MzIwMGIzOTRkNWFiMGI0NGRhY2RlNGJiOTAzODc3MGJhNTNhN2E4ODk3OWJkYWRhYiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1d76f4a6ce6d4338b036da28292389ca",
+      "statement": "At boot, app_main.c releases the GPIO7 RTC hold and sets it Hi-Z, forces GPIO13 to OUTPUT LOW, initializes deep-sleep/touch-wakeup handling, then immediately pulses the 12V relay ON and enables Display 5V before starting NVS, WiFi, HTTP, sensor tasks (analog, BME680/BSEC, HX711, INA226), BLE scanners, BNO055 (after a 1s settle delay), and finally the Display-link modem.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/app_main.c#L92-L100",
+          "version": "repo-lines-v1:sha256:022c1188a39dc939c621728534584e70cebaadd20b9ccacd8fec611193ab50f1:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWFmMjJjZjA3MzI1OTJjMjQ3MTQxY2JlNjFlZmExMTAxMjYxMmY1YTMxMjJiOWFmOWJiYWY1MmY1NzI0ZDE5NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGYzZTM1OTdlZmJjZDJmZGEyNmVkMzg4OTYxMDk5MmQ2NDBkNTE3OWFiZmJiY2M3ZjM1M2JkMjliOGMyYzcxOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTllNzYzNTVjZjExOTk0ODBjM2Y5OTgzNmIxNDg2Yzg0MWQ4OTFmYWFkOTA0YzYwOGUwOTMwMjJkMzc1N2FlZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTE0NjY2YzA1NzEzMjk4ZjQ0ODQwMzliOGRmNGViZmJlMzUyMzg0M2JiZTA4MmQ2NTFhOGMyNTMwYWU0ODZkNSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/systemPatterns.md#L3-L29",
+          "version": "repo-lines-v1:sha256:18fde8c1578814e18a23349724a005746071a358ea0d8e8d04ffc2e28222d65c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkzMjdkOGU1Mzk1ZjY0YjlhMTBjZDFmNTg0MWUzYjdjZjU2ODUxODg5ZjM3Y2Q0YWIxYThhZTEzZjM2YTA2OWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3YzA2YzU2MWQ1YzMyNzM0MzY4NTI2OGE0NmIzMzkxZjM5OThlZWU4OTBkMmJlNTFmMGQyMWNjNGE1M2FlNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoyLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhkYzZmZDk4NzNkM2RhODk1NDZiODhkYjg3ZmJjMTlmZjJkMjk5Yzk2MzdjZTY0MjI4MWQ3OTZjZDhhMzkwMDAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVmNzgzMjk2MzY5ODUzMGRkZmM3MTE4ZDQ2YjZmMzI4YjBkMjE0ZTgwNjk0MWFlNmZjODJiOWExOTI0MjRlNTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_570168950e4243099c0b9a33b409cd85",
+      "statement": "BME680 IAQ/eCO2/bVOC fields are only published once BSEC has produced a value after a burn-in period (~5 min on a seasoned sensor, 20-30 min factory-new); iaq_acc climbs 0 to 3 and the BSEC state is persisted to NVS once accuracy reaches >=3 so a restart resumes near the last calibration; a configurable board self-heating offset (default 4.0C) is subtracted before BSEC processing.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L93-L98",
+          "version": "repo-lines-v1:sha256:7056c7ec53ba9316a68b80653bce8a590476b95e3d0622966a53b86e8936437e:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWVmNzY0ZmNlYjBjNjViM2NkNGEzMzIzZmUwMTgxM2YxZjYxMDRkZjJkODI3MjI1YWFlMDg3OGZiZDU0Njg0YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTg1NmRiNTllZmFlYzllODg4ZmY4ZmNkY2E2NTllYjM2ZWRhNGNhMDE4MzE2NTM1NzJlM2Y0MTI5YWQwZjBkMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTgxZmZjOTI4YmJkOWVlZjMxNGFlZmE4MjEzN2Y1ZjM0NjQwMGJmNDk1YTBmNDU4NzI2N2UwZWE1Y2Q2OWJhZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWQzM2RjMzdkZTc3YWMwNmEzZWM2OTE1YjhkYTI4ZWRjNmI0NGM1Y2Q4OWY1MTNlZDcwNTJhYTI3N2RmOWY5NiJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L277-L287",
+          "version": "repo-lines-v1:sha256:e8cc70bbebc5cb61891930595a76f96fb8a68885966d90ac1fdd8d643a12f189:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhN2ViNjk5YmQzYjllOTM1MWQyYjQzZDE2MjIyNmIxMTJlZGJlMTgyYTU3Zjg1ZGM3NDk4OTI2YzU4YmY5MTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExMGNjODRmZTY2MDJhYzE0YzcwY2U5ZDdkNjc5ZTY2MDgwMTFlM2ZjYmM3MDkxYzFmNDY2MjRlOGZlYzZhMjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM3ZTlkZTIwMTk2ODlkOGM4ZWRkNTc2NTJlMDAyNGNiMTUyMmRlNGYyNzg0NjM4MDYxYjE0YTY0MDI2ZjhkNDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImExYTQ3NmFkOGM2MzMxNDA2NWMyZmVlZDQ5YWM4ZmJhY2I0YTE5YjkxMmI5ZjFkNGJmMGRmZTI2MDkwNjM2NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f72e756806bf4808902da9cd1e215b3d",
+      "statement": "NVS persists calibration and configuration state under namespaces bno055 (IMU calibration, pressure zero), bme680 (pressure history), bsec (per-sensor IAQ state), gas_state (gas consumption rates/references/last value+source), tank_state (tank consumption rates), wifi_cfg (WiFi STA credentials), ruuvi_cfg (BLE MAC filter) and gasbee_cfg (GasBee-to-bottle MAC mapping).",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L131-L142",
+          "version": "repo-lines-v1:sha256:b18d6a10ab0c1937c8b337aac3cfdad7560f27d43d71a261cc0044ed7d7fe9eb:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2MDk1ZDc5MjAxZDQwOGFhZmMzZjZjZTQ0MDc2ZDU0YzdkYjA3YjFjYmFlMzljMzI5ZGRlZWQyN2I2Njc4ODMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI3YmQ3NGJlZjQ0MGMwMzY2ZTdiZmIyY2MxYjJjMTRhOTUwNmQ2ZGM0ZmZiMjU3NmE2ZDFhYTYyYmFlMDE3YzQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk3MzNiMDBiYmU5ZWE5ZmJjMTAzYjNkYmVlNWFhNzM5MTU0YmY2MjVlMzU4YmY3NWViNjBkMDBhMDJmMWI4NGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk2MmNhYTEyMWRlNGYzY2RhZDRlZDY0YjY1YmIwMzNmNTU5NWRkOGViMDRhMTljZWU1MGY5M2JjMWQwYzUxZWYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_100871df4f124055ac54f4fd5edc9d2d",
+      "statement": "The Sensorboard serves an HTTP dashboard on port 80 at Womo-Sensor.local with endpoints '/' (redirect), '/dashboard.html', '/horizon.html', '/api/status', '/api/data', '/api/imu' (all GET), and '/api/cmd' (POST, same cmd syntax as the Display link), with static assets loaded from the SPIFFS partition 'storage' mounted at /spiffs.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L115-L129",
+          "version": "repo-lines-v1:sha256:47541b2c70e651ad34c6cac00e304fc775e6e4c204ca705f0fdb3b75c872b363:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjMTYxMjQ4Zjg3MDEzMzQxNDY3MTZmNWM1N2IyMDFjNjI4NDVhMThmMGM1MWIxYmE1YTU3OGNiOGQ4NDk4NTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmZmQwYjgyYTg2YzFjYWEyMTdiMGUyMjAxYjkzMzY2MGQxNTkzODgxZWU4ODA4Mjk0ZjU0ODQ3ODRlODllNjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU2ZDQ2MmQzZmVjYWQyN2E5ZDQxOGQ2NGU2MTU3ZTdlNDE3ZmIzZDcxZjc4YjNiMDM0MmM4ODVhZjVmMDc4MmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI2NDgwNDY4N2RhMjNkYzU3ODIxNWU4NjI0YmVlYzI2YzhlZjU5MTMxNGQ5NjM2YjBiZDhlMjY4NzdlOWViODIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ded48a5f39db4c4585693e9b71b8bfcd",
+      "statement": "The gas-weight source is arbitrated in sensors/gas_source.c: if the HX711 cable module is present it supplies both channels A and B with priority; otherwise BLE GasBee readings per bottle are used; otherwise the value is reported as not-connected (nc).",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L80-L80",
+          "version": "repo-lines-v1:sha256:70b375f1422189f5e239700a165f4f1657facdb68c724f79642109ddaf759920:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzBiMzc1ZjE0MjIxODlmNWUyMzk3MDBhMTY1ZjRmMTY1N2ZhY2RiNjhjNzI0Zjc5NjQyMTA5ZGRhZjc1OTkyMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzBiMzc1ZjE0MjIxODlmNWUyMzk3MDBhMTY1ZjRmMTY1N2ZhY2RiNjhjNzI0Zjc5NjQyMTA5ZGRhZjc1OTkyMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGVlM2VjMmIzNDRmZjg3NzdhYmU5Y2RjMzE0YTgxYzhmZTlmMzZlMjFkMjYxYjFmNWI1ODEzMTc1OTdlMDQ1OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGUxN2Y3MDdkOGMyZjRjYjJlMTQzYjg1MTkwNDllNTJlOWQ4ZTZjMTY5YmQ5OWYzODJhNTE2MzA0MTIyNzAwNyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/systemPatterns.md#L121-L121",
+          "version": "repo-lines-v1:sha256:79d8e467ffa86d6f810a36af17dc426619085a08ae03e0bf3eca305df491bd52:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzlkOGU0NjdmZmE4NmQ2ZjgxMGEzNmFmMTdkYzQyNjYxOTA4NWEwOGFlMDNlMGJmM2VjYTMwNWRmNDkxYmQ1MiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzlkOGU0NjdmZmE4NmQ2ZjgxMGEzNmFmMTdkYzQyNjYxOTA4NWEwOGFlMDNlMGJmM2VjYTMwNWRmNDkxYmQ1MiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjIyZDFmZGFmNWIzNDdhNGM4YzczNDBlNmNiOTJjNjBlMTU1ZGM0ZTQxODVkYTVhNjVmMjQ3MTY0NzVhNzMwZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDY1NTBlNmU1NmM1NWM4ZTg0M2ZhNmU2YmU0YmFlNWZmNzBhZWRkMDQ4YTAyOTIxYWM1ZDQyNDIwZTViNzEyMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_66e27d768a5f442e838d60a5c936d7f3",
+      "statement": "As of the progress.md snapshot, the 12V house-battery undervoltage protection feature is unimplemented and the GPIO17/light + GPIO18/pump outputs are hardware-wired and safely initialized to OUTPUT LOW but have no firmware command handling, topic integration, or Display UI yet.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L36-L36",
+          "version": "repo-lines-v1:sha256:9d14087e5796f8f73ee9312cec64b726d2e9939a176581511ef96edc9c1fcdde:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWQxNDA4N2U1Nzk2ZjhmNzNlZTkzMTJjZWM2NGI3MjZkMmU5OTM5YTE3NjU4MTUxMWVmOTZlZGM5YzFmY2RkZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWQxNDA4N2U1Nzk2ZjhmNzNlZTkzMTJjZWM2NGI3MjZkMmU5OTM5YTE3NjU4MTUxMWVmOTZlZGM5YzFmY2RkZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzkxZmFiODY3M2I1M2JiYzZhODNiYTRhNDE0NDJiNjcyNzAzYjMyNDhhNGQ1OGRkZGU1ZTBiYmI5MmM2YzYyYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjI5NGYzODU0ZjYyYzdmNTkwOGI2Mjk5YTFlYWE3MDU5ODFmZTFiMDhkNGE3ZTA0NGE1Mzg5NDA3OWYzYjRmMSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L39-L39",
+          "version": "repo-lines-v1:sha256:36bbfb907ca0281144dadb626acb93c95f96c61ce51115b2bbe5493f0b1bedb7:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzZiYmZiOTA3Y2EwMjgxMTQ0ZGFkYjYyNmFjYjkzYzk1Zjk2YzYxY2U1MTExNWIyYmJlNTQ5M2YwYjFiZWRiNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzZiYmZiOTA3Y2EwMjgxMTQ0ZGFkYjYyNmFjYjkzYzk1Zjk2YzYxY2U1MTExNWIyYmJlNTQ5M2YwYjFiZWRiNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGEzNmI0NDcxNTg0ZjhjZmIwZGJjMjlhMGY0NThhMTY4MmNlYzg1NzU4ZTc4ZGM1NmM1YzE1NGMwYTczOTU2NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDllZjMxNjY0MWUyYTRiMjQ2M2I1ODQzNmNkMWJlODVmNjk4ZGMyNmNkYzc0NzEyNGRlYjFlZDY5NWFkN2UwZCJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

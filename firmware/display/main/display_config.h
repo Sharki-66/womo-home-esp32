@@ -17,7 +17,7 @@
  */
 
 // ── Kern ────────────────────────────────────────────────────────────────────────────
-#define LOG_LEVEL_MAIN           ESP_LOG_INFO   // main.c (womo_main)
+#define LOG_LEVEL_MAIN           ESP_LOG_WARN   // main.c (womo_main)
 #define LOG_LEVEL_UI             ESP_LOG_WARN   // ui/main.c (WaveShare_7_UI)
 
 // ── Hardware / Treiber ───────────────────────────────────────────────────────────────
@@ -28,9 +28,9 @@
 #define LOG_LEVEL_SENSORBOARD          ESP_LOG_WARN   // sensorboard/womo_sensorboard.c
 
 // ── Netzwerk ─────────────────────────────────────────────────────────────────────────
-#define LOG_LEVEL_WIFI           ESP_LOG_WARN   // network/womo_wifi.c + ESP-IDF Netz (esp_netif etc.)
+#define LOG_LEVEL_WIFI           ESP_LOG_WARN   // network/womo_wifi.c + ESP-IDF Netz (WLAN-Treiber "wifi", esp_netif etc.)
 #define LOG_LEVEL_WEATHER_HTTP   ESP_LOG_WARN   // network/womo_weather_http.c
-#define LOG_LEVEL_METEOALARM     ESP_LOG_WARN   // network/womo_meteoalarm.c
+#define LOG_LEVEL_WEATHER_WARN   ESP_LOG_WARN   // network/womo_weather_warn.c
 #define LOG_LEVEL_GEOCODE        ESP_LOG_WARN   // network/womo_geocode.c
 #define LOG_LEVEL_ROUTER_UCI     ESP_LOG_WARN   // network/womo_router_uci.c
 #define LOG_LEVEL_HTTP_MUTEX     ESP_LOG_WARN   // network/womo_http_mutex.c
@@ -44,7 +44,7 @@
 #define LOG_LEVEL_SUN_CALC       ESP_LOG_WARN   // time/womo_sun_calc.c
 
 // ── GUI / Theme ──────────────────────────────────────────────────────────────────────
-#define LOG_LEVEL_THEME          ESP_LOG_INFO   // gui/womo_theme.c
+#define LOG_LEVEL_THEME          ESP_LOG_WARN   // gui/womo_theme.c
 #define LOG_LEVEL_WEATHER_WIDGET ESP_LOG_WARN   // gui/womo_weather.c
 #define LOG_LEVEL_BATTERY        ESP_LOG_WARN   // gui/womo_battery.c
 #define LOG_LEVEL_TANK           ESP_LOG_WARN   // gui/womo_tank.c
@@ -88,15 +88,6 @@
 #define ICON_CHARGER             "\xEE\x8A\xAE"   // U+E2AE charger             → Landstrom-Lader
 
 // ====================================================================================
-// Screenshot
-// Long-Press anywhere auf dem Display speichert PNG auf SD-Card
-// Pfad:    /sdcard/screenshots/screen_HHMMSS.png
-// Stack:   PSRAM (MALLOC_CAP_SPIRAM), 32 KiB  – lodepng + FAT-I/O
-// Methode: Liest Frame-Buffer direkt (RGB565, existiert bereits im PSRAM).
-//          Kein lv_snapshot, kein zusätzlicher Pixel-Puffer → ~400 KB Peak (PNG-Output).
-// 1 = aktiv, 0 = vollständig auskompiliert
-// ====================================================================================
-// ====================================================================================
 // Hintergrundbild
 // Das Ducato-Bild ist als kompaktes A8-Asset in die Firmware eingebettet.
 // Tag/Nacht wird nur per Recolor umgeschaltet, kein SD-Zugriff und kein
@@ -105,9 +96,18 @@
 // ====================================================================================
 #define WOMO_BG_IMAGE_DAY_COLOR    0xFFFFFF
 #define WOMO_BG_IMAGE_NIGHT_COLOR  0x9CA3AF
-#define WOMO_LOGO_IMAGE      "/sdcard/images/Malibu-Logo.png"
+#define WOMO_LOGO_IMAGE            "/sdcard/images/Malibu-Logo.png"
 
-#define WOMO_ENABLE_SCREENSHOT         0
-#define WOMO_SCREENSHOT_DIR            "/sdcard/screenshots"
-#define WOMO_SCREENSHOT_STACK_SIZE     (32768)
-#define WOMO_SCREENSHOT_TASK_PRIORITY  (3)
+// ====================================================================================
+// Screenshot
+// Long-Press anywhere auf dem Display speichert PNG auf SD-Card
+// Pfad:    /sdcard/screenshots/screen_HHMMSS.png
+// Stack:   PSRAM (MALLOC_CAP_SPIRAM), 32 KiB  – lodepng + FAT-I/O
+// Methode: Liest Frame-Buffer direkt (RGB565, existiert bereits im PSRAM).
+//          Kein lv_snapshot, kein zusätzlicher Pixel-Puffer → ~400 KB Peak (PNG-Output).
+// 1 = aktiv, 0 = vollständig auskompiliert
+// ====================================================================================
+#define WOMO_ENABLE_SCREENSHOT        0
+#define WOMO_SCREENSHOT_DIR           "/sdcard/screenshots"
+#define WOMO_SCREENSHOT_STACK_SIZE    (32768)
+#define WOMO_SCREENSHOT_TASK_PRIORITY (3)

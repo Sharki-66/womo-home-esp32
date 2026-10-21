@@ -55,3 +55,6 @@ tests/08_lvgl_Porting/main/gas_bottle*
 
 # Alte Workspace-Datei
 womo-modem.code-workspace
+
+# Fremd-Repo (Ruuvi-Hardware, eigener Git-Klon)
+hardware/schematics/ruuvitag_hw/

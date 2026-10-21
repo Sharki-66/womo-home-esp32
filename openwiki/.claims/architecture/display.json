@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:7b3a4be2b3e1aa2ac6ed3c379ac70c19857d2a3cbcf1cb46ac863631d66b273c",
+  "claims": [
+    {
+      "id": "claim_bc39fa8c51b841c59e84214e45775d3c",
+      "statement": "The Display node (Waveshare ESP32-S3-Touch-LCD-7) is the system's only network-facing node: it polls the Teltonika RUTX11 router directly for WLAN/LTE/GPS status and control, and is the only node making outbound HTTPS calls to external APIs (Open-Meteo, Nominatim, Meteoalarm); the Sensorboard never talks to the router or the internet directly.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L37-L37",
+          "version": "repo-lines-v1:sha256:80a3cb31226cf1c9723a65ad7267f67cf8548397fcbdd2c6fa22faadaf3540a9:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODBhM2NiMzEyMjZjZjFjOTcyM2E2NWFkNzI2N2Y2N2NmODU0ODM5N2ZjYmRkMmM2ZmEyMmZhYWRhZjM1NDBhOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODBhM2NiMzEyMjZjZjFjOTcyM2E2NWFkNzI2N2Y2N2NmODU0ODM5N2ZjYmRkMmM2ZmEyMmZhYWRhZjM1NDBhOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjdjNTAxOTAzMjU3NWUyZGQ5OTgxYTdlZTkzZTgyYzE5NTM4YjE1ZDU4MzRhOGEzN2UzZGRmNzgxOGE5NTcxMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjRjZjk1OGUxZmY1YjNmZmY5MTcwY2NlZWEwMzJiZDBjYzQ1ZDBlZDJiYjU2NTNmYTk3NGRiMjZhNGZkYzhjMSJ9"
+        },
+        {
+          "resource": "repo://firmware/display/README.md#L32-L40",
+          "version": "repo-lines-v1:sha256:261f32bdfb75ff23800163bb0733c9ab77fa78b0e698e644a251dddb93c68965:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzk4ZjAzMWEyOTVhMTI2ZTk5NmEwYzY4MWRkNWU2YWVlMDQwNzVjZTY4ODJlM2YzZTUyZjU5MTljYmU2MGE2ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWQ0ZjU0MjJjYTBiMzMyMDYyZWM1ZDliMDcxMTRhYTg3MTE2OWUyMjIzMDkzNGI3YTA4OGFkOTEwOTQwY2FiZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWUwM2RlNTZkNjMzZDQzNTY0OWI4YzNmZWRjOWZhZjRiOGY4N2M5OWRjYzcxMzkwYWEwZGE3MjA1YmNkMDZkMSJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_router_uci.h#L1-L25",
+          "version": "repo-lines-v1:sha256:edf68c99eb05567a596d2206f9082aaf014bb0d217eaab309c22e287568e5993:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlhMzQ5YmJkMWEyMTEwNGYwNTFlMzRiMmM4YTllNzBjYzdmYmI1MGJjMTlhNjc3ODFmMmExNDBjMzg2ZDk0MzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRiNWVmZTBjMWVjZmU3NGVlMzJlNzRjYTI5MThlNTIzNTdjZGYxMTg5ZjkzY2NjYTQxZDMzM2MzZTFkOTVkZjAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_19f7a0fed7604876bc9b64e578dfef06",
+      "statement": "The display hardware uses a GT911 capacitive touch controller over I2C and a CH422G I2C GPIO expander that switches the backlight and asserts the SD card chip-select (EXIO4); it is not used for touch-controller reset in this driver.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/hardware/waveshare_rgb_lcd_port.c#L19-L151",
+          "version": "repo-lines-v1:sha256:b124f4e4fd8644c1bc67bc5ad60f94087e3d6c51904605cb973b33b9948ddd1a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmZGQzNDNjMTRkZmE2OWZjNTlmY2ExYWE1OGVmY2YzYzcxYzE1OGM4Mjk1YTNhMzk4MjU3NTQ4MWJiYzUwMDAzIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI5YTA1NTNiYjlmMGNjOWIwZTk5MzEzMzg2MTM3YTZlZjFlMTEwMDA5NDg0ZmQyZjkyNTFjZmMyZTQ4YmY4YjQzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI3MjVkZjI5YTE4MzVmYTdkZWIyYmQyZmI1ZTkxN2EwYjFiZWEyMmQwZDk1ZDM3ODY0YTJjMDVmNTgzYWNkYzc0IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJhZGUyNjhjNjNhNjBjMGQzOWEyMjgzY2MzNDRkZTUzNjBjMzA2Y2JkMGRjMDc1N2JmYTE3MWRkYTM4MjMyYzViIn0"
+        },
+        {
+          "resource": "repo://firmware/display/main/hardware/waveshare_rgb_lcd_port.c#L340-L380",
+          "version": "repo-lines-v1:sha256:88707e3f79a542bc9f59b75b5115cd37c4bd32a7791c0776bf767f730aa10c5a:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjljNTMxZDEyMTRkMmRiZTQyZTg0OTRhNzZkYjIyZTZiMWE4MjRlNGE4OGQyMWI0NTFmNTU5YmRmMTUyNmEwZWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkxZDBiNGNkYzZhNzcxZmNlZWExYWZlNzA3YjUwMmZkZTQ0MzA4NWExNzRjNzJlMGM3MWM0NTQxMGJiOTJmNmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFkZTI2OGM2M2E2MGMwZDM5YTIyODNjYzM0NGRlNTM2MGMzMDZjYmQwZGMwNzU3YmZhMTcxZGRhMzgyMzJjNWIifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/hardware/waveshare_rgb_lcd_port.h#L22-L73",
+          "version": "repo-lines-v1:sha256:247d1f9d3dfa7fc6015884ea6f879c23efee3450aa64d6b7b010029390886f93:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEwZWFjNDQ2NTRjYjM0ZDFkZThlNTIwMzFiMzM5OGM3OGVmZWEyMmVlNmY1MWEzMDZiMWYyODhlMjdlMGFlYWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4MzQxMzUyNGU1ZjExYjM1Nzk2ZDZhNTg0MGFlNjRmMjNhOTBhNDA4OTVhNmU2ODlkZWZkZTcxMTAzMDJjYTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU4YTg4MzlmOWVhNTBmYWI0ZDZiOTY4MTEwZTU2ZjAyYjJjNWU1YTBkYmZiYWNiMjAyNmE1Y2JkMGVkNGM3NTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEwZDBkOWYxYzgzZDkyNmQ0N2U5YjNkYmVhZTI1ZjBlZmUyZjIxMTAyYTFlYjg2MjJlNDc5MmU2OTlhZmIxMjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d0da9c2ffe1843eeb5ae1be510e398a3",
+      "statement": "LVGL is pinned to the ^9.2.0 managed component (with esp_lvgl_port ^2) per main/idf_component.yml and firmware/display/CLAUDE.md; the LVGL v9.5 version string at the top of firmware/display/README.md does not match the pinned dependency.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L65-L67",
+          "version": "repo-lines-v1:sha256:403180d79cf17f387b6faa7a4baf618964567a8c30f488ffc531d29c7fc27d03:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDY3Zjg5YzFiNzllMTA0ZDNlMDZkZDY4ZGE3NTQwY2ExZjU5MGJmZGJmZDI5ODM0MjJjOTQwZDdiNmQxMGVmZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDM1NGRmMTlhZGRhY2U0MmY5MDBjMmIyZTI5ZjdlZTkyNmRkZWUxZjliYjE2YmMxYzJiZWU3ZDc0NzQ1NTdkYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTI0N2FkNDViZjU0OTgxOTJmOWY1Mzk3YjgxODBjZDZhZjJmMzY0Y2JmZWUyZjMzZWNmNjMxMzAwOTRhY2I3YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDM3NGQxNWNkY2FiMTEzOWMyNmM2OGY2YTgxN2ZlMDI5N2I3YzVmMmZiNmU3ZTE4MjA1MDVjZjNjNDYwODAwZiJ9"
+        },
+        {
+          "resource": "repo://firmware/display/README.md#L3-L3",
+          "version": "repo-lines-v1:sha256:c7ca6bbb9ef39b480c1d9556e405705deb985408081487c3d7f724a2acfb562b:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzdjYTZiYmI5ZWYzOWI0ODBjMWQ5NTU2ZTQwNTcwNWRlYjk4NTQwODA4MTQ4N2MzZDdmNzI0YTJhY2ZiNTYyYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzdjYTZiYmI5ZWYzOWI0ODBjMWQ5NTU2ZTQwNTcwNWRlYjk4NTQwODA4MTQ4N2MzZDdmNzI0YTJhY2ZiNTYyYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjIsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTRkMTA0ZWU1MjgzNzkyNTYxODRhYmZhODY0OThmODNjZjIyNDRlOTQ2ZTFlM2JiYjJjODQ2MjM5Nzg3NDhmMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDQ0OWViMTk5ZTc1YWNlNThlMWYwNTllY2I5MjAwYTA1MTZkYTBlMzdiNDBkNDYwYjU2NTJiMmUxN2U3OTlkMCJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/idf_component.yml",
+          "version": "repo-file-v1:sha256:24c16dd01d92acf39be2b381f7f7ff536a04b9b92c1cf4ee0f824f5d47729dca"
+        }
+      ]
+    },
+    {
+      "id": "claim_968c027b9e7041bfa7d686871c736990",
+      "statement": "main/ui/ is a standalone EEZ-Studio-generated reference UI with its own CMakeLists.txt and is not part of the production build: main/CMakeLists.txt only registers sources under main/gui, main/network, main/sensorboard, main/espnow, main/hardware, main/storage, and main/time, not main/ui.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/CMakeLists.txt",
+          "version": "repo-file-v1:sha256:1592659c40f6aac1a14cab9ff819ee7ba77dd53a8e2ef000a50df6fd538d88a3"
+        },
+        {
+          "resource": "repo://firmware/display/main/ui/CMakeLists.txt",
+          "version": "repo-file-v1:sha256:53f41b1e3c68f8bf2a6410125caee10565d5cb8f8c9c17681e8aaf38aa1ba8b0"
+        },
+        {
+          "resource": "repo://firmware/display/main/ui/main.c#L1-L20",
+          "version": "repo-lines-v1:sha256:aa013e8ff957c3a3a677b63a5dec476ab93fc52f17b381cd0bd4f0bd72f90f8c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY0OGUwMzU3ZjRmY2IwZDgyMWI3NjIxNjAzOTVmYTQ1N2VlYmM4YTVjNWNhNDRlODA4ZmQxMjMzZmZlNmU0MmQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fa55a140ebc64697b1b48cc4dab95c8f",
+      "statement": "The main screen's LVGL widgets (battery, tank, gas bottle) and modals (forecast, connectivity, router LEDs, settings) are implemented as separate modules under main/gui/, each exposing create/show/refresh functions used by main.c's central orchestration and 500 ms ui_update_timer_cb.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/README.md#L41-L63",
+          "version": "repo-lines-v1:sha256:ee417220dc44cdb0e8eaf0ac10fad735cd253f5fbfd75bf8df34a08e015e0d69:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBlMGYwYjdiOTZiMjNiNDhiNjdjOTUxOTFjMDFmOTI0YWUwZTI5NTJlNmM2NTFmZDM1Mjc5ZTQ1MzBiYTBkN2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhYmNjZDBlMWRlYThiMDBhZGRhNzFmMGQ5MmJiZjg3MWRhMTQ0YjAyYmNiNmNkMzA0Njc3M2MzMWM1ZjhmZmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY0Y2JiNWUwNDgwZDViOGYxZjYzYzllMDEyZmU2Y2FiMGFiNTNlMTVjNjhkYjBlYzZmMTAyYzQ1YjU5ZTc2OGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIxNTRiOWMxZDFjNGIzNDE0YTFlYzVkNjFkYzA3MzVmYzNkMzg1NjE5YTMyMTBhMDAyNmQ5ODc2OWYwZDhmNzcifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/gui/womo_battery.h#L42-L42",
+          "version": "repo-lines-v1:sha256:157579bcaec1464bb90a601fbba49333506c2d5db812ba537e75177cc0300fae:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTU3NTc5YmNhZWMxNDY0YmI5MGE2MDFmYmJhNDkzMzM1MDZjMmQ1ZGI4MTJiYTUzN2U3NTE3N2NjMDMwMGZhZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTU3NTc5YmNhZWMxNDY0YmI5MGE2MDFmYmJhNDkzMzM1MDZjMmQ1ZGI4MTJiYTUzN2U3NTE3N2NjMDMwMGZhZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzYzMzc4YjI4MmM4NDhkYWM5MmY0NzgwY2I3Y2Q1YzgyMWFmOTQ2Zjk5YzFjOGFmODI0NGJkNDk1YTcxY2Q4OSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzhmZDA1M2VlMTE4OWY3Zjk5NmI5NTFlYzY1ZWE3NGQxMDhjY2NjODNlZGE4MWY0YmQ4NTNhYzNiZTY3YmZkNCJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/gui/womo_gas_bottle.h#L49-L49",
+          "version": "repo-lines-v1:sha256:8ecc4d63b3a6011772cd4326de7ffc78553e9e36abfb0c6d26a8de141142f871:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGVjYzRkNjNiM2E2MDExNzcyY2Q0MzI2ZGU3ZmZjNzg1NTNlOWUzNmFiZmIwYzZkMjZhOGRlMTQxMTQyZjg3MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGVjYzRkNjNiM2E2MDExNzcyY2Q0MzI2ZGU3ZmZjNzg1NTNlOWUzNmFiZmIwYzZkMjZhOGRlMTQxMTQyZjg3MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWY2MDY3YmNmYzgxNWE0M2QxM2E1ZTViNDUwMWY4MDdlNmIwOWU0ZTMyMTRmMjE5NDhlNmE0ZjI0ZWY1YTUyYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOWZhNGZmMGU5YTMyYjAyOGJjMzIyMmJiZDVlYzZjMDMwMTZhOWZmMzhkY2ZlNjdlZDk4MjMyZWI0MDJhOGViYyJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/gui/womo_tank.h#L38-L38",
+          "version": "repo-lines-v1:sha256:3aea8141f7590c183f85cf507b33592b71731bec2347cef452f124115470e11f:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2FlYTgxNDFmNzU5MGMxODNmODVjZjUwN2IzMzU5MmI3MTczMWJlYzIzNDdjZWY0NTJmMTI0MTE1NDcwZTExZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2FlYTgxNDFmNzU5MGMxODNmODVjZjUwN2IzMzU5MmI3MTczMWJlYzIzNDdjZWY0NTJmMTI0MTE1NDcwZTExZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTdhMzRhMWY3OTU2ZGM3MzJkN2M3MmM5N2QwMzM4Y2U5NmE0NmZhY2VmZDk4NjM1ZTA4NDM4NTk0NjIxNDBmZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTIxZmU4Yzg3MjVlY2JmZTJkZTM4NmRlMDAzZjNkOGJjZmFlMWYyYzkzNDAzNDliODNlOTM0NGIxMjM5NGEwMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_2494cad990434d74a31a7254fcd5ff74",
+      "statement": "The connectivity modal's AP column is informational-only and can never be disabled in software (the AP is the sole ESP32-to-router communication channel), while WLAN scans deliberately target only the router's AP/Master radio interfaces, never the active STA uplink radio, to avoid freezing that connection.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L44-L55",
+          "version": "repo-lines-v1:sha256:5bd564ab8723519b250e3abf3af9a0d90a24a84c582c37c0226a37d44f7ff538:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUxNjE2ODVkOGQ1NTY1ZTNkNjc0YTBjMDZiYWFmNGI4NGRiMDNlMGZlNDYxZmM2ZTA4ZjNiNTZjMzk3ZGY5YjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlNWExMmQ4YmVkZDE4MTdiZDYyNTU2ZjNmZDExZWI4YWNlMzZkMzIzZmE0NWJmY2M4MTQ0MWY1YmY0ODAwODciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ0OWIxYjA5OWQyOWYzNTQ0ODlmMmY2YTFlNmUyN2M5Zjc2N2NmNzViYTdiMTUyNWM3MTBjMjU4ZjRhMTgyYzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc1OGQzNWJiZjk3NzE1NDZjYmE2N2I1ZmY5NzAwNTViZDllMjgwZDgwMmVlNTZmZjcxMDQ0ZWIzNmJhMmE2NWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_441b9e92cf3d424a9e6eebb01a840c56",
+      "statement": "The Display firmware implements a 6-source sensor error stack (gas, fresh water, grey water, battery, sensor-link timeout, indoor air quality) with per-tick re-evaluation, sticky latching that clears only after acknowledgement plus a stable recovery streak, and touch-based acknowledgement that silences the buzzer alarm.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/README.md#L27-L27",
+          "version": "repo-lines-v1:sha256:082742e33b706c35a9f497b9666d4a36db84e2451cb4ae1e55af20e4691be6be:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDgyNzQyZTMzYjcwNmMzNWE5ZjQ5N2I5NjY2ZDRhMzZkYjg0ZTI0NTFjYjRhZTFlNTVhZjIwZTQ2OTFiZTZiZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDgyNzQyZTMzYjcwNmMzNWE5ZjQ5N2I5NjY2ZDRhMzZkYjg0ZTI0NTFjYjRhZTFlNTVhZjIwZTQ2OTFiZTZiZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTRkMWZjYzU0MzYzNDNiYmI3NWI4MmI1MWYwYmUyYWY4NWM2MjdhYzI4MjNlMTYzMmJlZmJhZTI1ZTE0YmU3ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTYxNGY5ZjJjOGM3Zjk2MDQwOWRkNTI2YzAwNGYyMzQyZTI2MDM5N2ZkZjI1NTAwYWFjY2QyNGRlMzA2MzYzZiJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/main.c#L243-L279",
+          "version": "repo-lines-v1:sha256:b0a964bda71c094cf55cb891a464c2abf65f12323c8ebfe007968f39b9cf2e10:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRmNTI2ODI0ODI1Y2NiNjEyMjI4ZDQ4OTg3NGYxZjA3N2NkNTIyYzU5MGEyZjVlNjg2NjQyZWFjMzZhZjI1ZmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4Y2ZkYzUzZmQ3YWMzNTk5MDM5NmJjYzg5MDI3Yzc0ZTM4OTNkYTliNmI5YzllY2ViYTcyM2NlNTY0Y2JhMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEyNzZiNmYzOGVkZDNlZjU4YmYyNTQ4ZmRkMWM5ZjI0ZWZhY2FjYjFjY2ExYTAyNGU1NzhjNzNlMmMzZWUzODciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRhNDcwODhhNGFmMzBlMmQ5Nzg5MTcwM2ExODU4YzdhOTNjYjU1M2MzMDUwODZkNjM2NTBiZmUxZmNjZjhkMjcifQ"
+        },
+        {
+          "resource": "repo://firmware/display/memory-bank/systemPatterns.md#L43-L56",
+          "version": "repo-lines-v1:sha256:792b2d98452e8afc4620996f700e7df6382ea0e49d6e3e7d8e3eec57e53d0287:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFmMjVjNzAzMDEyN2I4ZjRiNDBlMDY5ZWY0YjUzMjI5ZTk0YzY5ODFiNzAzYmQ5ZWFkY2JlYzAyYmNjZTVjYjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNiMDI0Nzg4MDM2NWJlNjVmYWMyOTE0OGQ3ZmQwNzBlZDA2ZDEwMGViNmEwMWU0YmNmNDdjM2Y2MDM4YzM2M2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFiYzAwY2RhYzQzNmNmZGIzMzAwZjA5MTZmYjUyNzgxODMwYzQ0YTgxNDA4MmQ1YjI2ZDYwY2FiMzdiMmZhMjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY1ZWVjZjI0NWQ0ZDQzYzJmZGMzYzY1MDNjZjY0MDYzMTdiZjU1ZTdkYzM1ZDkzNzg5NjQzZTJjYzY5OTBkM2EifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_91e3858495c54bf6844fce073f777b1b",
+      "statement": "Weather coverage (current conditions, 5-day forecast modal, automatic severe-weather popup via Meteoalarm) is already implemented in the Display firmware and its own README/CLAUDE.md, even though the top-level project README still lists weather forecast as a '(todo)' planned feature.",
+      "evidence": [
+        {
+          "resource": "repo://README.md#L27-L31",
+          "version": "repo-lines-v1:sha256:3604267dc1bb79ecd7f1b5559327ad57109fe1c7e512549cdc4934c8768eb7ea:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmQ2NWZiOGQ3YWViNzJhZGQ5MjQyMGUzZWIxMWJlNzQ1MWRiYjFmMGE4ODk5MDZlZGRmNWY2NGViOTc5ZWY1YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTU1YjE4MjI0NTllMGRhZmNmNWRkMDE3MzY0ZGQ3NTVkMTY4ZmY3NjA1M2U5YjQwYTdjOGZhYmIwM2M0MTM3OCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWNjOTRkNGI5YTE4MjUyN2IxZWZmNjRkYzQ3NTdmM2ZjNGViMGNjNTc2YjQyMGMwYzVhMjE2MGM1NDI4OTQ5YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmRiNzQzNDk0MjdhMDU0OTcyNjkwMzM4N2Y1NzA1MTAxZWU4YmZmNjMyOTBkMjg2MzNmMDdiOTc5YTA0ZDM2ZiJ9"
+        },
+        {
+          "resource": "repo://firmware/display/README.md#L18-L31",
+          "version": "repo-lines-v1:sha256:f73de7de2256e16a232a93ed481f7c07dec81305a16d4c19f3026abfa95636ae:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjExMjI1ZTNlODRkM2QxNWRmMjZkOTVjMDcwN2M1MDI2MzUwOGQ5Zjg5MGI2YWJjNWNhZWRlMTFkOTA1NThhYjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZiMmY4NzUxZmJmM2U2YjcxZmEwZTQwZGUwNzI1MWRmZGMyODM2ZjU1YjUxZDQ4YWIwNTE4YWUxMWQ2ZDBmNjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ4MTA4MmU1YTVjYzQyMzY0MTA4MTc3MTg3ZTdiZWRlYjk1MjlmNTExZGJiMDYyODk1ZWNkYjJmNmVhYmU1NDcifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/gui/womo_forecast_modal.c#L1-L10",
+          "version": "repo-lines-v1:sha256:477f1ad253e7ee347a62c8f2a99149534ec8babeaa22cab7ff80e7c08463934b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUwMGJkNWVlN2U4NGUyM2VjZDk5ZGNkYWQxMGE1YWEzNzM4NzUzNTBmYTU3MDNjZmFiZGIwYjE0YzhlODhmOTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVhYmJkZTI4YTViZDM3OTZjOGFjMzQyMDZlZmE3NWJmYmE4NGU4MTEzZDdkYjZmYjg0Nzc2MDE2MGM5MzQ2Y2UifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_weather_http.h#L30-L60",
+          "version": "repo-lines-v1:sha256:d26b7499b9232ed3b530627d589519119cedd82ea79da4a59fdc382e2d68f3aa:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkNjg4YTdhMWQwNjFiOTFhYzQ1OGE1ZmM2ZjAxMmNiZjUzZTMwODdlOGIyODQwYmZkMzc1Nzk4YjFmNWFlZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhMjUwOWE0OGEzNzU3OWY3OGI5Mzc5MGU3YzYwYTk4ZTY4MTczZDc5NWNmY2ZmZWZhMWFmZjM1MmZiNDBlNjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMwM2MzYjRjODY3YTM2YjkzMzk3Y2IzZGRhM2UzZGJjZmQ0MTQ3YTNmNjY3OGI2ZmIzOGQ4NDAzZmNjNGFmZTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAzNDYwZDAyZTcwMzQ1MmVjYzM5YjEwZjM3ZjFjNjYzZWZlZTcyZmVjNjk4OTdlN2QwMTg5NWMyYjJkNjJmN2EifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4c4cad9614b84548ad2f8620d0476a91",
+      "statement": "The project's README/CLAUDE.md document a physical RS485 UART link (UART2, 57600 8N1, half-duplex DE/RTS, CRLF-terminated ASCII-JSON lines) between Display and Sensorboard, with the Sensorboard-side pins (TX=GPIO12, RX=GPIO11, DE/RTS=GPIO21) being that board's own local pinout for the shared physical RS485 pair, distinct from the Display's own local UART pin assignment.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L17-L20",
+          "version": "repo-lines-v1:sha256:609359288280541c2d9535ce7d95d89843f6c58cbe5aa62db27259e4c3c030b2:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDQ5NTk5YmIyZWY2OTg2YjUyN2RmODZjZmE2ZTUzZDI0ZWQwYmRkYmU1Y2M3YTkwMzg0YTRkNjQ3NmIwOGM3NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWU2YzQ1YmM3MDBiOTczNmYzZWViMzlkYmQyY2U2ZDYxOWNkZmE5OTU4M2JiMGQ3YTU5ZDQ5MjA4ZjE4ODNkZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzBlZGYyYjJiNjRiYTA1MzBmM2M5MDFmZGIyYTdiODQ2Y2RhZGM2MzJmMWY0N2RlYjc1MjE3Y2ZlN2Y1YTMxNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzk2MTE2NDkzYmE3MzY0YWQ5ZWY5NWMzYjMyMDdiMzY1MTQ4MjQwMGQ1YWE2YzUxZjViOWY0YzZlMjNkMDRmMSJ9"
+        },
+        {
+          "resource": "repo://firmware/display/README.md#L5-L13",
+          "version": "repo-lines-v1:sha256:57cc93c8b17e616eb619cb970f3e0454ff79e1512b7f26bbc1c67e5d39aa0ea7:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDM2MTRiYzNjOWE4ODRjODVkMTUxMzM3MTE3MmFlNzM2NWMzN2Y1ODlhNjljY2UxNGZiNzkyMDQzMWZjMTYxZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTg4ZWY4MmNiYThlY2NhOWM0MDBlNDVhYWJhM2E5MzVjNWIyMGFjYWM4ZjE1NzNhNWFkNmVkNzMxNzg1YmVkZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmQ3ODRjZWY4ODE2NGI3NDk2M2E5ODcwM2U1YmUyMDk0NDc1NDU5NDE2MjVhNjFkYThkYzdkY2JlYjYzZTRmOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWIyOGZmODQwYWJmMDdkMmE3Y2VlYWFkYjZkMjI1OTIyMDBjZmU5Mjk1OGU3NDkwZjU3N2QwODAyMGRkZTdiMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_ecbd14f123d447469dd29fad300451c0",
+      "statement": "Each Sensorboard-to-Display topic (ctrl, imu, bat, tank, hx, gas, bme_in, bme_out, elec) updates only its own slice of the Display's merged sensor-data snapshot; other fields are preserved across updates, and unknown or missing JSON fields are tolerated rather than causing errors.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L25-L41",
+          "version": "repo-lines-v1:sha256:68962e44d8167400b2f5312c804b37ba868a4093c1721612da5cd2234864781a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYzMzA4MGNjNTBmNTVhMzk4NDMxY2I1NGEyMWE3ZmFkODU4N2I2Y2I0YmFiODFlNjUxMzJlMjlkNTZjMDhiZWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEyMjc3YzgyYmVkZGFkM2U1M2M3YmJjMGZhODRhNGRjZTQyZGZmMmFmNDJlMTQ4NDRhMmVhZGQ3YzhjZTQyN2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA5YTQ1NjkxMGYyYTQ3NWE0OTdiZDMwMjI2YzcxYWRjN2E0NWFjZDYzZTM3OGNkZmIzNDY2M2EyMWExZjZlNzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRmMTEyZjVkYmYzZDFjMWFiNGVkMzkwN2ZiOTBiOTBlODNjOTllMWViMzI5NTdhNDI5NTM0YjJiNzFlMzljNTAifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/main.c#L5105-L5130",
+          "version": "repo-lines-v1:sha256:d2b2d9376ef8bcb0911879f7c2212e84f028625c8df95e6debce52529960cff7:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YTdmYWZhMGM5MzhlMGU5N2ZhNDkzN2Y1ZjRhMzZlNmQyOTc3NjY2YzM3MGVmNDJmZjM5Y2JlYjgxYmY4NzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkMzk2Njc4MzgwZTk2MGRiODFlZmIwZDYxZWMyOGQ4MTZiZWQwYTExMDBlMDI1ZDQzOTJmMjIwMjBjZjg2NTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcxYTNlNmVmMTFmNjIzZjcxODRmOWY2MjllZTc4MGNjNzNhYzJkMjJlNmIyNzQ5M2QwMGFjMThhY2JlNGExYzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0921cef56c0b4a83a1cfa29237ae6846",
+      "statement": "Despite the project's protocol documentation describing the Sensorboard link as physical RS485, the current Display firmware source shows the live transport has been migrated to ESP-NOW: firmware/shared/womo_config.h documents 'ESP-NOW Transport (ersetzt RS485)', womo_sensorboard_init() is annotated as initializing ESP-NOW, and main/espnow/womo_espnow.c implements broadcast-then-unicast peer discovery and frame transport over esp_now, with main.c logging an 'ESP-NOW Handshake' on first data receipt.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/espnow/womo_espnow.c#L1-L100",
+          "version": "repo-lines-v1:sha256:f955a3c601d2600f30e23e1c5e425010d3fafac39fe95222400fb6374b52379d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI4NzMyNzc1ZWVlNzcwMDE4ZGI3ZDc5ZDAzNWEwMTYzMDE1YTAxNmRlMTdlYmJmODg4NDkwMmVjNmQxZDlmY2YyIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJhMDg2ZmUxYTE0YmNlZmZkMWMxYWJhOWY3ZGRlNDVhN2YzYzFlZWU2NzQ3YzAxZjhhMGM5MDViNGIzYWEzYzFlIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MCwicHJlY2VkaW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIwOTY3YmU0MmJkNTYzODdmZTQyOWEyZjE3ODIyMmMwZDJkNWE3OTIzOGEzMGVlOTVkODFhOWYyNzVmZDlkZjY1In0"
+        },
+        {
+          "resource": "repo://firmware/display/main/main.c#L5070-L5096",
+          "version": "repo-lines-v1:sha256:c19a26ced4b97b9de924aff365a2de3cb0892ff2beb91d87c009a40cac04e88e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhYTY3OGE1MzQ4NzlhZmY4NzkyMDBhODQyZmQzYTgyODFjYzVmOTkwNDZlYWRhNTMwM2IzZWRmMzhkNjc2MTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkMzk2Njc4MzgwZTk2MGRiODFlZmIwZDYxZWMyOGQ4MTZiZWQwYTExMDBlMDI1ZDQzOTJmMjIwMjBjZjg2NTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNjNzNkNDBmYjA2ZDNiMzY2NTU5Nzg2ZWIxMzU3MjVkOWE4Yzc1NzI0MDQ2NjUwNzgzNzc3MDVhOWZhNGYxZjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIyZDBjZWE1MzQxZTQ3MjlhYjFjNjk4YTAzYTllMDI1YTc3NTc3OGRiODRjYzBjNTg0NjY5ZGM5YmNkNmY2ODEifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/sensorboard/womo_sensorboard.h#L240-L241",
+          "version": "repo-lines-v1:sha256:d03660799d2790e52c9b94c215592e1ba956756117319fd99ca8415f5057d308:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWJlZGYzOTExZjE4ZDk0NDgyNWE4YTQ5ZGY2NGE4NmVkMGY2N2RmZTNlNmVmMDVhOWZhYTk1NzlmZDczY2I3OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjlmN2Q5ZWJjMmRlMDFhZDUwMWQzY2YxM2UyMTZkZWMzNDlhNTAyNWJiYjBhNDlmMDExYzg0NWM1MzgwMTA1YSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTBmZGY4YzY1YTZhNmU4M2Q3OWUwZmM1YzY1MjAzM2EzODM3ODUxNGJlNjk2MDBiYzQwYjcwOWEwY2NjZThkNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2JiMDgxMGQ3ZDEwZjMwM2Y5Y2ViZjE1MTE1MzFjMzVhNWIwMjFlNTk2MzZkOTg5ODY4MDNlYWExM2FkZjhiNSJ9"
+        },
+        {
+          "resource": "repo://firmware/shared/womo_config.h#L25-L73",
+          "version": "repo-lines-v1:sha256:2e6f339808c6892358c40837a21da085e5c34a6aec9d9815250c91a1522ec772:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdiNjE5MWJkODZlMjY2YWI5MzQ2MjA4ZTk4MTUyMGI3MzljM2FiZmI1ODA3NGUwMGYxMDQ2MzMwOWVhYmI0YWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExOWE0MTdkODNmZDcxZTI1NTFhYTRmMzQwYzI5YjRiYjczMzg2OTJlZTljZjg2ZDJlOTY1NTEyM2ZlMWI2ZDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYxYzJiYWU1NGUwMDExZTM2ODM4OWJhNDI2NzZhYjdkNDhlNGY5YjhlYmQ0MjZiMTI0YTg5YTMwMmE4NjdmNWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a08640ff93cb40a999a51d9769f21db4",
+      "statement": "The Display tracks outstanding Sensorboard commands by sequence number and label with a 3 s ACK timeout, and separately runs a 5-minute link-timeout watchdog that raises the sensor error stack's RS485/sensor-link entry when no packet has arrived; GPS/LTE fields in the merged snapshot are written only by a separate 15 s router_poll_task so the two data sources never overwrite each other.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/main/main.c#L212-L222",
+          "version": "repo-lines-v1:sha256:1cd776fbc85b33ba688c9c88343cca5ef3631d9d1c0e82648b84a6c8fec4c3cf:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwNzAzMTZlOWU4MWEyMjExNzhkNmI5YTBjM2UyMDA3YjczODcyMjM1NjBmZmMwYTU4NTQyMTE3ZTBhMTk2ZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY0ZjRkNDgwNDk5ZmQ3MGM0OTYyYWQwY2E0MDhmNjZjNWZkNGMzNGE2MGFlOWQ1MDlhNjE2MGY1NTZlMjBmYWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI1ZGQwYjRmMzUwMzlkNGUxMTU2NDgzZGQyMWM5NDg2NmIyMDk4OWQ0MjdiNTUyMGVlYzVhMDRhMTA3YmIyMjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYzMzYxMjA2YmI4ZjE2YjRkYzQ4MTZiMjk5NTQxM2QyODVmNGJkY2Y4YWZmYWY3YjBjMjIxYmE5ZThmMmI5YzkifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/main.c#L5113-L5127",
+          "version": "repo-lines-v1:sha256:0cac593080a6b2aabed1b42da76083cbc2ad7f669a9b8e80bbfe3ec9bc1b26ff:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRiOTgxYmYxNDBlNGY5YjQxNzg2NTJmMjJjYjY5ODFiOTMxNjgzNzRjMjVjODA2MDQxNGViZDY2YzA4ZjI1ZDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2Njg2MWVjMDkzZmJmYmRlNDI5YTVjOTY4ZmI1M2FlNWFiNmUwNGIyMDY1NDIwN2U3NTRiYTcxNmViNzRhNzIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZjNzIxNGNhMmU1ZjJmMzgwMjJiODQ5N2RkMjFkZDgyYTNhYzZkOGJmMjI5NDg3YTkzMDk1NmE3YWY2OTFhNjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU0NGMyOWY1NWFlZWZiYTQ3MTNiNDY3N2Y5N2NiNThiMzU4MGVhYjE3YmI1ZTU5YTQ4Yzg5YzJjYzAwOWI4MDAifQ"
+        },
+        {
+          "resource": "repo://firmware/display/main/sensorboard/womo_sensorboard.c#L49-L261",
+          "version": "repo-lines-v1:sha256:be9bb903f2b674f18ede35a4841cec73b0a5926844b166270e8f91b0688f91d9:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmMjdiMTY5NmUyYWY4Yjg2YzkxZWVlZDY0ODkyOGQ1NWI5OGQ2OTNiMDE1MmM1OGIwOTJhNWU0OTRmOTQ2ZDJlIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2OTAzY2M4MDk3NjJlOGYwZTQ3MWMxOTA4OWU4MWRjZDIxMjVmMjk4ODAzMTAzMGY1ODE2ZDg3ZWMzZjU0NmY4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIwOGRhMTA3Y2JjOTA2YTdlYzI5MThhMDNkMWZjOTFlNWU5OGZlMzllNzcyZDYzZmVhNDFmYmFmNWIzZDUyYTgyIn0"
+        },
+        {
+          "resource": "repo://firmware/shared/womo_config.h#L29-L37",
+          "version": "repo-lines-v1:sha256:8f14f703bccd5b726f170339e78e4e8aa878b03357cc471c3a67ba613d596266:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTYxZDMyZjE0MDk2ODdmZGNkY2M3MTE4YTk0ZDE2M2NjOGU1OWE1MzNiNmRlY2FmNWI3ZTczZmYyNDFjNjY5MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGNkMzIwMmRkNjFmNTdlMjdiYjEzMDZiYmMyNDA1NGNhNzE1OWRjZDBkMDkwZDI5ZGQyMzc1ZDI0MTZhYWVhOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODMyYTczNTRjZTMxMjQ4NDkzOTgxMTk2MThkY2M0MjM3YmMxZTNiYTIyMjUwZTg3YTk3ZDJjZTVlZmQxNzNiNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWFjZWRmNzNlMWU0Y2M0M2VlZjA4NTBmNjMzZGRkOWI3ZTVjMmYyNmEzMzQ4NDA0YjM4YWJlYzk4MzkwYWY1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_796ac59d080d432f9b49c98c311b93d4",
+      "statement": "The Display polls the Teltonika RUTX11 router over UCI JSON-RPC/ubus via HTTP (default IP 192.168.55.1) for WLAN client status, LTE/modem status, GPS position, and WLAN scan results, refreshing AP/WLAN/LTE/GPS state every 15 seconds via router_poll_task, and serializes outbound TLS sessions to external APIs through a shared HTTP mutex to avoid exhausting mbedTLS resources.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L54-L54",
+          "version": "repo-lines-v1:sha256:02536aa1c910b610648fb1a821a41d9450532b55335ea055ccaed336d9e97428:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDI1MzZhYTFjOTEwYjYxMDY0OGZiMWE4MjFhNDFkOTQ1MDUzMmI1NTMzNWVhMDU1Y2NhZWQzMzZkOWU5NzQyOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDI1MzZhYTFjOTEwYjYxMDY0OGZiMWE4MjFhNDFkOTQ1MDUzMmI1NTMzNWVhMDU1Y2NhZWQzMzZkOWU5NzQyOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGU0YjE3ZWUzZGE5MTI5NTMyYmViYWI0YzFiYTc2OGIyYTBjNWQ1M2ZhMzZkZTQ2ZDlmOTBlY2Q3ODRhYjRkNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjhjMWY1M2E3YWZkMjE3MTNlMjllMWZhZWY1YzVkYTUzOWUzY2JlYmZhOTEyMDM2ZmJlMDNhNGI0NjJmZjE5ZiJ9"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_http_mutex.c",
+          "version": "repo-file-v1:sha256:750511ff37ebf7af790733a670b99731304d950a9ac3e50bba82eee5f7a9da3c"
+        },
+        {
+          "resource": "repo://firmware/display/main/network/womo_router_uci.h#L1-L50",
+          "version": "repo-lines-v1:sha256:feddd33e0141c29bd88e4108a816025171196afab2ce133f884cc727af1e7117:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU0YTBhYTI2ODE1OWZmYTA5ZWI0YWMxY2Q4MGJlZmY4OTkwNGJmZDYzMzc0M2QzNmRjYTg3YmE4YjM5NDJkNDMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFjY2U0NDExYTlkMWYyZDg3NTEyOGIzNmJlZWQ0ZmI5MTk3OGMyNDJkMDYyYTZhMjllMzE1NWIxZjFlY2E3MmMifQ"
+        },
+        {
+          "resource": "repo://firmware/display/memory-bank/techContext.md#L34-L40",
+          "version": "repo-lines-v1:sha256:a88ad4f1d9207f0a0f0df008bd9ccb5ce2c10a886ba7eea6c3325d0aa1bde0df:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYWQ0NGNjMDUyZWMzZTYzNDUxZjdmZDBmMzliMjZlOTRhNTJlNzYzMjE2MjVlNjUzOWE3N2Y4NDNkMjBlNTQ2NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiN2M2ODk4ZGNhMGRhNDk3Y2ZhYzdiMjlmNjZiM2MyOWFjNWQ2ZmM3YTdhZDc3NWIzYmYzMWFlZGQwOTdmZGU1NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjQzODkyZmE1NGU4N2FjODY5ZjNkMjJiOGZjZGU1OTk3OGM0NzgyMjY2YTMxNGMyOWRlMjY1YTFhMzVlMjA0OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDcyZTEyNjRkYTY2NzI2YWVlMzRlZmM0ZTZmM2ZmMDkyZTkyZDhlMWE5ZTRkN2ViYzIyNzJiYjQ4ZTY1NmU3OSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_46693db38abe4e1fa517d20c3cd4ff50",
+      "statement": "firmware/shared/womo_config.h values (heartbeat interval, command timeout, per-topic update intervals, router IP, ESP-NOW fallback channel/payload-size/queue-depth) must be identical between the Display and Sensorboard firmware images, requiring both to be rebuilt and reflashed after any change; NVS namespaces on the Display persist router WLAN credentials (rtr_wifi), the ESP32's own known-WLAN pool (wifi_cfg/known_list), AP hotspot credentials, thresholds, and Ruuvi/GasBee sensor-slot mappings.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/CLAUDE.md#L53-L63",
+          "version": "repo-lines-v1:sha256:42c175faf37ca7f31b6c47aee137238ab50cbc64bc1afe1cc0a6726eb3957493:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI4NTAyODI3OWQxMzQ1N2VmNWEzY2Q1OTVkYzAwYzVjZGFmOTJkZmNmOTM1NTU5ODgxM2U5Y2E0NjI5YTgwOGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZkNTk2YmJmNDJiZDY2OGRkODc2YzBjNDRhZTJjODAyODA0ZDJkZDRmODhhODllMTQyMmFiOTA5YjA2ZTdmM2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZhOWUwNTI1OTVlNjQyMzZiZGRkNTM4NzcxZDRmNDQxMzQ0YjY1NmMzODQyNjViNDlmNjllMjRiNDEyMTM4N2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImExOTlhMWQwMzZlMTU3MWFjN2ZiODAxYjg2ODdkMmRmNjU3YjkwMGFlMzQzM2FkZjE2NDQzMTc5ZDRhZWYwYTEifQ"
+        },
+        {
+          "resource": "repo://firmware/display/memory-bank/systemPatterns.md#L58-L62",
+          "version": "repo-lines-v1:sha256:69e9e1c106ac8883e569bdc607a102cbe5a0d3d6d708bf0604e65c8cd5b0c2fb:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDI1OTYzYTNlYzYyNmFlMzRiOTQ4OGQ1ZWI3ZDIxNGIwNzJhMWIyOTRjYjIzNzc3NTI4MTE4NzJiYmQ4NjMxNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjk3NGNmNDhiYWE5OTZkMThkZTUxODQ2OTRiYzI3NGRjNjgzZTA0ZmI2MDg1NWUxZDgzYjczOTNhODgxZGYzNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2E2NzkzMDM4ZDZlZjUzNjhlYjE4NWVlMWI3MWYzNWRiM2YyNmRjM2Q1NTdjMzg3Mzk1YTA4ZTQwOTIzMGMyYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWY1ODUxMGY4YTMxYmJmM2JhNzZlYTlhOGNmZjhiYjhkYjNhMjZhYmJmMmMwZmRkMjZmMWE1NGI4YzhkMDhkYyJ9"
+        },
+        {
+          "resource": "repo://firmware/shared/womo_config.h",
+          "version": "repo-file-v1:sha256:2eec0f1f5e1a1f352342a3c8ccc9b86ff41d0eb13ac573e3da53381fe6fd05f6"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

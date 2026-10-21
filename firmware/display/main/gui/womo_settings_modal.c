@@ -7,13 +7,14 @@
 /*
  * womo_settings_modal.c – Einstellungs-Modal mit 5 Tabs
  *
- * Tabs: Sprache | RTC / Temp / Gas | Grenzwerte | System | AP
+ * Tabs: AP | Sensoren | Grenzwerte | LTE | System
  * Größe: 640×420 px, Header 48 px, Tabview 372 px (Tabbar 38 px, Inhalt 334 px).
  */
 
 #include "womo_settings_modal.h"
 #include "womo_locale.h"
 #include "womo_thresholds.h"
+#include "womo_tariff.h"
 #include "womo_fonts_german.h"
 #include "../time/womo_time.h"
 #include "../sensorboard/womo_sensorboard.h"
@@ -58,7 +59,7 @@ static lv_obj_t *s_row_lbl[3]    = {NULL, NULL, NULL};
 static bool      s_locale_cb_reg  = false;
 
 /* Tab-Reihenfolge = Reihenfolge in der Tab-Leiste, erster Tab = Starttab */
-enum { TAB_AP = 0, TAB_SENSORS, TAB_THRESH, TAB_SYSTEM, TAB_COUNT };
+enum { TAB_AP = 0, TAB_SENSORS, TAB_THRESH, TAB_LTE, TAB_SYSTEM, TAB_COUNT };
 static lv_obj_t *s_tabview = NULL;
 
 /* Ton-Buttons */
@@ -77,6 +78,17 @@ static lv_obj_t *s_time_info_lbl   = NULL;
 static lv_obj_t *s_ruuvi_title_lbl  = NULL;
 static lv_obj_t *s_gasbee_title_lbl = NULL;
 static lv_obj_t *s_sens_row_lbl[4]  = {NULL};
+
+/* LTE-Tab: Mobilfunk-Tarif (Werte in womo_tariff, hier nur Anzeige) */
+static struct {
+    lv_obj_t *title;
+    lv_obj_t *name[4];     /* Vorlauf, Restvolumen, Termin, Rhythmus */
+    lv_obj_t *val[3];      /* Werte der −/+-Zeilen */
+    lv_obj_t *period_btn;
+    lv_obj_t *today_btn;
+    lv_obj_t *auto_lbl;
+    lv_obj_t *next_lbl;
+} s_lte;
 
 /* AP-Tab */
 static lv_obj_t *s_ap_keyboard        = NULL;
@@ -329,6 +341,7 @@ static esp_err_t gasbee_cfg_save(const char *mac_a, const char *mac_b)
 
 static void sound_btn_update(lv_obj_t *btn, bool on);
 static void system_time_info_refresh(void);
+static void lte_tab_refresh(void);
 
 static void set_label_str(lv_obj_t *lbl, womo_string_id_t id)
 {
@@ -345,7 +358,7 @@ static void settings_locale_cb(void)
 {
     if (!s_panel) return;
     static const womo_string_id_t tab_str[TAB_COUNT] = {
-        STR_SET_TAB_AP, STR_SET_TAB_SENSORS, STR_SET_TAB_THRESH, STR_SET_TAB_SYSTEM,
+        STR_SET_TAB_AP, STR_SET_TAB_SENSORS, STR_SET_TAB_THRESH, STR_SET_TAB_LTE, STR_SET_TAB_SYSTEM,
     };
     if (s_tabview) {
         for (int i = 0; i < TAB_COUNT; i++) {
@@ -362,6 +375,15 @@ static void settings_locale_cb(void)
     if (s_btn_tones) sound_btn_update(s_btn_tones, display_buzzer_is_enabled());
     if (s_btn_touch) sound_btn_update(s_btn_touch, display_buzzer_is_click_enabled());
     system_time_info_refresh();
+
+    /* LTE-Tab */
+    set_label_str(s_lte.title,   STR_TARIFF_SECTION);
+    set_label_str(s_lte.name[0], STR_TARIFF_LEAD);
+    set_label_str(s_lte.name[1], STR_TARIFF_VOLUME);
+    set_label_str(s_lte.name[2], STR_TARIFF_MANUAL);
+    set_label_str(s_lte.name[3], STR_TARIFF_PERIOD);
+    set_btn_str(s_lte.today_btn, STR_TARIFF_TODAY_BTN);
+    lte_tab_refresh();
 
     /* Sensoren-Tab */
     set_label_str(s_ruuvi_title_lbl,  STR_SENS_RUUVI_SECTION);
@@ -597,6 +619,7 @@ static void close_modal(void)
     s_ruuvi_title_lbl  = NULL;
     s_gasbee_title_lbl = NULL;
     for (int i = 0; i < 4; i++) s_sens_row_lbl[i] = NULL;
+    memset(&s_lte, 0, sizeof(s_lte));
     s_ap_keyboard      = NULL;
     s_ap_saved_lbl     = NULL;
     s_ap_scan_btn      = NULL;
@@ -2207,6 +2230,235 @@ static void build_tab_grenzwerte(lv_obj_t *tab)
                     &s_te.grey_warn,  &s_te.grey_crit,  true,  &s_row_lbl[2]);
 }
 
+/* ── LTE-Tab: Mobilfunk-Tarif ───────────────────────────────── */
+
+enum { LTE_ROW_LEAD = 0, LTE_ROW_VOLUME, LTE_ROW_MANUAL };
+#define LTE_STEP_PLUS  0x10   /* user_data: Zeile | LTE_STEP_PLUS */
+
+static void lte_fmt_date(uint32_t d, char *buf, size_t len)
+{
+    if (d) {
+        snprintf(buf, len, "%02u.%02u.%04u", (unsigned)(d % 100),
+                 (unsigned)(d / 100 % 100), (unsigned)(d / 10000));
+    } else {
+        snprintf(buf, len, "–");
+    }
+}
+
+static womo_string_id_t lte_period_str(uint8_t period)
+{
+    switch (period) {
+        case WOMO_TARIFF_PERIOD_30D:   return STR_TARIFF_PERIOD_30D;
+        case WOMO_TARIFF_PERIOD_MONTH: return STR_TARIFF_PERIOD_MONTH;
+        default:                       return STR_TARIFF_PERIOD_4W;
+    }
+}
+
+/* Heutiges Datum, nur mit plausibler Uhrzeit (wie die Auswertung in main.c) */
+static bool lte_get_today(struct tm *tm, uint32_t *today)
+{
+    if (womo_time_get(tm) != ESP_OK || tm->tm_year < (2024 - 1900)) return false;
+    *today = womo_tariff_date_from_tm(tm);
+    return true;
+}
+
+static void lte_tab_refresh(void)
+{
+    if (!s_lte.val[0]) return;
+
+    womo_tariff_cfg_t cfg;
+    womo_tariff_get_cfg(&cfg);
+    char buf[96];
+    char date[16];
+
+    if (cfg.lead_days) {
+        snprintf(buf, sizeof(buf), womo_locale_get_string(STR_TARIFF_DAYS_FMT), (unsigned)cfg.lead_days);
+    } else {
+        snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_OFF));
+    }
+    lv_label_set_text(s_lte.val[0], buf);
+
+    if (cfg.volume_pct) {
+        snprintf(buf, sizeof(buf), "%u %%", (unsigned)cfg.volume_pct);
+    } else {
+        snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_OFF));
+    }
+    lv_label_set_text(s_lte.val[1], buf);
+
+    lte_fmt_date(cfg.manual_due, date, sizeof(date));
+    lv_label_set_text(s_lte.val[2], date);
+    set_btn_str(s_lte.period_btn, lte_period_str(cfg.period));
+
+    const uint32_t auto_due = womo_tariff_get_auto_due();
+    if (auto_due) {
+        lte_fmt_date(auto_due, date, sizeof(date));
+        snprintf(buf, sizeof(buf), womo_locale_get_string(STR_TARIFF_AUTO_FMT), date);
+    } else {
+        snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_TARIFF_AUTO_NONE));
+    }
+    lv_label_set_text(s_lte.auto_lbl, buf);
+
+    struct tm tm;
+    uint32_t today;
+    womo_tariff_state_t st;
+    if (lte_get_today(&tm, &today) && womo_tariff_evaluate(&tm, &st) && st.due) {
+        lte_fmt_date(st.due, date, sizeof(date));
+        if (st.days_left < 0) {
+            snprintf(buf, sizeof(buf), womo_locale_get_string(STR_TARIFF_NEXT_EXPIRED), date);
+        } else {
+            snprintf(buf, sizeof(buf), womo_locale_get_string(STR_TARIFF_NEXT_FMT), date, st.days_left);
+        }
+    } else {
+        snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_TARIFF_NEXT_NONE));
+    }
+    lv_label_set_text(s_lte.next_lbl, buf);
+}
+
+static void lte_step_cb(lv_event_t *e)
+{
+    const int code = (int)(intptr_t)lv_event_get_user_data(e);
+    const int dir  = (code & LTE_STEP_PLUS) ? 1 : -1;
+    womo_tariff_cfg_t cfg;
+    womo_tariff_get_cfg(&cfg);
+
+    switch (code & 0x0F) {
+        case LTE_ROW_LEAD: {
+            int v = (int)cfg.lead_days + dir;
+            if (v < 0) v = 0;
+            if (v > TARIFF_LEAD_DAYS_MAX) v = TARIFF_LEAD_DAYS_MAX;
+            cfg.lead_days = (uint8_t)v;
+            break;
+        }
+        case LTE_ROW_VOLUME: {
+            int v = (int)cfg.volume_pct + 5 * dir;
+            if (v < 0) v = 0;
+            if (v > TARIFF_VOLUME_PCT_MAX) v = TARIFF_VOLUME_PCT_MAX;
+            cfg.volume_pct = (uint8_t)v;
+            break;
+        }
+        case LTE_ROW_MANUAL:
+            if (cfg.manual_due) {
+                cfg.manual_due = womo_tariff_add_days(cfg.manual_due, dir);
+            } else {
+                /* Noch kein Termin: bei heute beginnen */
+                struct tm tm;
+                if (!lte_get_today(&tm, &cfg.manual_due)) return;
+            }
+            break;
+        default:
+            return;
+    }
+    womo_tariff_set_cfg(&cfg);
+    lte_tab_refresh();
+}
+
+static void lte_period_cb(lv_event_t *e)
+{
+    (void)e;
+    womo_tariff_cfg_t cfg;
+    womo_tariff_get_cfg(&cfg);
+    cfg.period = (uint8_t)((cfg.period + 1) % WOMO_TARIFF_PERIOD_COUNT);
+    womo_tariff_set_cfg(&cfg);
+    lte_tab_refresh();
+}
+
+/* "Heute aufgeladen": nächster Termin = heute + Rhythmus */
+static void lte_today_cb(lv_event_t *e)
+{
+    (void)e;
+    struct tm tm;
+    uint32_t today;
+    if (!lte_get_today(&tm, &today)) return;
+    womo_tariff_cfg_t cfg;
+    womo_tariff_get_cfg(&cfg);
+    cfg.manual_due = womo_tariff_add_period(today, cfg.period, +1);
+    womo_tariff_set_cfg(&cfg);
+    lte_tab_refresh();
+}
+
+/* user_data 0: manuellen Termin löschen, 1: automatischen Termin verwerfen
+ * (z.B. nach Tarifwechsel; kommt beim nächsten Router-Poll wieder, falls vorhanden) */
+static void lte_clear_cb(lv_event_t *e)
+{
+    if ((intptr_t)lv_event_get_user_data(e) == 1) {
+        womo_tariff_set_auto_due(0);
+    } else {
+        womo_tariff_cfg_t cfg;
+        womo_tariff_get_cfg(&cfg);
+        cfg.manual_due = 0;
+        womo_tariff_set_cfg(&cfg);
+    }
+    lte_tab_refresh();
+}
+
+static lv_obj_t *lte_make_btn(lv_obj_t *tab, int x, int y, int w, uint32_t color,
+                              const char *text, lv_event_cb_t cb, void *user_data)
+{
+    lv_obj_t *btn = lv_btn_create(tab);
+    lv_obj_set_size(btn, w, 30);
+    lv_obj_set_pos(btn, x, y);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(color), 0);
+    lv_obj_set_style_radius(btn, 6, 0);
+    lv_obj_set_style_border_width(btn, 0, 0);
+    lv_obj_set_style_pad_all(btn, 0, 0);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, user_data);
+    lv_obj_t *lbl = lv_label_create(btn);
+    lv_label_set_text(lbl, text);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14_german, 0);
+    lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+    lv_obj_center(lbl);
+    return btn;
+}
+
+static lv_obj_t *lte_make_label(lv_obj_t *tab, int x, int y, int w, uint32_t color)
+{
+    lv_obj_t *lbl = lv_label_create(tab);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14_german, 0);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(color), 0);
+    lv_obj_set_pos(lbl, x, y);
+    if (w > 0) lv_obj_set_width(lbl, w);
+    return lbl;
+}
+
+/* Zeile: Name | − Wert + */
+static void lte_make_step_row(lv_obj_t *tab, int y, int row, womo_string_id_t name)
+{
+    enum { xMINUS = 210, xVAL = 244, wVAL = 110, xPLUS = 358 };
+    s_lte.name[row] = lte_make_label(tab, 0, y + 6, 200, 0x222222);
+    lv_label_set_text(s_lte.name[row], womo_locale_get_string(name));
+    lte_make_btn(tab, xMINUS, y, 30, 0x757575, LV_SYMBOL_MINUS, lte_step_cb, (void *)(intptr_t)row);
+    s_lte.val[row] = lte_make_label(tab, xVAL, y + 6, wVAL, 0x1565C0);
+    lv_obj_set_style_text_align(s_lte.val[row], LV_TEXT_ALIGN_CENTER, 0);
+    lte_make_btn(tab, xPLUS, y, 30, 0x2E7D32, LV_SYMBOL_PLUS, lte_step_cb,
+                 (void *)(intptr_t)(row | LTE_STEP_PLUS));
+}
+
+static void build_tab_lte(lv_obj_t *tab)
+{
+    make_tab_base(tab);
+    const int w = MODAL_W - 2 * PAD;
+
+    s_lte.title = make_section_title(tab, 0, 0, w, STR_TARIFF_SECTION);
+    lte_make_step_row(tab, 40,  LTE_ROW_LEAD,   STR_TARIFF_LEAD);
+    lte_make_step_row(tab, 80,  LTE_ROW_VOLUME, STR_TARIFF_VOLUME);
+    lte_make_step_row(tab, 120, LTE_ROW_MANUAL, STR_TARIFF_MANUAL);
+    lte_make_btn(tab, 396, 120, 30, 0x757575, LV_SYMBOL_CLOSE, lte_clear_cb, (void *)(intptr_t)0);
+    s_lte.today_btn = lte_make_btn(tab, 436, 120, w - 436, 0x1565C0,
+                                   womo_locale_get_string(STR_TARIFF_TODAY_BTN), lte_today_cb, NULL);
+
+    s_lte.name[3] = lte_make_label(tab, 0, 166, 200, 0x222222);
+    lv_label_set_text(s_lte.name[3], womo_locale_get_string(STR_TARIFF_PERIOD));
+    s_lte.period_btn = lte_make_btn(tab, 210, 160, 178, 0x1565C0, "", lte_period_cb, NULL);
+
+    make_section_sep_at(tab, 0, 206, w);
+    s_lte.auto_lbl = lte_make_label(tab, 0, 220, w - 44, 0x444444);
+    lte_make_btn(tab, w - 30, 214, 30, 0x757575, LV_SYMBOL_CLOSE, lte_clear_cb, (void *)(intptr_t)1);
+    s_lte.next_lbl = lte_make_label(tab, 0, 256, w, 0x222222);
+    lv_obj_set_style_text_font(s_lte.next_lbl, &lv_font_montserrat_16_german, 0);
+
+    lte_tab_refresh();
+}
+
 /* System-Tab, zwei Spalten: links Töne + Sprache, rechts Zeit / RTC */
 #define SYS_COL_W   290
 #define SYS_COL2_X  (MODAL_W - 2 * PAD - SYS_COL_W)
@@ -2441,6 +2693,7 @@ void womo_settings_modal_show(lv_obj_t *parent)
     lv_obj_t *tab_ap     = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_AP));
     lv_obj_t *tab_sens   = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_SENSORS));
     lv_obj_t *tab_thresh = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_THRESH));
+    lv_obj_t *tab_lte    = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_LTE));
     lv_obj_t *tab_sys    = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_SYSTEM));
 
     s_tabview = tabview;  /* für Tab-Texte bei Sprachwechsel */
@@ -2448,6 +2701,7 @@ void womo_settings_modal_show(lv_obj_t *parent)
     build_tab_ap(tab_ap);
     build_tab_sensoren(tab_sens);
     build_tab_grenzwerte(tab_thresh);
+    build_tab_lte(tab_lte);
     build_tab_system(tab_sys);
 
     /* ── QWERTZ-Tastatur auf Overlay (für AP-Passwort) ────── */

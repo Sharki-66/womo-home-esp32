@@ -1,5 +1,31 @@
 # Active Context — WoMoHome Display
 
+## Mobilfunk-Tarif: Ablauf- und Volumenwarnung (2026-10-21, auf Hardware getestet)
+
+Neues Modul `gui/womo_tariff.c/h` (NVS `womo_tariff`), neuer Einstellungs-Tab LTE (zwischen Grenzwerte und System), zwei Fehlerquellen `SENSOR_ERR_SRC_TARIFF`/`SENSOR_ERR_SRC_DATA` (nur WARNING, Text dynamisch über `sensor_err_src_label()`). Termin automatisch aus `valid_until_iso` (neu in `datapass.sh`, Router muss neu deployt werden) oder manuell mit Rhythmus 4 Wochen / 30 Tage / 1 Monat – gedacht auch für andere Tarife. Datumslogik mit Stub-Headern auf dem PC getestet (Monatsende, Schaltjahr, Rollen, Vorlauf aus, Volumen). Erster Flash: Boot-Schleife (NVS-Schreiben aus `router_poll_task` mit PSRAM-Stack) → behoben, NVS nur noch über `womo_tariff_flush()` im LVGL-Tick. Router: `valid_until` beginnt mit geschütztem Leerzeichen (C2 A0) → awk filtert Ziffern. Offen: Tab-Layout auf dem Display prüfen, Statuszeilen-Länge prüfen.
+
+## Bugfix: Tag-Hintergrund bei Nacht-Schrift (2026-10-21, gebaut ungetestet)
+
+Symptom: nachts helle Schrift, aber Tag-Hintergrund; nach Neustart weg, Ursache nicht per Log belegt. Härtung: `time_update_timer_cb` (`main.c`) merkt `last_applied_mode` erst nach erfolgreichem `load_background_image()` (sonst Retry jede Sekunde) und zieht Hintergrundbild + Bildschirmfarbe einmal pro Minute nach. `womo_theme_get_twilight_color()` prüft Jahr ≥ 2024 und liefert bei ungültiger Zeit die Farbe des aktuellen Modus statt pauschal Tag (ohne Cache). Außerdem: WLAN-Treiber-Tag `wifi` auf `LOG_LEVEL_WIFI` (DELBA-Infos weg).
+
+## RUTX11-Modem-Ausfall + Router-WebUI-Härtung (2026-10-20, deployt, auf Router geprüft)
+
+Symptom: Display/WebUI ohne LTE, `gsmctl` „Couldn't retrieve data“. Befund: Modem in GPIO-Neustartschleife (`modem_trackd`), Ports als `ttyUSB37–39` statt `ttyUSB1–3` → `gsmd` scheiterte; dazu ~90 Zombie-`gsmctl` und gestapelte `poll.sh` (keine Sperre). Wahrscheinlicher Auslöser: congstar-Tarif war pausiert (keine Datenverbindung → RutOS startet Modem neu), unser Polling verhinderte die Erholung. Nicht belegbar, RAM-Log durch Reboot verloren. Reboot + Aufladung behoben.
+
+Fix in `tools/router-webui/deploy.sh` (Commit 857ae71, gepusht auf `openwiki-test`): Sperre `/tmp/womo_poll.lock`, `gsmctl` mit `timeout 8`, kein Modemzugriff ohne ubus `gsm.modem0` (`lte.modem` = up/down in `status.json`), `cgi-bin/lte` liest nur Cache, Log-Schnappschuss bei Modem-Ausfall nach `/etc/womo/log/` (max. 5). Geprüft: Sperre greift, `gsm.modem0` existiert im Normalbetrieb. Verbliebene 5 Zombie-`gsmctl` stammen von `rpcd` (RutOS), stabil.
+
+Offen: `simslot` leer (`AT+QUIMSLOT?` liefert keine Ziffer). Display wertet `lte.modem` noch nicht aus (Option: „Modem nicht erreichbar“ im Konnektivitäts-Modal).
+
+## Bugfix: Stack-Overflow om_task + lwIP-Assert (2026-10-20, auf Hardware getestet)
+
+Log: `stack overflow in task om_task`, im nächsten Boot `assert tcp_slowtmr ... persist ticking with empty send buffer`. `om_task` (Open-Meteo, `womo_weather_http.c`) hatte nur 4096 Byte Stack für HTTPS/TLS; andere HTTPS-Tasks 6–8 KB. Auf 8192 (PSRAM) erhöht, Stack-Reserve wird nach jeder Abfrage gemessen (`ESP_LOGW` < 1 KB, sonst `ESP_LOGD`). Vermutung: lwIP-Assert ist Folgeschaden (unerkannter Überlauf, Canary-Check nur beim Taskwechsel, lwIP-Strukturen ebenfalls im PSRAM). Falls der Assert wiederkommt: `CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK` temporär aktivieren und weitersuchen.
+
+Health-Log reaktiviert: `log_runtime_heap_stats()` (`main.c`, aus `router_poll_task`, alle `HEAP_LOG_POLL_CYCLES` ≈ 10 min) loggt per `ESP_LOGW` Uptime, internen/DMA-Heap (frei, größter Block, Minimum) und Stack-Reserve von `router_poll`/`wifi_autoretry`. Kein PSRAM-Abfragen (Flackern). `geocode` misst seine Stack-Reserve nach jeder HTTPS-Abfrage wie `om_task`. Erster Langzeitlauf (~4,2 h, 2026-10-20): interner Heap stabil bei ~71,5 KB frei / 31,7 KB größter Block. `gsmctl -o`-Fehler „Couldn't retrieve data“ geklärt, siehe RUTX11-Modem-Abschnitt.
+
+## Unwetter: Meteoalarm ersetzt durch eigene Auswertung (2026-10-20, auf Hardware getestet)
+
+Meteoalarm lieferte HTTP 404 (Endpunkt `for-coordinates` existiert nicht). MeteoGate-EDR (`api.meteogate.eu/warnings`) geprüft: nur Länder-IDs, Antworten bis ~850 KB (IT) → verworfen. Neu: `womo_weather_warn.c/.h` wertet 24 Open-Meteo-Stundenwerte (`hourly`, in `womo_weather_http.c` mit abgefragt) nach DWD-Warnkriterien aus (Wind, Starkregen, Dauerregen, Schnee nach Höhe, Gewitter, gefrierender Regen, Frost, Hitze). Ergebnis über `womo_weather_http_set_warn_callback()` → `weather_warn_update_cb` in `main.c`: Stufe 1 nur im Forecast-Modal, ab Stufe 2 Badge + Auto-Popup. Texte über `STR_WARN_*`. Regeln auf dem PC mit echten Open-Meteo-Daten und Testfällen geprüft. `womo_meteoalarm.*` und `harica_root_pem.h` gelöscht.
+
 ## Einstellungs-Modal umgebaut (2026-10-19, gebaut, noch nicht auf Hardware getestet)
 
 Tabs jetzt AP | Sensoren | Grenzwerte | System (AP = Starttab, `enum TAB_*`). Sprache und RTC-Info sind in den System-Tab gewandert (zwei Spalten: Töne + Sprache | Zeit / RTC, `system_time_info_refresh()`). „RTC / Temp / Gas“ heißt jetzt „Sensoren“ (`build_tab_sensoren`, Ruuvi + GasBee nach oben gerückt, Platz für weitere Sensoren). Alle Texte der umgebauten Tabs über `womo_locale` (neue `STR_SET_TAB_*`, `STR_TIME_*`, `STR_SENS_*`, `STR_ON/OFF`), Live-Update in `settings_locale_cb()`. Die Ton-Buttons lesen ihren Zustand jetzt aus dem Buzzer-Modul statt aus dem Button-Text. Noch hart codiert: Statustexte Ruuvi/GasBee/Assistent, AP-Tab, Popups.

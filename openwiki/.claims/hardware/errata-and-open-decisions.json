@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:23adaf479c9f8d5053bb1b4d90295bcbc28dec968980b2eacb3ce8d6a6735b86",
+  "claims": [
+    {
+      "id": "claim_0e858af9507d433284217ba03ec81d27",
+      "statement": "The Sensorboard's J7 driver transistors Q1/Q2 for the 12V house-battery relay 'ON'/'OFF' pulses (GPIO11/GPIO12) are populated as IRLML2244 P-channel high-side switches that place +12V on the J7 pin when active, whereas the Schaudt EBL's 'Ein'/'Aus' relay inputs expect a low-side pull-to-GND pulse; as a result the EBL's internal bistable relay never switches, regardless of pulse length or the GPIO14 sense reading.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/CLAUDE.md#L16-L18",
+          "version": "repo-lines-v1:sha256:c94cce0dd159c86e423fb64ce472f399af19a8dfc85942f21ce0c053036bb8f5:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzA0ZTdmYTIwMGFjMzM3ZjhkMWQ3OWFiODVjY2NlYTYyOTdiMGFkNzM5MjNlY2MxZTA4YWVmN2M4YjdhZDI4NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmRjOTZhYzU4Y2Y5ZTRmMDI2ZmRkYWQ3MTI4ZGUyY2YyNmNjMmRiOGU2NDFlNmE2NjVhZDc1YjUzNDAzN2ViZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjliOGU4YTNjMjQ5MDIwMjFmNGQ3YmZkMDJhOWQ0N2JkZWFiNTQ3MTllYTBmNzVlMjNkMDQ0OTQ0YmRhYWM2MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGM2ZmYwNjNkODYwYTYxYzA5NTViZWE1ODBlOGQ2ZDBmZTVjZmUxYzFkOGJjMDFiYTUxZDNlZmUyMWUzZGU1MCJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L44-L45",
+          "version": "repo-lines-v1:sha256:06733176d07648f21c3b9714445823c5b1980d9f94150d96d3cd3d49246f119b:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWNiMDY4MmJjNWVlYzZhZjdkMTMzMGM4ZDJiOWZkM2E0YTUwYTU4OTFiYzVhY2RjMzFmOGRhMDZlMjMwOGRlYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWY2NWI1Y2YyZGY1NGFkN2RkNWZhNWM2MTFlOWRhMGU4ZjM5YzMzMWFiNzQxNWEwY2I2MGZjNTgwZTliNmRmZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDliODYxMWNiOWYxMmE4Zjc4Y2Y2OWQyNTYxNGM4NGNjNmY1MTE2ODViMjQxODg2ZDEwMjUwMDA3MjJjNjRjNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzNkM2VkY2I0NjlmNTViZGNlOTFmYmI4MzIzOWZhZmQ3ZGYxZWY1MzAxZWRjODFjZDY0Y2MxZWYyZTE3NjYxMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_0f27931f68b744439a3f421569f66251",
+      "statement": "The identified fix for the Q1/Q2 polarity bug is a same-footprint swap to IRLML6244 (N-channel), contingent on the transistor source already being wired to GND, and this fix had not yet been verified on hardware as of the latest progress notes.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/CLAUDE.md#L18-L18",
+          "version": "repo-lines-v1:sha256:fdc96ac58cf9e4f026fddad7128de2cf26cc2db8e641e6a665ad75b534037ebd:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmRjOTZhYzU4Y2Y5ZTRmMDI2ZmRkYWQ3MTI4ZGUyY2YyNmNjMmRiOGU2NDFlNmE2NjVhZDc1YjUzNDAzN2ViZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmRjOTZhYzU4Y2Y5ZTRmMDI2ZmRkYWQ3MTI4ZGUyY2YyNmNjMmRiOGU2NDFlNmE2NjVhZDc1YjUzNDAzN2ViZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjE3MzgwZjVjZjc4M2NkNWU2OTcyZjVjYzg1YTc4MjBlZjEwYmQ4MTA1MGEyMzA0MTQ0MGE0OGE4ZjA5OGYxZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGM2ZmYwNjNkODYwYTYxYzA5NTViZWE1ODBlOGQ2ZDBmZTVjZmUxYzFkOGJjMDFiYTUxZDNlZmUyMWUzZGU1MCJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L45-L45",
+          "version": "repo-lines-v1:sha256:ef65b5cf2df54ad7dd5fa5c611e9da0e8f39c331ab7415a0cb60fc580e9b6dfe:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWY2NWI1Y2YyZGY1NGFkN2RkNWZhNWM2MTFlOWRhMGU4ZjM5YzMzMWFiNzQxNWEwY2I2MGZjNTgwZTliNmRmZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWY2NWI1Y2YyZGY1NGFkN2RkNWZhNWM2MTFlOWRhMGU4ZjM5YzMzMWFiNzQxNWEwY2I2MGZjNTgwZTliNmRmZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDhmYzMxNDg4ZmNlZmE0ZWI0OWJkNzNjOTBjZGU2MmQ5MmZjODk3MWExMjJlMWJlODQ2MjU0OTIyNWVmOTNiNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzNkM2VkY2I0NjlmNTViZGNlOTFmYmI4MzIzOWZhZmQ3ZGYxZWY1MzAxZWRjODFjZDY0Y2MxZWYyZTE3NjYxMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_14d431f7b2fd4625b1c497a24af5a5dc",
+      "statement": "A 2026-08-30 reversed-polarity connection at connector J7 physically damaged the Sensorboard's GPIO13 (multimedia) output driver (hard short to GND) and GPIO17 (light, swapped 12V control signal), while GPIO18 (pump) survived the same incident; GPIO11/GPIO12 (12V relay) are also routed through J7 and are suspected, but not conclusively verified, to be damaged as well. No firmware workaround exists, and a new PCB revision was ordered rather than remapping pins on the damaged board.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L237-L245",
+          "version": "repo-lines-v1:sha256:a4a9908484da4f141075a7e30513061de08e9c2089fe4671ccdf020063bb995d:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWJjYWIwMzk3ZjJiY2VlYzczMTZmYTk0YWMzMzc5ZDVmNWM0ZTRkM2JmMGM3MThmOGI4ODY4MTM2ZGQ4Mjc4YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGNiMTgzYTYyZWY3ZjVmMjMxZTRiZTUzMTFjNjMzYmQzZGUzZjgzMzhmNGNjMzkxOGQ2YzFmY2NiN2RiN2IzMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjUyYTczMmI0OGQxMjUzNjkyZjUyOTMwMjJjYzdkYmQ3NTYxYjdkZWRjNzViYjM3ODQ4ZmRjZGQyMzkyYzlhNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDg0M2IzNTdjNjRlNTdmZTY2ZjAwZjA4ZmM4YWY4MDY1MmJkNjNhZjEwOTBlZjAwY2Q5NDRiYTQwMTE0ZDQ2MyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L52-L52",
+          "version": "repo-lines-v1:sha256:7b8b06bf65f6ff73264b6efb71448b3db0f801da56c800f5c23eacbed6dc8faa:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2I4YjA2YmY2NWY2ZmY3MzI2NGI2ZWZiNzE0NDhiM2RiMGY4MDFkYTU2YzgwMGY1YzIzZWFjYmVkNmRjOGZhYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiN2I4YjA2YmY2NWY2ZmY3MzI2NGI2ZWZiNzE0NDhiM2RiMGY4MDFkYTU2YzgwMGY1YzIzZWFjYmVkNmRjOGZhYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTdiMTYzMWU5OGEyMzcyMzQyMTg5M2ZlMmI5YjE1MjgwMTllMDYyNGI0ZjdlNjM1ZDE0YzFlZTUxMjE2NjE4NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDAwZmM1NDdjNzg4ZGM1NGI0OTM2YjFkYmQ3ZWMyOTlhZjczOTk0NDEyOGNjMTM5NjE5MzA2MDcwMGYzYzg3OSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_8169610ab3dd4949bcbb3fc7b76a2dcf",
+      "statement": "SENSOR_INA226_SHUNT_MOHM in sensor_config.h is a placeholder value (10 mOhm) used directly in current calculation and INA226 calibration, and had not yet been measured against the installed shunt resistor as of the latest progress notes.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L123-L123",
+          "version": "repo-lines-v1:sha256:3fcbbc00ab7fc12150f62286306a8eab42256f2505d9e72939f334bc8bfa5a2b:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2ZjYmJjMDBhYjdmYzEyMTUwZjYyMjg2MzA2YThlYWI0MjI1NmYyNTA1ZDllNzI5MzlmMzM0YmM4YmZhNWEyYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2ZjYmJjMDBhYjdmYzEyMTUwZjYyMjg2MzA2YThlYWI0MjI1NmYyNTA1ZDllNzI5MzlmMzM0YmM4YmZhNWEyYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMmMzYTEzZmU4ZmY5ZmZhZDgyMmM5ZDNkOTYxNWFhZDUzYjUxMzgwYTBkNjc1OTFlYzVlNTFlZjI2ODBhMTUyMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTFhMGYwOTRiOTg4NGU5NzgyMDNkNDRjNTA1ZWY1MGQ1NDA0MjYwMDBlNzVhY2FhYTQwNDVmY2FiNjM5NGZlOSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensors/ina226_sensor.c#L46-L46",
+          "version": "repo-lines-v1:sha256:6bd4f1c8495011b0c4d7abf712e269a0502e0c9ca68cebcf3de05b8d8e7dcd6a:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmJkNGYxYzg0OTUwMTFiMGM0ZDdhYmY3MTJlMjY5YTA1MDJlMGM5Y2E2OGNlYmNmM2RlMDViOGQ4ZTdkY2Q2YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmJkNGYxYzg0OTUwMTFiMGM0ZDdhYmY3MTJlMjY5YTA1MDJlMGM5Y2E2OGNlYmNmM2RlMDViOGQ4ZTdkY2Q2YSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjQyMjg4YWE4OGVhYzYyZGE0NmE2NjVjN2ZlNmJiN2Y4OWVjY2NiMzJjNTIzOTRjYTBmODAzNzc4ZDIzYWFkYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjY0OWE2ZjNkNzVkYTI0NjI4NWVlZjY2MDI3MmYzMjY0ZmNiZTFkM2M0ZWExZWU4ZTIxNmE1NDAxNzEzNmE5MSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L34-L34",
+          "version": "repo-lines-v1:sha256:d6a0382e9bbef74ae551eeb6dc2e1d26f637776234aec5e10c9ae14282434062:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDZhMDM4MmU5YmJlZjc0YWU1NTFlZWI2ZGMyZTFkMjZmNjM3Nzc2MjM0YWVjNWUxMGM5YWUxNDI4MjQzNDA2MiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDZhMDM4MmU5YmJlZjc0YWU1NTFlZWI2ZGMyZTFkMjZmNjM3Nzc2MjM0YWVjNWUxMGM5YWUxNDI4MjQzNDA2MiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNmEzZGRkMmJmN2MwM2M3ZTI1NTViYmI1YjNlNTUzZGMzYWMxYWMwM2EzNGFhYjYwZjBiMGNlNDljMzc1Y2UyOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjE3MDA0YmIwNDJmZjJkYjQ1OWIzMzc3ODZkMjQ4OTk1NWJjMzM3ZmFhMTBlNWEwOGY4NjVhNGQ2NWEzMGYxYyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_b8877772717b4dc7bcf5380d25f27832",
+      "statement": "SENSOR_BME680_BSEC_STATE_VERSION must be incremented whenever the indoor BME680 sensor is physically replaced, because the persisted BSEC baseline NVS state is keyed by I2C address and this version number, and applying an old sensor's baseline to a different physical sensor would corrupt its IAQ calibration.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L287-L287",
+          "version": "repo-lines-v1:sha256:a10cc84fe6602ac14c70ce9d7d679e6608011e3fcbc7091c1f46624e8fec6a25:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTEwY2M4NGZlNjYwMmFjMTRjNzBjZTlkN2Q2NzllNjYwODAxMWUzZmNiYzcwOTFjMWY0NjYyNGU4ZmVjNmEyNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTEwY2M4NGZlNjYwMmFjMTRjNzBjZTlkN2Q2NzllNjYwODAxMWUzZmNiYzcwOTFjMWY0NjYyNGU4ZmVjNmEyNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjI1Y2JlYjAyOTZjMjU5ZTRlOTM0NjllMmIyZTBkNmMyZjBiYTc3OTFmNzYyODEyMmY0ZTdjOGU3NjFmZjRlOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTFhNDc2YWQ4YzYzMzE0MDY1YzJmZWVkNDlhYzhmYmFjYjRhMTliOTEyYjlmMWQ0YmYwZGZlMjYwOTA2MzY1MSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensors/bme680_sensor.c#L1095-L1104",
+          "version": "repo-lines-v1:sha256:1a5b1194c9c351871a89164afbdf946e4942e72488bfc502d9a70f437f65b467:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVjNzNjNWE0MTVmYTg0ZjczNzBhZjYzYTZmYzk2ZDU3OGY5NjdiYjJhY2UyZWQyOWIyMmFiOTUzN2NjNjE3Y2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUwMTI4MjQwMjFiNDM4NTdmZjBkY2Y0YTNiYWNjN2EzMzU4MTVlNjFjNzQ3YjY3M2U0NDM4M2MzM2M2MGM3NjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAxMTIyNzYxMmQwZTk4NzYxMWIyOWM1ZWM3ODMyYTE1MDI0ZTAwMTBmYmE3ZGY0NDZjMDlmOTczY2E0OTk3ZjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJiNWRjZTQ4OTQ5NDg1Yjk4MDlmMDgxZTM0MGZlZjQ4YmQ0NjY3MTJlNGIyZTM4M2JjNDM5MTRkMDhiY2QyOTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b9b595b478ad4558941d6ebcae5e1145",
+      "statement": "SENSOR_PWR_12V_SENSE_ACTIVE_HIGH is set to 1 in sensor_config.h based only on an analogy to the AC-sense input, with an explicit TODO(hardware) comment marking it as unverified by bench measurement at GPIO14.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/network/espnow_modem.c#L563-L563",
+          "version": "repo-lines-v1:sha256:36e53605bb9d457b763f3517791cfa6cf623d23b811ed3d8272f55abeeb4d391:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzZlNTM2MDViYjlkNDU3Yjc2M2YzNTE3NzkxY2ZhNmNmNjIzZDIzYjgxMWVkM2Q4MjcyZjU1YWJlZWI0ZDM5MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzZlNTM2MDViYjlkNDU3Yjc2M2YzNTE3NzkxY2ZhNmNmNjIzZDIzYjgxMWVkM2Q4MjcyZjU1YWJlZWI0ZDM5MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTE0YzRjN2FkNWNjZTU0NDBlOWQ3MTdjZjgwNGMyZTgwZjMxMzdmN2RlMDNiNTkxNzEzZWUwZDFkM2IxNWRhYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDQyMDIwNjllNjJkMmU5YTc5YTYyMjZjODg5ZTY0ZjUwYTg5NjcwYjc1NjRiNGQ2YWNkMzk3NzcxYzI2MmM0ZCJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L231-L233",
+          "version": "repo-lines-v1:sha256:266f76c6f0ed2a74f20ae892d79318a9f4b8579f20b0b6df1ccff5b50acf52a9:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDZjNTQ4MzQ0YzhlOGI0MjU1MDcwNWZlMjcyODRiZTUwNjEyMTUzZjA5NjI1ODBkMDRkMTE3MmU2NzhlMzM5NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmMwODU1OThjM2QyNTI3YTk4YjU2MDhmNmI2MzQyYzVkMTVjNTA1OGQyZjZmYzEyYzdmODZlNzkwZmM0OTczNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzUwZGYyMzk1MGM3ODg2MjZmZjk0ZjUyZDQ4OGMyMjZjNWNlNTA2YjY0NDk3NTYwNTI5ZTUyYWM2NzA0NmM2NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjUyYTczMmI0OGQxMjUzNjkyZjUyOTMwMjJjYzdkYmQ3NTYxYjdkZWRjNzViYjM3ODQ4ZmRjZGQyMzkyYzlhNSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_895933b0158b43419d0f58d816296122",
+      "statement": "The GasBee nRF's LiPo battery percentage curve (SENSOR_GASBEE_LIPO_CURVE) has not been verified against a real battery's discharge behavior; only a single near-full-charge voltage spot-check (multimeter 4.025V vs. reported 4.003V) has been performed, which does not validate the percentage curve across the discharge range.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L250-L250",
+          "version": "repo-lines-v1:sha256:b8e0afa5a5dd72eb61193286ef00ebb9aa6fc7c89d98dcf17cdaecd6ca945577:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjhlMGFmYTVhNWRkNzJlYjYxMTkzMjg2ZWYwMGViYjlhYTZmYzdjODlkOThkY2YxN2NkYWVjZDZjYTk0NTU3NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjhlMGFmYTVhNWRkNzJlYjYxMTkzMjg2ZWYwMGViYjlhYTZmYzdjODlkOThkY2YxN2NkYWVjZDZjYTk0NTU3NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjA2MDQzODhmYmYyNDc4MDg2NDgxYmE3NDBiZjQ4YTdhNDIxYTIyODQ2NmYxNTFmMGJiNWFhMDhmYjk4MWQ1NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDU5NmE2ZGU5MDBmZTk4NTA2YmYxY2NiZjk1NGVlMjliZDVjYzY2ZWIxYmJjMjQ5ZThiNmI5NWIxOTQ5NzYyYSJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/README.md#L78-L78",
+          "version": "repo-lines-v1:sha256:9c38d2bc524c33b616b95316b2b7bf8870c0341b801baa1896d6e3e39a7e4a5b:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWMzOGQyYmM1MjRjMzNiNjE2Yjk1MzE2YjJiN2JmODg3MGMwMzQxYjgwMWJhYTE4OTZkNmUzZTM5YTdlNGE1YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWMzOGQyYmM1MjRjMzNiNjE2Yjk1MzE2YjJiN2JmODg3MGMwMzQxYjgwMWJhYTE4OTZkNmUzZTM5YTdlNGE1YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjA3MDQ1NjAyMjJjMmUzY2E1YzI5YmQzNmI3OTVkY2M0M2M5YzQwYjg4ZDYyYWEzYjc3ZWYyMzUwOWE4YzZhNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTU1YWE0YmYwY2FjZDAwZDE1OWRhZTFjZDNjNzcyMDFiMGRmOWMzNGM5Mzc3ZjE0YTgzODM4YzMyYWNiYzFlYyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1dcdba50374f422b89ea72996593f294",
+      "statement": "The GasBee nRF's ~100mA (0.1C) charge current is a calculated target set by holding HICHG (P0.13) low via a gpio-hog so two 2.7kOhm resistors parallel the BQ25101 ISET pin; the actual delivered charge current has not yet been measured on hardware, and firmware must never drive HICHG high.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/gasbee_nrf/README.md#L17-L17",
+          "version": "repo-lines-v1:sha256:c5dd8d6b2a6ea1d7260c287a6b3b56bc7b42c19d43b901d0ce4e69058412eb03:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzVkZDhkNmIyYTZlYTFkNzI2MGMyODdhNmIzYjU2YmM3YjQyYzE5ZDQzYjkwMWQwY2U0ZTY5MDU4NDEyZWIwMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzVkZDhkNmIyYTZlYTFkNzI2MGMyODdhNmIzYjU2YmM3YjQyYzE5ZDQzYjkwMWQwY2U0ZTY5MDU4NDEyZWIwMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmRiNmFjNzg5M2Q3OGM5ZmZmMzY3MzUxM2NkYWUyYWVjNzExYjZhZTkxMTJiNTRjNDcxNTgzNTk3MDQ0ZjM5MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGNkZWNhYmI0ZWZiY2EwOTZmNTM3ZWQwNWJmOTA4NGUyNjQ2MGI2NDc2NGEyMmM3ZWIxZTk2ZWNhZTdmZTJlOCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_af92e8ef93224ad9987ad6109e8e26f0",
+      "statement": "Integration of the vehicle's original WoMo tank sensors (4-level reed/resistor-network interface) is blocked because GPIO17/GPIO18, originally earmarked as free pins for this feature, were committed to the light and pump switched outputs instead as of 2026-08-30; a different pair of free GPIOs must be chosen before this integration can proceed.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/main/sensor_config.h#L247-L255",
+          "version": "repo-lines-v1:sha256:ba603c2127170e64628e079d9f542a8f112fa38b21e0cc0020246eee3ec0db57:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzAxMGNjZjcxY2JjZjBmYTJhZTZlOGY0NDU0N2JjOWE0NzA3ZGRkYzRmOGI4MjA4YTViMGVkNjE0NmJkMGZmMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGVjMjY3OTQxYmQ2MGUzYzVmMzc3NDYwOWRlMGM2M2M1ZDBjYWUwMzJkY2E4MjE3NjFhNjBlOGQyNGJiOTM2NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzc0MDFkYTE2MjQwNWFjN2M1YTIyOTZmZWVlNTBjZjg2ODVhYWI1Mjc1OWJkYTNkM2Y4ZWJmNWQ4Yzc2YzdkYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmZlNTViNWI5MjhkOTQxY2EzOTNhNWQxMmNmNzcxMGZiOWM0MmNlZjFlODQ4MTFjMDg1NWE4ZGJiNTlmZWUwMyJ9"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L35-L36",
+          "version": "repo-lines-v1:sha256:e80918ad7a1d942415ff1d0c739fcaed73040eb78eb03f0406fe6c1436af25cd:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDlkOGE0ZWM1MjE2ZDgyZDRiNGRjY2ZiMmM5MWE5OGJmMjJlNDI5YjBhYjVhNjFmY2E2N2VjNTA0MjYzMDdiYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWQxNDA4N2U1Nzk2ZjhmNzNlZTkzMTJjZWM2NGI3MjZkMmU5OTM5YTE3NjU4MTUxMWVmOTZlZGM5YzFmY2RkZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzVhNDk3NmIzNzIwMWE4MWY0Nzk0YjY1ODEwNTM4ZGY4NjM1MDdjZjg3ZmVhOTVhNjIyMzE2YjU1YmRlNzRhMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjI5NGYzODU0ZjYyYzdmNTkwOGI2Mjk5YTFlYWE3MDU5ODFmZTFiMDhkNGE3ZTA0NGE1Mzg5NDA3OWYzYjRmMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_30508b49294e44d3a967f6fd79c2f7b6",
+      "statement": "No automatic under-voltage shutoff exists for the 12V house battery; the Sensorboard only switches the HS relay on explicit Display command. The Schaudt EBL's own automatic battery-guard cutoff behavior (reportedly ~10.6V for >60s on some newer models) is documented only as an unverified reference model, not as a confirmed threshold for the EBL 262-3 unit in this vehicle, and no threshold/timer has been decided for this project.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/progress.md#L39-L39",
+          "version": "repo-lines-v1:sha256:36bbfb907ca0281144dadb626acb93c95f96c61ce51115b2bbe5493f0b1bedb7:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzZiYmZiOTA3Y2EwMjgxMTQ0ZGFkYjYyNmFjYjkzYzk1Zjk2YzYxY2U1MTExNWIyYmJlNTQ5M2YwYjFiZWRiNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzZiYmZiOTA3Y2EwMjgxMTQ0ZGFkYjYyNmFjYjkzYzk1Zjk2YzYxY2U1MTExNWIyYmJlNTQ5M2YwYjFiZWRiNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGEzNmI0NDcxNTg0ZjhjZmIwZGJjMjlhMGY0NThhMTY4MmNlYzg1NzU4ZTc4ZGM1NmM1YzE1NGMwYTczOTU2NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDllZjMxNjY0MWUyYTRiMjQ2M2I1ODQzNmNkMWJlODVmNjk4ZGMyNmNkYzc0NzEyNGRlYjFlZDY5NWFkN2UwZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_e631070263d64f9eacb751f73cd3c604",
+      "statement": "RuuviTag Gas has completed only schematic design (Phase 2a); PCB layout (Phase 2b), fabrication documentation (Phase 3), and firmware are not started, and open hardware questions (load-cell bridge resistance, HX711 package footprint choice, P-MOSFET gate-threshold margin at end-of-battery-life) remain unresolved before PCB layout can proceed.",
+      "evidence": [
+        {
+          "resource": "repo://hardware/schematics/ruuvitag_gas/PHASE2_HX711.md#L59-L177",
+          "version": "repo-lines-v1:sha256:e6305b4d94e07a89ab177db861c64168c7a7e20deb09972ffc1feb1884e4f517:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI4MjExZTAwYzY0Mjg4NDExYjMxYzdjMGVjYWEwZTMxM2ZjMzY2MWY5NDE5OTg4ZjE3OThlZDFkYjZiOTc5YTFlIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIwMDFmMmVjMTc1OTNjMTA1NGViNDYzNjdkODQ1M2VmMjRhMTczY2U5NmI3MTE3ZDkxZjlhNjhkNDRmZWY4YjAxIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI2ODQwNzgxYWI2MTc2NmM1NWI1OGUyN2M3OTFkNDNlNWMyZTUzYTkyMzkwOTcxMGViZmYwYmUxMjI1YWM3OGNmIn0"
+        },
+        {
+          "resource": "repo://hardware/schematics/ruuvitag_gas/README.md",
+          "version": "repo-file-v1:sha256:1fe3099f32fe4449356e5a8123a27d4e3c4998b5a376994f5bece34c70bc106a"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

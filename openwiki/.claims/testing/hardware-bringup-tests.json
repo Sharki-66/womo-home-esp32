@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:53f905772949c26e980688fdf30aaca514dd58b5c582ba8df6add0805271c9ff",
+  "claims": [
+    {
+      "id": "claim_e1883e2dbebe4c4480dee700975124ea",
+      "statement": "The /tests directory contains eight standalone ESP-IDF projects (01_I2C_Test, 02_RS485_Test, 03_SD_Test, 04_Sensor_AD, 05_UART_Test, 06_TWAItransmit, 07_TWAIreceive, 08_lvgl_Porting), each with its own CMakeLists.txt and sdkconfig.defaults, built independently of firmware/sensorboard/ and firmware/display/, used to bring up and manually validate a single peripheral/bus in isolation.",
+      "evidence": [
+        {
+          "resource": "repo://tests/01_I2C_Test/CMakeLists.txt",
+          "version": "repo-file-v1:sha256:4c11bbfd0ef68f4544d4e0e15423983fc4fb065a233a35e9af055425ad17ef15"
+        },
+        {
+          "resource": "repo://tests/02_RS485_Test/CMakeLists.txt",
+          "version": "repo-file-v1:sha256:da6c571fc2fab691a8a356d4aabaf7aaa469b449989465c2dd5dbafa1116a58d"
+        },
+        {
+          "resource": "repo://tests/03_SD_Test/CMakeLists.txt",
+          "version": "repo-file-v1:sha256:cc82b1a567ee90fe9d52cbd62c4f16a41fc5b48feb335deace1ea950ba30ac1c"
+        },
+        {
+          "resource": "repo://tests/04_Sensor_AD/CMakeLists.txt",
+          "version": "repo-file-v1:sha256:6a704596f048a967b82b395565c1eaf2f01886ad96158aa97e87bdca9efd50b1"
+        },
+        {
+          "resource": "repo://tests/05_UART_Test/CMakeLists.txt",
+          "version": "repo-file-v1:sha256:da6c571fc2fab691a8a356d4aabaf7aaa469b449989465c2dd5dbafa1116a58d"
+        },
+        {
+          "resource": "repo://tests/06_TWAItransmit/CMakeLists.txt",
+          "version": "repo-file-v1:sha256:c707b629a3071b1b5efa7a45a29c5c6e4fa3263b4d2fd6d7eace09c9cfaad46d"
+        },
+        {
+          "resource": "repo://tests/07_TWAIreceive/CMakeLists.txt",
+          "version": "repo-file-v1:sha256:c707b629a3071b1b5efa7a45a29c5c6e4fa3263b4d2fd6d7eace09c9cfaad46d"
+        },
+        {
+          "resource": "repo://tests/08_lvgl_Porting/CMakeLists.txt",
+          "version": "repo-file-v1:sha256:33d25aca1c1f6422fa72d70654eeb977aa36e6d30e73118346ae2fdb98d361f5"
+        }
+      ]
+    },
+    {
+      "id": "claim_3432140900914cfc894cbb8e6ddf478e",
+      "statement": "01_I2C_Test is the ESP-IDF i2c-tools console example exposing i2cconfig/i2cdetect/i2cget/i2cset/i2cdump commands for interactively probing I2C devices, with default SDA/SCL pins (GPIO8/GPIO9) set in sdkconfig.defaults and reconfigurable at runtime via i2cconfig.",
+      "evidence": [
+        {
+          "resource": "repo://tests/01_I2C_Test/README.md#L1-L18",
+          "version": "repo-lines-v1:sha256:4c80d9a4ef767b78e95fe953720b5dde2f140a885781056476ad657788819a70:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwNWU1YzU3ZDcxZjQ4YjEzMmIyMmZmYmM4NTI4MGE1MTdjZmI4ZWQzNWFhNTBjYWIyNGNiOWE1ZDAxMTQwOWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkMGM5M2EyZGQ1ZDNmY2VlYjBiMDBhMzg5NmM0MGYxOTFkM2M4MmM0MGEzZjFhMWY1ZTYwYjk2OGRhN2UwMzkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ2OTk5NWFiYzgwZmI3YWE1ZDkyZmYxNmFjYTk2MzBkYjNkNzQ0NTgzMjZhOGJlYTMzMzgzZWJmOWIwMTMzZDYifQ"
+        },
+        {
+          "resource": "repo://tests/01_I2C_Test/main/cmd_i2ctools.c",
+          "version": "repo-file-v1:sha256:b5836c62ebfee7103ad2f1fd61eb0475644132c6a27e1e1ea6c452880ddb0bb3"
+        },
+        {
+          "resource": "repo://tests/01_I2C_Test/sdkconfig.defaults",
+          "version": "repo-file-v1:sha256:5a3d2af7053ed1c0b79c4574ac513d51f59859ed5b2995a9d0509e6e1c58a0ea"
+        }
+      ]
+    },
+    {
+      "id": "claim_e7eb5d0273bf493aa80cfd40448cfa85",
+      "statement": "02_RS485_Test is the stock ESP-IDF uart_echo example used to validate RS485/UART wiring, and is kept separate from the production Sensorboard-Display link which currently runs over ESP-NOW rather than physical RS485.",
+      "evidence": [
+        {
+          "resource": "repo://tests/02_RS485_Test/README.md#L1-L30",
+          "version": "repo-lines-v1:sha256:0fc72dac075a2e7b814a301f11f5431f6409c5c199da26d91c6bea58aa7cf5bd:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwNWU1YzU3ZDcxZjQ4YjEzMmIyMmZmYmM4NTI4MGE1MTdjZmI4ZWQzNWFhNTBjYWIyNGNiOWE1ZDAxMTQwOWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3YzA2YzU2MWQ1YzMyNzM0MzY4NTI2OGE0NmIzMzkxZjM5OThlZWU4OTBkMmJlNTFmMGQyMWNjNGE1M2FlNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZlZmNjNDJhZTE5YjEyOWYxZWMwMDhiNDU0YThhYTllMmU5NjQ4NDhkODFlY2Q0MmM1MTU1ZDY0ZTJjN2JlZDUifQ"
+        },
+        {
+          "resource": "repo://tests/02_RS485_Test/main/uart_echo_example_main.c",
+          "version": "repo-file-v1:sha256:3bca2ad2488f10ca3cc492eee0648e3b6368228354b65b21977a1d98f1dfedd2"
+        }
+      ]
+    },
+    {
+      "id": "claim_c29c7b424e70498fbccc983042fbe9d8",
+      "statement": "03_SD_Test is the stock ESP-IDF SDSPI example that mounts an SD card via esp_vfs_fat_sdspi_mount, prints card info, and exercises fopen/fprintf/stat/unlink/rename through the VFS layer, with configurable SPI pin assignments per target chip.",
+      "evidence": [
+        {
+          "resource": "repo://tests/03_SD_Test/README.md#L1-L47",
+          "version": "repo-lines-v1:sha256:0989f6716420682c116326aa0146ad664b11d338a549ef1e82aa42d7b7b1cd21:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc5MDI4MjE0NTkwYzBhYWEzY2ZiOTAwMTRiMjE0NWYyODJmODZlNjM2ZGM2YWQyNzI1Y2U3NzA4YjJlOTE5MTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZmOGQ1NmI0ODIwZjc1NjQxMTZiZjMxN2VlMGE2ODU0MDMzZjBmZjhmMGMyMmU3MjRkNTQ0ZTVhODc4MDEwYTAifQ"
+        },
+        {
+          "resource": "repo://tests/03_SD_Test/main/sd_card.c",
+          "version": "repo-file-v1:sha256:e176cf5a0b6bf1972be1808b504076d938294b6b00b260a0f6bbe1bc0bbf7edc"
+        }
+      ]
+    },
+    {
+      "id": "claim_309515413ca94f799921994402760b28",
+      "statement": "04_Sensor_AD is the stock ESP-IDF oneshot_read ADC example demonstrating the ADC oneshot driver plus calibration API (curve-fitting scheme), falling back to raw uncalibrated readings when calibration eFuse bits are not burnt.",
+      "evidence": [
+        {
+          "resource": "repo://tests/04_Sensor_AD/README.md#L1-L62",
+          "version": "repo-lines-v1:sha256:2a874a7905e4a4515188b85d9599ddbdbdef398aa1b246327da564ffd25effcb:eyJzZWxlY3RlZExpbmVDb3VudCI6NjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4MDQ5ODczMjYyNTMwY2ZmZmM3MGM4MDRlNjQzZTBiOTE1ZTFhZWUyY2Y0YjE3NWEwMjBlNGE1OTViYzliMWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYxYjkwMTg0NzM5MGIwZWQ3ZTM3NGU3YzFlNDY0ZWMxN2I0NmE0MjdjNDg3YTVhZDZjYmQyOTA2NDA1MDgzZDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://tests/04_Sensor_AD/main/oneshot_read_main.c",
+          "version": "repo-file-v1:sha256:21c7c87c2f2deeccdc0309e9541ce1f111df45f2692bd62eda12c67da1786e64"
+        }
+      ]
+    },
+    {
+      "id": "claim_591ecf3146224e9ebcf68d1f99806b79",
+      "statement": "06_TWAItransmit and 07_TWAIreceive are a matched transmit/receive pair adapted from the ESP-IDF TWAI network example via a shared waveshare_twai_port helper wrapping driver/twai.h, meant to run on two boards on the same CAN bus simultaneously to validate TWAI transceiver wiring and framing.",
+      "evidence": [
+        {
+          "resource": "repo://tests/06_TWAItransmit/main/main.c",
+          "version": "repo-file-v1:sha256:66816feaf71690f26909f8f7cbd99d3b421e0f1a8bfb68b801471671b0fce32b"
+        },
+        {
+          "resource": "repo://tests/06_TWAItransmit/main/waveshare_twai_port.h",
+          "version": "repo-file-v1:sha256:318a60fb93dff24736ee32eea68ca2ccd801c4f0838b961e6c520746b62d41f9"
+        },
+        {
+          "resource": "repo://tests/07_TWAIreceive/main/main.c",
+          "version": "repo-file-v1:sha256:8a2178c803e4641d8c9a22476e060b57b75efc1de29df10ff06a9169e3b446a8"
+        },
+        {
+          "resource": "repo://tests/07_TWAIreceive/main/waveshare_twai_port.c",
+          "version": "repo-file-v1:sha256:24e22b69357cbf49f9111cf2179bbb1252a7bc63b530d75e3310c298ce91c9a4"
+        }
+      ]
+    },
+    {
+      "id": "claim_0c0ca3a0d0944cca80c541794f71fa18",
+      "statement": "08_lvgl_Porting targets an ESP32-S3 board with an ST7701 RGB LCD (800x480) and GT911 capacitive touch controller, uses managed components (lvgl/lvgl v8.3.x, esp_lcd_touch_gt911) resolved into a local components/ tree, and provides an LVGL porting layer (lvgl_port.c/.h) with a mutex-guarded FreeRTOS task driving lv_timer_handler since LVGL calls are not thread-safe.",
+      "evidence": [
+        {
+          "resource": "repo://tests/08_lvgl_Porting/README.md#L1-L23",
+          "version": "repo-lines-v1:sha256:a31fb74d91a82fd35e59bdb3e0eeeb58aeef248c3c6a58974f4aa5a616236e50:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5NWRjZjAwNTE1NTIwMGYzOGIxNmU5ODE2MmUwZjA1NjZhYTcyYjhkZmUxZTNlOTEwYjg4YjIwYmUzYjQwYzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEzMjg0ZDQ5ZGVjNTQ3MWFlNGU3MTkwOTFiMTRlZmVlOTg0ZTU0ZTlkNDEwZjllMDllMTEwZGM3MWMxY2FlNzgifQ"
+        },
+        {
+          "resource": "repo://tests/08_lvgl_Porting/main/idf_component.yml",
+          "version": "repo-file-v1:sha256:a891180e4546f185b9e2d1d2f5f4ce861bd3358f96d5140aed65ca416f367ab7"
+        },
+        {
+          "resource": "repo://tests/08_lvgl_Porting/main/lvgl_port.h#L1-L60",
+          "version": "repo-lines-v1:sha256:cbba29e6438c2341fb400378105cc12fa1b21663e8e9963790c9dc9faed6c130:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzI3NzVlZWU3NzAwMThkYjdkNzlkMDM1YTAxNjMwMTVhMDE2ZGUxN2ViYmY4ODg0OTAyZWM2ZDFkOWZjZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjMWYxYWUyMDFjMGQ5MjliMzZmZmFiOGI3MWQ5Y2RkMjQ0Y2VmMDFkZTlkMDE1Yjg0YTdhNWY0YjNiYzljZmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjllOWIxNWIyM2IwMjcwOThjYmE2ZDMyN2Y2MjBjMzE4OTQ1OTE0MzAzZDQ5YTE3ODc0OGYwYzAxMmYxYzYxYzQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_bd62ebe8ea364b59b93284984d56d347",
+      "statement": "08_lvgl_Porting includes a custom gas_bottle LVGL widget (not from the upstream example) rendering a gas-bottle fill-level graphic with weight-to-color mapping (green >60%, yellow 30-60%, red <30%, max 11kg), instantiated by app_main() as a standalone UI prototype independent of firmware/display/.",
+      "evidence": [
+        {
+          "resource": "repo://tests/08_lvgl_Porting/main/gas_bottle.h",
+          "version": "repo-file-v1:sha256:93ac44db92906802f5ee5d3d8ff8ffb7fe1176c6ee6d2dc5fd0d9d4378ee7a21"
+        },
+        {
+          "resource": "repo://tests/08_lvgl_Porting/main/main.c",
+          "version": "repo-file-v1:sha256:e1ed3704997b7dbc7f94df9414babcfeaf0a5648eb877192c0a8bcc397e3a334"
+        }
+      ]
+    },
+    {
+      "id": "claim_124c191fba254afb9e9c0bd24dc6db80",
+      "statement": "The repository has no automated CI test suite exercising firmware logic; verification is manual and hardware-in-the-loop, recorded as dated entries in each firmware's memory-bank/activeContext.md explicitly flagged e.g. '(auf Hardware getestet)' versus '(gebaut, nicht auf Hardware getestet)'.",
+      "evidence": [
+        {
+          "resource": "repo://firmware/display/memory-bank/activeContext.md#L1-L15",
+          "version": "repo-lines-v1:sha256:7e6a96ecfa20486b77117703e37ab82b5c52585f39834b5807dcdbe2c568e63f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJlNGE3YmQxMWI0MjkzMDhmNDA4OGY0OGMxNTAyYTc0MmY0NGY0YmQ3YjdhNmFlYTU0ZjM0N2YzN2RjZDliZWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRmZTExOTJkNWY5ZTM4Y2QwYjRkNTk2NTg3MWM3M2UwNzIyMTkyZmI0ZmZhYzQzOTRlYTRmZTA3ZWEyMjM4MTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhmZWM5NGRkNGNlMTliYjZjOWI3MzBhNTRjMzZmNWY3MmM4Nzg0NGY1NmFkMWNlZjIzYTU4MmI3ODQ5ZjJjNDYifQ"
+        },
+        {
+          "resource": "repo://firmware/sensorboard/memory-bank/activeContext.md#L1-L26",
+          "version": "repo-lines-v1:sha256:08a04dc90bc145ee7a3cc19bcfe11298d0228e8ea147845da679ee2bfa0e625c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAzZDRkNjM3NWU4NjZkNTZiN2FhYzZkNjBiYTVmNTlmZjJmMTBiNThhOGExNjYxY2EzNTY5ZTI5MmNlMmU0YzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjNjZiNTI1YzlhZTAxMmExNTJhOGQ1OWI2OTgxN2Y1MzUyM2JjMWMzZGM2ODU3MDI3YjA5ZThjM2NjMmRkYzQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY4NjM3MTdhNjMxMjg3OWU4NWM5NmM2ZGEwMWE4MGQ2NmYzYzFhYjAyNjYxNjEwYWFkNTM3MTA0MWQwNjc2ZDYifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

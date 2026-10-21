@@ -263,6 +263,7 @@ typedef struct {
     char  unit[8];                /**< Einheit, z.B. "GB"                 */
     char  speed[32];              /**< Download-Speed-Text                */
     char  valid_until[32];        /**< Gültig bis, z.B. "13. Oktober 2026"*/
+    char  valid_until_iso[12];    /**< Dasselbe als "2026-10-13", leer wenn unbekannt */
     uint32_t ts;                  /**< Unix-Timestamp der Abfrage (Router)*/
 } womo_router_datapass_t;
 

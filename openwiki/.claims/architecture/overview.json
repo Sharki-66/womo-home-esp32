@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:a25e8f16984a9e35159ed56328d8d2034b3fbc0c56be08d991b22b5087f27a13",
+  "claims": [
+    {
+      "id": "claim_c8225a8cde8745c6939565632218e426",
+      "statement": "No openHAB integration (Items, Things, MQTT/REST binding, or any other home-automation-hub consumer) exists anywhere in this repository; neither the top-level project documentation nor the Display firmware's list of external network integrations mentions openHAB, and a repository-wide text search for the term finds no source, configuration, or documentation hits.",
+      "evidence": [
+        {
+          "resource": "repo://CLAUDE.md#L56-L61",
+          "version": "repo-lines-v1:sha256:f9b158ea54752fe209902b0d60da4de72841d8bcbf3aeed787150676c49f1005:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjA4YmFiMThiNjJiZjFkNjg4YjU5NDA0NTYwYTg4MDUxNTU2NGRjMDY4N2Y4ZWM5OGQ4OWY4YjI2NmVmZDBhZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjAzNWI0NDdjZjg4N2IwNzZiMDdhZGE4OTdiOGQwZWU5NzdjZTE5N2ZmZTlmMzJmMmE5MmEzMDNhZDFiZmI0YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTQ0YzQ4ZTliYTUyMTdjOTI5Zjc5ZTYyMWNiYTZmNjVkMDNmMDMxZmJjZTVkNTNiNTVmZDQ0ZTg5YzhkOGJlNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2EyMWMyODdmZjA0N2RmOTE0OGE2ZDM4ZTA1ZDJjMDEzODk1YWY1MDIyMjg4N2VjNzRhNjgyYzI2M2E4MTZmNSJ9"
+        },
+        {
+          "resource": "repo://firmware/display/README.md#L32-L38",
+          "version": "repo-lines-v1:sha256:d9987e86c36e3c3c67755ffd340165716a965d8c23c189495220d24f427265e5:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzk4ZjAzMWEyOTVhMTI2ZTk5NmEwYzY4MWRkNWU2YWVlMDQwNzVjZTY4ODJlM2YzZTUyZjU5MTljYmU2MGE2ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWQxYTQ1MmQ2NWFkMjZmZjE3MjJhMjlmMjEwYmY4YmJkY2EwODlhOTI3MjU1MDc1OWE2NDNjYTUwM2EyZTc4YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWQ0ZjU0MjJjYTBiMzMyMDYyZWM1ZDliMDcxMTRhYTg3MTE2OWUyMjIzMDkzNGI3YTA4OGFkOTEwOTQwY2FiZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDljMDkwYTIyZWZhMWFjYWI4NDQ3ZTkxMjViNzc3NDQ0MmZkNDk1OWQ0NzZlMmE1NDUxYjhlZDg0ZThiMDM5NyJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-19T20:49:57.319Z"
+  }
+}

@@ -18,7 +18,10 @@
       "Bash(sed -i -e 's|\"network/rs485_modem\\\\.h\"|\"network/espnow_modem.h\"|g' -e s/rs485_modem_execute_cmd_json/espnow_modem_execute_cmd_json/g -e s/rs485_modem_get_snapshot/espnow_modem_get_snapshot/g /home/hajo/womo-home-esp32/firmware/sensorboard/main/network/wifi/sensor_http.c)",
       "Bash(sed -i -e s/SENSOR_RS485_DE_GPIO/SENSOR_ESPNOW_DE_LEGACY_GPIO/g -e 's/RS485-Transceiver: DE\\\\/RTS LOW halten/Ehemaliger RS485-DE \\(GPIO8\\): im Deep-Sleep LOW halten/g' /home/hajo/womo-home-esp32/firmware/sensorboard/main/hal/deep_sleep.c)",
       "Bash(sed -i -e 's|z\\\\.B\\\\. um per RS485 das Passwort beim Display anzufragen|z.B. um per ESP-NOW das Passwort beim Display anzufragen|g' -e 's|// Callback aufrufen \\(z.B. RS485 Passwort-Anfrage ans Display\\)|// Callback aufrufen \\(z.B. ESP-NOW Passwort-Anfrage ans Display\\)|g' /home/hajo/womo-home-esp32/firmware/sensorboard/main/network/wifi/sensor_wifi.h /home/hajo/womo-home-esp32/firmware/sensorboard/main/network/wifi/sensor_wifi.c)",
-      "Bash(grep -v \"^.*//.*$\")"
+      "Bash(grep -v \"^.*//.*$\")",
+      "Bash(kicad-cli --version)",
+      "Bash(kicad-cli sch *)",
+      "Bash(python3 -)"
     ],
     "additionalDirectories": [
       "/home/hajo/womo-home-esp32/firmware/sensorboard"

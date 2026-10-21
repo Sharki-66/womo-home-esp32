@@ -16,7 +16,7 @@
 #include "womo_forecast_modal.h"
 #include "womo_locale.h"
 #include "storage/womo_sd.h"
-#include "network/womo_meteoalarm.h"
+#include "network/womo_weather_warn.h"
 #include "misc/cache/instance/lv_image_cache.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -40,7 +40,7 @@ static const char *TAG = "forecast_modal";
 #define SIDE_PAD      8   /* Rand links + rechts */
 #define ICON_SIZE    64
 
-/* ── Meteoalarm-Warnbereich (unterhalb der 5 Spalten) ─────── */
+/* ── Warnbereich (unterhalb der 5 Spalten) ──────────────────── */
 #define WARN_MAX_DISPLAY   3
 #define WARN_Y0            280   /* HDR_H(48) + COL_CONTENT_Y0(12) + COL_CONTENT_H(252) - 20px */
 #define WARN_DOT_SZ        12
@@ -95,8 +95,9 @@ static lv_obj_t *s_sunh_ico [COL_COUNT];
 static lv_obj_t *s_rain_ico [COL_COUNT];  /* water_drop vor Regenwahrscheinlichkeit */
 static lv_obj_t *s_wind_ico [COL_COUNT];  /* air vor Windgeschwindigkeit */
 
-/* ── Meteoalarm-Warnbereich ─────────────────────────────────── */
-static womo_meteoalarm_result_t s_meteoalarm     = {0};
+/* ── Warnbereich ────────────────────────────────────────────── */
+static womo_weather_warn_result_t s_warn_result  = {0};
+static lv_obj_t *s_warn_src_lbl                  = NULL;
 static lv_obj_t *s_warn_hdr_lbl                  = NULL;
 static lv_obj_t *s_warn_dot [WARN_MAX_DISPLAY]   = {0};
 static lv_obj_t *s_warn_text[WARN_MAX_DISPLAY]   = {0};
@@ -325,6 +326,7 @@ static void close_modal(void)
     s_hdr_lbl_ss   = NULL;
     s_warn_hdr_lbl = NULL;
     s_warn_more_lbl = NULL;
+    s_warn_src_lbl = NULL;
     for (int i = 0; i < WARN_MAX_DISPLAY; i++) {
         s_warn_dot[i]  = NULL;
         s_warn_text[i] = NULL;
@@ -339,7 +341,18 @@ static void close_modal(void)
 
 static void close_btn_cb(lv_event_t *e)   { (void)e; close_modal(); }
 
-/* ── Meteoalarm-Warnbereich: Widgets aufbauen ───────────────── */
+/* Farben nach DWD-Stufen: 1 gelb, 2 orange, 3 rot, 4 violett */
+static uint32_t warn_level_color(uint8_t sev)
+{
+    switch (sev) {
+    case WOMO_WARN_SEV_EXTREME:  return 0x8E24AA;
+    case WOMO_WARN_SEV_SEVERE:   return 0xC62828;
+    case WOMO_WARN_SEV_MODERATE: return 0xFB8C00;
+    default:                     return 0xFDD835;
+    }
+}
+
+/* ── Warnbereich: Widgets aufbauen ──────────────────────────── */
 static void build_warn_section(lv_obj_t *col_frame)
 {
     /* Trennlinie */
@@ -355,8 +368,8 @@ static void build_warn_section(lv_obj_t *col_frame)
 
     /* Kopfzeile ("Keine Wetterwarnungen" / "⚠ N Warnung(en)") */
     s_warn_hdr_lbl = lv_label_create(col_frame);
-    lv_label_set_text(s_warn_hdr_lbl, "Keine Wetterwarnungen");
-    lv_obj_set_style_text_font(s_warn_hdr_lbl, &lv_font_montserrat_14, 0);
+    lv_label_set_text(s_warn_hdr_lbl, womo_locale_get_string(STR_WARN_NONE));
+    lv_obj_set_style_text_font(s_warn_hdr_lbl, &lv_font_montserrat_14_german, 0);
     lv_obj_set_style_text_color(s_warn_hdr_lbl, lv_color_hex(0x546E7A), 0);
     lv_obj_set_size(s_warn_hdr_lbl, MODAL_W - 20, 16);
     lv_obj_set_pos(s_warn_hdr_lbl, 10, WARN_Y0 + 14);
@@ -376,11 +389,11 @@ static void build_warn_section(lv_obj_t *col_frame)
         lv_obj_clear_flag(s_warn_dot[i], LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(s_warn_dot[i], LV_OBJ_FLAG_HIDDEN);
 
-        /* Text: "EVENT – Headline  |  bis EXPIRES" */
+        /* Text: "Titel  |  von - bis" */
         s_warn_text[i] = lv_label_create(col_frame);
         lv_label_set_text(s_warn_text[i], "");
         lv_label_set_long_mode(s_warn_text[i], LV_LABEL_LONG_DOT);
-        lv_obj_set_style_text_font(s_warn_text[i], &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(s_warn_text[i], &lv_font_montserrat_12_german, 0);
         lv_obj_set_style_text_color(s_warn_text[i], lv_color_hex(0x333333), 0);
         lv_obj_set_size(s_warn_text[i], MODAL_W - 36, 16);
         lv_obj_set_pos(s_warn_text[i], 28, row_y + (WARN_ROW_H - 16) / 2);
@@ -390,66 +403,72 @@ static void build_warn_section(lv_obj_t *col_frame)
     /* "+ N weitere..." Label */
     s_warn_more_lbl = lv_label_create(col_frame);
     lv_label_set_text(s_warn_more_lbl, "");
-    lv_obj_set_style_text_font(s_warn_more_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(s_warn_more_lbl, &lv_font_montserrat_12_german, 0);
     lv_obj_set_style_text_color(s_warn_more_lbl, lv_color_hex(0x757575), 0);
-    lv_obj_set_size(s_warn_more_lbl, 300, 14);
+    lv_obj_set_size(s_warn_more_lbl, 140, 14);
     lv_obj_set_pos(s_warn_more_lbl, 28, WARN_Y0 + 34 + WARN_MAX_DISPLAY * WARN_ROW_H + 2);
     lv_obj_add_flag(s_warn_more_lbl, LV_OBJ_FLAG_HIDDEN);
+
+    /* Herkunftshinweis: eigene Auswertung, keine amtliche Warnung */
+    s_warn_src_lbl = lv_label_create(col_frame);
+    lv_label_set_text(s_warn_src_lbl, womo_locale_get_string(STR_WARN_SOURCE));
+    lv_label_set_long_mode(s_warn_src_lbl, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_font(s_warn_src_lbl, &lv_font_montserrat_12_german, 0);
+    lv_obj_set_style_text_color(s_warn_src_lbl, lv_color_hex(0x757575), 0);
+    lv_obj_set_style_text_align(s_warn_src_lbl, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_size(s_warn_src_lbl, MODAL_W - 180, 14);
+    lv_obj_set_pos(s_warn_src_lbl, 170, WARN_Y0 + 34 + WARN_MAX_DISPLAY * WARN_ROW_H + 2);
+    lv_obj_add_flag(s_warn_src_lbl, LV_OBJ_FLAG_HIDDEN);
 }
 
-/* ── Meteoalarm-Warnbereich: Daten einsetzen ────────────────── */
+/* ── Warnbereich: Daten einsetzen ───────────────────────────── */
 static void update_warn_section(void)
 {
     if (!s_warn_hdr_lbl) return;
 
-    uint8_t count = s_meteoalarm.valid ? s_meteoalarm.count : 0;
+    uint8_t count = s_warn_result.valid ? s_warn_result.count : 0;
 
     if (count == 0) {
-        lv_label_set_text(s_warn_hdr_lbl, "Keine Wetterwarnungen");
+        lv_label_set_text(s_warn_hdr_lbl, womo_locale_get_string(STR_WARN_NONE));
         lv_obj_set_style_text_color(s_warn_hdr_lbl, lv_color_hex(0x546E7A), 0);
         for (int i = 0; i < WARN_MAX_DISPLAY; i++) {
             if (s_warn_dot[i])  lv_obj_add_flag(s_warn_dot[i],  LV_OBJ_FLAG_HIDDEN);
             if (s_warn_text[i]) lv_obj_add_flag(s_warn_text[i], LV_OBJ_FLAG_HIDDEN);
         }
         if (s_warn_more_lbl) lv_obj_add_flag(s_warn_more_lbl, LV_OBJ_FLAG_HIDDEN);
+        if (s_warn_src_lbl)  lv_obj_add_flag(s_warn_src_lbl,  LV_OBJ_FLAG_HIDDEN);
         return;
     }
 
-    /* Kopfzeile mit Anzahl */
+    /* Kopfzeile mit Anzahl; Gelb ist auf hellem Grund schlecht lesbar → dunkles Gelb */
     {
         char hdr[48];
-        snprintf(hdr, sizeof(hdr), LV_SYMBOL_WARNING " %u Wetterwarnung%s (meteoalarm.org)",
-                 count, count == 1 ? "" : "en");
+        snprintf(hdr, sizeof(hdr),
+                 womo_locale_get_string(count == 1 ? STR_WARN_HDR_ONE : STR_WARN_HDR_MANY),
+                 count);
         lv_label_set_text(s_warn_hdr_lbl, hdr);
-        uint32_t hdr_color = (s_meteoalarm.max_severity >= WOMO_WARN_SEV_SEVERE)
-                             ? 0xC62828 : 0xE65100;
+        uint32_t hdr_color = (s_warn_result.max_severity <= WOMO_WARN_SEV_MINOR)
+                             ? 0xF57F17 : warn_level_color(s_warn_result.max_severity);
         lv_obj_set_style_text_color(s_warn_hdr_lbl, lv_color_hex(hdr_color), 0);
     }
 
-    /* Bis zu WARN_MAX_DISPLAY Zeilen */
+    /* Bis zu WARN_MAX_DISPLAY Zeilen (Liste ist absteigend nach Stufe sortiert) */
     int shown = (count < WARN_MAX_DISPLAY) ? count : WARN_MAX_DISPLAY;
     for (int i = 0; i < shown; i++) {
-        const womo_meteoalarm_warning_t *w = &s_meteoalarm.warnings[i];
+        const womo_weather_warning_t *w = &s_warn_result.warnings[i];
 
-        /* Farbe nach Severity */
-        uint32_t dot_color = (w->severity >= WOMO_WARN_SEV_SEVERE) ? 0xC62828 : 0xFB8C00;
-        lv_obj_set_style_bg_color(s_warn_dot[i], lv_color_hex(dot_color), 0);
+        lv_obj_set_style_bg_color(s_warn_dot[i], lv_color_hex(warn_level_color(w->severity)), 0);
         lv_obj_clear_flag(s_warn_dot[i],  LV_OBJ_FLAG_HIDDEN);
 
-        /* Text aufbauen: "EVENT – Headline  |  bis EXPIRES" */
-        char row_buf[120];
-        if (w->event[0] && w->expires[0]) {
-            snprintf(row_buf, sizeof(row_buf), "%s \xe2\x80\x93 %s  |  bis %s",
-                     w->event, w->headline, w->expires);
-        } else if (w->event[0]) {
-            snprintf(row_buf, sizeof(row_buf), "%s \xe2\x80\x93 %s", w->event, w->headline);
-        } else if (w->expires[0]) {
-            snprintf(row_buf, sizeof(row_buf), "%s  |  bis %s", w->headline, w->expires);
-        } else {
-            snprintf(row_buf, sizeof(row_buf), "%s", w->headline);
-        }
+        char title[64], when[32], row_buf[112];
+        womo_weather_warn_format(w, title, sizeof(title), when, sizeof(when));
+        snprintf(row_buf, sizeof(row_buf), "%s  |  %s", title, when);
         lv_label_set_text(s_warn_text[i], row_buf);
         lv_obj_clear_flag(s_warn_text[i], LV_OBJ_FLAG_HIDDEN);
+    }
+    if (s_warn_src_lbl) {
+        lv_label_set_text(s_warn_src_lbl, womo_locale_get_string(STR_WARN_SOURCE));
+        lv_obj_clear_flag(s_warn_src_lbl, LV_OBJ_FLAG_HIDDEN);
     }
 
     /* Restliche Zeilen ausblenden */
@@ -461,7 +480,8 @@ static void update_warn_section(void)
     /* "+ N weitere" wenn mehr als WARN_MAX_DISPLAY Warnungen */
     if (count > WARN_MAX_DISPLAY) {
         char more_buf[32];
-        snprintf(more_buf, sizeof(more_buf), "+ %u weitere...", count - WARN_MAX_DISPLAY);
+        snprintf(more_buf, sizeof(more_buf), womo_locale_get_string(STR_WARN_MORE),
+                 (unsigned)(count - WARN_MAX_DISPLAY));
         lv_label_set_text(s_warn_more_lbl, more_buf);
         lv_obj_clear_flag(s_warn_more_lbl, LV_OBJ_FLAG_HIDDEN);
     } else {
@@ -489,12 +509,12 @@ void womo_forecast_modal_update(const womo_weather_forecast_t *forecast)
     fill_columns(forecast);
 }
 
-void womo_forecast_modal_set_warnings(const womo_meteoalarm_result_t *result)
+void womo_forecast_modal_set_warnings(const womo_weather_warn_result_t *result)
 {
     if (result) {
-        s_meteoalarm = *result;
+        s_warn_result = *result;
     } else {
-        memset(&s_meteoalarm, 0, sizeof(s_meteoalarm));
+        memset(&s_warn_result, 0, sizeof(s_warn_result));
     }
     /* Wenn das Modal gerade offen ist → sofort aktualisieren */
     if (s_overlay) {

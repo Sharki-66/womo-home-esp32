@@ -1680,6 +1680,7 @@ esp_err_t womo_router_get_data_pass(womo_router_datapass_t *out)
     json_strcpy(out->unit,        sizeof(out->unit),        root, "unit");
     json_strcpy(out->speed,       sizeof(out->speed),       root, "speed");
     json_strcpy(out->valid_until, sizeof(out->valid_until), root, "valid_until");
+    json_strcpy(out->valid_until_iso, sizeof(out->valid_until_iso), root, "valid_until_iso");
 
     cJSON *ts = cJSON_GetObjectItem(root, "ts");
     if (ts && cJSON_IsNumber(ts)) out->ts = (uint32_t)ts->valuedouble;

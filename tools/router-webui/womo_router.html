@@ -319,10 +319,12 @@ function applyStatus(d) {
     lSigDbm = rssi;
     lSigPct = Math.min(100, Math.max(0, Math.round((rssi + 113) / 62 * 100)));
   }
-  const lRegistered = l.op && l.op !== '–' && l.op !== 'N/A' && l.op !== '';
-  setLed('lte-led', lRegistered, !lEnabled);
+  const lModemDown = l.modem === 'down';
+  const lRegistered = !lModemDown && l.op && l.op !== '–' && l.op !== 'N/A' && l.op !== '';
+  setLed('lte-led', lRegistered, !lEnabled || lModemDown);
   document.getElementById('lte-sw').checked = lEnabled;
-  document.getElementById('lte-op').textContent   = l.op   || '–';
+  document.getElementById('lte-op').textContent   =
+    lModemDown ? '⚠ Modem nicht erreichbar' : (l.op || '–');
   document.getElementById('lte-type').textContent = l.type || '–';
   document.getElementById('lte-sig').textContent  =
     lSigDbm !== null ? `${lSigPct}% (${lSigDbm} dBm)` : '–';
@@ -504,7 +506,7 @@ async function refreshWifi() {
    LTE
 ══════════════════════════════════════════════ */
 async function refreshLte() {
-  let enabled = true, op = '–', type = '–', sim = '–', sigPct = 0, sigDbm = null;
+  let enabled = true, op = '–', type = '–', sim = '–', simslot = '', sigPct = 0, sigDbm = null;
 
   // LTE-Daten via dediziertem CGI (läuft als root, kein ubus file/exec nötig)
   let lteErr = null;
@@ -515,10 +517,12 @@ async function refreshLte() {
     let d;
     try { d = JSON.parse(text); }
     catch (_) { throw new Error(`Kein JSON: ${text.substring(0, 80)}`); }
+    if (d.modem === 'down') throw new Error('Modem nicht erreichbar');
     enabled   = d.disabled !== '1';
     op        = d.op   || '–';
     type      = d.type || '–';
     sim       = d.sim  || '';
+    simslot   = d.simslot || '';
     // RSRP ist für LTE der relevanteste Wert (-140 dBm = 0 % … -80 dBm = 100 %)
     const rsrp = d.rsrp && d.rsrp !== '-' ? parseInt(d.rsrp) : null;
     const rssi = d.rssi && d.rssi !== '-' ? parseInt(d.rssi) : null;
@@ -541,7 +545,7 @@ async function refreshLte() {
   document.getElementById('lte-sig').textContent  =
     sigDbm !== null ? `${sigPct}% (${sigDbm} dBm)` : '–';
   document.getElementById('lte-sim').textContent  = sim;
-  document.getElementById('lte-simslot').textContent = d.simslot ? `SIM ${d.simslot}` : '–';
+  document.getElementById('lte-simslot').textContent = simslot ? `SIM ${simslot}` : '–';
   const bar = document.getElementById('lte-bar');
   bar.style.width = sigPct + '%';
   bar.style.background = sigColor(sigPct);
