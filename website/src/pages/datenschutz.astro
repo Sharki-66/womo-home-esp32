@@ -19,11 +19,14 @@ const sections = [
       <a href="https://www.netlify.com/privacy/" target="_blank" rel="noopener" class="text-amber-400 hover:underline">netlify.com/privacy</a>.`,
   },
   {
-    title: '3. Seitenaufrufzähler',
-    html: `Auf der Startseite wird ein Zähler der Seitenaufrufe angezeigt. Bei jedem Aufruf wird lediglich eine
-      Gesamtzahl um eins erhöht und bei Netlify gespeichert. Es werden dabei keine personenbezogenen Daten
-      gespeichert – keine IP-Adresse, keine Uhrzeit, kein Browser – und es werden keine Cookies oder sonstigen
-      Daten auf Ihrem Endgerät abgelegt.`,
+    title: '3. Besucherzähler',
+    html: `Auf der Startseite wird die Zahl der Besucher angezeigt. Um mehrfache Aufrufe am selben Tag nur einmal
+      zu zählen, wird aus Ihrer IP-Adresse, Ihrem User-Agent (Browser und Betriebssystem) und einem zufälligen,
+      täglich wechselnden Wert ein Hash (SHA-256) gebildet. Gespeichert werden bei Netlify nur dieser Hash und
+      die Gesamtzahl – nicht die IP-Adresse und nicht der User-Agent selbst. Der Hash lässt sich nicht auf Ihre
+      IP-Adresse zurückrechnen; Hashes und Zufallswert werden am Folgetag gelöscht, danach ist keine Zuordnung
+      mehr möglich. Es werden keine Cookies oder sonstigen Daten auf Ihrem Endgerät abgelegt. Rechtsgrundlage ist
+      Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an einer einfachen, datensparsamen Reichweitenmessung).`,
   },
   {
     title: '4. Kontaktformular und E-Mail',
@@ -35,14 +38,14 @@ const sections = [
   },
   {
     title: '5. Externe Links',
-    html: `Diese Website enthält Links zu externen Angeboten (z. B. GitHub, Hersteller-Websites, ESP Web Flasher).
+    html: `Diese Website enthält Links zu externen Angeboten (z. B. GitHub, Hersteller-Websites).
       Daten werden an diese Anbieter erst übertragen, wenn Sie einen Link anklicken. Für deren Datenverarbeitung
       ist der jeweilige Anbieter verantwortlich.`,
   },
   {
     title: '6. Cookies',
     html: `Diese Website setzt keine Cookies, speichert keine Daten auf Ihrem Endgerät und verwendet keine
-      Tracking- oder Analysedienste.`,
+      Tracking- oder Analysedienste Dritter.`,
   },
   {
     title: '7. Ihre Rechte',

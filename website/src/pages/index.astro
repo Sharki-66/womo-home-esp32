@@ -482,12 +482,12 @@ import Layout from '../layouts/Layout.astro';
     </p>
     <p id="visits" class="mt-2 text-xs text-gray-600"></p>
     <script is:inline>
-      // Seitenaufrufzähler (netlify/functions/counter.mjs); bei Fehler bleibt die Zeile leer
+      // Besucherzähler (netlify/functions/counter.mjs); bei Fehler bleibt die Zeile leer
       fetch('/api/counter', { method: 'POST' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
           if (d && typeof d.count === 'number') {
-            document.getElementById('visits').textContent = d.count.toLocaleString('de-DE') + ' Seitenaufrufe';
+            document.getElementById('visits').textContent = d.count.toLocaleString('de-DE') + ' Besucher';
           }
         })
         .catch(function () {});

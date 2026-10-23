@@ -13,7 +13,7 @@ Build-Konfiguration: `../netlify.toml` (Basis `website/`, Ausgabe `dist/`).
 | `src/pages/impressum.astro` | Impressum + Haftungsausschluss |
 | `src/pages/datenschutz.astro` | Datenschutzerklärung |
 | `src/layouts/Layout.astro` | Gemeinsames Layout, Tag/Nacht-Theme |
-| `netlify/functions/counter.mjs` | Seitenaufrufzähler (`/api/counter`, Netlify Blobs, nur Gesamtzahl) |
+| `netlify/functions/counter.mjs` | Besucherzähler (`/api/counter`, Netlify Blobs; eindeutige Besucher pro Tag per Hash mit Tages-Salt, keine IP gespeichert) |
 
 ## Inhalte aktuell halten
 
@@ -37,4 +37,4 @@ Build-Konfiguration: `../netlify.toml` (Basis `website/`, Ausgabe `dist/`).
 | `npm run build` | Produktions-Build nach `./dist/` |
 | `npm run preview` | Build lokal ansehen |
 
-Der Seitenaufrufzähler läuft nur auf Netlify (bzw. mit `netlify dev`), lokal bleibt die Zeile leer.
+Der Besucherzähler läuft nur auf Netlify (bzw. mit `netlify dev`), lokal bleibt die Zeile leer.
