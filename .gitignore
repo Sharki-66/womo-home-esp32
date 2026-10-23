@@ -24,6 +24,9 @@ DRC.rpt
 *.lck
 _autosave-*
 #auto_saved_files#
+# Freerouting-Austauschdateien (temporär)
+*.dsn
+*.ses
 hardware/schematics/*/gerber/
 hardware/schematics/*/production/
 hardware/schematics/*/bom/
