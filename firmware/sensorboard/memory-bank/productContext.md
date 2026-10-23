@@ -11,7 +11,7 @@
       ↓
 [Display ESP32-S3]
       ↑ BLE
-[GasBee ESP32-C3]  ──BLE──→ [Sensorboard]
+[GasBee nRF52840] ──BLE-Advertising──→ [Sensorboard]
 ```
 
 Das Sensorboard ist **kein** UI-Gerät – es sammelt Daten und sendet sie weiter. Das Display ist für alle Visualisierung und Nutzerinteraktion zuständig.
@@ -29,10 +29,11 @@ Primärkanal. Das Sensorboard ist der **Sender**, das Display der **Empfänger**
 - NTP-Zeit-Sync über Router
 - GPS/LTE-Daten werden **nicht** vom Sensorboard geholt – das macht das Display direkt
 
-### → GasBee (BLE Central)
-- Sensorboard ist NimBLE Central, GasBee ist Peripheral
-- Auto-Reconnect bei Verbindungsabbruch
-- Empfängt Gewichtsdaten der Gasflaschen
+### → GasBee (BLE, passiver Scan)
+- GasBee sendet alle 5 min einen Advertising-Burst (Format v1: Bruttogewicht, Akku, seq, Flags)
+- Sensorboard scannt passiv, Zuordnung Flasche A/B per MAC (`gasbee_cfg`)
+- GATT-Verbindung nur zur Kalibrierung, wenn die GasBee an USB hängt (`gasbee_gatt_cal.c`)
+- HX711 am Kabel hat Vorrang (`gas_source.c`)
 
 ### → Browser (HTTP Web-Dashboard)
 - Erreichbar unter `http://Womo-Sensor.local/` (mDNS)

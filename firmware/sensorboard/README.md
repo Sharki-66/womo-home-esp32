@@ -24,11 +24,14 @@ ESP-IDF v5.5.2 · ESP32-S3-WROOM-1 (N16R8)
 
 | GPIO | Funktion | Richtung |
 |---|---|---|
-| 7  | Display 5V (P-MOSFET Q4: LOW=ein, Hi-Z=aus) | Ausgang |
+| 6  | Touch-Wakeup (TOUCH_PAD_NUM6) | Eingang |
+| 7  | Display 5V (Q5 2N7002 → Q4 AO3401A: HIGH=ein, LOW/Hi-Z=aus) | Ausgang |
 | 11 | 12V Bordnetz EIN (bistabiles Relais, Puls) | Ausgang |
 | 12 | 12V Bordnetz AUS (bistabiles Relais, Puls) | Ausgang |
 | 13 | Multimedia Power (N-MOSFET, HIGH=ein) | Ausgang |
 | 14 | 12V Bordnetz Feedback | Eingang |
+| 17 | Licht (reserviert, Firmware TODO) | Ausgang |
+| 18 | Pumpe (reserviert, Firmware TODO) | Ausgang |
 | 21 | 230V AC Sense | Eingang |
 
 ### Spannungsteiler (ADC)

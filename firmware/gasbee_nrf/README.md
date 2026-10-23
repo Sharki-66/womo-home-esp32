@@ -1,6 +1,6 @@
 # GasBee nRF – BLE-Gaswaage auf Seeed XIAO nRF52840
 
-Ersatz für [firmware/gasbee](../gasbee/) (ESP32-C3). Wiegt die Gasflasche mit einer Wägezelle über einen HX711 und sendet Bruttogewicht, Akkuspannung und Status per **BLE-Advertising (Format v1)**. Das Sensorboard empfängt das per passivem Scan und verbindet sich nicht (`firmware/sensorboard/main/network/gasbee_ble_scanner.c`, dann `sensors/gas_source.c` ins Gas-Topic). Den GATT-Service des ESP32-C3-GasBee gibt es weiterhin, aber nur noch für andere Clients wie Handy-Apps und für den Tare-Befehl.
+Ersatz für [firmware/gasbee](../gasbee/) (ESP32-C3). Wiegt die Gasflasche mit einer Wägezelle über einen HX711 und sendet Bruttogewicht, Akkuspannung und Status per **BLE-Advertising (Format v1)**. Das Sensorboard empfängt das per passivem Scan und verbindet sich nur zur Kalibrierung (Messwerte: `firmware/sensorboard/main/network/gasbee_ble_scanner.c`, dann `sensors/gas_source.c` ins Gas-Topic). Den GATT-Service des ESP32-C3-GasBee gibt es weiterhin, für die Kalibrierung durch das Sensorboard (`gasbee_gatt_cal.c`, nur an USB), für andere Clients wie Handy-Apps und für den Tare-Befehl.
 
 ## Hardware
 
@@ -70,7 +70,7 @@ Nach dem Abziehen trennt er laufende Verbindungen und kehrt in den Akkubetrieb z
 
 **Befehle über GATT** (Tare, Kalibrierung) lösen sofort eine Zusatzmessung aus. Der 5-min-Takt bleibt dabei erhalten.
 
-Auch ohne HX711 wird gesendet, das Gewicht ist dann als ungültig markiert. Im Leerlauf geht der nRF52840 automatisch in System ON Idle. System OFF ist nicht möglich, weil der nRF52840 daraus nicht per Timer aufwacht. Der Stromverbrauch ist noch nicht gemessen.
+Auch ohne HX711 wird gesendet, das Gewicht ist dann als ungültig markiert. Im Leerlauf geht der nRF52840 automatisch in System ON Idle. System OFF ist nicht möglich, weil der nRF52840 daraus nicht per Timer aufwacht. Gemessen ist bisher nur der Ruhestrom (6,7 µA, siehe Status), der mittlere Strom inklusive Messung und Burst noch nicht.
 
 ### Advertising-Format v1 (für passiven Scan)
 
@@ -94,7 +94,7 @@ Tara, Gas-Netto, Füllstand und Akku-% berechnet das Sensorboard. Die Adresse is
 
 ### GATT (Kompatibilität)
 
-Das Sensorboard nutzt GATT nicht. Der Service ist für andere Clients gedacht, etwa nRF Connect auf dem Handy, und für den Tare-Befehl.
+Für die Messwerte nutzt das Sensorboard GATT nicht. Es verbindet sich nur zur Kalibrierung (0x2B11/0x2B12, `firmware/sensorboard/main/network/gasbee_gatt_cal.c`), und das nur im Konfigurationsmodus an USB. Ansonsten ist der Service für andere Clients gedacht, etwa nRF Connect auf dem Handy, und für den Tare-Befehl.
 
 Das Advertising ist verbindbar. Ein GATT-Client kann sich während eines Bursts verbinden. Solange diese Verbindung steht, gibt es keine Bursts, und auch das Sensorboard bekommt dann keine Werte. Nach dem Trennen sendet der GasBee erst beim nächsten Messzyklus wieder.
 
@@ -210,7 +210,7 @@ Jeder GasBee wird **einzeln** kalibriert. Die Werte liegen pro Gerät in NVS (`g
 
 ### Ablauf
 
-Für Nutzer ist die Bedienung am **Display** vorgesehen: Das Sensorboard verbindet sich und schreibt die Befehle. Das wird im Sensorboard-/Display-Arbeitsbereich umgesetzt. Bis dahin, und für Entwickler, geht es mit **nRF Connect** auf dem Handy:
+Für Nutzer läuft die Kalibrierung am **Display** (Einstellungen > Sensoren > „Einrichten“): Das Sensorboard verbindet sich und schreibt die Befehle. Für Entwickler geht es auch mit **nRF Connect** auf dem Handy:
 
 1. GasBee an USB anstecken, ein Netzteil reicht. Er ist nach spätestens 2 s im Konfigurationsmodus, Flag Bit 3.
 2. In nRF Connect „GasBee" suchen und verbinden. Die richtige MAC steht im Scan, zum Beispiel E5:DC:C9:7D:C4:27.
@@ -256,5 +256,4 @@ Unterschied zum ESP32-C3-GasBee: Dort setzte Tare die Tara nur auf 0 und machte 
 - [x] Grob-Kalibrierung GasBee 1 (2026-10-18), Gegenprobe 14,32 statt 14,285 kg (+0,25 %)
 - [x] Kalibrierung per GATT (0x2B11–0x2B13, NVS pro Gerät) und Konfigurationsmodus per USB: beide GasBees über das Display kalibriert (2026-10-19)
 - [x] Kalibrierung am Display (Sensorboard als GATT-Client), umgesetzt im anderen Arbeitsbereich
-- [ ] GasBee 2 (E5:DC:C9:7D:C4:27) kalibrieren
 - [ ] Feinkalibrierung pro GasBee im Sensorboard (anderer Arbeitsbereich)

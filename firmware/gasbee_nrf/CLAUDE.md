@@ -16,7 +16,7 @@ Ersatz für `firmware/gasbee` (ESP32-C3). Details zu Hardware, Protokoll und Kal
 - Gegenstelle: `firmware/sensorboard/main/network/gasbee_ble_scanner.c`. Sie scannt nur passiv und verbindet sich nie. Erkannt wird über den exakten Namen `GasBee` (6 Byte, im Advertising selbst), Company-ID 0xFFFF und Version 1. Die Zuordnung zu Flasche A/B läuft über die MAC, die im Sensorboard-NVS steht.
 - Weiterverarbeitung: `sensors/gas_source.c` ins Gas-Topic, getestet am 2026-10-17.
 
-GATT (nur für andere Clients wie Handy-Apps und für den Tare-Befehl, nicht für das Sensorboard):
+GATT (Kalibrierung durch das Sensorboard per `gasbee_gatt_cal.c`, nur an USB; sonst andere Clients wie Handy-Apps und Tare-Befehl):
 - Service-UUID `4a5b6c7d-8e9f-0a1b-2c3d-4e5f60718293`
 - Characteristics 0x2B01 (float kg), 0x2B02 (uint8 %), 0x2B03 (float kg), 0x2B04 (uint16 mV Akku, nur GasBee nRF), alle mit Notify. 0x2B10 ist der Tare-Write.
 - Eine GATT-Verbindung unterdrückt die Bursts. Solange ein Client verbunden ist, bekommt das Sensorboard keine Werte.
@@ -48,8 +48,7 @@ GATT (nur für andere Clients wie Handy-Apps und für den Tare-Befehl, nicht fü
 
 ## Offen
 
-- Kalibrierung per GATT und Konfigurationsmodus per USB laufen auf beiden GasBees, bedient über das Display (2026-10-19).
-- Sensorboard: `gasbee_scan`-Frame ist mit 2 GasBees zu groß für ESP-NOW (301 > 250 Byte). Das liegt im Sensorboard-Arbeitsbereich.
 - Mittleren Strom inklusive Messung und Burst messen (Ruhestrom 6,7 µA ist gemessen)
+- Erledigt: Kalibrierung per GATT und Konfigurationsmodus per USB laufen auf beiden GasBees, bedient über das Display (2026-10-19). `gasbee_scan` wird inzwischen als ein Frame pro Gerät gesendet (Commit `2e61e36`).
 - Hardware-Stand: XIAO nRF52840 Sense, Bootloader 0.6.1 / S140 7.3.0. HX711, Akkubetrieb, Advertising v1 und der Empfang am Sensorboard funktionieren (2026-10-17/18).
 - USB-Log gibt es nur im Testmodus (`debug.conf`), Port `/dev/ttyGASBEE_<Seriennummer>` (udev). Im Normalbetrieb den Zustand per BLE-Scan prüfen. Die ESP32-Ports nicht öffnen, weil das Öffnen sie resetten kann.

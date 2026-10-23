@@ -14,7 +14,7 @@ Git regelmäsig updaten -> Nutzer fragen.
 - Router: Teltonika RUTX11 (OpenWRT-basiert) für WLAN/Netz/Hotspot/LTE/GNSS. Anschluss ans Wohnmobil über 2 Relais mit Freilaufdiode und Nachlaufzeit gemäß RUTX11-Doku. Dachantenne (Teltonika) mit 2× WLAN, 2× LTE, 1× GNSS.
 - Display: ESP32-S3-Touch-LCD-7, übernimmt Visualisierung aller Sensor- und Statusdaten im Wohnmobil.
 - Sensorboard: Heemol ESP32 S3 N16R8 DevKitC-1 (ESP32-S3-DevKitC-1), erfasst analoge/digitale Sensoren und bedient E/A Richtung EBL/Anzeigepanel.
-- Sensorik: BNO055, 2× BME680 (außen/innen), HX711 (Gasfüllstände), 2× Batterien (Board/Kfz), 2× Tanksensoren Votronic (Frisch/Grau, kapazitiv), Steuerung Ein-/Ausgänge EBL/Panel.
+- Sensorik: BNO055, BME680 (innen), BME280 (außen) bzw. Ruuvi-Tags als Ersatz, HX711 oder GasBee-BLE-Waagen (Gasfüllstände), 2× Batterien (Board/Kfz), 2× Tanksensoren Votronic (Frisch/Grau, kapazitiv), Steuerung Ein-/Ausgänge EBL/Panel.
 
 ## ESP-NOW-Schnittstelle (Sensorboard ↔ Display)
 - Seit 2026-06 ESP-NOW statt RS485. Aktuelle Protokollbeschreibung (Transport, Topics, Kommandos): `firmware/display/CLAUDE.md`, Abschnitt „ESP-NOW-Schnittstelle“, und `firmware/sensorboard/CLAUDE.md`.
@@ -28,12 +28,3 @@ Git regelmäsig updaten -> Nutzer fragen.
 - WLAN und LTE werden über UCI JSON-RPC am RUTX11 gesteuert (nicht über ESP-NOW).
 - Router-WiFi-Zugangsdaten werden im NVS gespeichert (Namespace `rtr_wifi`, max. 20 Einträge, MRU-Reihenfolge). Bei Netzwerkauswahl aus Dropdown wird gespeichertes Passwort vorausgefüllt.
 - Router-Poll-Task (`router_poll_task` in main.c) aktualisiert AP/WiFi/LTE/GPS alle 15 s und füllt `womo_connectivity_snapshot_t` mit AP-Feldern (ap_enabled, ap_ssid, ap_clients, ap_client_list).
-
-## Geplante Migration: LVGL v8 → v9
-
-> Details, Phasen, betroffene Dateien und Risiken: siehe [.github/lvgl-v8-to-v9-migration.md](lvgl-v8-to-v9-migration.md)
-
-- Branch: `feature/lvgl9-migration`
-- Aktueller LVGL-Stand: **8.4.0** (lokale Kopie in `components/lvgl__lvgl/`)
-- Migrationsziel: LVGL **v9** + `espressif/esp_lvgl_port ^2` als Managed Component
-- Startpunkt: Phase 1 – `lvgl_port.c` Rewrite + `idf_component.yml` umstellen

@@ -27,13 +27,13 @@ Das N16R8-Modul nutzt **Octal-PSRAM** → GPIO35, GPIO36, GPIO37 sind intern bel
 
 ## GPIO-Besonderheiten
 
-### Display 5V (GPIO7, P-MOSFET Q4 AO3401A) ⚠️
+### Display 5V (GPIO7, N-Kanal-Treiber Q5 2N7002 vor P-MOSFET Q4 AO3401A)
+Seit der neuen Platine (Commit `760b25e`) treibt GPIO7 nur noch das Gate von Q5:
 ```
-LOW (OUTPUT)  → Gate ≈ 0V → FET leitet → Display EIN ✅
-Hi-Z (INPUT)  → R21 (100k) zieht Gate auf 5V → Vgs≈0V → FET sperrt → Display AUS ✅
-HIGH (OUTPUT) → VERBOTEN! Vgs = 3,3−5 = −1,7V → FET leitet → ~300mA Querstrom ❌
+HIGH (OUTPUT) → Q5 leitet → Q4-Gate LOW → Q4 leitet → Display EIN
+LOW / Hi-Z    → Q5 sperrt → R21 (100k) zieht Q4-Gate auf 5V → Display AUS
 ```
-Nach Deep-Sleep: `rtc_gpio_hold_dis()` + `rtc_gpio_deinit()` + `gpio_config(INPUT)` aufrufen.
+OUTPUT HIGH ist sicher (kein direkter Vgs-Querstrom mehr). Boot: `rtc_gpio_hold_dis()` + `rtc_gpio_deinit()`, dann OUTPUT LOW; Deep-Sleep: LOW + `rtc_gpio_hold_en()`. Quelle: `sensor_config.h` (`SENSOR_DISPLAY_PWR_GPIO`), `app_main.c`, `deep_sleep.c`.
 
 ### 12V Bordnetz (bistabiles Relais)
 - EIN: Puls `SENSOR_PWR_12V_PULSE_MS` (500 ms) auf GPIO11, dann LOW

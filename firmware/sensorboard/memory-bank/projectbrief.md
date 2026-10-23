@@ -15,11 +15,11 @@ Das Sensorboard ist das sensorische Herzstück des digitalen Wohnmobil-Cockpits.
 | Sensordaten erfassen (Klima, IMU, Gas, Batterie, Tank, Strom) | ✅ |
 | ESP-NOW → Display (JSON Topic-basiert, ersetzt RS485 seit 2026-06) | ✅ |
 | Steuerung 12V Bordnetz + Multimedia-Relais | ✅ |
-| Web-Dashboard (HTTP, SPIFFS, mDNS) | ✅ (Feature-Branch) |
-| GasBee BLE-Client (NimBLE Central, Auto-Reconnect) | ✅ |
+| Web-Dashboard (HTTP, SPIFFS, mDNS) | ✅ |
+| GasBee BLE (passiver Scan Advertising v1, GATT nur zur Kalibrierung) | ✅ |
 | Deep-Sleep + Touch-Wakeup | ✅ |
 | NTP + RTC-Sync (PCF8523) | ✅ |
-| INA226 Strom-/Leistungsmessung Hauptleitung | ✅ (neu) |
+| INA226 Strom-/Leistungsmessung Eigenverbrauch Sensorboard/Display | ✅ |
 | Original WoMo-Tanksensoren (4-Stufen Reed-Schwimmer) | ❌ TODO |
 | NVS-Layer für Kalibrierung (HX711/Bat/Tank per Web-UI) | ❌ TODO |
 
@@ -31,7 +31,7 @@ Das Sensorboard ist das sensorische Herzstück des digitalen Wohnmobil-Cockpits.
 | Klima innen | BME680 – Temp, Feuchte, Druck, IAQ (BSEC) | I2C 0x76 |
 | Klima außen | BME280 / BME260 – Temp, Feuchte, Druck, Drucktrend | I2C 0x77 |
 | Gasfüllstand | HX711 – 2× Wägezelle (Kanal A + B) | DOUT=GPIO47, SCK=GPIO45 |
-| GasBee | BLE-Gaswaage (ESP32-C3), NimBLE Central | BLE |
+| GasBee | BLE-Gaswaage (`firmware/gasbee_nrf`, XIAO nRF52840), passiver Scan | BLE |
 | Strom/Leistung | INA226 – Vbus 0–36V, ±81,92mV Shunt | I2C 0x40 |
 | Batterien | 2× ADC + Spannungsteiler | Kfz=GPIO4, Board=GPIO5 |
 | Tanks | 2× Votronic kapazitiv (0–1V) | Frisch=GPIO1, Grau=GPIO2 |

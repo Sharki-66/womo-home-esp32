@@ -25,7 +25,7 @@ ESP-IDF v5.5.2 · LVGL v9.5 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 - **Router-LEDs**: Separate Statusanzeige für WLAN/LTE/GPS-Empfang des Routers
 - **Steuerung**: 12V Bordnetz + Multimedia per ESP-NOW-Kommandos ans Sensorboard
 - **Fehler-Management**: Fehler-Stack mit Latching, Quittierung per Touch, Buzzer-Alarm (Warn/Alarm-Ton bei neuen unquittier­ten Fehlern)
-- **Einstellungs-Modal**: Schwellwerte für Tank/Batterie/Gas konfigurierbar, Speicherung in NVS
+- **Einstellungs-Modal**: Tabs AP | Sensoren | Grenzwerte | LTE | System – Ruuvi-Tags und GasBee-Waagen einrichten (inkl. Kalibrier-Assistent), Schwellwerte für Gas/Frisch-/Grauwasser (NVS), Töne, Sprache DE/EN, Zeit/RTC
 - **Mobilfunk-Tarif**: Warnung vor Tarifablauf und bei wenig Restvolumen im Fehler-Stack; Termin automatisch aus pass.telekom.de (Router-WebUI-Tool) oder manuell mit Rhythmus (4 Wochen / 30 Tage / 1 Monat), Einstellungen im Tab LTE
 - **Screenshot**: Long-Press unten links → PNG auf SD-Karte
 - **Tag/Nacht**: Automatischer Themenwechsel (Sonnenauf-/-untergang), Backlight-Steuerung
@@ -43,10 +43,12 @@ ESP-IDF v5.5.2 · LVGL v9.5 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 ```
 main/
 ├── main.c                      Startup, GUI-Update-Loop, Task-Orchestrierung
+├── assets/
+│   └── ducato_asset            Fahrzeuggrafik (eingebettet)
 ├── gui/
 │   ├── womo_theme              Tag/Nacht-Umschaltung
-│   ├── womo_locale             Deutsche Lokalisierung (Datum, Wochentage)
-│   ├── womo_fonts_german       6× Montserrat mit dt. Sonderzeichen + Icons
+│   ├── womo_locale             Texte DE/EN (alle UI-Strings, Datum, Wochentage)
+│   ├── womo_fonts_german       5× Montserrat mit dt. Sonderzeichen + 2× Material-Icons
 │   ├── womo_battery            Batterie-Widget
 │   ├── womo_tank               Tank-Widget
 │   ├── womo_gas_bottle         Gas-Flaschen-Widget

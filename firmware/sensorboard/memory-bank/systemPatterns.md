@@ -5,7 +5,7 @@
 ```
 1. sensor_log_init()          – Log-Level aus sensor_config.h setzen
 2. rtc_gpio_hold_dis(GPIO7)   – Display-MOSFET Hold nach Deep-Sleep aufheben
-3. GPIO7 = INPUT (Hi-Z)       – Display 5V sperren (P-MOSFET AUS)
+3. GPIO7 = OUTPUT LOW         – Display 5V aus (Q5 sperrt → Q4 sperrt)
 4. GPIO13 = OUTPUT LOW        – Multimedia AUS (kein Hardware-Pulldown!)
 5. deep_sleep_init()          – Touch immer zuerst initialisieren
 6. deep_sleep_wakeup_by_touch() prüfen
@@ -77,7 +77,6 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 ### HX711 (hx711_sensor.c)
 - Dual-Channel (A + B), 3 Samples gemittelt
 - Kalibrierung: `Gewicht = (raw - OFFSET) * SCALE`
-- **Scan-Listen (`ruuvi_scan`/`gasbee_scan`):** Ein Frame pro Gerät (`sid`/`idx`/`cnt`), ein Frame pro Durchlauf des TX-Tasks (100 ms, Round-Robin setzt dann aus). Grund: Die Liste als ein Frame überschritt mit 2 GasBees `WOMO_ESPNOW_MAX_PAYLOAD` (250 Byte). Die Liste zeigt bewusst **alle** Geräte (bis `SENSOR_*_SCAN_MAX_TAGS` = 8), die Zuordnung erfolgt explizit per MAC (Stellplatz mit Nachbarfahrzeugen).
 - Gasverbrauch: EMA-basierte Rate (1h + 2h Fenster), in NVS persistiert (gilt für HX711 und GasBee)
 - Ausschalt-Lücke: `gas_state` speichert Netto A/B mit Uhrzeit (RTC/NTP) und Quelle; beim ersten Messwert nach dem Boot wird der mittlere Verbrauch über die Lücke direkt als `rate1h`/`rate2h` übernommen (gleiche Quelle, Lücke ≤ `SENSOR_GAS_GAP_MAX_S` = 1 Tag, Abnahme ≥ `SENSOR_GAS_ACTIVE_EPS_KG`), sonst Raten auf 0 und neue Basis.
 
@@ -113,6 +112,7 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 - Zuordnung für Nutzer über Bit 3 (USB): Display-Assistent fragt `gasbee_scan_request` mit `cfg_only` ab, keine MAC-Auswahl
 - Kalibrierung: `gasbee_gatt_cal.c` (einziger Connection-Handler des BLE-Managers), Ergebnis asynchron → Frame `gasbee_cal_result` aus dem TX-Task. Während `gasbee_cal_start`…`_end` ist die Flasche `nc` und die Verbrauchsrate ruht (sonst Gas-Alarm/falsche Rate durch leere Waage bzw. Referenzgewicht)
 - Veraltet nach `SENSOR_GASBEE_STALE_MS` (2 Zyklen + Sendefenster) ohne neue `seq`
+- **Scan-Listen (`ruuvi_scan`/`gasbee_scan`):** Ein Frame pro Gerät (`sid`/`idx`/`cnt`), ein Frame pro Durchlauf des TX-Tasks (100 ms, Round-Robin setzt dann aus). Grund: Die Liste als ein Frame überschritt mit 2 GasBees `WOMO_ESPNOW_MAX_PAYLOAD` (250 Byte). Die Liste zeigt bewusst **alle** Geräte (bis `SENSOR_*_SCAN_MAX_TAGS` = 8), die Zuordnung erfolgt explizit per MAC (Stellplatz mit Nachbarfahrzeugen).
 - Akku-% per LiPo-Tabelle `SENSOR_GASBEE_LIPO_CURVE` (linear interpoliert, noch nicht am Akku verifiziert)
 - `gas_source_get_snapshot()`: HX711-Modul vorhanden (`valid_a || valid_b`) → HX711 (Vorrang); sonst GasBee A→Kanal A, B→Kanal B; sonst nc. Alle Gas-Publisher (`hx`, `gas`, Web-Snapshot) nutzen nur noch diese Funktion. Fehlende Wägezelle bei vorhandenem Modul ist nicht erkennbar (Mischbetrieb nicht vorgesehen).
 - **nc vs. leer (`gas`-Topic `nc_a`/`nc_b`):** GasBee: `nc` nur, wenn keine aktuellen Werte kommen (veraltet, HX711-Fehler-Flag oder **unkalibriert**); gültiger Wert unter `SENSOR_GAS_NO_BOTTLE_THRESHOLD_KG` (1 kg, keine Flasche auf der Waage) = **leer** → `pct_a` 0, Gas-Alarm im Display. HX711 am Kabel: unter Schwelle weiterhin `nc` (abgesteckte Wägezelle sonst nicht erkennbar). Leere Waage wird weder als aktive Flasche gewählt noch als Voll-Referenz übernommen.
@@ -135,7 +135,7 @@ GPIO2  Tank2 Grau  (ADC1_CH1)      GPIO10 frei (ehem. RS485 RX)
 GPIO4  Batt1 Kfz  (ADC1_CH3)       GPIO8  ehem. RS485 DE, im Deep-Sleep LOW
 GPIO5  Batt2 Board (ADC1_CH4)      GPIO11 12V LBE EIN (Relais-Puls)
 GPIO6  Touch-Wakeup (TOUCH_PAD6)   GPIO12 12V LBE AUS (Relais-Puls)
-GPIO7  Display 5V (P-MOSFET Q4)    GPIO13 Multimedia (N-MOSFET)
+GPIO7  Display 5V (HIGH=ein, Q5→Q4) GPIO13 Multimedia (N-MOSFET)
 GPIO14 12V Sense (Eingang)         GPIO15 I2C SCL
 GPIO16 I2C SDA                     GPIO21 AC 230V Sense
 GPIO45 HX711 SCK                   GPIO47 HX711 DOUT

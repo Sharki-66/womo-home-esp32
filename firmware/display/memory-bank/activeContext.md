@@ -1,5 +1,9 @@
 # Active Context — WoMoHome Display
 
+## Doku-Abgleich Display/Sensorboard/GasBee nRF (2026-10-23)
+
+Doku gegen Code/sdkconfig/Lockfile geprüft und korrigiert: GPIO7 (Display-5V) seit Q5-Treiber HIGH = EIN (alte Doku: „HIGH verboten“), LVGL-Task-Stack intern statt PSRAM, LVGL 9.5.0, Fontliste, `womo_buzzer_http`, 8 Fehlerquellen, Icons von SD statt SPIFFS, GasBee passiv + GATT nur zur Kalibrierung, Web-Dashboard gemergt, INA226 Shunt 10 mΩ (Messung offen). ToolBox-Bericht gelöscht, LVGL-Migrationsabschnitt aus `copilot-instructions.md` entfernt. Offen: `main/ui/` (EEZ-Prototyp) wird nicht kompiliert – toter Code.
+
 ## Doku: RS485 → ESP-NOW nachgezogen (2026-10-23)
 
 Code nutzt seit Commit `e1eae83` (2026-06) ESP-NOW, die Doku beschrieb noch RS485 (57600 Baud, `hello`/`display_ready`, falsche Intervalle). Korrigiert: CLAUDE.md (Root, Display, Sensorboard), READMEs, `docs/README.md`, `.github/copilot-instructions.md`, beide Memory Banks. Danach Code aufgeräumt: `rs485_*` → `modem_*` (Sensorboard) bzw. `sensor_link_*`/`SENSOR_ERR_SRC_LINK` (Display), tote Pfade entfernt (`hello`/`hb` vom Sensorboard, `display_ready`, `level_start/stop`, Events `HELLO`/`HEARTBEAT`), Kommentare korrigiert. Beide Firmwares gebaut, geflasht und auf Hardware getestet (2026-10-23).

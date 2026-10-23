@@ -81,7 +81,7 @@
 - LVGL **v9.x** als Managed Component (`lvgl/lvgl: ^9.2.0`, aktuell aufgelöst auf 9.5.0, `espressif/esp_lvgl_port: ^2`)
 - RGB-Interface 800×480, 16 MHz PCLK, 2 Framebuffer in PSRAM (Direct Mode + Avoid-Tearing)
 - Bounce-Buffer: 4 Zeilen × 800 px × 2 Byte × 2 Buffer = 12,8 KB DMA-SRAM
-- LVGL-Task auf Core 1, Stack 16 KB in PSRAM, Priorität 4
+- LVGL-Task auf Core 1, Stack 16 KB intern (`MALLOC_CAP_INTERNAL`, `lvgl_port.c`), Priorität 4
 - Touch: GT911 via `esp_lcd_touch_gt911`, eigener Read-Callback in `lvgl_port.c`
 
 # Plan / Act Arbeitsablauf (Cursor-Stil)

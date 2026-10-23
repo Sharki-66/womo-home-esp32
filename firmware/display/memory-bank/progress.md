@@ -20,7 +20,7 @@
 - **Systemstatus-Label**: 2-Stufen (MANUAL, SENSOR), Acknowledge per Touch
 
 ### Error-Stack
-- 6 Fehlerquellen mit Latching, Debounce (ok_streak 6 = 3 s) und Acknowledge
+- 8 Fehlerquellen (Gas, Frisch, Grau, Batterie, Sensorboard-Link, IAQ, Tarif, Daten) mit Latching, Debounce (ok_streak 6 = 3 s) und Acknowledge
 - Buzzer-Triggerung bei neuen unacknowledged Alarmen
 - Widget-Farben folgen `.current` (Echtzeit, unabhängig von Latch/Ack)
 
@@ -61,6 +61,6 @@
 ## Bekannte Probleme / Einschränkungen
 
 - LVGL Font `lv_font_montserrat_8` nicht aktiviert (kleinste verfügbare Schrift: 12 px)
-- Icons werden als PNG geladen aus SPIFFS → Ladezeit beim Bootup
+- Icons/Hintergründe werden als PNG von der SD-Karte geladen (`/sdcard/images/...`) → Ladezeit beim Boot, Fehler bei fehlender/defekter Karte (siehe `NOTES.md`)
 - RUTX11: pausierter congstar-Tarif kann Modem-Neustarts auslösen; Ursache landet künftig in `/etc/womo/log/modem_down_*.log`
 - RUTX11: `simslot` in `status.json` leer (`AT+QUIMSLOT?` ohne Ziffer)

@@ -11,8 +11,8 @@
 | Komponente | Version / Details |
 |---|---|
 | ESP-IDF | v5.5.2 (`source /home/hajo/esp/v5.5.2/esp-idf/export.sh`) |
-| LVGL | v9.2.0 (Managed Component `lvgl/lvgl: ^9.2.0`) |
-| esp_lvgl_port | v2 (`espressif/esp_lvgl_port: ^2`) |
+| LVGL | v9.5.0 (Managed Component `lvgl/lvgl: ^9.2.0`, laut `dependencies.lock`) |
+| esp_lvgl_port | v2.7.2 (`espressif/esp_lvgl_port: ^2`) |
 | Sprache | C (C17) |
 | Build | CMake via `idf.py build` |
 
@@ -22,7 +22,7 @@
 Display:     RGB 800×480, 2 Framebuffer in PSRAM (Direct Mode + Avoid-Tearing)
 Bounce-Buffer: 4 Zeilen × 800 px × 2 Byte × 2 = 12,8 KB DMA-SRAM
 LVGL-Task:   Core 1, Stack 16 KB intern (MALLOC_CAP_INTERNAL, lvgl_port.c), Priorität 4
-Fonts:       lv_font_montserrat_12/14/16/20/24/28/32/48 (alle aktiviert)
+Fonts:       LVGL lv_font_montserrat_12/14/16/20/24/26 (sdkconfig) + eigene *_german 12/14/16/20/24 + Material 16/24
 ```
 
 ## Speicherstrategie
@@ -37,7 +37,7 @@ Fonts:       lv_font_montserrat_12/14/16/20/24/28/32/48 (alle aktiviert)
 |---|---|
 | `womo_wifi` | ESP32-eigene STA-Verbindung, Scan, Known-Network-Pool (NVS `wifi_cfg`) |
 | `womo_router_uci` | RUTX11 HTTP/UCI JSON-RPC: WiFi-, LTE-, AP-Status, Steuerung; `datapass.json` (Port 8080, Router-WebUI-Tool) |
-| `womo_buzzer_http` | HTTP-Request an Sensorboard-Buzzer-Endpoint |
+| `womo_buzzer_http` | HTTP-Server zum Testen von Buzzer-Tönen (nur mit `WOMO_ENABLE_BUZZER_STUDIO_HTTP`) |
 
 ## Build & Flash
 
