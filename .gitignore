@@ -61,3 +61,6 @@ womo-modem.code-workspace
 
 # Fremd-Repo (Ruuvi-Hardware, eigener Git-Klon)
 hardware/schematics/ruuvitag_hw/
+
+# Datenblätter unter tools/ (lokal, nicht im Repo)
+tools/*.pdf
