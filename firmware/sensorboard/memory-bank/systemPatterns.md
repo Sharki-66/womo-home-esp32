@@ -30,7 +30,7 @@
 
 ## ESP-NOW Task-Architektur (espnow_modem.c + espnow_transport.c)
 
-Seit 2026-06 (Commit `e1eae83`) ESP-NOW statt RS485. Interne Namen `rs485_*` in `espnow_modem.c` sind Altlast.
+Seit 2026-06 (Commit `e1eae83`) ESP-NOW statt RS485. Interne Funktionen in `espnow_modem.c` mit Präfix `modem_*` (bis 2026-10 `rs485_*`).
 
 **Transport (`espnow_transport.c`):** Ein JSON-Frame pro ESP-NOW-Paket, max. `WOMO_ESPNOW_MAX_PAYLOAD` (250 Byte), Voll-Duplex (keine TX-Sperren mehr). Senden zunächst per Broadcast; Display-MAC wird beim ersten empfangenen Paket gelernt und als Unicast-Peer eingetragen. Empfang über Queue + RX-Task (Stack 8192 Byte).
 
@@ -102,7 +102,7 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 - Zwei Slots (Indoor/Outdoor), Routing ausschließlich per MAC-Filter
 - **MAC-Filter vom Display konfigurierbar** (seit MAC-Config-Umbau): kein Compile-Time-Default mehr, sondern per ESP-NOW `cmd:"ruuvi_config"` (`indoor_mac`, `outdoor_mac`) gesetzt und in NVS (`SENSOR_RUUVI_NVS_NAMESPACE`/`_KEY_INDOOR`/`_KEY_OUTDOOR` in `sensor_config.h`) persistiert; `ruuvi_ble_scanner_set_macs()` aktualisiert den Filter zur Laufzeit ohne Reboot. Leer/unkonfiguriert = Slot deaktiviert.
 - Scan-Liste (`ruuvi_ble_scanner_get_scan_list()`): sammelt bis zu `SENSOR_RUUVI_SCAN_MAX_TAGS` zuletzt gesehene Tags unabhängig vom Filter (MAC, RSSI, Temp, Alter), für die Auswahlliste im Display; wird auf `cmd:"ruuvi_scan_request"` als `ruuvi_scan`-Topic gesendet
-- Kabel-Sensor (BME680/BME280) hat Vorrang; Ruuvi wird in `espnow_modem.c` (`rs485_publish_bme_in/out`) nur als Fallback genutzt
+- Kabel-Sensor (BME680/BME280) hat Vorrang; Ruuvi wird in `espnow_modem.c` (`modem_publish_bme_in/out`) nur als Fallback genutzt
 - Felder: `temp_c`, `humidity_pct`, `pressure_hpa` (nur wenn `has_pressure`), `battery_mv` (nur wenn `battery_valid`, Byte 15-16 des DF5-Payloads, 11-Bit + 1600mV Offset)
 
 ### GasBee BLE Scanner (gasbee_ble_scanner.c) + Gas-Quelle (gas_source.c)

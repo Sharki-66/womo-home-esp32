@@ -2,7 +2,7 @@
 
 ## Doku: RS485 → ESP-NOW nachgezogen (2026-10-23)
 
-Code nutzt seit Commit `e1eae83` (2026-06) ESP-NOW, die Doku beschrieb noch RS485 (57600 Baud, `hello`/`display_ready`, falsche Intervalle). Korrigiert: CLAUDE.md (Root, Display, Sensorboard), READMEs, `docs/README.md`, `.github/copilot-instructions.md`, beide Memory Banks. Offen: Altnamen im Code (`rs485_*` in `espnow_modem.c`, toter `hello`/`display_ready`-Pfad, Kommentare in `display_config.h`/`womo_config.h`).
+Code nutzt seit Commit `e1eae83` (2026-06) ESP-NOW, die Doku beschrieb noch RS485 (57600 Baud, `hello`/`display_ready`, falsche Intervalle). Korrigiert: CLAUDE.md (Root, Display, Sensorboard), READMEs, `docs/README.md`, `.github/copilot-instructions.md`, beide Memory Banks. Danach Code aufgeräumt: `rs485_*` → `modem_*` (Sensorboard) bzw. `sensor_link_*`/`SENSOR_ERR_SRC_LINK` (Display), tote Pfade entfernt (`hello`/`hb` vom Sensorboard, `display_ready`, `level_start/stop`, Events `HELLO`/`HEARTBEAT`), Kommentare korrigiert. Beide Firmwares gebaut, geflasht und auf Hardware getestet (2026-10-23).
 
 ## Git-Stand (2026-10-21)
 

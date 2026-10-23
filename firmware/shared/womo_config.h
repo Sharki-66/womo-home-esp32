@@ -23,7 +23,7 @@
 #include "womo_credentials.h"
 
 // ═══════════════════════════════════════════════════════════════════════
-//  Kategorie 1: RS485 Protokoll (MUSS identisch sein)
+//  Kategorie 1: Sensorboard-Protokoll (MUSS identisch sein)
 // ═══════════════════════════════════════════════════════════════════════
 
 /** Heartbeat-Intervall (ms): Display sendet alle X ms einen Heartbeat ans Sensorboard.

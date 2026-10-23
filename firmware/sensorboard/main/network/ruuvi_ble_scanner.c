@@ -11,7 +11,7 @@
  * Registriert sich beim BLE-Manager – kein eigenes NimBLE.
  *
  * Slot-Routing ausschließlich per MAC-Adresse, konfiguriert vom Display
- * (RS485 cmd "ruuvi_config") und in NVS persistiert (sensor_config.h: SENSOR_RUUVI_NVS_*).
+ * (ESP-NOW cmd "ruuvi_config") und in NVS persistiert (sensor_config.h: SENSOR_RUUVI_NVS_*).
  * Leerer/unkonfigurierter MAC = Slot deaktiviert (kein fremder Tag wird akzeptiert).
  * Zusätzlich wird eine Scan-Liste aller gesehenen Ruuvi-Tags (unabhängig vom Filter)
  * geführt, damit das Display eine Auswahlliste zur Konfiguration anbieten kann.

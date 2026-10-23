@@ -56,7 +56,7 @@ esp_err_t womo_time_sync_ntp(bool wait_for_sync);
 /**
  * @brief Sync time from GPS/Sensorboard (Sensorboard)
  * 
- * Uses timestamp from Sensorboard RS485 packets
+ * Uses timestamp from Sensorboard ESP-NOW packets
  * 
  * @param gps_time UTC time from GPS
  * @return ESP_OK on successful sync

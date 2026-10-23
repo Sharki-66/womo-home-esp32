@@ -100,7 +100,7 @@ static void touchpad_read(lv_indev_t *indev, lv_indev_data_t *data)
             data->state            = LV_INDEV_STATE_RELEASED;
             touch_state.is_pressed = false;
         } else if (rising_edge) {
-            /* Steigende Flanke: Touch-Klick-Ton (lokaler Buzzer, kein RS485) */
+            /* Steigende Flanke: Touch-Klick-Ton (lokaler Buzzer, kein Sensorboard-Kommando) */
             display_buzzer_click();
         }
     } else {

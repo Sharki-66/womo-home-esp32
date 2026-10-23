@@ -13,7 +13,7 @@
  * Kein Verbindungsaufbau – Gewicht, Akku und Flags kommen aus der Manufacturer Data.
  *
  * Zwei Slots (Flasche A / B), Zuordnung ausschließlich per MAC. Die MACs werden
- * per RS485/ESP-NOW vom Display konfiguriert (cmd "gasbee_config") und in NVS
+ * per ESP-NOW vom Display konfiguriert (cmd "gasbee_config") und in NVS
  * (sensor_config.h: SENSOR_GASBEE_NVS_*) persistiert – leer = Slot deaktiviert.
  *
  * Kabel-HX711 hat Vorrang: GasBee wird nur über gas_source genutzt, wenn das

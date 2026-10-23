@@ -56,7 +56,7 @@ Pulslänge/Sense. Details + Fix-Vorschlag (Q1/Q2 → IRLML6244 N-Kanal, gleiches
 **Update (2026-09-13):** Bauteiltausch durchgeführt – Q1/Q2 (12V EIN/AUS) von
 IRLML2244 auf **IRLML6244** (N-Kanal) umbestückt. Die übrigen IRLML2244
 (Licht/Pumpe/Multimedia) wurden **entfernt, nicht ersetzt** – diese Kanäle sind
-damit hardwareseitig stillgelegt, bis neu bestückt wird (`rs485_set_radio()`
+damit hardwareseitig stillgelegt, bis neu bestückt wird (`modem_set_radio()`
 schaltet GPIO13 weiterhin, es hängt aber nichts mehr dran).
 **Noch offen:** Testergebnis, ob das EBL-Relais jetzt tatsächlich schaltet, steht
 noch aus (nicht zurückgemeldet).
@@ -182,7 +182,7 @@ Befunde beim Testen:
 2. Nutzer berichtet: nach langem Testen findet der Scan irgendwann GAR KEINE
    Ruuvi-Tags mehr (dauerhafte Verschlechterung, nicht nur einzelne Anfragen).
    Verdacht: Speicherleck (BLE-Events bei `filter_duplicates=0` sehr häufig,
-   auch von Fremdgeräten). Diagnose ergänzt: `rs485_publish_ctrl()` loggt jetzt
+   auch von Fremdgeräten). Diagnose ergänzt: `modem_publish_ctrl()` loggt jetzt
    bei jedem `ctrl`-Topic `esp_get_free_heap_size()` und
    `esp_get_minimum_free_heap_size()` (TODO-markiert, nach Abschluss entfernen).
    Nächster Schritt: Bei langem Testlauf beobachten ob `min_je_frei` kontinuierlich
@@ -208,7 +208,7 @@ Befunde beim Testen:
 | `main/CMakeLists.txt` | INA226-Sensor hinzugefügt |
 | `main/app_main.c` | `ina226_app_start()` integriert |
 | `main/idf_component.yml` | `k0i05/esp_ina226` Dependency |
-| `main/network/espnow_modem.c` (damals `rs485_modem.c`) | `rs485_publish_elec()` Topic-Publisher |
+| `main/network/espnow_modem.c` (damals `rs485_modem.c`) | `modem_publish_elec()` Topic-Publisher |
 | `main/sensor_config.h` | INA226-Konfiguration |
 | `main/sensors/bme680_sensor.c` | Drucktrend-Verbesserungen |
 | `spiffs/dashboard.html` | Web-Dashboard |

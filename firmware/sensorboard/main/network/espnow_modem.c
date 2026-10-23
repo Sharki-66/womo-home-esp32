@@ -5,9 +5,9 @@
  */
 
 /**
- * RS485 Sensor-Link – Topic-basierte Kommunikation zum Display
+ * ESP-NOW Sensor-Link – Topic-basierte Kommunikation zum Display
  *
- * Basiert auf archive/firmware-modem rs485_modem.c (Stand Feb 2026).
+ * Basiert auf archive/firmware-modem modem_modem.c (Stand Feb 2026).
  * Modem-spezifischer Code (LTE, WiFi-AP, USB-CDC, PPP, AT-Kommandos)
  * wurde entfernt.  Alle Sensor-Publisher (bme, hx, gas, bat, tank, imu, ctrl)
  * und die Gas-Verbrauchslogik sind vollständig portiert.
@@ -47,9 +47,9 @@
 #define TAG "espnow_modem"
 
 // ── Protokollparameter ──────────────────────────────────────────────────
-#define RS485_LINE_MAX                4096
-#define RS485_MAX_PENDING_CMDS        WOMO_SENSOR_MAX_PENDING_CMDS
-#define RS485_COMMAND_TIMEOUT_MS      WOMO_SENSOR_COMMAND_TIMEOUT_MS
+#define MODEM_LINE_MAX                4096
+#define MODEM_MAX_PENDING_CMDS        WOMO_SENSOR_MAX_PENDING_CMDS
+#define MODEM_COMMAND_TIMEOUT_MS      WOMO_SENSOR_COMMAND_TIMEOUT_MS
 
 // Heartbeat / Handshake Intervalle
 
@@ -60,9 +60,9 @@ typedef struct {
     uint32_t seq;
     int64_t sent_us;
     char label[32];
-} rs485_pending_cmd_t;
+} modem_pending_cmd_t;
 
-static rs485_pending_cmd_t s_pending[RS485_MAX_PENDING_CMDS];
+static modem_pending_cmd_t s_pending[MODEM_MAX_PENDING_CMDS];
 static portMUX_TYPE s_pending_lock = portMUX_INITIALIZER_UNLOCKED;
 static portMUX_TYPE s_seq_lock     = portMUX_INITIALIZER_UNLOCKED;
 static uint32_t s_tx_seq            = 1;
@@ -75,15 +75,15 @@ static TaskHandle_t s_tx_task       = NULL;
 
 // ── Forward-Deklarationen ───────────────────────────────────────────────
 
-static void rs485_publish_ctrl(void);
-static void rs485_publish_imu(void);
-static void rs485_publish_bat(void);
-static void rs485_publish_tank(void);
-static void rs485_publish_hx(void);
-static void rs485_publish_gas(void);
-static void rs485_publish_bme_in(void);
-static void rs485_publish_bme_out(void);
-static void rs485_publish_elec(void);
+static void modem_publish_ctrl(void);
+static void modem_publish_imu(void);
+static void modem_publish_bat(void);
+static void modem_publish_tank(void);
+static void modem_publish_hx(void);
+static void modem_publish_gas(void);
+static void modem_publish_bme_in(void);
+static void modem_publish_bme_out(void);
+static void modem_publish_elec(void);
 
 // ── Hilfsfunktionen ─────────────────────────────────────────────────────
 
@@ -113,7 +113,7 @@ static inline int adc_mv_to_percent_cal(int mv, int empty_mv, int full_mv)
     return ((mv - empty_mv) * 100) / (full_mv - empty_mv);
 }
 
-static int64_t rs485_epoch_ms(void)
+static int64_t modem_epoch_ms(void)
 {
     struct timeval tv;
     if (gettimeofday(&tv, NULL) == 0) {
@@ -133,7 +133,7 @@ static double ts_us_to_epoch_ms(int64_t ts_us)
         return 0.0;
     }
     int64_t now_us = esp_timer_get_time();
-    double now_ms  = (double)rs485_epoch_ms();
+    double now_ms  = (double)modem_epoch_ms();
     double delta_ms = (double)(now_us - ts_us) / 1000.0;
     if (delta_ms < 0.0) {
         delta_ms = 0.0;
@@ -143,7 +143,7 @@ static double ts_us_to_epoch_ms(int64_t ts_us)
 
 // ── Sequence Tracking ───────────────────────────────────────────────────
 
-static uint32_t rs485_next_seq(void)
+static uint32_t modem_next_seq(void)
 {
     taskENTER_CRITICAL(&s_seq_lock);
     uint32_t seq = s_tx_seq++;
@@ -151,10 +151,10 @@ static uint32_t rs485_next_seq(void)
         s_tx_seq = 1;
     }
     taskEXIT_CRITICAL(&s_seq_lock);
-    return seq == 0 ? rs485_next_seq() : seq;
+    return seq == 0 ? modem_next_seq() : seq;
 }
 
-static void rs485_record_rx_seq(uint32_t seq)
+static void modem_record_rx_seq(uint32_t seq)
 {
     if (seq == 0) return;
     taskENTER_CRITICAL(&s_seq_lock);
@@ -164,10 +164,10 @@ static void rs485_record_rx_seq(uint32_t seq)
 
 // ── Pending Command Management ──────────────────────────────────────────
 
-static bool rs485_register_pending(uint32_t seq, const char *label)
+static bool modem_register_pending(uint32_t seq, const char *label)
 {
     taskENTER_CRITICAL(&s_pending_lock);
-    for (size_t i = 0; i < RS485_MAX_PENDING_CMDS; ++i) {
+    for (size_t i = 0; i < MODEM_MAX_PENDING_CMDS; ++i) {
         if (!s_pending[i].in_use) {
             s_pending[i].in_use  = true;
             s_pending[i].warned  = false;
@@ -183,10 +183,10 @@ static bool rs485_register_pending(uint32_t seq, const char *label)
     return false;
 }
 
-static void rs485_resolve_pending(uint32_t seq, bool success, const char *cmd, const char *err_str)
+static void modem_resolve_pending(uint32_t seq, bool success, const char *cmd, const char *err_str)
 {
     taskENTER_CRITICAL(&s_pending_lock);
-    for (size_t i = 0; i < RS485_MAX_PENDING_CMDS; ++i) {
+    for (size_t i = 0; i < MODEM_MAX_PENDING_CMDS; ++i) {
         if (s_pending[i].in_use && s_pending[i].seq == seq) {
             s_pending[i].in_use = false;
             taskEXIT_CRITICAL(&s_pending_lock);
@@ -201,14 +201,14 @@ static void rs485_resolve_pending(uint32_t seq, bool success, const char *cmd, c
     taskEXIT_CRITICAL(&s_pending_lock);
 }
 
-static void rs485_check_command_timeouts(void)
+static void modem_check_command_timeouts(void)
 {
     int64_t now = esp_timer_get_time();
     taskENTER_CRITICAL(&s_pending_lock);
-    for (size_t i = 0; i < RS485_MAX_PENDING_CMDS; ++i) {
+    for (size_t i = 0; i < MODEM_MAX_PENDING_CMDS; ++i) {
         if (s_pending[i].in_use) {
             int64_t age_ms = (now - s_pending[i].sent_us) / 1000;
-            if (age_ms > RS485_COMMAND_TIMEOUT_MS) {
+            if (age_ms > MODEM_COMMAND_TIMEOUT_MS) {
                 if (!s_pending[i].warned) {
                     s_pending[i].warned = true;
                     taskEXIT_CRITICAL(&s_pending_lock);
@@ -216,7 +216,7 @@ static void rs485_check_command_timeouts(void)
                              (unsigned)s_pending[i].seq, s_pending[i].label, (long long)age_ms);
                     taskENTER_CRITICAL(&s_pending_lock);
                 }
-                if (age_ms > RS485_COMMAND_TIMEOUT_MS * 3) {
+                if (age_ms > MODEM_COMMAND_TIMEOUT_MS * 3) {
                     s_pending[i].in_use = false;
                 }
             }
@@ -227,11 +227,11 @@ static void rs485_check_command_timeouts(void)
 
 // ── Frame Senden ────────────────────────────────────────────────────────
 
-static esp_err_t rs485_send_frame(const char *label, cJSON *payload, bool need_ack)
+static esp_err_t modem_send_frame(const char *label, cJSON *payload, bool need_ack)
 {
     if (!payload) return ESP_ERR_INVALID_STATE;
 
-    uint32_t seq = rs485_next_seq();
+    uint32_t seq = modem_next_seq();
     cJSON_AddNumberToObject(payload, "seq", seq);
     if (need_ack) {
         cJSON_AddBoolToObject(payload, "need_ack", true);
@@ -252,12 +252,12 @@ static esp_err_t rs485_send_frame(const char *label, cJSON *payload, bool need_a
     ESP_LOGI(TAG, "TX %s seq=%u len=%u", label, (unsigned)seq, (unsigned)len);
 
     if (need_ack) {
-        rs485_register_pending(seq, label);
+        modem_register_pending(seq, label);
     }
     return ESP_OK;
 }
 
-static esp_err_t rs485_send_ack(uint32_t ack_seq, bool success, const char *label, const char *error)
+static esp_err_t modem_send_ack(uint32_t ack_seq, bool success, const char *label, const char *error)
 {
     cJSON *root = cJSON_CreateObject();
     if (!root) return ESP_ERR_NO_MEM;
@@ -266,13 +266,10 @@ static esp_err_t rs485_send_ack(uint32_t ack_seq, bool success, const char *labe
     cJSON_AddStringToObject(root, "status", success ? "ok" : "error");
     if (label && label[0]) cJSON_AddStringToObject(root, "cmd", label);
     if (!success && error && error[0]) cJSON_AddStringToObject(root, "err", error);
-    esp_err_t err = rs485_send_frame("ack", root, false);
+    esp_err_t err = modem_send_frame("ack", root, false);
     cJSON_Delete(root);
     return err;
 }
-
-// ── Hello / Heartbeat ───────────────────────────────────────────────────
-
 
 // ── WiFi Passwort-Anfrage ans Display ─────────────────────────────────
 esp_err_t espnow_modem_request_wifi_pass(void)
@@ -282,13 +279,13 @@ esp_err_t espnow_modem_request_wifi_pass(void)
     if (!root) return ESP_ERR_NO_MEM;
     cJSON_AddStringToObject(root, "type", "wifi_pass_request");
     cJSON_AddStringToObject(root, "cmd", "wifi_pass_request");
-    esp_err_t err = rs485_send_frame("wifi_pass_request", root, true);
+    esp_err_t err = modem_send_frame("wifi_pass_request", root, true);
     cJSON_Delete(root);
     return err;
 }
 
 // Void-Wrapper für den Auth-Failure-Callback (erwartet void(void))
-static void rs485_wifi_auth_fail_cb(void)
+static void modem_wifi_auth_fail_cb(void)
 {
     espnow_modem_request_wifi_pass();
 }
@@ -296,7 +293,7 @@ static void rs485_wifi_auth_fail_cb(void)
 
 // ── ACK Handling ────────────────────────────────────────────────────────
 
-static void rs485_handle_ack_packet(const cJSON *root)
+static void modem_handle_ack_packet(const cJSON *root)
 {
     const cJSON *ack_seq_obj = cJSON_GetObjectItem(root, "ack_seq");
     if (!cJSON_IsNumber(ack_seq_obj)) return;
@@ -310,7 +307,7 @@ static void rs485_handle_ack_packet(const cJSON *root)
     const cJSON *err = cJSON_GetObjectItem(root, "err");
     const char *err_str = (cJSON_IsString(err) && err->valuestring) ? err->valuestring : NULL;
 
-    rs485_resolve_pending(ack_seq, success, cmd_str, err_str);
+    modem_resolve_pending(ack_seq, success, cmd_str, err_str);
 
     taskENTER_CRITICAL(&s_seq_lock);
     s_last_ack_seq     = ack_seq;
@@ -318,7 +315,7 @@ static void rs485_handle_ack_packet(const cJSON *root)
     taskEXIT_CRITICAL(&s_seq_lock);
 }
 
-static void rs485_handle_display_ready(void)
+static void modem_handle_display_ready(void)
 {
     s_display_ready = true;
     s_display_ready_seen++;
@@ -326,23 +323,23 @@ static void rs485_handle_display_ready(void)
     
     // Initial-Burst: Alle Topics sofort einmal senden
     ESP_LOGI(TAG, "Sende initiale Sensor-Daten...");
-    rs485_publish_ctrl();
+    modem_publish_ctrl();
     vTaskDelay(pdMS_TO_TICKS(20));
-    rs485_publish_imu();
+    modem_publish_imu();
     vTaskDelay(pdMS_TO_TICKS(20));
-    rs485_publish_bat();
+    modem_publish_bat();
     vTaskDelay(pdMS_TO_TICKS(20));
-    rs485_publish_tank();
+    modem_publish_tank();
     vTaskDelay(pdMS_TO_TICKS(20));
-    rs485_publish_hx();
+    modem_publish_hx();
     vTaskDelay(pdMS_TO_TICKS(20));
-    rs485_publish_gas();
+    modem_publish_gas();
     vTaskDelay(pdMS_TO_TICKS(20));
-    rs485_publish_bme_in();
+    modem_publish_bme_in();
     vTaskDelay(pdMS_TO_TICKS(20));
-    rs485_publish_bme_out();
+    modem_publish_bme_out();
     vTaskDelay(pdMS_TO_TICKS(20));
-    rs485_publish_elec();
+    modem_publish_elec();
     ESP_LOGI(TAG, "Initiale Sensor-Daten gesendet");
 }
 
@@ -522,7 +519,7 @@ static void tank_state_save_to_nvs(void)
     nvs_close(handle);
 }
 
-static void rs485_power_gpio_init(void)
+static void modem_power_gpio_init(void)
 {
     if (s_power_gpio_inited) return;
 
@@ -549,17 +546,17 @@ static void rs485_power_gpio_init(void)
     s_power_gpio_inited = true;
 }
 
-static bool rs485_read_gpio_level(gpio_num_t gpio, bool fallback)
+static bool modem_read_gpio_level(gpio_num_t gpio, bool fallback)
 {
-    if (!s_power_gpio_inited) rs485_power_gpio_init();
+    if (!s_power_gpio_inited) modem_power_gpio_init();
     int level = gpio_get_level(gpio);
     return (level < 0) ? fallback : (level != 0);
 }
 
 // 12V-Sense (GPIO14) lesen und Polarität anwenden.
-static bool rs485_read_12v_sense(void)
+static bool modem_read_12v_sense(void)
 {
-    bool pin_high = rs485_read_gpio_level(SENSOR_PWR_12V_SENSE_GPIO, false);
+    bool pin_high = modem_read_gpio_level(SENSOR_PWR_12V_SENSE_GPIO, false);
 #if SENSOR_PWR_12V_SENSE_ACTIVE_HIGH
     return pin_high;
 #else
@@ -573,14 +570,14 @@ static bool rs485_read_12v_sense(void)
 //    Relais-Puls wird noch der kommandierte Zustand gemeldet, bis die 12V-Schiene
 //    eingeschwungen ist.
 //  - 12V-Sense deaktiviert: reines Soft-Flag (nur der zuletzt kommandierte Zustand).
-static bool rs485_board_power_on(void)
+static bool modem_board_power_on(void)
 {
 #if SENSOR_PWR_12V_SENSE_ENABLE
     int64_t since_pulse = esp_timer_get_time() - s_pwr_pulse_us;
     if (s_pwr_pulse_us != 0 && since_pulse < (int64_t)SENSOR_PWR_12V_SENSE_GRACE_MS * 1000) {
         return s_pwr_on_state;
     }
-    bool sense = rs485_read_12v_sense();
+    bool sense = modem_read_12v_sense();
     if (sense != s_pwr_on_state) {
         ESP_LOGW(TAG, "12V-Sense: kommandiert=%d, gemessen=%d (GPIO%d) -> uebernehme Messung",
                  (int)s_pwr_on_state, (int)sense, SENSOR_PWR_12V_SENSE_GPIO);
@@ -592,15 +589,15 @@ static bool rs485_board_power_on(void)
 #endif
 }
 
-static bool rs485_ac_present(void)
+static bool modem_ac_present(void)
 {
-    return rs485_read_gpio_level(SENSOR_AC_SENSE_GPIO, false);
+    return modem_read_gpio_level(SENSOR_AC_SENSE_GPIO, false);
 }
 
 // 12V Bordnetz ein-/ausschalten per GPIO-Puls (bistabiles Relais)
-static esp_err_t rs485_set_12v_power(bool enable)
+static esp_err_t modem_set_12v_power(bool enable)
 {
-    if (!s_power_gpio_inited) rs485_power_gpio_init();
+    if (!s_power_gpio_inited) modem_power_gpio_init();
     gpio_num_t pin = enable ? SENSOR_PWR_12V_ON_GPIO : SENSOR_PWR_12V_OFF_GPIO;
     gpio_set_level(pin, 1);
     vTaskDelay(pdMS_TO_TICKS(SENSOR_PWR_12V_PULSE_MS));  // Puls für bistabiles Relais
@@ -618,9 +615,9 @@ static esp_err_t rs485_set_12v_power(bool enable)
 }
 
 // Radio/Multimedia ein-/ausschalten (nur wenn 12V aktiv)
-static esp_err_t rs485_set_radio(bool enable)
+static esp_err_t modem_set_radio(bool enable)
 {
-    if (enable && !rs485_board_power_on()) {
+    if (enable && !modem_board_power_on()) {
         ESP_LOGW(TAG, "Radio ON rejected: 12V not active");
         return ESP_ERR_INVALID_STATE;
     }
@@ -664,14 +661,14 @@ static void gasbee_cal_report(gasbee_cal_step_t step, int result, void *arg)
     taskEXIT_CRITICAL(&s_cal_res_lock);
 }
 
-static void rs485_publish_ctrl(void)
+static void modem_publish_ctrl(void)
 {
     cJSON *root = cJSON_CreateObject();
     if (!root) return;
     cJSON_AddStringToObject(root, "type", "ctrl");
-    cJSON_AddBoolToObject(root, "pwr_on", rs485_board_power_on());
+    cJSON_AddBoolToObject(root, "pwr_on", modem_board_power_on());
     cJSON_AddBoolToObject(root, "radio_on", s_radio_on);
-    cJSON_AddBoolToObject(root, "ac_present", rs485_ac_present());
+    cJSON_AddBoolToObject(root, "ac_present", modem_ac_present());
 
     // RTC-Batteriestatus
     time_sync_status_t ts_status = {0};
@@ -692,11 +689,11 @@ static void rs485_publish_ctrl(void)
     ESP_LOGI(TAG, "Heap: frei=%lu Byte  min_je_frei=%lu Byte",
              (unsigned long)heap_free, (unsigned long)esp_get_minimum_free_heap_size());
 
-    rs485_send_frame("ctrl", root, false);
+    modem_send_frame("ctrl", root, false);
     cJSON_Delete(root);
 }
 
-static void rs485_publish_imu(void)
+static void modem_publish_imu(void)
 {
     bno055_imu_snapshot_t imu = {0};
     cJSON *root = cJSON_CreateObject();
@@ -729,11 +726,11 @@ static void rs485_publish_imu(void)
         cJSON_AddItemToObject(root, "cal", cal);
         cJSON_AddBoolToObject(root, "calibrated", false);
     }
-    rs485_send_frame("imu", root, false);
+    modem_send_frame("imu", root, false);
     cJSON_Delete(root);
 }
 
-static void rs485_publish_bme_in(void)
+static void modem_publish_bme_in(void)
 {
     bme680_snapshot_t bme = {0};
     bme680_app_get_snapshot(&bme);
@@ -776,11 +773,11 @@ static void rs485_publish_bme_in(void)
             cJSON_AddNumberToObject(root, "press_hpa", 0.0);
         }
     }
-    rs485_send_frame("bme_in", root, false);
+    modem_send_frame("bme_in", root, false);
     cJSON_Delete(root);
 }
 
-static void rs485_publish_bme_out(void)
+static void modem_publish_bme_out(void)
 {
     bme680_snapshot_t bme = {0};
     bme680_app_get_snapshot(&bme);
@@ -866,11 +863,11 @@ static void rs485_publish_bme_out(void)
             cJSON_AddNumberToObject(root, "press_hpa", 0.0);
         }
     }
-    rs485_send_frame("bme_out", root, false);
+    modem_send_frame("bme_out", root, false);
     cJSON_Delete(root);
 }
 
-static void rs485_publish_bat(void)
+static void modem_publish_bat(void)
 {
     int mv = 0;
     cJSON *root = cJSON_CreateObject();
@@ -889,7 +886,7 @@ static void rs485_publish_bat(void)
     cJSON_AddNumberToObject(root, "b2", round2(batt2_connected ? (double)mv / 1000.0 : 0.0));
     cJSON_AddBoolToObject(root, "nc2", !batt2_connected);
 
-    rs485_send_frame("bat", root, false);
+    modem_send_frame("bat", root, false);
     cJSON_Delete(root);
 }
 
@@ -919,7 +916,7 @@ static void add_gas_bee_info(cJSON *obj, const gas_source_snapshot_t *gs)
     }
 }
 
-static void rs485_publish_hx(void)
+static void modem_publish_hx(void)
 {
     gas_source_snapshot_t gs;
     gas_source_get_snapshot(&gs);
@@ -940,11 +937,11 @@ static void rs485_publish_hx(void)
         cJSON_AddBoolToObject(root, "nc", true);
     }
     add_gas_bee_info(root, &gs);
-    rs485_send_frame("hx", root, false);
+    modem_send_frame("hx", root, false);
     cJSON_Delete(root);
 }
 
-static void rs485_publish_gas(void)
+static void modem_publish_gas(void)
 {
     static bool s_gas_nvs_loaded = false;
     if (!s_gas_nvs_loaded) {
@@ -1113,11 +1110,11 @@ static void rs485_publish_gas(void)
              net_b, nc_b ? " (nc)" : empty_b ? " (leer)" : "",
              rate1h, rate2h, rest_h);
 
-    rs485_send_frame("gas", root, false);
+    modem_send_frame("gas", root, false);
     cJSON_Delete(root);
 }
 
-static void rs485_publish_tank(void)
+static void modem_publish_tank(void)
 {
     static bool s_tank_nvs_loaded = false;
     if (!s_tank_nvs_loaded) {
@@ -1215,7 +1212,7 @@ static void rs485_publish_tank(void)
              tank1_pct, tank1_liters, tank1_rate1h, tank1_rate2h, tank1_rest_h,
              tank2_pct, tank2_liters, tank2_rate1h, tank2_rate2h, tank2_rest_h);
     
-    rs485_send_frame("tank", root, false);
+    modem_send_frame("tank", root, false);
     cJSON_Delete(root);
 }
 
@@ -1226,9 +1223,9 @@ typedef struct {
     uint32_t interval_ms;
     TickType_t last_sent;
     void (*publish)(void);
-} rs485_topic_t;
+} modem_topic_t;
 
-static void rs485_publish_elec(void)
+static void modem_publish_elec(void)
 {
     cJSON *root = cJSON_CreateObject();
     if (!root) return;
@@ -1245,7 +1242,7 @@ static void rs485_publish_elec(void)
         cJSON_AddBoolToObject(root, "nc", true);
     }
 
-    rs485_send_frame("elec", root, false);
+    modem_send_frame("elec", root, false);
     cJSON_Delete(root);
 }
 
@@ -1286,7 +1283,7 @@ static cJSON *scan_frame_create(const char *type, uint32_t sid, size_t idx, size
     return root;
 }
 
-// Abbild der Scan-Liste anlegen; das Senden übernimmt rs485_scan_tx_step()
+// Abbild der Scan-Liste anlegen; das Senden übernimmt modem_scan_tx_step()
 static void ruuvi_scan_start(void)
 {
     s_ruuvi_tx_cnt    = ruuvi_ble_scanner_get_scan_list(s_ruuvi_tx, SENSOR_RUUVI_SCAN_MAX_TAGS);
@@ -1327,7 +1324,7 @@ static void ruuvi_scan_send_next(void)
         cJSON_AddNumberToObject(root, "age_s", (double)((esp_timer_get_time() - e->last_seen_us) / 1000000));
     }
     if (root) {
-        rs485_send_frame("ruuvi_scan", root, false);
+        modem_send_frame("ruuvi_scan", root, false);
         cJSON_Delete(root);
     }
     s_ruuvi_tx_idx++;
@@ -1356,14 +1353,14 @@ static void gasbee_scan_send_next(void)
         cJSON_AddNumberToObject(root, "age_s", (double)((esp_timer_get_time() - e->last_seen_us) / 1000000));
     }
     if (root) {
-        rs485_send_frame("gasbee_scan", root, false);
+        modem_send_frame("gasbee_scan", root, false);
         cJSON_Delete(root);
     }
     s_gasbee_tx_idx++;
     s_gasbee_tx_active = (s_gasbee_tx_idx < s_gasbee_tx_cnt);
 }
 
-static void rs485_publish_gasbee_cal_result(gasbee_cal_step_t step, int result)
+static void modem_publish_gasbee_cal_result(gasbee_cal_step_t step, int result)
 {
     cJSON *root = cJSON_CreateObject();
     if (!root) return;
@@ -1372,35 +1369,35 @@ static void rs485_publish_gasbee_cal_result(gasbee_cal_step_t step, int result)
     cJSON_AddBoolToObject(root, "ok", result == GASBEE_CAL_OK);
     cJSON_AddNumberToObject(root, "err", result);
     cJSON_AddStringToObject(root, "msg", gasbee_gatt_cal_result_str(result));
-    rs485_send_frame("gasbee_cal_result", root, false);
+    modem_send_frame("gasbee_cal_result", root, false);
     cJSON_Delete(root);
 }
 
 // Höchstens einen Scan-Frame senden. true = gesendet (Round-Robin dann aussetzen).
-static bool rs485_scan_tx_step(void)
+static bool modem_scan_tx_step(void)
 {
     if (s_ruuvi_tx_active)  { ruuvi_scan_send_next();  return true; }
     if (s_gasbee_tx_active) { gasbee_scan_send_next(); return true; }
     return false;
 }
 
-static rs485_topic_t s_topics[] = {
-    { "ctrl",  WOMO_TOPIC_CTRL_INTERVAL_MS, 0, rs485_publish_ctrl },
-    { "imu",   WOMO_TOPIC_IMU_INTERVAL_MS,  0, rs485_publish_imu  },
-    { "bat",   WOMO_TOPIC_BAT_INTERVAL_MS,  0, rs485_publish_bat  },
-    { "tank",  WOMO_TOPIC_TANK_INTERVAL_MS, 0, rs485_publish_tank },
-    { "hx",    WOMO_TOPIC_HX_INTERVAL_MS,   0, rs485_publish_hx   },
-    { "gas",     WOMO_TOPIC_GAS_INTERVAL_MS,  0, rs485_publish_gas     },
-    { "bme_in",  WOMO_TOPIC_BME_INTERVAL_MS,   0, rs485_publish_bme_in  },
-    { "bme_out", WOMO_TOPIC_BME_INTERVAL_MS,   0, rs485_publish_bme_out },
-    { "elec",    WOMO_TOPIC_ELEC_INTERVAL_MS,  0, rs485_publish_elec    },
+static modem_topic_t s_topics[] = {
+    { "ctrl",  WOMO_TOPIC_CTRL_INTERVAL_MS, 0, modem_publish_ctrl },
+    { "imu",   WOMO_TOPIC_IMU_INTERVAL_MS,  0, modem_publish_imu  },
+    { "bat",   WOMO_TOPIC_BAT_INTERVAL_MS,  0, modem_publish_bat  },
+    { "tank",  WOMO_TOPIC_TANK_INTERVAL_MS, 0, modem_publish_tank },
+    { "hx",    WOMO_TOPIC_HX_INTERVAL_MS,   0, modem_publish_hx   },
+    { "gas",     WOMO_TOPIC_GAS_INTERVAL_MS,  0, modem_publish_gas     },
+    { "bme_in",  WOMO_TOPIC_BME_INTERVAL_MS,   0, modem_publish_bme_in  },
+    { "bme_out", WOMO_TOPIC_BME_INTERVAL_MS,   0, modem_publish_bme_out },
+    { "elec",    WOMO_TOPIC_ELEC_INTERVAL_MS,  0, modem_publish_elec    },
 };
-#define RS485_TOPIC_COUNT (sizeof(s_topics) / sizeof(s_topics[0]))
+#define MODEM_TOPIC_COUNT (sizeof(s_topics) / sizeof(s_topics[0]))
 static size_t s_topic_rr = 0;
 
 // ── Command Execution ───────────────────────────────────────────────────
 
-static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_err_t *out_err)
+static bool modem_execute_command(const cJSON *root, const char *cmd_str, esp_err_t *out_err)
 {
     if (!cmd_str) {
         if (out_err) *out_err = ESP_ERR_INVALID_ARG;
@@ -1410,11 +1407,9 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
     esp_err_t cmd_err = ESP_OK;
     bool handled = true;
 
-    if (strcmp(cmd_str, "display_ready") == 0) {
-        rs485_handle_display_ready();
     // level_start/level_stop entfernt – Fast-Mode wird automatisch über
     // /api/imu gesteuert (horizon.html pollt → Fast, Seite zu → Normal)
-    } else if (strcmp(cmd_str, "wifi_config") == 0) {
+    if (strcmp(cmd_str, "wifi_config") == 0) {
         const cJSON *j_ssid = cJSON_GetObjectItem(root, "ssid");
         const cJSON *j_pass = cJSON_GetObjectItem(root, "pass");
         const char *new_ssid = cJSON_IsString(j_ssid) ? j_ssid->valuestring : NULL;
@@ -1506,18 +1501,18 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
                  slot_idx, chan, override, s_ref_pending_a, s_ref_pending_b);
     } else if (strcmp(cmd_str, "pwr_12v_on") == 0) {
         s_pwr_on_state = true;
-        cmd_err = rs485_set_12v_power(true);
+        cmd_err = modem_set_12v_power(true);
         s_ctrl_immediate = true;
     } else if (strcmp(cmd_str, "pwr_12v_off") == 0) {
         s_pwr_on_state = false;
-        cmd_err = rs485_set_12v_power(false);
+        cmd_err = modem_set_12v_power(false);
         s_ctrl_immediate = true;
         s_shutdown_pending = true;  // Nach ACK-Versand in Deep Sleep
     } else if (strcmp(cmd_str, "radio_on") == 0) {
-        cmd_err = rs485_set_radio(true);
+        cmd_err = modem_set_radio(true);
         s_ctrl_immediate = true;
     } else if (strcmp(cmd_str, "radio_off") == 0) {
-        cmd_err = rs485_set_radio(false);
+        cmd_err = modem_set_radio(false);
         s_ctrl_immediate = true;
     } else if (strcmp(cmd_str, "imu_zero") == 0) {
         cmd_err = bno055_app_zero_pitch_roll();
@@ -1532,7 +1527,7 @@ static bool rs485_execute_command(const cJSON *root, const char *cmd_str, esp_er
 
 // ── RX Line Processing ──────────────────────────────────────────────────
 
-static bool rs485_line_is_ascii(const char *line)
+static bool modem_line_is_ascii(const char *line)
 {
     if (!line) return false;
     const unsigned char *p = (const unsigned char *)line;
@@ -1546,14 +1541,14 @@ static bool rs485_line_is_ascii(const char *line)
     return true;
 }
 
-static void rs485_process_rx_line(const char *line)
+static void modem_process_rx_line(const char *line)
 {
     if (!line) return;
 
     while (*line && (unsigned char)*line < 0x20) ++line;
     if (*line == '\0') return;
 
-    if (!rs485_line_is_ascii(line)) return;
+    if (!modem_line_is_ascii(line)) return;
 
     while (*line && *line != '{' && *line != '[') ++line;
     if (*line == '\0') {
@@ -1571,12 +1566,12 @@ static void rs485_process_rx_line(const char *line)
     }
 
     size_t json_len = (size_t)(end - line + 1);
-    if (json_len >= RS485_LINE_MAX) {
+    if (json_len >= MODEM_LINE_MAX) {
         ESP_LOGW(TAG, "RX JSON too long (%zu)", json_len);
         return;
     }
 
-    char clean_line[RS485_LINE_MAX];
+    char clean_line[MODEM_LINE_MAX];
     memcpy(clean_line, line, json_len);
     clean_line[json_len] = '\0';
     line = clean_line;
@@ -1593,7 +1588,7 @@ static void rs485_process_rx_line(const char *line)
     uint32_t rx_seq = 0;
     if (cJSON_IsNumber(seq_obj)) {
         rx_seq = (uint32_t)seq_obj->valuedouble;
-        rs485_record_rx_seq(rx_seq);
+        modem_record_rx_seq(rx_seq);
     }
 
     bool need_ack = false;
@@ -1614,16 +1609,16 @@ static void rs485_process_rx_line(const char *line)
     char ack_error[96] = "";
 
     if (type && (strcmp(type, "ack") == 0 || strcmp(type, "cmd_ack") == 0)) {
-        rs485_handle_ack_packet(root);
+        modem_handle_ack_packet(root);
         need_ack = false;
         ack_success = true;
-    } else if (type && (strcmp(type, "hb") == 0 || strcmp(type, "hello") == 0)) {
-        /* Display-Heartbeat/-Hello: kein ACK nötig, Peer-Erkennung läuft via espnow_transport */
+    } else if (type && strcmp(type, "hb") == 0) {
+        /* Display-Heartbeat: kein ACK nötig, Peer-Erkennung läuft via espnow_transport */
         ack_success = true;
         need_ack = false;
     } else if (cmd_str) {
         esp_err_t cmd_err = ESP_OK;
-        bool handled = rs485_execute_command(root, cmd_str, &cmd_err);
+        bool handled = modem_execute_command(root, cmd_str, &cmd_err);
         ack_success = (handled && cmd_err == ESP_OK);
         if (!handled) {
             strncpy(ack_error, "unknown command", sizeof(ack_error) - 1);
@@ -1635,7 +1630,7 @@ static void rs485_process_rx_line(const char *line)
     }
 
     if (need_ack && rx_seq != 0) {
-        esp_err_t ack_err = rs485_send_ack(rx_seq, ack_success, ack_label, ack_success ? NULL : ack_error);
+        esp_err_t ack_err = modem_send_ack(rx_seq, ack_success, ack_label, ack_success ? NULL : ack_error);
         if (ack_err != ESP_OK) {
             ESP_LOGW(TAG, "ACK send failed: %s", esp_err_to_name(ack_err));
         }
@@ -1651,18 +1646,18 @@ static void rs485_process_rx_line(const char *line)
 }
 
 // ── TX Task ─────────────────────────────────────────────────────────────
-// RX läuft im espnow_transport: espnow_rx_task → rs485_process_rx_line()
+// RX läuft im espnow_transport: espnow_rx_task → modem_process_rx_line()
 
-static void rs485_tx_task(void *arg)
+static void modem_tx_task(void *arg)
 {
     (void)arg;
-    ESP_LOGI(TAG, "TX task started (topic-based, %d topics)", (int)RS485_TOPIC_COUNT);
+    ESP_LOGI(TAG, "TX task started (topic-based, %d topics)", (int)MODEM_TOPIC_COUNT);
 
     const TickType_t loop_delay = pdMS_TO_TICKS(100);
 
     // Initialisiere Topic-Timer
     TickType_t now_init = xTaskGetTickCount();
-    for (size_t i = 0; i < RS485_TOPIC_COUNT; ++i) {
+    for (size_t i = 0; i < MODEM_TOPIC_COUNT; ++i) {
         s_topics[i].last_sent = now_init;
     }
 
@@ -1671,13 +1666,13 @@ static void rs485_tx_task(void *arg)
 
         // Display-Peer über ESP-NOW bekannt? → Topics einmalig freischalten + Initial-Burst
         if (!s_display_ready && espnow_transport_peer_known()) {
-            rs485_handle_display_ready();
+            modem_handle_display_ready();
         }
 
         // Sofort-Ctrl nach Command-Ausführung (Button-Feedback)
         if (s_display_ready && s_ctrl_immediate) {
             s_ctrl_immediate = false;
-            rs485_publish_ctrl();
+            modem_publish_ctrl();
             s_topics[0].last_sent = now;  // ctrl-Timer zurücksetzen
         }
 
@@ -1691,7 +1686,7 @@ static void rs485_tx_task(void *arg)
             s_gasbee_scan_requested = false;
             gasbee_scan_start(s_gasbee_scan_cfg_only);
         }
-        bool scan_sent = s_display_ready && rs485_scan_tx_step();
+        bool scan_sent = s_display_ready && modem_scan_tx_step();
 
         // Ergebnis eines Kalibrierschritts (aus NimBLE-/Timer-Kontext gemeldet)
         if (!scan_sent && s_display_ready) {
@@ -1705,25 +1700,25 @@ static void rs485_tx_task(void *arg)
             s_cal_res_pending = false;
             taskEXIT_CRITICAL(&s_cal_res_lock);
             if (res_pending) {
-                rs485_publish_gasbee_cal_result(res_step, res_code);
+                modem_publish_gasbee_cal_result(res_step, res_code);
                 scan_sent = true;   // Round-Robin für diesen Durchlauf aussetzen
             }
         }
 
         // Round-Robin: pro Loop maximal 1 Topic senden (nicht zusätzlich zu einem Scan-Frame)
         if (s_display_ready && !scan_sent) {
-            for (size_t i = 0; i < RS485_TOPIC_COUNT; ++i) {
-                size_t idx = (s_topic_rr + i) % RS485_TOPIC_COUNT;
+            for (size_t i = 0; i < MODEM_TOPIC_COUNT; ++i) {
+                size_t idx = (s_topic_rr + i) % MODEM_TOPIC_COUNT;
                 if ((now - s_topics[idx].last_sent) >= pdMS_TO_TICKS(s_topics[idx].interval_ms)) {
                     s_topics[idx].publish();
                     s_topics[idx].last_sent = now;
-                    s_topic_rr = (idx + 1) % RS485_TOPIC_COUNT;
+                    s_topic_rr = (idx + 1) % MODEM_TOPIC_COUNT;
                     break;
                 }
             }
         }
 
-        rs485_check_command_timeouts();
+        modem_check_command_timeouts();
         vTaskDelay(loop_delay);
     }
 }
@@ -1740,16 +1735,16 @@ esp_err_t espnow_modem_init(void)
     if (err != ESP_OK) {
         return err;
     }
-    espnow_transport_set_recv_cb(rs485_process_rx_line);
+    espnow_transport_set_recv_cb(modem_process_rx_line);
 
-    rs485_power_gpio_init();
+    modem_power_gpio_init();
 
-    BaseType_t tx_created = xTaskCreate(rs485_tx_task, "espnow_tx", 6144, NULL, 5, &s_tx_task);
+    BaseType_t tx_created = xTaskCreate(modem_tx_task, "espnow_tx", 6144, NULL, 5, &s_tx_task);
     if (tx_created != pdPASS) {
         return ESP_FAIL;
     }
 
-    sensor_wifi_set_auth_fail_cb(rs485_wifi_auth_fail_cb);
+    sensor_wifi_set_auth_fail_cb(modem_wifi_auth_fail_cb);
 
     ESP_LOGI(TAG, "ESP-NOW sensor link bereit");
     return ESP_OK;
@@ -1764,14 +1759,14 @@ esp_err_t espnow_modem_get_snapshot(char **json_out)
     cJSON *root = cJSON_CreateObject();
     if (!root) return ESP_ERR_NO_MEM;
 
-    cJSON_AddNumberToObject(root, "ts", (double)rs485_epoch_ms());
+    cJSON_AddNumberToObject(root, "ts", (double)modem_epoch_ms());
 
     // ctrl ──────────────────────────────────────────────────────────────
     {
         cJSON *j = cJSON_AddObjectToObject(root, "ctrl");
-        cJSON_AddBoolToObject(j, "pwr_on",    rs485_board_power_on());
+        cJSON_AddBoolToObject(j, "pwr_on",    modem_board_power_on());
         cJSON_AddBoolToObject(j, "radio_on",  s_radio_on);
-        cJSON_AddBoolToObject(j, "ac_present", rs485_ac_present());
+        cJSON_AddBoolToObject(j, "ac_present", modem_ac_present());
     }
 
     // imu ───────────────────────────────────────────────────────────────
@@ -1961,7 +1956,7 @@ static void shutdown_timer_cb(void *arg)
 static esp_err_t execute_cmd_with_root(const cJSON *root, const char *cmd)
 {
     esp_err_t err = ESP_OK;
-    bool handled  = rs485_execute_command(root, cmd, &err);
+    bool handled  = modem_execute_command(root, cmd, &err);
     if (!handled)  return ESP_ERR_NOT_FOUND;
     if (err != ESP_OK) return err;
 

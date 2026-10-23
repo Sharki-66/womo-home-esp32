@@ -45,7 +45,7 @@ extern const lv_font_t Material24; // 24 px
 #define WOMO_FONT_TEMP          WOMO_FONT_MEDIUM    // Temperatur-Labels
 #define WOMO_FONT_SENSOR        WOMO_FONT_SMALL     // Sensor-Werte
 #define WOMO_FONT_STATUS        WOMO_FONT_SMALL     // Status-Texte
-#define WOMO_FONT_DEBUG         WOMO_FONT_TINY      // Debug/RS485
+#define WOMO_FONT_DEBUG         WOMO_FONT_TINY      // Debug/Sensorboard-Link
 // Icon-Font für Material Symbols (16 px und 24 px)
 #define WOMO_FONT_ICONS         (&Material)
 #define WOMO_FONT_ICONS_LARGE   (&Material24)

@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-// IMU-Snapshot (Shared-State zwischen BNO055-Task und RS485-Modem)
+// IMU-Snapshot (Shared-State zwischen BNO055-Task und ESP-NOW-Modem)
 typedef struct {
     bool valid;
     bool calibrated;

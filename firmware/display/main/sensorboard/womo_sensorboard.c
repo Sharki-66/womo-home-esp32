@@ -52,16 +52,15 @@ typedef struct {
     uint32_t seq;
     char label[32];
     int64_t sent_us;
-} rs485_pending_cmd_t;
+} sb_pending_cmd_t;
 
-static rs485_pending_cmd_t s_pending_cmds[WOMO_SENSOR_MAX_PENDING_CMDS] = {0};
+static sb_pending_cmd_t s_pending_cmds[WOMO_SENSOR_MAX_PENDING_CMDS] = {0};
 static portMUX_TYPE s_pending_cmd_lock = portMUX_INITIALIZER_UNLOCKED;
 static portMUX_TYPE s_seq_lock = portMUX_INITIALIZER_UNLOCKED;
 static uint32_t s_tx_seq_counter = 1;
 static uint32_t s_last_rx_seq = 0;
 static uint32_t s_last_ack_seq = 0;
 static int64_t s_last_ack_time_us = 0;
-static int64_t s_last_heartbeat_rx_us = 0;
 static int64_t s_last_heartbeat_tx_us = 0;
 
 static void sb_emit_event(womo_sensorboard_event_t event)
@@ -118,7 +117,7 @@ static void sb_add_pending(uint32_t seq, const char *label)
         return;
     }
 
-    rs485_pending_cmd_t entry = {
+    sb_pending_cmd_t entry = {
         .in_use = true,
         .warned = false,
         .seq = seq,
@@ -174,7 +173,7 @@ static void sb_resolve_pending(uint32_t seq,
         return;
     }
 
-    rs485_pending_cmd_t resolved = {0};
+    sb_pending_cmd_t resolved = {0};
     bool found = false;
 
     taskENTER_CRITICAL(&s_pending_cmd_lock);
@@ -600,24 +599,6 @@ bool womo_sensorboard_get_latest_data(womo_sensor_data_t *data)
     return false;
 }
 
-esp_err_t womo_sensorboard_send_level_start(void)
-{
-    esp_err_t err = sb_send_simple_command("level_start");
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Sent level_start command");
-    }
-    return err;
-}
-
-esp_err_t womo_sensorboard_send_level_stop(void)
-{
-    esp_err_t err = sb_send_simple_command("level_stop");
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Sent level_stop command");
-    }
-    return err;
-}
-
 esp_err_t womo_sensorboard_send_tare_a(void)
 {
     esp_err_t err = sb_send_simple_command("tare_a");
@@ -1041,24 +1022,6 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
         return;
     }
 
-    if (strcmp(frame_kind, "hb") == 0) {
-        s_last_heartbeat_rx_us = esp_timer_get_time();
-        sb_emit_event(WOMO_SENSORBOARD_EVENT_HEARTBEAT);
-        cJSON_Delete(root);
-        return;
-    }
-
-    if (strcmp(frame_kind, "hello") == 0) {
-        ack_needed = false;
-        const cJSON *fw = cJSON_GetObjectItem(root, "fw");
-        if (cJSON_IsString(fw)) {
-            ESP_LOGI(TAG, "Sensorboard hello: fw=%s", fw->valuestring);
-        }
-        sb_emit_event(WOMO_SENSORBOARD_EVENT_HELLO);
-        cJSON_Delete(root);
-        return;
-    }
-
     // ── WiFi Passwort-Anfrage vom Sensor ──────────────────────────────
     if (strcmp(frame_kind, "wifi_pass_request") == 0) {
         ESP_LOGI(TAG, "Sensor fragt nach WiFi-Passwort");
@@ -1123,7 +1086,6 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             topic_handled = true;
             ack_success = true;
         }
-        s_last_heartbeat_rx_us = esp_timer_get_time();  // ctrl ersetzt hb als Kontakt-Marker
     }
     else if (strcmp(frame_kind, "imu") == 0) {
         if (xSemaphoreTake(s_data_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {

@@ -191,7 +191,7 @@ typedef struct {
     int64_t elec_topic_rx_us;
 } womo_sensor_data_t;
 
-// Ruuvi-Scan-Ergebnis (Auswahlliste für Konfiguration, RS485-Frame "ruuvi_scan")
+// Ruuvi-Scan-Ergebnis (Auswahlliste für Konfiguration, ESP-NOW-Frame "ruuvi_scan")
 #define WOMO_RUUVI_SCAN_MAX_TAGS 8
 
 typedef struct {
@@ -230,9 +230,7 @@ typedef void (*womo_ruuvi_scan_cb_t)(const womo_ruuvi_scan_entry_t *entries, siz
 typedef void (*womo_gasbee_scan_cb_t)(const womo_gasbee_scan_entry_t *entries, size_t count, void *user_data);
 
 typedef enum {
-    WOMO_SENSORBOARD_EVENT_HELLO = 0,
-    WOMO_SENSORBOARD_EVENT_HEARTBEAT,
-    WOMO_SENSORBOARD_EVENT_INVALID_JSON,
+    WOMO_SENSORBOARD_EVENT_INVALID_JSON = 0,
 } womo_sensorboard_event_t;
 
 typedef void (*womo_sensorboard_event_cb_t)(womo_sensorboard_event_t event, void *user_data);
@@ -258,8 +256,6 @@ typedef void (*womo_gasbee_cal_result_cb_t)(bool zero_step, bool ok, int err, co
 void womo_sensorboard_set_gasbee_cal_result_callback(womo_gasbee_cal_result_cb_t callback, void *user_data);
 
 // Kommandos an Sensorboard senden
-esp_err_t womo_sensorboard_send_level_start(void);
-esp_err_t womo_sensorboard_send_level_stop(void);
 esp_err_t womo_sensorboard_send_tare_a(void);
 esp_err_t womo_sensorboard_send_tare_b(void);
 esp_err_t womo_sensorboard_send_wifi_control(bool enable, const char *ssid, const char *password);

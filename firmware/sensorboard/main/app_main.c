@@ -39,7 +39,6 @@ static void sensor_log_init(void)
 {
     esp_log_level_set("sensor_main",  LOG_LEVEL_SENSOR_MAIN);
     esp_log_level_set("deep_sleep",   LOG_LEVEL_DEEP_SLEEP);
-    esp_log_level_set("womo_rs485_legacy",   LOG_LEVEL_SENSORBOARD);
     esp_log_level_set("espnow_modem",  LOG_LEVEL_SENSORBOARD);
     esp_log_level_set("analog",       LOG_LEVEL_ANALOG);
     esp_log_level_set("bno055_app",   LOG_LEVEL_BNO055);
@@ -217,9 +216,9 @@ void app_main(void)
 
     // ESP-NOW direkt nach WiFi-Start (nicht erst nach Sensor-Inits) —
     // esp_now_init() braucht nur esp_wifi_start(), keine Router-Verbindung
-    esp_err_t rs485_err = espnow_modem_init();
-    if (rs485_err != ESP_OK) {
-        ESP_LOGW(TAG, "ESP-NOW nicht gestartet (err=%s)", esp_err_to_name(rs485_err));
+    esp_err_t modem_err = espnow_modem_init();
+    if (modem_err != ESP_OK) {
+        ESP_LOGW(TAG, "ESP-NOW nicht gestartet (err=%s)", esp_err_to_name(modem_err));
     } else {
         ESP_LOGI(TAG, "✓ ESP-NOW-Kommunikation aktiv");
     }

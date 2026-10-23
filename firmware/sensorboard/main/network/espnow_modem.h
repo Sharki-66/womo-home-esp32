@@ -20,7 +20,7 @@ esp_err_t espnow_modem_init(void);
 esp_err_t espnow_modem_request_wifi_pass(void);
 
 /**
- * Erstellt einen vollständigen JSON-Snapshot aller Sensordaten (ohne RS485/ESP-NOW Protokoll).
+ * Erstellt einen vollständigen JSON-Snapshot aller Sensordaten (ohne ESP-NOW-Protokollfelder).
  * Liest direkt von Sensor-Snapshots und internem EMA-Zustand.
  * Rückgabe-String muss vom Aufrufer mit free() freigegeben werden.
  *

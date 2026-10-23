@@ -331,7 +331,7 @@
 // ====================================================================================
 // Ruuvi BLE Scanner
 // Routing ausschließlich per MAC – konfiguriert über Display (Einstellungen > RTC / Ruuvi),
-// per RS485 cmd "ruuvi_config" übertragen und hier in NVS persistiert.
+// per ESP-NOW cmd "ruuvi_config" übertragen und hier in NVS persistiert.
 // Kein Compile-Time-Default: unkonfigurierter Slot ist deaktiviert (kein fremder Tag
 // aus Nachbarfahrzeugen wird akzeptiert), bis der Nutzer eine MAC im Display einträgt.
 // Innen-Tag: z. B. RuuviTag 4in1 oder Standard

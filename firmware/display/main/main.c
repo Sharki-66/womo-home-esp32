@@ -143,8 +143,8 @@ static int bg_last_day_state = -1;   // -1 unknown, 0 night, 1 day (aktuell ange
 static lv_obj_t *logo_img = NULL;    // Fahrzeug-Logo über Hintergrundbild
 static uint8_t *logo_png_data = NULL; // Geladener Logo-PNG-Puffer
 static TaskHandle_t sd_init_task_handle = NULL;
-static TaskHandle_t rs485_init_task_handle = NULL;
-static lv_obj_t *sensor_debug_label = NULL; // RS485 debug status
+static TaskHandle_t sensor_link_init_task_handle = NULL;
+static lv_obj_t *sensor_debug_label = NULL; // Sensorboard-Link Debug-Status
 static lv_obj_t *imu_zero_modal = NULL;     // IMU calibration modal
 static womo_weather_t *weather_widget = NULL; // Weather widget
 static womo_battery_t *main_battery = NULL;   // Battery 1 widget
@@ -211,19 +211,19 @@ static womo_tank_t *fresh_water_tank = NULL;
 static womo_tank_t *grey_water_tank = NULL;
 static lv_obj_t *tank_info_label = NULL;  // Tank-Verbrauch (L/h) + Restlaufzeit
 
-// RS485 packet counter
-static uint32_t rs485_packet_count = 0;
+// Paketzähler Sensorboard-Link
+static uint32_t sensor_link_packet_count = 0;
 
 static portMUX_TYPE display_data_spinlock = portMUX_INITIALIZER_UNLOCKED;
 static womo_sensor_data_t latest_sensor_data = {0};
 static uint32_t latest_packet_count = 0;
 static bool latest_data_valid = false;
-static int64_t rs485_last_packet_time_us = 0;
-static int64_t rs485_watchdog_start_us = 0;
-static bool rs485_timeout_active = false;
-static const int64_t RS485_TIMEOUT_US = 5LL * 60LL * 1000000LL;  // 5 Minuten in Mikrosekunden
-static bool rs485_waiting_for_handshake = false;
-static bool rs485_invalid_data_active = false;
+static int64_t sensor_link_last_packet_time_us = 0;
+static int64_t sensor_link_watchdog_start_us = 0;
+static bool sensor_link_timeout_active = false;
+static const int64_t SENSOR_LINK_TIMEOUT_US = 5LL * 60LL * 1000000LL;  // 5 Minuten in Mikrosekunden
+static bool sensor_link_waiting_for_handshake = false;
+static bool sensor_link_invalid_data_active = false;
 
 typedef enum {
     SYSTEM_STATUS_SOURCE_MANUAL = 0,
@@ -259,7 +259,7 @@ typedef enum {
     SENSOR_ERR_SRC_FRESH,
     SENSOR_ERR_SRC_GREY,
     SENSOR_ERR_SRC_BAT,
-    SENSOR_ERR_SRC_RS485,  // RS485 Timeout / Verbindungsverlust
+    SENSOR_ERR_SRC_LINK,   // Sensorboard-Link (ESP-NOW) Timeout / Verbindungsverlust
     SENSOR_ERR_SRC_IAQ,    // Luftqualität (BME680 indoor IAQ)
     SENSOR_ERR_SRC_TARIFF, // Mobilfunk-Tarif läuft ab / abgelaufen (womo_tariff)
     SENSOR_ERR_SRC_DATA,   // Mobilfunk-Restvolumen unter Schwelle (womo_tariff)
@@ -293,7 +293,7 @@ static int sensor_err_display_idx = -1;
 static char sensor_detail_text[40] = "";  // Name (max. 23, Tarif-Texte) + "+N"
 static portMUX_TYPE system_status_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
-// RS485 data callback
+// Sensorboard-Daten-Callback
 static void sensorboard_data_received(const womo_sensor_data_t *data, void *user_data);
 static void imu_labels_update(bool has_data,
                               float roll_deg,
@@ -1107,15 +1107,8 @@ static void sensorboard_event_handler(womo_sensorboard_event_t event, void *user
     (void)user_data;
 
     switch (event) {
-        case WOMO_SENSORBOARD_EVENT_HELLO:
-            ESP_LOGI(TAG, "Sensorboard hello empfangen");
-            rs485_waiting_for_handshake = false;
-            break;
-        case WOMO_SENSORBOARD_EVENT_HEARTBEAT:
-            // Heartbeats dienen aktuell nur zur Diagnose
-            break;
         case WOMO_SENSORBOARD_EVENT_INVALID_JSON:
-            rs485_invalid_data_active = true;
+            sensor_link_invalid_data_active = true;
             break;
         default:
             break;
@@ -1362,9 +1355,9 @@ static void ui_update_timer_cb(lv_timer_t *timer)
     womo_thresholds_get(&thr);
     uint32_t packet_count = 0;
     bool data_valid = false;
-    bool rs485_timeout_snapshot = false;
-    bool rs485_waiting_snapshot = false;
-    bool rs485_invalid_snapshot = false;
+    bool sensor_link_timeout_snapshot = false;
+    bool sensor_link_waiting_snapshot = false;
+    bool sensor_link_invalid_snapshot = false;
     // Tarif-Termin ins NVS: hier (LVGL, interner Stack), nicht im router_poll_task (PSRAM-Stack),
     // und vor dem frühen return weiter unten, damit es auch ohne Sensordaten passiert
     womo_tariff_flush();
@@ -1381,23 +1374,23 @@ static void ui_update_timer_cb(lv_timer_t *timer)
     lte_snapshot = lte_status;
     packet_count = latest_packet_count;
     data_valid = latest_data_valid;
-    last_packet_us = rs485_last_packet_time_us;
-    rs485_timeout_snapshot = rs485_timeout_active;
-    rs485_waiting_snapshot = rs485_waiting_for_handshake;
-    rs485_invalid_snapshot = rs485_invalid_data_active;
+    last_packet_us = sensor_link_last_packet_time_us;
+    sensor_link_timeout_snapshot = sensor_link_timeout_active;
+    sensor_link_waiting_snapshot = sensor_link_waiting_for_handshake;
+    sensor_link_invalid_snapshot = sensor_link_invalid_data_active;
     taskEXIT_CRITICAL(&display_data_spinlock);
 
-    int64_t reference_us = last_packet_us ? last_packet_us : rs485_watchdog_start_us;
+    int64_t reference_us = last_packet_us ? last_packet_us : sensor_link_watchdog_start_us;
     bool timed_out_now = false;
     if (reference_us > 0) {
-        timed_out_now = (now_us - reference_us) >= RS485_TIMEOUT_US;
+        timed_out_now = (now_us - reference_us) >= SENSOR_LINK_TIMEOUT_US;
     }
 
-    if (timed_out_now != rs485_timeout_snapshot) {
+    if (timed_out_now != sensor_link_timeout_snapshot) {
         taskENTER_CRITICAL(&display_data_spinlock);
-        rs485_timeout_active = timed_out_now;
+        sensor_link_timeout_active = timed_out_now;
         taskEXIT_CRITICAL(&display_data_spinlock);
-        rs485_timeout_snapshot = timed_out_now;
+        sensor_link_timeout_snapshot = timed_out_now;
 
         double elapsed_s = (reference_us > 0) ?
                            (double)(now_us - reference_us) / 1000000.0 : 0.0;
@@ -1408,16 +1401,16 @@ static void ui_update_timer_cb(lv_timer_t *timer)
         }
     }
 
-    // RS485-Timeout → Sensor-Stapel (WARNING, damit veraltete Daten sichtbar werden)
-    sensor_err_states[SENSOR_ERR_SRC_RS485].current =
-        rs485_timeout_snapshot ? WOMO_STATUS_WARNING : WOMO_STATUS_OK;
+    // Sensorboard-Link-Timeout → Sensor-Stapel (WARNING, damit veraltete Daten sichtbar werden)
+    sensor_err_states[SENSOR_ERR_SRC_LINK].current =
+        sensor_link_timeout_snapshot ? WOMO_STATUS_WARNING : WOMO_STATUS_OK;
 
     // Multi-Source Time Sync (WiFi NTP > GPS > LTE) mit dynamischer Rate
     const int64_t TIME_SYNC_RETRY_US_SYNCED = 60LL * 1000000LL; // 60s Abklingzeit nach Sync
     const int64_t TIME_SYNC_RETRY_US_UNSYNCED = 10LL * 1000000LL; // 10s wenn noch keine gültige Zeit
     bool wifi_connected_now = womo_wifi_is_connected();
     bool gps_has_time = snapshot.gps.valid && snapshot.gps.ts > 0;
-    bool rs485_has_time = data_valid && snapshot.timestamp_ms > 0 && !rs485_timeout_snapshot;
+    bool sensor_link_has_time = data_valid && snapshot.timestamp_ms > 0 && !sensor_link_timeout_snapshot;
     bool lte_online = lte_snapshot.valid && lte_snapshot.registered;
     bool time_synced = womo_time_is_synced();
     static bool last_wifi_connected = false;
@@ -1430,14 +1423,14 @@ static void ui_update_timer_cb(lv_timer_t *timer)
 
     int64_t retry_interval = time_synced ? TIME_SYNC_RETRY_US_SYNCED : TIME_SYNC_RETRY_US_UNSYNCED;
     if ((now_us - last_time_sync_try_us) >= retry_interval) {
-        if (rs485_has_time) {
+        if (sensor_link_has_time) {
             time_t current_time = 0;
             time(&current_time);
-            int64_t rs485_secs = (int64_t)(snapshot.timestamp_ms / 1000ULL);
-            int64_t delta = llabs((int64_t)current_time - rs485_secs);
+            int64_t sensor_link_secs = (int64_t)(snapshot.timestamp_ms / 1000ULL);
+            int64_t delta = llabs((int64_t)current_time - sensor_link_secs);
 
             if (!time_synced || delta > 2) {
-                womo_time_sync_gps((time_t)rs485_secs);
+                womo_time_sync_gps((time_t)sensor_link_secs);
                 last_time_sync_try_us = now_us;
                 time_synced = true;
             }
@@ -1542,49 +1535,49 @@ static void ui_update_timer_cb(lv_timer_t *timer)
         }
     }
 
-    // RS485 debug label
+    // Sensorboard-Link Debug-Label
     if (sensor_debug_label) {
         static uint32_t last_packet_count = 0;
-        static char last_rs485_text[60] = "";
-        if (rs485_timeout_snapshot) {
+        static char last_link_text[60] = "";
+        if (sensor_link_timeout_snapshot) {
             const char *timeout_text = womo_locale_get_string(STR_SENSOR_TIMEOUT_LABEL);
-            if (strcmp(timeout_text, last_rs485_text) != 0) {
+            if (strcmp(timeout_text, last_link_text) != 0) {
                 lv_label_set_text(sensor_debug_label, timeout_text);
-                strncpy(last_rs485_text, timeout_text, sizeof(last_rs485_text) - 1);
-                last_rs485_text[sizeof(last_rs485_text) - 1] = '\0';
+                strncpy(last_link_text, timeout_text, sizeof(last_link_text) - 1);
+                last_link_text[sizeof(last_link_text) - 1] = '\0';
             }
             lv_obj_set_style_text_color(sensor_debug_label, lv_color_make(255, 0, 0), 0);
-        } else if (rs485_invalid_snapshot) {
+        } else if (sensor_link_invalid_snapshot) {
             const char *invalid = womo_locale_get_string(STR_SENSOR_INVALID_DATA);
-            if (strcmp(invalid, last_rs485_text) != 0) {
+            if (strcmp(invalid, last_link_text) != 0) {
                 lv_label_set_text(sensor_debug_label, invalid);
-                strncpy(last_rs485_text, invalid, sizeof(last_rs485_text) - 1);
-                last_rs485_text[sizeof(last_rs485_text) - 1] = '\0';
+                strncpy(last_link_text, invalid, sizeof(last_link_text) - 1);
+                last_link_text[sizeof(last_link_text) - 1] = '\0';
             }
             lv_obj_set_style_text_color(sensor_debug_label, lv_color_make(255, 0, 0), 0);
-        } else if (rs485_waiting_snapshot) {
+        } else if (sensor_link_waiting_snapshot) {
             const char *waiting_hello = womo_locale_get_string(STR_SENSOR_WAITING_HELLO);
-            if (strcmp(waiting_hello, last_rs485_text) != 0) {
+            if (strcmp(waiting_hello, last_link_text) != 0) {
                 lv_label_set_text(sensor_debug_label, waiting_hello);
-                strncpy(last_rs485_text, waiting_hello, sizeof(last_rs485_text) - 1);
-                last_rs485_text[sizeof(last_rs485_text) - 1] = '\0';
+                strncpy(last_link_text, waiting_hello, sizeof(last_link_text) - 1);
+                last_link_text[sizeof(last_link_text) - 1] = '\0';
             }
             lv_obj_set_style_text_color(sensor_debug_label, lv_color_make(255, 165, 0), 0);
         } else if (!data_valid) {
             const char *waiting = womo_locale_get_string(STR_SENSOR_WAITING);
-            if (strcmp(waiting, last_rs485_text) != 0) {
+            if (strcmp(waiting, last_link_text) != 0) {
                 lv_label_set_text(sensor_debug_label, waiting);
-                strncpy(last_rs485_text, waiting, sizeof(last_rs485_text) - 1);
-                last_rs485_text[sizeof(last_rs485_text) - 1] = '\0';
+                strncpy(last_link_text, waiting, sizeof(last_link_text) - 1);
+                last_link_text[sizeof(last_link_text) - 1] = '\0';
             }
             lv_obj_set_style_text_color(sensor_debug_label, lv_color_make(255, 0, 0), 0);
         } else if (packet_count != last_packet_count) {
             char buf[60];
             snprintf(buf, sizeof(buf), womo_locale_get_string(STR_SENSOR_PACKETS), packet_count);
-            if (strcmp(buf, last_rs485_text) != 0) {
+            if (strcmp(buf, last_link_text) != 0) {
                 lv_label_set_text(sensor_debug_label, buf);
-                strncpy(last_rs485_text, buf, sizeof(last_rs485_text) - 1);
-                last_rs485_text[sizeof(last_rs485_text) - 1] = '\0';
+                strncpy(last_link_text, buf, sizeof(last_link_text) - 1);
+                last_link_text[sizeof(last_link_text) - 1] = '\0';
             }
             lv_obj_set_style_text_color(sensor_debug_label, lv_color_make(0, 200, 0), 0);
             last_packet_count = packet_count;
@@ -2185,7 +2178,7 @@ gas_done:
         }
     }
 
-    // Power / Radio / Landstrom aus RS485 ctrl-Block synchronisieren
+    // Power / Radio / Landstrom aus ctrl-Topic synchronisieren
     if (snapshot.power.valid) {
         int64_t now_us = esp_timer_get_time();
         bool pwr_grace = (s_pwr_cmd_sent_us > 0 &&
@@ -2226,10 +2219,10 @@ gas_done:
         }
     }
 
-    // Per-Topic Stale-Prüfung: Topic seit > 60 s nicht empfangen, aber RS485 läuft → WARNING
+    // Per-Topic Stale-Prüfung: Topic seit > 60 s nicht empfangen, aber Sensorboard-Link läuft → WARNING
     {
         const int64_t STALE_TOPIC_US = 60LL * 1000000LL;
-        if (!rs485_timeout_snapshot && packet_count > 0) {
+        if (!sensor_link_timeout_snapshot && packet_count > 0) {
             if (snapshot.bat_topic_rx_us > 0 &&
                 (now_us - snapshot.bat_topic_rx_us) > STALE_TOPIC_US &&
                 sensor_err_states[SENSOR_ERR_SRC_BAT].current < WOMO_STATUS_WARNING) {
@@ -2343,7 +2336,7 @@ gas_done:
         }
     }
 
-    // Buzzer: steigende Flanke → lokaler Ton (direkt, kein RS485)
+    // Buzzer: steigende Flanke → lokaler Ton (direkt, kein Sensorboard-Kommando)
     {
         static womo_status_level_t s_prev_stack_max = WOMO_STATUS_OK;
         if (stack_max > s_prev_stack_max) {
@@ -3726,7 +3719,7 @@ static void perf_monitor_toggle_event_cb(lv_event_t *e)
 #endif /* LV_USE_PERF_MONITOR */
     ESP_LOGI(TAG, "Performance Monitor %s", perf_monitor_visible ? "eingeblendet" : "ausgeblendet");
 
-    // RS485 Debug Label mittogglen
+    // Sensorboard-Link Debug-Label mittogglen
     if (sensor_debug_label) {
         if (perf_monitor_visible) {
             lv_obj_clear_flag(sensor_debug_label, LV_OBJ_FLAG_HIDDEN);
@@ -3900,21 +3893,21 @@ static void sensorboard_init_task(void *arg)
     int64_t start_us = esp_timer_get_time();
     ESP_LOGI(TAG, "Async Sensorboard init started");
 
-    esp_err_t rs485_err = womo_sensorboard_init();
+    esp_err_t sensor_link_err = womo_sensorboard_init();
     int32_t elapsed_ms = (int32_t)((esp_timer_get_time() - start_us) / 1000);
 
-    if (rs485_err == ESP_OK) {
+    if (sensor_link_err == ESP_OK) {
         ESP_LOGI(TAG, "Async Sensorboard init finished after %d ms", elapsed_ms);
         ESP_LOGI(TAG, "ESP-NOW initialisiert - receiving data from Sensorboard");
         womo_sensorboard_set_data_callback(sensorboard_data_received, NULL);
         womo_sensorboard_set_event_callback(sensorboard_event_handler, NULL);
-        rs485_waiting_for_handshake = true;
+        sensor_link_waiting_for_handshake = true;
     } else {
         ESP_LOGW(TAG, "Async Sensorboard init failed after %d ms: %s",
-                 elapsed_ms, esp_err_to_name(rs485_err));
+                 elapsed_ms, esp_err_to_name(sensor_link_err));
     }
 
-    rs485_init_task_handle = NULL;
+    sensor_link_init_task_handle = NULL;
     vTaskDelete(NULL);
 }
 
@@ -4018,7 +4011,7 @@ static void log_runtime_heap_stats(void)
              poll_stack, retry_stack);
 }
 
-// Timer-Callbacks für asynchronen RS485-Send (blockiert nicht den LVGL-Thread)
+// Timer-Callbacks für asynchrones Senden ans Sensorboard (blockiert nicht den LVGL-Thread)
 // Statische Handles für Debounce – verhindert Doppel-Send bei schnellem Tippen
 static lv_timer_t *s_pwr_send_timer = NULL;
 static lv_timer_t *s_radio_send_timer = NULL;
@@ -4098,7 +4091,7 @@ static void radio_button_event_cb(lv_event_t *event)
     // Optimistisches UI: sofort umschalten
     radio_on = new_state;
     update_radio_icon(lv_color_hex(0x1565C0), radio_on);
-    // RS485-Befehl asynchron senden
+    // Sensorboard-Kommando asynchron senden
     s_radio_send_timer = lv_timer_create(radio_send_timer_cb, 10, (void *)(uintptr_t)radio_on);
     if (s_radio_send_timer) lv_timer_set_repeat_count(s_radio_send_timer, 1);
 }
@@ -4190,9 +4183,9 @@ void app_main()
 
     // Initialize time management
     womo_time_init();
-    rs485_watchdog_start_us = esp_timer_get_time();
-    rs485_last_packet_time_us = rs485_watchdog_start_us;
-    rs485_timeout_active = false;
+    sensor_link_watchdog_start_us = esp_timer_get_time();
+    sensor_link_last_packet_time_us = sensor_link_watchdog_start_us;
+    sensor_link_timeout_active = false;
     
     // Initialize WiFi + sofort async verbinden (läuft parallel zu Display-HW + UI-Konstruktion)
     ESP_LOGI(TAG, "Initializing WiFi...");
@@ -4867,7 +4860,7 @@ void app_main()
         lv_obj_align(elec_vi_label, LV_ALIGN_TOP_LEFT, 0, 0);
     }
 
-    // RS485 Debug label (über KFZ-Batterie, fallback unten links)
+    // Sensorboard-Link Debug-Label (über KFZ-Batterie, fallback unten links)
 #if CONFIG_LOG_DEFAULT_LEVEL >= ESP_LOG_INFO
     sensor_debug_label = lv_label_create(screen);
     lv_label_set_text(sensor_debug_label, womo_locale_get_string(STR_SENSOR_WAITING));
@@ -4971,9 +4964,9 @@ void app_main()
                  esp_err_to_name(wifi_err));
     }
 
-    // Auf gültige Zeit warten: NTP oder RS485-Timestamp (max 5s).
-    // RS485 display_ready wurde in create_ui() bereits gesendet,
-    // das Sensorboard sendet jetzt schon Pakete mit timestamp_ms.
+    // Auf gültige Zeit warten: NTP oder Sensorboard-Timestamp (max 5s).
+    // Der Sensorboard-Link läuft bereits (Init in create_ui()), das Sensorboard
+    // sendet nach dem ersten Display-Heartbeat Pakete mit timestamp_ms.
     {
         bool time_ok = false;
         for (int i = 0; i < 50; i++) {  // max 5s (50 × 100ms)
@@ -4984,15 +4977,15 @@ void app_main()
                 time_ok = true;
                 break;
             }
-            // 2) RS485-Timestamp vom Sensorboard verfügbar?
+            // 2) Timestamp vom Sensorboard verfügbar?
             taskENTER_CRITICAL(&display_data_spinlock);
             uint64_t ts_ms = latest_sensor_data.timestamp_ms;
             taskEXIT_CRITICAL(&display_data_spinlock);
             if (ts_ms > 0) {
-                int64_t rs485_secs = (int64_t)(ts_ms / 1000ULL);
+                int64_t sensor_link_secs = (int64_t)(ts_ms / 1000ULL);
                 // Plausibilitätscheck: nach 2024-01-01
-                if (rs485_secs > 1704067200) {
-                    womo_time_sync_gps((time_t)rs485_secs);
+                if (sensor_link_secs > 1704067200) {
+                    womo_time_sync_gps((time_t)sensor_link_secs);
                     ESP_LOGI(TAG, "Time synced from Sensorboard after %d ms", i * 100);
                     time_ok = true;
                     break;
@@ -5065,16 +5058,16 @@ void app_main()
         }
     }
 
-    if (rs485_init_task_handle == NULL) {
-        BaseType_t rs485_created = xTaskCreateWithCaps(sensorboard_init_task,
+    if (sensor_link_init_task_handle == NULL) {
+        BaseType_t sensor_link_created = xTaskCreateWithCaps(sensorboard_init_task,
                                                        "sensorboard_init",
                                                        4096,
                                                        NULL,
                                                        4,
-                                                       &rs485_init_task_handle,
+                                                       &sensor_link_init_task_handle,
                                                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (rs485_created != pdPASS) {
-            rs485_init_task_handle = NULL;
+        if (sensor_link_created != pdPASS) {
+            sensor_link_init_task_handle = NULL;
             ESP_LOGW(TAG, "Async Sensorboard init task could not be started");
         }
     }
@@ -5119,32 +5112,32 @@ void app_main()
     ESP_LOGI(TAG, "System running - Touch Control: Bottom-Left=Language, Right=Status, Auto-Theme=Enabled");
 }
 
-// RS485 data received callback - updates display labels
+// Sensorboard data received callback - updates display labels
 static void sensorboard_data_received(const womo_sensor_data_t *data, void *user_data)
 {
     if (!data) {
         return;
     }
 
-    if (rs485_waiting_for_handshake) {
-        rs485_waiting_for_handshake = false;
+    if (sensor_link_waiting_for_handshake) {
+        sensor_link_waiting_for_handshake = false;
         ESP_LOGI(TAG, "ESP-NOW Handshake abgeschlossen (erstes Datenpaket)");
     }
 
-    if (rs485_invalid_data_active) {
-        rs485_invalid_data_active = false;
+    if (sensor_link_invalid_data_active) {
+        sensor_link_invalid_data_active = false;
     }
 
-    rs485_packet_count++;
+    sensor_link_packet_count++;
     int64_t now_us = esp_timer_get_time();
     int64_t previous_us = 0;
     bool timeout_was_active = false;
 
     taskENTER_CRITICAL(&display_data_spinlock);
-    previous_us = rs485_last_packet_time_us;
-    rs485_last_packet_time_us = now_us;
-    timeout_was_active = rs485_timeout_active;
-    rs485_timeout_active = false;
+    previous_us = sensor_link_last_packet_time_us;
+    sensor_link_last_packet_time_us = now_us;
+    timeout_was_active = sensor_link_timeout_active;
+    sensor_link_timeout_active = false;
     taskEXIT_CRITICAL(&display_data_spinlock);
 
     int64_t delta_us = (previous_us == 0) ? 0 : (now_us - previous_us);
@@ -5152,21 +5145,21 @@ static void sensorboard_data_received(const womo_sensor_data_t *data, void *user
         ESP_LOGI(TAG, "Sensor-Timeout beendet, Empfang nach %.1f s wieder aktiv",
                  (double)delta_us / 1000000.0);
     }
-    ESP_LOGD(TAG, "sensorboard_data_received: packet %lu (Δ%lld us)", rs485_packet_count, (long long)delta_us);
+    ESP_LOGD(TAG, "sensorboard_data_received: packet %lu (Δ%lld us)", sensor_link_packet_count, (long long)delta_us);
 
     womo_sensor_data_t snapshot = *data;
 
-    if (snapshot.bno.valid && (rs485_packet_count % 20 == 0)) {
+    if (snapshot.bno.valid && (sensor_link_packet_count % 20 == 0)) {
         const char *dir = snapshot.bno.direction[0] ? snapshot.bno.direction : "?";
         ESP_LOGD(TAG, "Sensor IMU: %s %.1f° R:%.1f° P:%.1f°",
                  dir, snapshot.bno.heading_deg, snapshot.bno.roll_deg, snapshot.bno.pitch_deg);
     }
 
     // HX711 weights
-    // (Mit topic-basiertem RS485 v2 bleibt valid persistent im Merge-State;
+    // (Mit topic-basiertem Protokoll bleibt valid persistent im Merge-State;
     //  separate Missing-Counter sind nicht mehr nötig.)
 
-    // GPS und LTE werden nicht mehr über RS485 empfangen
+    // GPS und LTE werden nicht über den Sensorboard-Link empfangen
     // (Display pollt Router direkt → latest_sensor_data.gps / .lte
     //  werden im router_poll_task geschrieben und dürfen hier nicht
     //  überschrieben werden.)
@@ -5177,7 +5170,7 @@ static void sensorboard_data_received(const womo_sensor_data_t *data, void *user
     snapshot.gps = latest_sensor_data.gps;
     snapshot.lte = latest_sensor_data.lte;
     latest_sensor_data = snapshot;
-    latest_packet_count = rs485_packet_count;
+    latest_packet_count = sensor_link_packet_count;
     latest_data_valid = true;
     taskEXIT_CRITICAL(&display_data_spinlock);
 }

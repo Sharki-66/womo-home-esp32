@@ -18,7 +18,7 @@ Build, Flash und Monitor werden vom Nutzer über VS Code Tasks gestartet — nur
 | GPIO14 (12V-Sense): Eingang, aktiver Pegel per `SENSOR_PWR_12V_SENSE_ACTIVE_HIGH` | **Bekannter Hardware-Bug (2026-09):** J7-Treiber Q1/Q2 für 12V-EIN/AUS sind P-Kanal-FETs (High-Side, +12V) statt N-Kanal (Low-Side, gegen GND) — EBL erwartet Pull-to-GND. Relais schaltet dadurch nicht, unabhängig von Pulslänge/Sense. Fix: IRLML2244→IRLML6244 auf Q1/Q2 (gleiches Footprint). TODO(hardware): Fix verifizieren. |
 
 ## ESP-NOW-Protokoll (Kurzfassung)
-Seit 2026-06 ESP-NOW statt RS485 (Commit `e1eae83`). Transport `network/espnow_transport.c`, Topics/Kommandos `network/espnow_modem.c` (interne Namen `rs485_*` sind Altlast).
+Seit 2026-06 ESP-NOW statt RS485 (Commit `e1eae83`). Transport `network/espnow_transport.c`, Topics/Kommandos `network/espnow_modem.c` (internes Präfix `modem_*`).
 Ein Frame = ein ESP-NOW-Paket mit unformatiertem JSON, max. `WOMO_ESPNOW_MAX_PAYLOAD` (250 Byte). Kanal = WLAN-Kanal, sonst `WOMO_ESPNOW_CHANNEL_FALLBACK`. Peer-Discovery: Broadcast, Display-MAC wird beim ersten empfangenen Paket gelernt (Display sendet alle 2 s `hb`). Sobald der Peer bekannt ist (`espnow_transport_peer_known()`), werden die Topics freigeschaltet und einmal komplett gesendet. `hello`/`hb` sendet das Sensorboard nicht mehr, `display_ready` kommt vom Display nicht mehr.
 Jedes Frame: `{ type|cmd, seq, need_ack?, … }`. ACK vom Sensorboard: `{ type:"cmd_ack", ack_seq, status:"ok"|"error", cmd, err? }`, ACK vom Display: `{ type:"ack", ack_seq, status }`.
 

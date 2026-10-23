@@ -15,7 +15,7 @@
  *   Outdoor (has_pressure = false) — Ruuvi IP68 ohne Drucksensor
  *
  * Erkennung automatisch anhand Ruuvi DF5: raw_press 0xFFFF = kein Sensor.
- * MAC-Filter pro Slot wird per RS485 vom Display konfiguriert (cmd "ruuvi_config")
+ * MAC-Filter pro Slot wird per ESP-NOW vom Display konfiguriert (cmd "ruuvi_config")
  * und in NVS (sensor_config.h: SENSOR_RUUVI_NVS_*) persistiert – leer/unkonfiguriert
  * = Slot deaktiviert, kein Tag wird akzeptiert.
  *
@@ -70,7 +70,7 @@ void ruuvi_ble_scanner_get_outdoor(ruuvi_snapshot_t *out);
 
 /**
  * @brief MAC-Filter zur Laufzeit setzen, in NVS persistieren (vom Display per
- *        RS485-Kommando "ruuvi_config" gesetzt). Leerer String = Slot deaktiviert.
+ *        ESP-NOW-Kommando "ruuvi_config" gesetzt). Leerer String = Slot deaktiviert.
  */
 esp_err_t ruuvi_ble_scanner_set_macs(const char *indoor_mac, const char *outdoor_mac);
 

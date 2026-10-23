@@ -23,7 +23,7 @@
 
 static const char *TAG = "bno055_app";
 
-// ── IMU-Snapshot (interner Shared-State für RS485-Modem) ─────────────────
+// ── IMU-Snapshot (interner Shared-State für ESP-NOW-Modem) ─────────────────
 static bno055_imu_snapshot_t s_imu_last = {0};
 
 void bno055_imu_update(const bno055_imu_snapshot_t *snap)

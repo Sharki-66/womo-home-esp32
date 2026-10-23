@@ -24,7 +24,7 @@
 #define LOG_LEVEL_LVGL_PORT      ESP_LOG_WARN   // hardware/lvgl_port.c
 #define LOG_LEVEL_DISPLAY_HW     ESP_LOG_WARN   // hardware/waveshare_rgb_lcd_port.c
 
-// ── RS485 ────────────────────────────────────────────────────────────────────────────
+// ── Sensorboard-Link (ESP-NOW) ────────────────────────────────────────────────────────────────────────────
 #define LOG_LEVEL_SENSORBOARD          ESP_LOG_WARN   // sensorboard/womo_sensorboard.c
 
 // ── Netzwerk ─────────────────────────────────────────────────────────────────────────
