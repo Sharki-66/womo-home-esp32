@@ -10,7 +10,7 @@ ESP-IDF v5.5.2 · LVGL v9.5 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 | **MCU** | ESP32-S3-WROOM-1, 16 MB Flash, 8 MB PSRAM (Octal) |
 | **Display** | 7" IPS, ST7701 RGB-Interface, Double-Buffer + Direct-Mode |
 | **Touch** | GT911 (I2C), CH422G GPIO-Expander für Backlight/Reset |
-| **RS485** | RX/TX Sensorboard (JSON, 57600 8N1, Half-Duplex) |
+| **ESP-NOW** | Funkverbindung zum Sensorboard (JSON, max. 250 Byte pro Frame; RS485-Klemme des Boards ungenutzt) |
 | **SD-Karte** | Hintergrundbilder, optional |
 
 ## Funktionen
@@ -23,7 +23,7 @@ ESP-IDF v5.5.2 · LVGL v9.5 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 - **Sonnenauf-/-untergang**: Berechnung aus GPS-Position (womo_sun_calc), Anzeige im Hauptscreen
 - **Konnektivität**: Modal mit AP-Status, WLAN-Scan/Connect, LTE Ein/Aus (Router UCI)
 - **Router-LEDs**: Separate Statusanzeige für WLAN/LTE/GPS-Empfang des Routers
-- **Steuerung**: 12V Bordnetz + Multimedia per RS485-Kommandos ans Sensorboard
+- **Steuerung**: 12V Bordnetz + Multimedia per ESP-NOW-Kommandos ans Sensorboard
 - **Fehler-Management**: Fehler-Stack mit Latching, Quittierung per Touch, Buzzer-Alarm (Warn/Alarm-Ton bei neuen unquittier­ten Fehlern)
 - **Einstellungs-Modal**: Schwellwerte für Tank/Batterie/Gas konfigurierbar, Speicherung in NVS
 - **Mobilfunk-Tarif**: Warnung vor Tarifablauf und bei wenig Restvolumen im Fehler-Stack; Termin automatisch aus pass.telekom.de (Router-WebUI-Tool) oder manuell mit Rhythmus (4 Wochen / 30 Tage / 1 Monat), Einstellungen im Tab LTE
@@ -70,8 +70,10 @@ main/
 │   ├── womo_buzzer_http        HTTP-Endpunkt für externen Buzzer-Trigger
 │   ├── womo_http_mutex         TLS-Session-Serialisierung
 │   └── isrg_root_x1_pem.h     Let's Encrypt Root-Zertifikat
-├── rs485/
-│   └── womo_rs485_display      RS485-Empfang/Senden, JSON-Parsing, Merge-Snapshot
+├── espnow/
+│   └── womo_espnow             ESP-NOW-Transport (Init, Peer-Discovery, Senden/Empfangen)
+├── sensorboard/
+│   └── womo_sensorboard        Sensorboard-Protokoll: JSON-Parsing, Kommandos/ACK, Heartbeat, Merge-Snapshot
 ├── storage/
 │   └── womo_sd                 SD-Karten-Zugriff (Hintergrundbilder, Screenshots)
 └── time/

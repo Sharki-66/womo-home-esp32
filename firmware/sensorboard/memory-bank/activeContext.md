@@ -208,7 +208,7 @@ Befunde beim Testen:
 | `main/CMakeLists.txt` | INA226-Sensor hinzugefügt |
 | `main/app_main.c` | `ina226_app_start()` integriert |
 | `main/idf_component.yml` | `k0i05/esp_ina226` Dependency |
-| `main/network/rs485_modem.c` | `rs485_publish_elec()` Topic-Publisher |
+| `main/network/espnow_modem.c` (damals `rs485_modem.c`) | `rs485_publish_elec()` Topic-Publisher |
 | `main/sensor_config.h` | INA226-Konfiguration |
 | `main/sensors/bme680_sensor.c` | Drucktrend-Verbesserungen |
 | `spiffs/dashboard.html` | Web-Dashboard |

@@ -3,7 +3,7 @@
 ## High-Level Architektur
 
 ```
-RS485-UART  ──►  rs485_parser_task  ──►  s_latest_data (Mutex)
+ESP-NOW  ──►  espnow_rx (womo_sensorboard)  ──►  s_latest_data (Mutex)
                                                │
                                     ui_update_timer_cb (500 ms)
                                                │
@@ -25,12 +25,13 @@ router_poll_task (15 s)  ──►  s_router_ap / s_router_wifi / s_router_lte
 | `main/main.c` | Zentrales Orchestrierung (~3500 Zeilen): Tasks, Timer, UI-Build, Callbacks |
 | `main/gui/` | LVGL-Modale und Widgets: `womo_connectivity_modal`, `womo_settings_modal`, `womo_weather`, `womo_thresholds`, `womo_tariff` (Mobilfunk-Tarif), `womo_theme` |
 | `main/network/` | HTTP-Clients: `womo_wifi` (ESP32-STA), `womo_router_uci` (RUTX11), `womo_buzzer_http` |
-| `main/rs485/` | Parser und Sender für das RS485-Protokoll |
+| `main/espnow/` | ESP-NOW-Transport (`womo_espnow`: Init, Peer-Discovery, Senden/Empfangen) |
+| `main/sensorboard/` | Sensorboard-Protokoll (`womo_sensorboard`: JSON-Parsing, Kommandos/ACK, Heartbeat, Merge-Snapshot) |
 
-## Datenpfad RS485 → GUI
+## Datenpfad ESP-NOW → GUI
 
-1. Sensorboard sendet JSON-Topics über RS485 (57600 8N1)
-2. `rs485_parser_task` parsed Topics und schreibt in `s_latest_data` (geschützt per Mutex)
+1. Sensorboard sendet JSON-Topics per ESP-NOW (ein Frame ≤ 250 Byte; bis 2026-06 RS485)
+2. Empfangs-Task `espnow_rx` (Core 0) übergibt an `womo_sensorboard.c`, das die Topics parsed und schreibt in `s_latest_data` (geschützt per Mutex)
 3. `ui_update_timer_cb` läuft alle 500 ms auf dem LVGL-Task (Core 1)
 4. Timer liest `s_latest_data` snapshot, aktualisiert alle Widgets und Error-Stack
 5. Router-Daten kommen separat aus `router_poll_task` (alle 15 s) → `s_router_reachable`, `s_router_ap`, `s_router_wifi`, `s_router_lte`
@@ -43,7 +44,7 @@ router_poll_task (15 s)  ──►  s_router_ap / s_router_wifi / s_router_lte
 
 ## Error-Stack (8 Quellen)
 
-Quellen: Gas, Frischwasser, Grauwasser, Batterie, RS485-Timeout, IAQ (Luftqualität), Tarif (Ablauf), Daten (Restvolumen). Tarif/Daten nur WARNING, Text dynamisch über `sensor_err_src_label()`. Die Auswertung läuft nur bei gültigen Sensordaten und geschlossenem Konnektivitäts-Modal (frühes `return` in `ui_update_timer_cb`).
+Quellen: Gas, Frischwasser, Grauwasser, Batterie, Sensorboard-Timeout, IAQ (Luftqualität), Tarif (Ablauf), Daten (Restvolumen). Tarif/Daten nur WARNING, Text dynamisch über `sensor_err_src_label()`. Die Auswertung läuft nur bei gültigen Sensordaten und geschlossenem Konnektivitäts-Modal (frühes `return` in `ui_update_timer_cb`).
 
 ```c
 sensor_err_state_t:
@@ -66,7 +67,7 @@ sensor_err_state_t:
 
 ## Patterns vermeiden
 
-- Keine LVGL-Aufrufe aus `rs485_parser_task` oder `router_poll_task` direkt
+- Keine LVGL-Aufrufe aus `espnow_rx`/`womo_sensorboard`-Callbacks oder `router_poll_task` direkt
 - Kein NVS-Schreiben aus Tasks mit PSRAM-Stack (`router_poll_task`, `xTaskCreateWithCaps(... MALLOC_CAP_SPIRAM)`)
 - LVGL-Symbole (`LV_SYMBOL_*`) nicht mit `*_german`-Fonts – die enthalten sie nicht; Symbol-Tasten ohne eigene Schrift (wie `make_thresh_row`)
 - Keine blockierenden HTTP-Calls im LVGL-Task

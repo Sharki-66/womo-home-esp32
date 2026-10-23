@@ -4,7 +4,7 @@
 - **MCU**: ESP32-S3-Touch-LCD-7 (ESP32-S3, Dual-Core 240 MHz, 16 MB Flash, 8 MB PSRAM)
 - **Display**: RGB-Interface 800×480 px, 16 MHz PCLK
 - **Touch**: GT911 (kapazitiv, I2C), Bibliothek `esp_lcd_touch_gt911`
-- **RS485**: UART2, 57600 8N1, Half-Duplex (DE/RTS-Pin)
+- **Sensorboard-Link**: ESP-NOW (seit 2026-06, ersetzt RS485; RS485-Klemme des Boards ungenutzt)
 
 ## Stack
 
@@ -50,13 +50,14 @@ idf.py build
 
 Flash und Monitor: VS Code Tasks „Flash Display" / „Monitor Display".
 
-## RS485-Protokoll (Display-Seite)
+## ESP-NOW-Protokoll (Display-Seite)
 
-- **Physik**: UART2, 57600 8N1, Half-Duplex (115200 verursacht Framing-Fehler durch DE-Toggle)
-- **Format**: CRLF-terminierte ASCII-JSON-Zeilen
+- **Transport**: `main/espnow/womo_espnow.c`, ein JSON-Frame pro Paket, max. 250 Byte (`WOMO_ESPNOW_MAX_PAYLOAD`), Kanal = WLAN-Kanal, sonst `WOMO_ESPNOW_CHANNEL_FALLBACK`; Sensorboard-MAC wird beim ersten Paket gelernt
+- **Heartbeat**: Display sendet alle 2 s `hb`, damit das Sensorboard den Peer findet (ersetzt `display_ready`)
 - **Empfang**: Topic-basiert, Display merged Teilupdates in `s_latest_data`
-- **Senden**: Display schickt `cmd`-Objekte (z.B. `display_ready`, `pwr_12v_on`, `radio_on`)
-- **ACK**: Display quittiert per `{ "type":"ack", "ack":<seq>, "status":"ok"|"err" }`
+- **Senden**: Display schickt `cmd`-Objekte (z. B. `pwr_12v_on`, `radio_on`, `wifi_config`) mit `need_ack:true`
+- **ACK**: Sensorboard antwortet mit `cmd_ack` (`ack_seq`), Display quittiert per `{ "type":"ack", "ack_seq":<seq>, "status":"ok"|"err" }`
+- Details: `firmware/display/CLAUDE.md`, Abschnitt „ESP-NOW-Schnittstelle"
 
 ## Konfigurationsdateien
 
@@ -65,5 +66,5 @@ Flash und Monitor: VS Code Tasks „Flash Display" / „Monitor Display".
 | `main/gui/womo_thresholds.h` | Konfigurierbare Schwellwerte (NVS-gespeichert) |
 | `main/gui/womo_tariff.h` | Tarif-Defaults (Vorlauf 3 Tage, Volumen 10 %), Rhythmus-Enum |
 | `main/gui/womo_theme.h` | `womo_status_level_t` Enum, Theme-Farben |
-| `firmware/shared/womo_config.h` | Geteilte Konstanten (RS485-Baudrate, Topics) |
-| `sdkconfig` | ESP-IDF Konfiguration (PSRAM, UART, WiFi-Stack) |
+| `firmware/shared/womo_config.h` | Geteilte Konstanten (ESP-NOW-Kanal/Payload, Topic-Intervalle, Kommando-Timeout) |
+| `sdkconfig` | ESP-IDF Konfiguration (PSRAM, WiFi-Stack) |

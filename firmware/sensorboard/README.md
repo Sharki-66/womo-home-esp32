@@ -16,7 +16,7 @@ ESP-IDF v5.5.2 · ESP32-S3-WROOM-1 (N16R8)
 | **Batterien** | 2× ADC mit Spannungsteiler | Kfz=GPIO4, Board=GPIO5 |
 | **Tanks** | 2× Votronic kapazitiv (0–1V) | Frisch=GPIO1 (100L), Grau=GPIO2 (92L) |
 | **RTC** | PCF8523 – Echtzeituhr | I2C 0x68 |
-| **RS485** | MAX3485, Half-Duplex, 57600 8N1 | TX=GPIO9, RX=GPIO10, DE=GPIO8 |
+| **ESP-NOW** | Funkverbindung zum Display (ersetzt seit 2026-06 RS485/MAX3485, Transceiver aus Schaltplan entfernt) | GPIO8 (ehem. DE) im Deep-Sleep LOW |
 | **I2C** | 100 kHz, interne Pull-ups | SDA=GPIO16, SCL=GPIO15 |
 | **RGB-LED** | WS2812 (onboard) | GPIO48 |
 
@@ -37,22 +37,20 @@ Alle Batterie-/Sense-Kanäle: **100 kΩ / 22 kΩ** Teiler → Faktor 122/22.
 - Tanks: Votronic 0–1V → direkt am ADC, 0–1000 mV = 0–100%
 - Nicht angeschlossen: < 1V → `nc=true`
 
-## RS485-Protokoll (Topic-basiert, v2)
-CRLF-terminierte ASCII-JSON-Zeilen. Round-Robin, max. 1 Topic pro 100 ms. Nach `display_ready`: Initial-Burst aller Topics sofort.
+## ESP-NOW-Protokoll (Topic-basiert)
+Ein JSON-Frame pro ESP-NOW-Paket, max. 250 Byte (`WOMO_ESPNOW_MAX_PAYLOAD`). Kanal = WLAN-Kanal, sonst `WOMO_ESPNOW_CHANNEL_FALLBACK` (`firmware/shared/womo_config.h`). Peer-Discovery per Broadcast: Das Sensorboard lernt die Display-MAC beim ersten empfangenen Paket (Display sendet alle 2 s `hb`), schaltet dann die Topics frei und sendet einen Initial-Burst aller Topics. Round-Robin, max. 1 Topic pro 100 ms. Jedes Frame enthält `seq`, optional `need_ack`; Kommandos werden mit `{ type:"cmd_ack", ack_seq, status, cmd, err? }` quittiert. `hello`/`hb` sendet das Sensorboard nicht mehr (Diagnose steckt in `ctrl`).
 
 | Topic | Intervall | Felder |
 |---|---|---|
-| `hello` | bis ready | `fw`, `board`, `uptime`, `ts` |
-| `hb` | 30 s | `uptime`, `ts`, `heap` |
-| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. u.), `radio_on`, `ac_present`; optional: `rtc_bat_low`, `rtc_bat_switched` |
-| `imu` | 5 s | `yaw_deg`, `pitch_deg`, `roll_deg`, `hdg`, `cal:{sys,gyro,acc,mag}`, `calibrated`, `ts` |
-| `bat` | 10 s | `b1`, `b2` (Volt), `nc1`, `nc2` |
+| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. u.), `radio_on`, `ac_present`, `uptime`, `heap`; optional: `rtc_bat_low`, `rtc_bat_switched` |
+| `imu` | 2 s | `yaw_deg`, `pitch_deg`, `roll_deg`, `hdg`, `cal:{sys,gyro,acc,mag}`, `calibrated`, `ts` |
+| `bat` | 5 s | `b1`, `b2` (Volt), `nc1`, `nc2` |
 | `tank` | 10 s | `t1`, `t2` (%), `nc1`, `nc2`, `t1_l`, `t2_l` (Liter), `t1_rate1h`, `t1_rate2h`, `t1_rest_h`, `t2_rate1h`, `t2_rate2h`, `t2_rest_h` |
 | `hx` | 10 s | `src` (`hx`/`ble`/`none`), `a`, `b` (kg, optional), `sum` (optional), `nc`, `ts`; nur bei `src:"ble"` je Flasche `batt_a_mv`/`batt_a_pct`, `chg_a`, `cal_a`, `cfg_a` (nur wenn an USB/Konfigurationsmodus, analog `_b`) |
 | `gas` | 10 s | `src`, `active`, `net`, `rate1h`, `rate2h`, `rest_h`, `net_a`, `net_b`, `cap_kg`, `pct`, `pct_a`, `pct_b` |
-| `bme_in` | 15 s | `chip` (`bme680`/`bme280`/`bme260`/`ruuvi`), `addr`?, `temp_c`, `rh_pct`, `press_hpa`, `ts`; BME680 zusätzlich: `gas_kohm`? (wenn Gas gültig) sowie `iaq`, `iaq_acc` (0–3), `eco2_ppm`, `bvoc_ppm` – erst nach BSEC-Burn-in (fehlen während der Stabilisierung); bei Ruuvi-Fallback zusätzlich `batt_mv`? |
-| `bme_out` | 15 s | `chip`, `addr`?, `temp_c`, `rh_pct`, `press_hpa`, `ts`, `press_trend_state`?, `press_trend_hpa_h`?, `gas_kohm`? (wenn Gas gültig); **kein `iaq`/`eco2`/`bvoc` für den Außensensor**; bei Ruuvi-Fallback zusätzlich `batt_mv`? |
-| `elec` | 5 s | `v_bus` (V), `i_a` (A), `p_w` (W), `v_shunt_mv` (mV), `ts`; `nc=true` wenn INA226 nicht gefunden |
+| `bme_in` | 10 s | `chip` (`bme680`/`bme280`/`bme260`/`ruuvi`), `addr`?, `temp_c`, `rh_pct`, `press_hpa`, `ts`; BME680 zusätzlich: `gas_kohm`? (wenn Gas gültig) sowie `iaq`, `iaq_acc` (0–3), `eco2_ppm`, `bvoc_ppm` – erst nach BSEC-Burn-in (fehlen während der Stabilisierung); bei Ruuvi-Fallback zusätzlich `batt_mv`? |
+| `bme_out` | 10 s | `chip`, `addr`?, `temp_c`, `rh_pct`, `press_hpa`, `ts`, `press_trend_state`?, `press_trend_hpa_h`?, `gas_kohm`? (wenn Gas gültig); **kein `iaq`/`eco2`/`bvoc` für den Außensensor**; bei Ruuvi-Fallback zusätzlich `batt_mv`? |
+| `elec` | 1 s | `v_bus` (V), `i_a` (A), `p_w` (W), `v_shunt_mv` (mV), `ts`; `nc=true` wenn INA226 nicht gefunden |
 | `ruuvi_scan` | nur auf Anfrage | ein Frame pro Tag: `sid`, `idx`, `cnt` (0 = keiner) + `mac`, `rssi`, `temp_c`, `has_pressure`, `age_s` – alle gesehenen Ruuvi-Tags (ungefiltert), Antwort auf `cmd:"ruuvi_scan_request"` |
 | `gasbee_scan` | nur auf Anfrage | ein Frame pro GasBee: `sid`, `idx`, `cnt` (0 = keine) + `mac`, `rssi`, `weight_kg`, `batt_mv`, `batt_pct`, `chg`, `cal`, `cfg`, `bee_seq`, `age_s` – alle gesehenen GasBees (ungefiltert), Antwort auf `cmd:"gasbee_scan_request"` |
 | `gasbee_cal_result` | nach `gasbee_cal` | `step` (`zero`/`ref`), `ok`, `err` (0 ok, > 0 ATT-Fehler der GasBee, < 0 Sensorboard-Fehler, s. `gasbee_gatt_cal.h`), `msg` |
@@ -110,7 +108,7 @@ IRLML2244 (P-Kanal, High-Side, schaltet +12V) bestückt. Der EBL erwartet an die
 Pull-to-GND (Low-Side). Das Relais schaltet dadurch nicht – unabhängig von Pulslänge oder Sense.
 Fix: Q1/Q2 → IRLML6244 (N-Kanal, gleiches SOT-23-Pinout), sofern Source bereits an GND liegt.
 
-**WiFi-Passwort-Anfrage:** Bei fehlenden WLAN-Zugangsdaten sendet das Sensorboard `type:"wifi_pass_request"` per RS485.
+**WiFi-Passwort-Anfrage:** Bei fehlenden WLAN-Zugangsdaten sendet das Sensorboard `type:"wifi_pass_request"` per ESP-NOW.
 
 ## Web-Dashboard (HTTP, Port 80)
 
@@ -124,7 +122,7 @@ Erreichbar unter `http://Womo-Sensor.local/` nach WiFi-Verbindung mit RUTX11.
 | `/api/status` | GET | Systemstatus (JSON) |
 | `/api/data` | GET | Aktueller Sensor-Snapshot (JSON) |
 | `/api/imu` | GET | IMU-Snapshot (JSON) |
-| `/api/cmd` | POST | Steuerkommandos (JSON, gleiche `cmd`-Syntax wie RS485) |
+| `/api/cmd` | POST | Steuerkommandos (JSON, gleiche `cmd`-Syntax wie über ESP-NOW) |
 
 Statische Dateien (HTML, PNG, favicon) werden aus der SPIFFS-Partition `storage` → `/spiffs` geladen.
 
@@ -162,8 +160,8 @@ main/
 │   ├── gas_source          Quellenwahl Gasgewicht: HX711 (Vorrang) oder GasBee
 │   └── ina226_sensor       INA226 Strom-/Leistungsmessung Eigenverbrauch
 ├── network/
-│   ├── rs485_modem         JSON-Serialisierung aller Topics, Steuerlogik
-│   ├── womo_rs485          UART-Transport, Framing, ACK
+│   ├── espnow_modem        JSON-Serialisierung aller Topics, Kommandos, ACK, Steuerlogik
+│   ├── espnow_transport    ESP-NOW-Transport, Peer-Discovery
 │   ├── ble_manager         NimBLE-Stack, passiver Scan, Advertising-Dispatch
 │   ├── ruuvi_ble_scanner   Ruuvi DF5 (Innen/Außen)
 │   ├── gasbee_ble_scanner  GasBee Advertising v1 (Flasche A/B)

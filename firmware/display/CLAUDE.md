@@ -6,7 +6,7 @@
 - Build, Flash und Monitor werden vom Nutzer gestartet (siehe VS Code Tasks „Build/Flash/Monitor Display Firmware"). Nur erklären, keine Befehle ausführen.
 
 ## Projektüberblick
-- Ziel: Anzeige und Steuerung von Wohnmobil-Daten. Router liefert WLAN/LTE/GNSS; Display visualisiert; Sensorboard sammelt analoge/digitale Messwerte. Kommunikation zwischen Display und Sensorboard per RS485.
+- Ziel: Anzeige und Steuerung von Wohnmobil-Daten. Router liefert WLAN/LTE/GNSS; Display visualisiert; Sensorboard sammelt analoge/digitale Messwerte. Kommunikation zwischen Display und Sensorboard per ESP-NOW (bis 2026-06 RS485).
 
 ## Hardware
 - Router: Teltonika RUTX11 (OpenWRT-basiert) für WLAN/Netz/Hotspot/LTE/GNSS. Anschluss ans Wohnmobil über 2 Relais mit Freilaufdiode und Nachlaufzeit gemäß RUTX11-Doku. Dachantenne (Teltonika) mit 2× WLAN, 2× LTE, 1× GNSS.
@@ -14,19 +14,17 @@
 - Sensorboard: Heemol ESP32 S3 N16R8 DevKitC-1 (ESP32-S3-DevKitC-1), erfasst analoge/digitale Sensoren und bedient E/A Richtung EBL/Anzeigepanel.
 - Sensorik: BNO055, BME680 (innen), BME280 (außen), HX711 (Gasfüllstände), 2× Batterien (Board/Kfz), 2× Tanksensoren Votronic (Frisch/Grau, kapazitiv), Steuerung Ein-/Ausgänge EBL/Panel.
 
-## RS485-Schnittstelle (Sensorboard → Display) – Protokoll v2 (Topic-basiert)
-- Physik: UART2 RS485 Half-Duplex, **57600** 8N1, DE/RTS automatisch (115200 verursacht Framing-Fehler durch DE-Toggle). Leitungsende per CRLF-terminierter ASCII-JSON-Zeilen (kein Binary, nur 0x20–0x7E).
-- Pins (Sensorboard): TX=GPIO12, RX=GPIO11, DE/RTS=GPIO21 (siehe modem_config.h). Display RS485 Buchse (A / B).
-- Grundstruktur jedes Frames: JSON-Objekt mit `type` oder `cmd`, immer `seq` (u32) und `ts` (ms seit Epoch). `need_ack` bool steuert, ob das Gegenüber ein ACK schickt (Sensorboard fordert i. d. R. ACK, sobald Display "ready" ist).
-- ACK vom Display: `{ "type":"ack", "ack":<seq>, "status":"ok"|"err", "cmd":"<label>", "err":"<text>" }`, `need_ack=false`.
-- Periodik vom Sensorboard:
-- `hello`: `type="hello"`, Felder `fw`, `uptime` (s), optional `rx_seq`, `last_ack`.
-- `hb`: `type="hb"`, Felder `uptime`, optional `rx_seq`, `last_ack`.
-- **Topic-Pakete** (ersetzt das alte monolithische `full`-Paket): Jedes Topic wird als eigenständiges kleines JSON-Paket gesendet. Round-Robin-Scheduler, max. 1 Topic pro 100 ms-Zyklus.
-- Topic-Intervalle (definiert in `firmware/shared/womo_config.h`):
-- `ctrl` (2 s): `{ type:"ctrl", pwr_on, radio_on, ac_present }` – Steuer-/Power-Zustände. WiFi/LTE-Zustand kommt **nicht** vom Sensorboard – Display pollt Router direkt.
-- `imu` (1 s): `{ type:"imu", yaw_deg, pitch_deg, roll_deg, hdg, cal:{sys,gyro,acc,mag}, calibrated }` – BNO055
-- `bat` (1 s): `{ type:"bat", b1, b2, nc1, nc2 }` – Batterien (Board/Kfz in Volt, kein SoC)
+## ESP-NOW-Schnittstelle (Sensorboard ↔ Display) – Topic-basiertes JSON-Protokoll
+- Seit 2026-06 (Commit `e1eae83`) ESP-NOW statt RS485, der RS485-Transceiver ist aus dem Schaltplan entfernt. RS485-Bezeichner im Code (`rs485_*` in `espnow_modem.c`) sind Altnamen.
+- Transport: Display `main/espnow/womo_espnow.c`, Sensorboard `main/network/espnow_transport.c`. Ein Frame = ein ESP-NOW-Paket mit unformatiertem JSON, max. `WOMO_ESPNOW_MAX_PAYLOAD` (250 Byte) → große Topics aufteilen (deshalb `bme_in`/`bme_out`). Kanal = Kanal der aktiven WLAN-Verbindung, sonst `WOMO_ESPNOW_CHANNEL_FALLBACK` (6), beide Boards müssen auf demselben Kanal sein. TX-Leistung 10 dBm, unverschlüsselt.
+- Peer-Discovery: Beide Seiten senden zunächst per Broadcast und lernen die MAC der Gegenseite beim ersten empfangenen Paket (danach Unicast). Display sendet alle `WOMO_SENSOR_HEARTBEAT_INTERVAL_MS` (2 s) ein `hb` (`uptime`, optional `rx_seq`), damit das Sensorboard es findet. Sobald das Sensorboard den Display-Peer kennt (`espnow_transport_peer_known()`), schaltet es die Topics frei und sendet einen Initial-Burst aller Topics. `hello` und der Kommando-Handshake `display_ready` werden nicht mehr gesendet (Empfangszweige existieren noch als Altlast).
+- Grundstruktur jedes Frames: JSON-Objekt mit `type` oder `cmd`, immer `seq` (u32). `ts` (ms seit Epoch) ist kein Kopffeld mehr, sondern nur der Messzeitpunkt in einzelnen Topics (`imu`, `hx`, `elec`, `bme_*`). `need_ack` bool steuert, ob das Gegenüber ein ACK schickt (Standard `false`; Kommandos vom Display setzen `true`, Timeout `WOMO_SENSOR_COMMAND_TIMEOUT_MS` 3 s).
+- ACK vom Sensorboard: `{ "type":"cmd_ack", "ack_seq":<seq>, "status":"ok"|"error", "cmd":"<label>", "err":"<text>" }`. ACK vom Display: `{ "type":"ack", "ack_seq":<seq>, "status":"ok"|"err", ... }`, `need_ack=false`.
+- **Topic-Pakete**: Jedes Topic wird als eigenständiges kleines JSON-Paket gesendet. Round-Robin-Scheduler, max. 1 Topic pro 100 ms-Zyklus.
+- Topic-Intervalle (definiert in `firmware/shared/womo_config.h`, `WOMO_TOPIC_*_INTERVAL_MS`):
+- `ctrl` (2 s): `{ type:"ctrl", pwr_on, radio_on, ac_present, rtc_bat_low?, rtc_bat_switched?, uptime, heap }` – Steuer-/Power-Zustände plus Diagnose (ehemals `hb`). WiFi/LTE-Zustand kommt **nicht** vom Sensorboard – Display pollt Router direkt.
+- `imu` (2 s): `{ type:"imu", yaw_deg, pitch_deg, roll_deg, hdg, cal:{sys,gyro,acc,mag}, calibrated }` – BNO055
+- `bat` (5 s): `{ type:"bat", b1, b2, nc1, nc2 }` – Batterien (Board/Kfz in Volt, kein SoC)
 - `tank` (10 s): `{ type:"tank", t1, t2, nc1, nc2 }` – Tanksensoren (Prozent)
 - `hx` (10 s): `{ type:"hx", src, a, b, sum, nc }` – Flaschengewichte (kg). `src`: `"hx"` = Kabel-HX711 (Vorrang), `"ble"` = GasBee-Waagen, `"none"`. Bei `"ble"` zusätzlich je Flasche `batt_a_mv`, `batt_a_pct`, `chg_a`, `cal_a` (analog `_b`) → `hx711.is_gasbee`/`bee[0..1]`.
 - `gas` (10 s): `{ type:"gas", src, active, net, rate1h, rate2h, rest_h, net_a, net_b, cap_kg, pct, pct_a, pct_b }` – Gaslogik
@@ -34,8 +32,8 @@
 - `bme_out` (10 s): `{ type:"bme_out", temp_c, rh_pct, press_hpa, gas_kohm?, press_trend_state?, press_trend_hpa_h?, chip?, batt_mv? }` – Außensensor. Analog: verkabeltes BME280 **oder** Ruuvi-BLE-Tag (`chip:"ruuvi"`, `batt_mv`).
 - `elec` (1 s): `{ type:"elec", nc:bool, v_bus, i_a, p_w, v_shunt_mv }` – INA226 Strom-/Leistungsmessung Hauptleitung. `nc:true` wenn Sensor nicht eingebaut. Display zeigt Spannung/Strom(mA)/Leistung als graues Panel rechts mitte (Long Press zum Ein-/Ausblenden).
 - Sofort-Ctrl: Nach Ausführung von `pwr_12v_on/off` oder `radio_on/off` wird `ctrl`-Topic sofort gesendet (`s_ctrl_immediate`-Flag), damit Display den neuen Zustand schnell anzeigt.
-- GPS/LTE: Werden **nicht** über RS485 übertragen. Display pollt den Router direkt (HTTP/SSH).
-- Display → Sensorboard (Kommandos): `cmd` Feld mit JSON-Objekt. Unterstützt: `display_ready`, `level_start|level_stop`, `tare_a|tare_b`, `gas_bottle_replace` (optional `slot`, `channel`), `pwr_12v_on|pwr_12v_off` (12V Bordnetz), `radio_on|radio_off` (Multimedia, nur wenn 12V aktiv), `ruuvi_config` (`indoor_mac`, `outdoor_mac` – MAC-Filter für den Ruuvi-BLE-Scanner, in Sensorboard-NVS persistiert, leer = Slot deaktiviert), `ruuvi_scan_request` (fordert einmalig das `ruuvi_scan`-Antwort-Topic an), `gasbee_config` (`bottle_a_mac`, `bottle_b_mac` – Zuordnung GasBee → Flasche, Sensorboard-NVS), `gasbee_scan_request` (fordert `gasbee_scan` an, mit `cfg_only:true` nur GasBees an USB), `gasbee_cal_start`/`gasbee_cal_end` (`slot`), `gasbee_cal` (`mac`, `step` `zero`/`ref`, `g`; Ergebnis kommt als Frame `gasbee_cal_result` `{step, ok, err, msg}`). Sensorboard quittiert per ACK.
+- GPS/LTE: Werden **nicht** über ESP-NOW übertragen. Display pollt den Router direkt (HTTP/SSH).
+- Display → Sensorboard (Kommandos): `cmd` Feld mit JSON-Objekt. Unterstützt: `tare_a|tare_b`, `imu_zero` (Pitch/Roll nullen), `wifi_config` (`ssid`, `pass`), `gas_bottle_replace` (optional `slot`, `channel`), `pwr_12v_on|pwr_12v_off` (12V Bordnetz), `radio_on|radio_off` (Multimedia, nur wenn 12V aktiv), `ruuvi_config` (`indoor_mac`, `outdoor_mac` – MAC-Filter für den Ruuvi-BLE-Scanner, in Sensorboard-NVS persistiert, leer = Slot deaktiviert), `ruuvi_scan_request` (fordert einmalig das `ruuvi_scan`-Antwort-Topic an), `gasbee_config` (`bottle_a_mac`, `bottle_b_mac` – Zuordnung GasBee → Flasche, Sensorboard-NVS), `gasbee_scan_request` (fordert `gasbee_scan` an, mit `cfg_only:true` nur GasBees an USB), `gasbee_cal_start`/`gasbee_cal_end` (`slot`), `gasbee_cal` (`mac`, `step` `zero`/`ref`, `g`; Ergebnis kommt als Frame `gasbee_cal_result` `{step, ok, err, msg}`). Sensorboard quittiert per `cmd_ack`. Umgekehrt fragt das Sensorboard bei WLAN-Authentifizierungsfehler per `wifi_pass_request` (`need_ack:true`) nach den Zugangsdaten, Display antwortet mit `wifi_config` aus seiner Known-List.
 - `ruuvi_scan` (nur auf Anfrage, kein periodisches Topic): ein Frame pro Tag `{ type:"ruuvi_scan", sid, idx, cnt, mac, rssi, temp_c, has_pressure, age_s }` (`cnt:0` ohne Eintrag = nichts gefunden) – alle zuletzt gesehenen Ruuvi-Tags (unabhängig vom konfigurierten Filter), für die Auswahlliste im Display (Einstellungen > Sensoren).
 - `gasbee_scan` (nur auf Anfrage): ein Frame pro GasBee `{ type:"gasbee_scan", sid, idx, cnt, mac, rssi, weight_kg?, batt_mv?, batt_pct?, chg, cal, cfg, bee_seq, age_s }` – alle zuletzt gesehenen GasBees. GasBee sendet nur alle 5 min (10 s lang) → Liste kann kurz nach Boot leer sein. Zusammengesetzt in `womo_sensorboard.c` (`scan_asm_*`): Auslieferung an die GUI, sobald alle `cnt` Einträge einer `sid` da sind, spätestens 1 s nach dem letzten Frame mit dem Empfangenen.
 - Display-Merge: Jedes empfangene Topic aktualisiert nur seinen Teil in `s_latest_data`; alle anderen Felder bleiben erhalten. Callback an main.c liefert vollständigen Merge-Snapshot. Fehlende/unbekannte Felder tolerant ignorieren.
@@ -49,10 +47,10 @@
 - WLAN-Spalte: Status + Switch + Scan-Button + Dropdown + Passwortfeld (erst nach Netzwerkauswahl sichtbar). Switch steuert `womo_router_wifi_set_sta()` / `womo_router_wifi_enable_sta()`. QWERTZ-Tastatur für Passwort.
   - `womo_router_wifi_scan()` scannt gezielt nur AP/Master-Interfaces des Routers (per `iwinfo info`-Moduscheck), niemals das aktive STA/Client-Uplink-Interface: Ein Scan auf dem verbundenen Uplink-Radio kann dessen Verbindung einfrieren (beobachtet 2026-08-30 bei RUTX11, Radio0/wlan0=AP, Radio1/wlan1=STA).
 - LTE-Spalte: Provider + Signalstärke + Switch. Switch steuert `womo_router_lte_enable()`.
-- WLAN und LTE werden über UCI JSON-RPC am RUTX11 gesteuert (nicht über RS485).
+- WLAN und LTE werden über UCI JSON-RPC am RUTX11 gesteuert (nicht über ESP-NOW).
 - Router-WiFi-Zugangsdaten werden im NVS gespeichert (Namespace `rtr_wifi`, max. 20 Einträge, MRU-Reihenfolge). Bei Netzwerkauswahl aus Dropdown wird gespeichertes Passwort vorausgefüllt.
 - Router-Poll-Task (`router_poll_task` in main.c) aktualisiert AP/WiFi/LTE/GPS alle 15 s und füllt `womo_connectivity_snapshot_t` mit AP-Feldern (ap_enabled, ap_ssid, ap_clients, ap_client_list).
-- **ESP32-WLAN-Konfiguration**: Die AP-Spalte enthält einen "WLAN konfigurieren"-Button, der einen ESP32-eigenen WiFi-Scan (`womo_wifi_scan_async`) startet. Nach Auswahl + Passwort-Eingabe verbindet der ESP32 sich mit dem gewählten Netzwerk (`womo_wifi_connect`). Credentials werden in NVS (`wifi_cfg` / `known_list`) gespeichert und per RS485 `cmd:"wifi_config"` ans Sensorboard weitergeleitet. Der WiFi-Autoretry (`wifi_autoretry_task`) bevorzugt `womo_wifi_connect_best_known()` mit Fallback auf Kconfig-SSID.
+- **ESP32-WLAN-Konfiguration**: Die AP-Spalte enthält einen "WLAN konfigurieren"-Button, der einen ESP32-eigenen WiFi-Scan (`womo_wifi_scan_async`) startet. Nach Auswahl + Passwort-Eingabe verbindet der ESP32 sich mit dem gewählten Netzwerk (`womo_wifi_connect`). Credentials werden in NVS (`wifi_cfg` / `known_list`) gespeichert und per ESP-NOW `cmd:"wifi_config"` ans Sensorboard weitergeleitet. Der WiFi-Autoretry (`wifi_autoretry_task`) bevorzugt `womo_wifi_connect_best_known()` mit Fallback auf Kconfig-SSID.
 
 ## Einstellungen-Modal (Display)
 

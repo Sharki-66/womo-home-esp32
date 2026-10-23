@@ -51,7 +51,7 @@ Das System besteht aus drei Komponenten:
 
 **Router** – Hier ein Teltonika RUTX11 sorgt für die Verbindung zur Außenwelt: LTE-Internet unterwegs, WLAN auf dem Campingplatz, GPS-Ortung und ein eigener Hotspot für Laptops und Smartphones an Bord. Wurde gewählt wegen der Anschlußmöglichkeiten der Antennen auf dem Womo Dach.
 
-Sensorboard und Display kommunizieren über einen RS485-Bus
+Sensorboard und Display kommunizieren drahtlos per ESP-NOW (direkt zwischen den beiden ESP32, ohne Router).
 
 ## 💡 Warum selbst bauen?
 
@@ -59,7 +59,7 @@ Sensorboard und Display kommunizieren über einen RS485-Bus
 - **Alles an einem Ort** – Kein Aufstehen mehr, um am EBL-Panel nachzuschauen. Kein separates Thermometer, keine Extra-App für den Router.
 - **Intelligente Prognosen** – Das System rechnet mit: Wie lange reicht das Gas bei aktuellem Verbrauch? Wann ist der Tank leer? Wie entwickelt sich der Luftdruck?
 - **Offenes System** – Komplett Open Source auf ESP32-Basis. Erweiterbar, anpassbar, reparierbar. Kein Cloud-Zwang, keine Abo-Kosten.
-- **Robustheit** – Industriekomponenten (RS485, Metallgehäuse-Router), für den 12V-Betrieb ausgelegt. Funktioniert auch ohne Internet.
+- **Robustheit** – Industriekomponenten (Metallgehäuse-Router), für den 12V-Betrieb ausgelegt. Funktioniert auch ohne Internet.
 - **Weil es Spass macht und so noch nicht gibt.**
 
 ## 📁 Projektstruktur

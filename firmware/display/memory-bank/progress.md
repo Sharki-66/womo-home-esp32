@@ -2,11 +2,11 @@
 
 ## Fertig / funktioniert
 
-### RS485-Protokoll (Display-Empfänger)
-- Topic-Parser für alle Topics: `bat`, `tank`, `gas`, `imu`, `bme`, `ctrl`, `elec`, `hx`, `hello`, `hb`
+### ESP-NOW-Protokoll (Display-Empfänger, seit 2026-06 statt RS485)
+- Topic-Parser für alle Topics: `bat`, `tank`, `gas`, `imu`, `bme_in`, `bme_out`, `ctrl`, `elec`, `hx` (+ `ruuvi_scan`, `gasbee_scan`, `gasbee_cal_result` auf Anfrage)
 - ACK-Mechanismus (Display quittiert Sensorboard-Pakete mit `need_ack=true`)
 - Merge-Logik: jedes Topic aktualisiert nur seinen Teil in `s_latest_data`
-- `display_ready`-Kommando beim Start, danach periodische `ctrl`/`pwr`-Kommandos
+- Peer-Discovery per `hb` alle 2 s (ersetzt `display_ready`)
 
 ### GUI-Widgets (Hauptscreen)
 - **Batterie**: 2 Widgets (Board/Kfz), Volt-Anzeige, farbkodiert per Schwellwert
@@ -46,8 +46,8 @@
 - Fallback auf Kconfig-SSID wenn kein gespeicherter AP
 
 ### Steuerung
-- **12V-Bordnetz**: Long-Press auf Blitz-Button (unten links), RS485-Kommando `pwr_12v_on/off`
-- **Radio/Multimedia**: Click auf Noten-Button (oben links), RS485-Kommando `radio_on/off`
+- **12V-Bordnetz**: Long-Press auf Blitz-Button (unten links), ESP-NOW-Kommando `pwr_12v_on/off`
+- **Radio/Multimedia**: Click auf Noten-Button (oben links), ESP-NOW-Kommando `radio_on/off`
 - **Einstellungen**: Click auf Zahnrad-Button
 
 ## Backlog / noch nicht implementiert
@@ -62,6 +62,5 @@
 
 - LVGL Font `lv_font_montserrat_8` nicht aktiviert (kleinste verfügbare Schrift: 12 px)
 - Icons werden als PNG geladen aus SPIFFS → Ladezeit beim Bootup
-- RS485 bei 115200 Baud: Framing-Fehler durch DE/RTS-Toggle-Timing → fest auf 57600
 - RUTX11: pausierter congstar-Tarif kann Modem-Neustarts auslösen; Ursache landet künftig in `/etc/womo/log/modem_down_*.log`
 - RUTX11: `simslot` in `status.json` leer (`AT+QUIMSLOT?` ohne Ziffer)

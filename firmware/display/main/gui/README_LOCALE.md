@@ -144,9 +144,9 @@ Touch the **bottom-left corner** (date area) to toggle between DE/EN.
 
 ## Example: Dynamic Labels
 
-When sensor data arrives via RS485:
+When sensor data arrives via ESP-NOW:
 ```c
-void rs485_data_received(const womo_sensor_data_t *data) {
+void sensorboard_data_received(const womo_sensor_data_t *data) {
     if (lvgl_port_lock(500)) {
         char buf[60];
         
@@ -168,7 +168,7 @@ void rs485_data_received(const womo_sensor_data_t *data) {
 2. **Touch bottom-left corner** (date area) to toggle DE ↔ EN
 3. **Verify** all labels update immediately:
    - WiFi status
-   - RS485 status  
+   - Sensorboard link status  
    - Sensor labels (on next data packet)
    - Mode/Status labels (on next theme change)
 

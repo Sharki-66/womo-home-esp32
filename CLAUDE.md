@@ -35,7 +35,7 @@ Bei jeder Code-Änderung die betroffenen Dateien mitaktualisieren:
 
 | Teilprojekt | MCU | Verzeichnis | Aufgabe |
 |---|---|---|---|
-| **Sensorboard** | ESP32-S3-WROOM-1 N16R8 | `firmware/sensorboard/` | Sensoren erfassen, RS485 → Display, Webdashboard |
+| **Sensorboard** | ESP32-S3-WROOM-1 N16R8 | `firmware/sensorboard/` | Sensoren erfassen, ESP-NOW → Display, Webdashboard |
 | **Display** | ESP32-S3-Touch-LCD-7 | `firmware/display/` | LVGL-GUI, Visualisierung, Steuerung |
 | **GasBee** | ESP32-C3 | `firmware/gasbee/` | BLE-Gaswaage (Flaschenwägung) |
 | **GasBee nRF** | Seeed XIAO nRF52840 | `firmware/gasbee_nrf/` | Ersatz für GasBee, BLE-Advertising-Format v1 (Spezifikation: `firmware/sensorboard/README.md`), nRF Connect SDK v3.4.1, siehe dortige README |
@@ -55,14 +55,14 @@ Build, Flash und Monitor werden vom Nutzer über VS Code Tasks gestartet — Cla
 
 ## Kommunikation zwischen Teilprojekten
 
-- **RS485** (57600 8N1, Half-Duplex): Sensorboard → Display, JSON Topic-basiert
+- **ESP-NOW** (seit 2026-06, ersetzt RS485): Sensorboard ↔ Display, JSON Topic-basiert, max. 250 Byte pro Frame. Protokoll: `firmware/display/CLAUDE.md`
 - **BLE** (NimBLE, passiver Scan): GasBee (bis zu 2, Flasche A/B) und Ruuvi-Tags → Sensorboard per Advertising, kein Connect. HX711 am Kabel hat Vorrang vor GasBee.
 - **HTTP/UCI**: Display → RUTX11 Router (WiFi/LTE/GPS)
 - **WiFi**: Sensorboard im RUTX11-Netz (NTP, Web-Dashboard)
 
 ## Geteilte Konfiguration
 
-`firmware/shared/womo_config.h` — RS485-Baudrate, Topic-Intervalle, WiFi-Credentials.
+`firmware/shared/womo_config.h` — ESP-NOW-Kanal/Payload-Limit, Kommando-Timeouts, Topic-Intervalle, WiFi-Credentials.
 Änderungen dort wirken sich auf Sensorboard **und** Display aus.
 
 ## Hardware

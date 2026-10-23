@@ -13,16 +13,16 @@
 
 | Dokument | Beschreibung |
 |----------|-------------|
-| [Sensorboard README](../firmware/sensorboard/README.md) | Hardware, Pins, RS485-Protokoll, NVS, Projektstruktur |
+| [Sensorboard README](../firmware/sensorboard/README.md) | Hardware, Pins, ESP-NOW-Protokoll, NVS, Projektstruktur |
 | [Display README](../firmware/display/README.md) | Hardware, Funktionen, Externe APIs, Projektstruktur |
 
 ## System
 
 | Komponente | Hardware | Funktion |
 |---|---|---|
-| **Display** | Waveshare ESP32-S3-Touch-LCD-7 | LVGL-GUI, Touch, RS485-Empfang, Router-Anbindung |
-| **Sensorboard** | Heemol ESP32-S3 N16R8 DevKitC-1 | Sensoren (BME680, BNO055, HX711, ADC), RS485-Sender |
+| **Display** | Waveshare ESP32-S3-Touch-LCD-7 | LVGL-GUI, Touch, ESP-NOW-Empfang, Router-Anbindung |
+| **Sensorboard** | Heemol ESP32-S3 N16R8 DevKitC-1 | Sensoren (BME680, BNO055, HX711, ADC), ESP-NOW-Sender |
 | **Router** | Teltonika RUTX11 | WLAN, LTE, GNSS, Hotspot |
 
-Kommunikation: Display ↔ Sensorboard per RS485 (JSON, 115200 8N1).
+Kommunikation: Display ↔ Sensorboard per ESP-NOW (JSON, max. 250 Byte pro Frame).
 Router wird vom Display per HTTP/UCI angesprochen.

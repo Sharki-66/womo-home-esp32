@@ -16,6 +16,6 @@ Fahrer und Reisende (Hajo) — keine technischen Vorkenntnisse nötig für die B
 ## Constraints
 - **Stromversorgung**: 12V Bordnetz (Blei-Säure oder LiFePO4), kein stabiles 5V-Netzteil
 - **Display**: ESP32-S3-Touch-LCD-7, 800×480 px, kapazitiver Touch (GT911)
-- **Performance**: LVGL auf Core 1, RS485-Parser auf Core 0, kein Blocking im UI-Thread
+- **Performance**: LVGL auf Core 1, ESP-NOW-Empfang auf Core 0, kein Blocking im UI-Thread
 - **Speicher**: PSRAM für große Allokationen (Framebuffer, LVGL-Heap, Icons), SRAM knapp
 - **Offline-fähig**: Display muss ohne Router funktionieren (Konnektivitätsfehler anzeigen, nicht abstürzen)

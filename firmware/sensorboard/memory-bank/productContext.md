@@ -7,7 +7,7 @@
       ↑ WiFi STA                        ↑ HTTP/UCI (Display → Router)
       │
 [Sensorboard ESP32-S3]
-      │ RS485 (57600 8N1, JSON)
+      │ ESP-NOW (JSON, ≤ 250 Byte/Frame)
       ↓
 [Display ESP32-S3]
       ↑ BLE
@@ -18,11 +18,11 @@ Das Sensorboard ist **kein** UI-Gerät – es sammelt Daten und sendet sie weite
 
 ## Schnittstellen
 
-### → Display (RS485)
+### → Display (ESP-NOW, bis 2026-06 RS485)
 Primärkanal. Das Sensorboard ist der **Sender**, das Display der **Empfänger**.
 - Topics im Round-Robin (alle paar Sekunden)
 - Display sendet Steuerkommandos zurück (`pwr_12v_on`, `radio_on`, `tare_a`, ...)
-- Handshake: Sensorboard sendet `hello` bis Display `display_ready` schickt
+- Kein Handshake mehr: Display sendet alle 2 s `hb`, Sensorboard lernt daraus die Display-MAC und startet die Topics
 
 ### → Router (WiFi STA)
 - Verbindet sich als WLAN-Client mit RUTX11
@@ -41,13 +41,13 @@ Primärkanal. Das Sensorboard ist der **Sender**, das Display der **Empfänger**
 - API: `/api/status`, `/api/data`, `/api/imu`, `/api/cmd` (POST)
 
 ## Nutzerkontext
-Das Fahrzeug ist ein **Fiat Ducato** (Reisemobil). Das System ist dauerhaft im Fahrzeug verbaut. Kein Display am Sensorboard selbst – Bedienung nur über Touch-Wakeup (GPIO6), RS485-Kommandos vom Display, oder Web-Dashboard.
+Das Fahrzeug ist ein **Fiat Ducato** (Reisemobil). Das System ist dauerhaft im Fahrzeug verbaut. Kein Display am Sensorboard selbst – Bedienung nur über Touch-Wakeup (GPIO6), ESP-NOW-Kommandos vom Display, oder Web-Dashboard.
 
 ## Steuerlogik
 
 ### 12V Bordnetz (LBE)
 Bistabiles Relais: Ein-Puls (GPIO11) / Aus-Puls (GPIO12), Pulslänge `SENSOR_PWR_12V_PULSE_MS`
-(500 ms). Display sendet `pwr_12v_on`/`pwr_12v_off` per RS485-Kommando. `ctrl.pwr_on` meldet
+(500 ms). Display sendet `pwr_12v_on`/`pwr_12v_off` per ESP-NOW-Kommando. `ctrl.pwr_on` meldet
 den an GPIO14 gemessenen Ist-Zustand (12V-Sense) → Display-Button zeigt Realität.
 
 ⚠️ **Bekannter Hardware-Bug (2026-09):** Treiber Q1/Q2 (J7 „12V EIN"/„AUS") sind mit

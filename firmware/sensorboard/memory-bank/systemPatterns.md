@@ -23,26 +23,24 @@
 18. ble_manager_init() + gasbee_ble_scanner_init() + gasbee_gatt_cal_init() + ruuvi_ble_scanner_init() – passiver BLE-Scan, GATT nur zur GasBee-Kalibrierung
 19. vTaskDelay(1000ms)        – BNO055 braucht kurze Pause
 20. bno055_app_start()        – IMU
-21. rs485_modem_init()        – RS485 TX+RX Tasks starten
+21. espnow_modem_init()       – ESP-NOW-Transport + Topic-Scheduler starten
 22. deep_sleep_start_monitor() – Touch-Debug-Log
 23. while(1) vTaskDelay(1s)   – Idle
 ```
 
-## RS485 Task-Architektur (rs485_modem.c)
+## ESP-NOW Task-Architektur (espnow_modem.c + espnow_transport.c)
 
-**TX-Task:** Round-Robin über alle Topics (100ms-Zyklus, max. 1 Topic pro Zyklus)
-- Vor TX: `s_last_rx_us` prüfen → 150ms TX-Sperre nach RX (Empfangsfenster)
-- Mindestabstand TX→TX: 80ms (`RS485_MIN_TX_GAP_US`)
-- `s_tx_mutex` schützt Bus-Zugriff
+Seit 2026-06 (Commit `e1eae83`) ESP-NOW statt RS485. Interne Namen `rs485_*` in `espnow_modem.c` sind Altlast.
 
-**RX-Task:** Liest UART-Bytes, assembliert CRLF-terminierte JSON-Zeilen
-- Echo-Unterdrückung: eigene TX-Bytes auf Half-Duplex-Bus werden ignoriert
-- ACK verarbeiten → `s_pending[]`-Array aufräumen
-- Commands (`display_ready`, `pwr_12v_on/off`, `radio_on/off`, `tare_a/b`, ...) direkt ausführen
+**Transport (`espnow_transport.c`):** Ein JSON-Frame pro ESP-NOW-Paket, max. `WOMO_ESPNOW_MAX_PAYLOAD` (250 Byte), Voll-Duplex (keine TX-Sperren mehr). Senden zunächst per Broadcast; Display-MAC wird beim ersten empfangenen Paket gelernt und als Unicast-Peer eingetragen. Empfang über Queue + RX-Task (Stack 8192 Byte).
+
+**Scheduler-Task:** Round-Robin über alle Topics (100 ms-Zyklus, max. 1 Topic pro Zyklus). Sobald `espnow_transport_peer_known()` → `s_display_ready = true` + Initial-Burst. Scan-Listen und `gasbee_cal_result` haben Vorrang vor dem Round-Robin.
+
+**RX:** ACK (`ack`/`cmd_ack`) → `s_pending[]` aufräumen; `hb` vom Display wird ohne ACK verworfen (dient nur der Peer-Erkennung); Commands (`pwr_12v_on/off`, `radio_on/off`, `tare_a/b`, `wifi_config`, ...) direkt ausführen und mit `cmd_ack` quittieren.
 
 **State-Flags:**
 ```c
-s_display_ready     // true nach erstem display_ready CMD
+s_display_ready     // true sobald Display-Peer per ESP-NOW bekannt
 s_tx_seq            // monoton steigender Sequenzzähler (u32, skip 0)
 s_last_rx_seq       // letzter vom Display empfangener seq
 s_last_ack_seq      // letzter bestätigter seq
@@ -50,22 +48,20 @@ s_last_ack_seq      // letzter bestätigter seq
 
 ## Topic-Scheduler
 
-Jedes Topic hat ein eigenes Intervall. Nach `display_ready`: Initial-Burst aller Topics sofort.
+Jedes Topic hat ein eigenes Intervall (`WOMO_TOPIC_*_INTERVAL_MS` in `firmware/shared/womo_config.h`). Sobald der Display-Peer bekannt ist: Initial-Burst aller Topics sofort.
 Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `ctrl`-Topic unmittelbar nochmal gesendet.
 
 | Topic | Intervall | Felder (Kernfelder) |
 |---|---|---|
-| `hello` | bis display_ready | `fw`, `board`, `uptime`, `ts` |
-| `hb` | 30 s | `uptime`, `ts`, `heap` |
-| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. Abschnitt „12V Bordnetz"), `radio_on`, `ac_present` |
-| `imu` | 5 s | `yaw_deg`, `pitch_deg`, `roll_deg`, `hdg`, `cal`, `calibrated` |
-| `bat` | 10 s | `b1`, `b2` (V), `nc1`, `nc2` |
+| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. Abschnitt „12V Bordnetz"), `radio_on`, `ac_present`, `uptime`, `heap` (ehemals `hb`), optional `rtc_bat_low`, `rtc_bat_switched` |
+| `imu` | 2 s | `yaw_deg`, `pitch_deg`, `roll_deg`, `hdg`, `cal`, `calibrated` |
+| `bat` | 5 s | `b1`, `b2` (V), `nc1`, `nc2` |
 | `tank` | 10 s | `t1`, `t2` (%), `t1_l`, `t2_l` (L), Rate-Felder |
 | `hx` | 10 s | `src` (`hx`/`ble`/`none`), `a`, `b` (kg), `sum`, `nc`; bei `src:"ble"` `batt_a_mv`, `batt_a_pct`, `chg_a`, `cal_a`, `cfg_a` (nur wenn an USB/Konfigurationsmodus, analog `_b`) |
 | `gas` | 10 s | `src`, `active`, `net`, `rate1h`, `rate2h`, `rest_h`, ... |
-| `bme_in` | 15 s | `chip` (`bme680`/`bme280`/`bme260`/`ruuvi`), `addr`, `temp_c`, `rh_pct`, `press_hpa`, `ts`; nur BME680: `gas_kohm` (wenn Gas gültig) sowie – erst wenn BSEC einen IAQ-Wert liefert (nach Burn-in) – `iaq`, `iaq_acc` (0–3), `eco2_ppm`, `bvoc_ppm`; Ruuvi-Fallback zusätzlich `batt_mv` |
-| `bme_out` | 15 s | `chip`, `addr`, `temp_c`, `rh_pct`, `press_hpa`, `ts`; bei Trenddaten `press_trend_state` (`fall_fast`/`fall_slow`/`steady`/`rise_slow`/`rise_fast`) + `press_trend_hpa_h`; nur BME680: `gas_kohm` (wenn Gas gültig); **kein IAQ/BSEC** für den Außensensor; Ruuvi-Fallback zusätzlich `batt_mv` |
-| `elec` | 5 s | `v_bus`, `i_a`, `p_w`, `v_shunt_mv`; `nc=true` wenn INA226 fehlt |
+| `bme_in` | 10 s | `chip` (`bme680`/`bme280`/`bme260`/`ruuvi`), `addr`, `temp_c`, `rh_pct`, `press_hpa`, `ts`; nur BME680: `gas_kohm` (wenn Gas gültig) sowie – erst wenn BSEC einen IAQ-Wert liefert (nach Burn-in) – `iaq`, `iaq_acc` (0–3), `eco2_ppm`, `bvoc_ppm`; Ruuvi-Fallback zusätzlich `batt_mv` |
+| `bme_out` | 10 s | `chip`, `addr`, `temp_c`, `rh_pct`, `press_hpa`, `ts`; bei Trenddaten `press_trend_state` (`fall_fast`/`fall_slow`/`steady`/`rise_slow`/`rise_fast`) + `press_trend_hpa_h`; nur BME680: `gas_kohm` (wenn Gas gültig); **kein IAQ/BSEC** für den Außensensor; Ruuvi-Fallback zusätzlich `batt_mv` |
+| `elec` | 1 s | `v_bus`, `i_a`, `p_w`, `v_shunt_mv`; `nc=true` wenn INA226 fehlt |
 | `ruuvi_scan` | nur auf Anfrage | ein Frame pro Tag: `sid`, `idx`, `cnt` (0 = keiner) + `mac`, `rssi`, `temp_c`, `has_pressure`, `age_s` – alle gesehenen Ruuvi-Tags (ungefiltert), Antwort auf `cmd:"ruuvi_scan_request"` |
 | `gasbee_scan` | nur auf Anfrage | ein Frame pro GasBee: `sid`, `idx`, `cnt` (0 = keine) + `mac`, `rssi`, `weight_kg`, `batt_mv`, `batt_pct`, `chg`, `cal`, `cfg`, `bee_seq`, `age_s` – alle gesehenen GasBees (ungefiltert), Antwort auf `cmd:"gasbee_scan_request"` |
 | `gasbee_cal_result` | nach `gasbee_cal` | `step` (`zero`/`ref`), `ok`, `err` (0 ok, > 0 ATT-Fehler der GasBee, < 0 Sensorboard-Fehler, s. `gasbee_gatt_cal.h`), `msg` |
@@ -104,7 +100,7 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 ### Ruuvi BLE Scanner (ruuvi_ble_scanner.c)
 - Dekodiert Ruuvi Data Format 5 (RAWv2) aus Advertisement-Manufacturer-Data, registriert als Handler beim zentralen `ble_manager` (kein eigenes NimBLE)
 - Zwei Slots (Indoor/Outdoor), Routing ausschließlich per MAC-Filter
-- **MAC-Filter vom Display konfigurierbar** (seit MAC-Config-Umbau): kein Compile-Time-Default mehr, sondern per RS485 `cmd:"ruuvi_config"` (`indoor_mac`, `outdoor_mac`) gesetzt und in NVS (`SENSOR_RUUVI_NVS_NAMESPACE`/`_KEY_INDOOR`/`_KEY_OUTDOOR` in `sensor_config.h`) persistiert; `ruuvi_ble_scanner_set_macs()` aktualisiert den Filter zur Laufzeit ohne Reboot. Leer/unkonfiguriert = Slot deaktiviert.
+- **MAC-Filter vom Display konfigurierbar** (seit MAC-Config-Umbau): kein Compile-Time-Default mehr, sondern per ESP-NOW `cmd:"ruuvi_config"` (`indoor_mac`, `outdoor_mac`) gesetzt und in NVS (`SENSOR_RUUVI_NVS_NAMESPACE`/`_KEY_INDOOR`/`_KEY_OUTDOOR` in `sensor_config.h`) persistiert; `ruuvi_ble_scanner_set_macs()` aktualisiert den Filter zur Laufzeit ohne Reboot. Leer/unkonfiguriert = Slot deaktiviert.
 - Scan-Liste (`ruuvi_ble_scanner_get_scan_list()`): sammelt bis zu `SENSOR_RUUVI_SCAN_MAX_TAGS` zuletzt gesehene Tags unabhängig vom Filter (MAC, RSSI, Temp, Alter), für die Auswahlliste im Display; wird auf `cmd:"ruuvi_scan_request"` als `ruuvi_scan`-Topic gesendet
 - Kabel-Sensor (BME680/BME280) hat Vorrang; Ruuvi wird in `espnow_modem.c` (`rs485_publish_bme_in/out`) nur als Fallback genutzt
 - Felder: `temp_c`, `humidity_pct`, `pressure_hpa` (nur wenn `has_pressure`), `battery_mv` (nur wenn `battery_valid`, Byte 15-16 des DF5-Payloads, 11-Bit + 1600mV Offset)
@@ -130,13 +126,13 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 - Kalibrierung in NVS (`bno055` Namespace)
 
 ## WiFi-Credential-Flow
-Wenn kein SSID in NVS: Sensorboard sendet `type:"wifi_pass_request"` per RS485 → Display zeigt Passwort-Dialog → sendet Credentials per `cmd` zurück → Sensorboard speichert in NVS und verbindet.
+Wenn kein SSID in NVS: Sensorboard sendet `type:"wifi_pass_request"` per ESP-NOW → Display zeigt Passwort-Dialog → sendet Credentials per `cmd` zurück → Sensorboard speichert in NVS und verbindet.
 
 ## Pin-Übersicht (Kurzfassung)
 ```
-GPIO1  Tank1 Frisch (ADC1_CH0)     GPIO9  RS485 TX
-GPIO2  Tank2 Grau  (ADC1_CH1)      GPIO10 RS485 RX
-GPIO4  Batt1 Kfz  (ADC1_CH3)       GPIO8  RS485 DE/RTS
+GPIO1  Tank1 Frisch (ADC1_CH0)     GPIO9  frei (ehem. RS485 TX)
+GPIO2  Tank2 Grau  (ADC1_CH1)      GPIO10 frei (ehem. RS485 RX)
+GPIO4  Batt1 Kfz  (ADC1_CH3)       GPIO8  ehem. RS485 DE, im Deep-Sleep LOW
 GPIO5  Batt2 Board (ADC1_CH4)      GPIO11 12V LBE EIN (Relais-Puls)
 GPIO6  Touch-Wakeup (TOUCH_PAD6)   GPIO12 12V LBE AUS (Relais-Puls)
 GPIO7  Display 5V (P-MOSFET Q4)    GPIO13 Multimedia (N-MOSFET)

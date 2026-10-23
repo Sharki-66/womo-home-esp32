@@ -6,7 +6,7 @@
 
 | Feature | Anmerkung |
 |---|---|
-| RS485-Protokoll v2 (Topic-basiert) | Round-Robin, ACK, Half-Duplex-Timing |
+| ESP-NOW-Protokoll (Topic-basiert, ersetzt RS485 2026-06) | Round-Robin, ACK, Peer-Discovery |
 | BME680 (innen, 0x76) + BSEC | IAQ, CO2eq, VOCeq, Drucktrend |
 | BME280/BME260 (außen, 0x77) | Drucktrend (1h/3h), 96-Sample-History |
 | BNO055 IMU | Euler, Heading, Kalibrierungsstatus, NVS |
@@ -20,7 +20,7 @@
 | PCF8523 RTC | I2C 0x68, NTP-Sync nach WiFi-Connect |
 | WiFi STA (RUTX11) | NVS-Credentials, mDNS, Retry-Logik |
 | HTTP Web-Dashboard | `/api/*`, SPIFFS, mDNS `Womo-Sensor.local` |
-| WiFi-Credential-Request via RS485 | `wifi_pass_request` → Display zeigt Dialog |
+| WiFi-Credential-Request via ESP-NOW | `wifi_pass_request` → Display zeigt Dialog |
 | Ruuvi BLE Scanner (Innen/Außen) | DF5-Decoding, Fallback für BME280/680, Batteriespannung |
 | Ruuvi-MAC-Konfiguration via Display | `cmd:"ruuvi_config"` + `ruuvi_scan_request`/`ruuvi_scan`, NVS statt Compile-Time-Default |
 
@@ -43,7 +43,6 @@
 | Problem | Beschreibung | Workaround |
 |---|---|---|
 | **EBL-Relais schaltet nicht (2026-09, Ursache gefunden)** | Monatelang vermuteter Firmware-Bug (Pulslänge) war es nicht. Schaltplan-Analyse: Treiber Q1/Q2 für J7 Pin 1/2 („12V AUS"/„12V EIN") sind **IRLML2244 (P-Kanal)** in High-Side-Beschaltung (Source an +12V, Drain an J7-Pin, SS14-Freilauf nach +12V) — das legt bei „aktiv" **+12V** auf den Pin. Der EBL erwartet an diesen beiden Pins aber **Pull-to-GND** (die Relaisspule liegt EBL-intern schon auf +12V; der Original-Schaudt-Taster zieht Pin 9/12 kurz auf Masse). Mit +12V auf beiden Spulenenden liegt keine Spannung über der Spule → Relais schaltet nie, unabhängig von Pulslänge (100/500/1000 ms alle getestet) oder 12V-Sense. | **Fix (Hardware):** Q1/Q2 → **IRLML6244 (N-Kanal)**, sofern Source bereits an GND liegt und Gate direkt vom GPIO kommt (gleiches SOT-23-Pinout, vermutlich reiner Bestückungsfehler — Ein-Ziffer-Verwechslung IRLML2244/6244; betrifft evtl. auch Licht/Pumpe/Multimedia-Kanäle, dort aber laut Doku als N-Kanal *vorgesehen*). Vor Bestellung: Source-Anschluss von Q1/Q2 am Schaltplan verifizieren. Freilaufdioden (SS14) an Q1/Q2 können nach dem Tausch entfallen (EBL hat eigene) — bei Licht/Pumpe (induktive Last, v. a. Pumpenmotor) **behalten**. |
-| 115200 Baud RS485 | Framing-Fehler durch DE-Toggle | Fix: 57600 Baud (aktuell korrekt) |
 | GPIO7 HIGH verboten | P-MOSFET Querstrom ~300mA | Nur OUTPUT LOW oder INPUT (Hi-Z) |
 | GPIO35-37 gesperrt | Octal-PSRAM intern (N16R8) | Pins nicht verwenden |
 | INA226 Shunt-Wert | Platzhalter 1mΩ | Nach Einbau messen und anpassen |

@@ -52,16 +52,14 @@ Nach Deep-Sleep: `rtc_gpio_hold_dis()` + `rtc_gpio_deinit()` + `gpio_config(INPU
 - HIGH = EIN, LOW = AUS
 - Beim Boot auf LOW setzen (kein passiver Pulldown in Hardware)
 
-### RS485 Half-Duplex
-- 57600 Baud (115200 verursacht Framing-Fehler durch DE-Toggle)
-- DE/RTS = GPIO8, automatisch von UART-Treiber gesteuert
-- TX-Sperre 150ms nach letztem RX (Empfangsfenster sicherstellen)
-- Mindestabstand zwischen zwei TX: 80ms
+### ESP-NOW (ersetzt RS485 seit 2026-06)
+- Max. 250 Byte pro Frame (`WOMO_ESPNOW_MAX_PAYLOAD`), Kanal = WLAN-Kanal, sonst `WOMO_ESPNOW_CHANNEL_FALLBACK`
+- TX-Leistung auf 10 dBm begrenzt (Link im Fahrzeug < 1 m)
+- GPIO8 (ehem. RS485-DE, `SENSOR_ESPNOW_DE_LEGACY_GPIO`) wird im Deep-Sleep LOW gehalten
 
 ## Deep Sleep / Touch-Wakeup
 - Wakeup-Pin: GPIO6 = TOUCH_PAD_NUM6 (kapazitiv, RTC-fähig)
 - Schwellwert: 10% über Baseline
-- Nach Wakeup: `gpio_hold_dis(SENSOR_RS485_DE_GPIO)` aufrufen
 
 ## NVS-Namespaces
 

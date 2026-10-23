@@ -1,7 +1,7 @@
 # Project Brief – WoMoHome Sensorboard
 
 ## Ziel
-Das Sensorboard ist das sensorische Herzstück des digitalen Wohnmobil-Cockpits. Es erfasst alle analogen und digitalen Messwerte, steuert das 12V-Bordnetz und leitet Daten per RS485 an das Display weiter. Zusätzlich bietet es ein WiFi-Web-Dashboard für direkten Browserzugriff.
+Das Sensorboard ist das sensorische Herzstück des digitalen Wohnmobil-Cockpits. Es erfasst alle analogen und digitalen Messwerte, steuert das 12V-Bordnetz und leitet Daten per ESP-NOW an das Display weiter. Zusätzlich bietet es ein WiFi-Web-Dashboard für direkten Browserzugriff.
 
 ## MCU
 **Heemol ESP32-S3-WROOM-1 N16R8 DevKitC-1**
@@ -13,7 +13,7 @@ Das Sensorboard ist das sensorische Herzstück des digitalen Wohnmobil-Cockpits.
 | Aufgabe | Status |
 |---|---|
 | Sensordaten erfassen (Klima, IMU, Gas, Batterie, Tank, Strom) | ✅ |
-| RS485 → Display (JSON Topic-basiert, v2) | ✅ |
+| ESP-NOW → Display (JSON Topic-basiert, ersetzt RS485 seit 2026-06) | ✅ |
 | Steuerung 12V Bordnetz + Multimedia-Relais | ✅ |
 | Web-Dashboard (HTTP, SPIFFS, mDNS) | ✅ (Feature-Branch) |
 | GasBee BLE-Client (NimBLE Central, Auto-Reconnect) | ✅ |
@@ -36,7 +36,7 @@ Das Sensorboard ist das sensorische Herzstück des digitalen Wohnmobil-Cockpits.
 | Batterien | 2× ADC + Spannungsteiler | Kfz=GPIO4, Board=GPIO5 |
 | Tanks | 2× Votronic kapazitiv (0–1V) | Frisch=GPIO1, Grau=GPIO2 |
 | RTC | PCF8523 – Echtzeituhr | I2C 0x68 |
-| RS485 | MAX3485, Half-Duplex, 57600 8N1 | TX=GPIO9, RX=GPIO10, DE=GPIO8 |
+| ESP-NOW | Funk zum Display, MAX3485 entfernt | GPIO8 (ehem. DE) im Deep-Sleep LOW |
 | I2C-Bus | 100 kHz, interne Pull-ups | SDA=GPIO16, SCL=GPIO15 |
 | RGB-LED | WS2812 onboard | GPIO48 |
 
