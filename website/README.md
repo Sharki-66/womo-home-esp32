@@ -1,43 +1,40 @@
-# Astro Starter Kit: Minimal
+# WoMoHome – Projekt-Website
 
-```sh
-npm create astro@latest -- --template minimal
-```
+Statische Projektseite (Astro 6 + Tailwind 4), gehostet auf Netlify.
+Build-Konfiguration: `../netlify.toml` (Basis `website/`, Ausgabe `dist/`).
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Seiten
 
-## 🚀 Project Structure
+| Datei | Inhalt |
+|---|---|
+| `src/pages/index.astro` | Startseite: Komponenten, Features, Selbstbau, Kaufen, FAQ, Kontakt |
+| `src/pages/horizont.astro` | Demo des künstlichen Horizonts (simulierte Daten) |
+| `src/pages/schaltplan.astro` | Sensorboard-Schaltplan (`public/Sensorboard.svg`) |
+| `src/pages/impressum.astro` | Impressum + Haftungsausschluss |
+| `src/pages/datenschutz.astro` | Datenschutzerklärung |
+| `src/layouts/Layout.astro` | Gemeinsames Layout, Tag/Nacht-Theme |
+| `netlify/functions/counter.mjs` | Seitenaufrufzähler (`/api/counter`, Netlify Blobs, nur Gesamtzahl) |
 
-Inside of your Astro project, you'll see the following folders and files:
+## Inhalte aktuell halten
 
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
-```
+- Feature-Texte und Hardware-Liste in `index.astro` bei Firmware-Änderungen mitziehen
+  (Quellen: `firmware/*/README.md`, `firmware/*/memory-bank/progress.md`).
+- Schaltplan-SVG nach Änderungen am KiCad-Projekt neu exportieren und an beide Stellen kopieren:
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+  ```sh
+  kicad-cli sch export svg -o <ziel> hardware/schematics/Sensorboard/Sensorboard.kicad_sch
+  # -> hardware/schematics/Sensorboard/Sensorboard.svg und website/public/Sensorboard.svg
+  ```
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+  Revision und KiCad-Version in `schaltplan.astro` anpassen.
 
-Any static assets, like images, can be placed in the `public/` directory.
+## Befehle
 
-## 🧞 Commands
+| Befehl | Aktion |
+|---|---|
+| `npm install` | Abhängigkeiten installieren |
+| `npm run dev` | Entwicklungsserver auf `localhost:4321` |
+| `npm run build` | Produktions-Build nach `./dist/` |
+| `npm run preview` | Build lokal ansehen |
 
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+Der Seitenaufrufzähler läuft nur auf Netlify (bzw. mit `netlify dev`), lokal bleibt die Zeile leer.

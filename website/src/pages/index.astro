@@ -92,7 +92,7 @@ import Layout from '../layouts/Layout.astro';
     </div>
     <!-- Schnellübersicht-Badges -->
     <div class="flex flex-wrap justify-center gap-3 mt-14 text-sm text-gray-400">
-      {["🔥 Gas", "🐝 GasBee (Funk-Gaswaage)", "💧 Tanks", "🔋 Batterie", "✈️ Künstlicher Horizont", "🌡️ Klima / IAQ", "📡 LTE & GPS", "🖥️ 7\" Touch-Display"].map(f => (
+      {["🔥 Gas", "🐝 GasBee (Funk-Gaswaage)", "💧 Tanks", "🔋 Batterie", "✈️ Künstlicher Horizont", "🌡️ Klima / IAQ", "⛅ Wetter", "📡 LTE & GPS", "🖥️ 7\" Touch-Display"].map(f => (
         <span class="bg-gray-800 border border-gray-700 px-3 py-1 rounded-full">{f}</span>
       ))}
     </div>
@@ -145,7 +145,7 @@ import Layout from '../layouts/Layout.astro';
             chip: "nRF52840 · BLE · Akku",
             img: null,
             imgStyle: "",
-            desc: "Kabellose Gaswaage für bis zu zwei Flaschen (A/B): Seeed XIAO nRF52840 mit HX711 und Wägezelle, LiPo-Akku, Laden per USB-C. Sendet Gewicht, Akku und Status per Bluetooth-Advertising – ohne Verbindungsaufbau, Ruhestrom nur 6,7 µA. Einrichten und Kalibrieren per Assistent am Display. Eigene Platine in Entwicklung."
+            desc: "Kabellose Gaswaage, je eine pro Flasche (bis zu zwei: A/B): Seeed XIAO nRF52840 mit HX711 und Wägezelle, LiPo-Akku, Laden per USB-C. Sendet Gewicht, Akku und Status per Bluetooth-Advertising – ohne Verbindungsaufbau, Ruhestrom nur 6,7 µA. Einrichten und Kalibrieren per Assistent am Display. Eigene Platine in Entwicklung."
           },
           {
             icon: "📡",
@@ -185,17 +185,20 @@ import Layout from '../layouts/Layout.astro';
       <p class="text-center text-gray-400 max-w-xl mx-auto mb-16">Alles was ein Reisemobilist(in) braucht – in einem System.</p>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {[
-          { icon: "🔥", title: "Gasverbrauch",          desc: "Zwei Gasflaschen per Wägezelle – am Kabel (HX711 am Sensorboard) oder kabellos per GasBee; das Kabel hat Vorrang. Füllstand 0–100 %, Verbrauchsrate, Restlaufzeit, auch über Zeiten gemittelt, in denen das System aus war. Das Display wechselt automatisch auf die aktive Flasche. Einstellbare Alarmschwellen.", link: null },
-          { icon: "💧", title: "Tank-Überwachung",     desc: "Frisch- und Grauwasser kapazitiv per Votronic-Sensor, Anzeige 0–100 %. Einstellbare Alarmschwellen.",                                                                              link: null },
+          { icon: "🔥", title: "Gasverbrauch",          desc: "Zwei Gasflaschen per Wägezelle – am Kabel (HX711 am Sensorboard) oder kabellos per GasBee; das Kabel hat Vorrang. Füllstand 0–100 %, Verbrauchsrate, Restlaufzeit – auch über kurze Ausschaltzeiten (bis 1 Tag) hinweg. Das Display wechselt automatisch auf die aktive Flasche. Einstellbare Alarmschwellen.", link: null },
+          { icon: "💧", title: "Tank-Überwachung",     desc: "Frisch- und Grauwasser kapazitiv per Votronic-Sensor, Anzeige in % und Litern, mit Verbrauchsrate und Restzeit. Einstellbare Alarmschwellen.", link: null },
           { icon: "🔋", title: "Batteriemonitor",      desc: "Bordnetz- und Aufbaubatterie in Volt – kontinuierlich überwacht. Alarmschwellen fest vorgegeben.", link: null },
           { icon: "⚡", title: "Eigenverbrauch",       desc: "Spannung, Strom und Leistung (V / mA / W) der Sensor-/Display-Einheit per INA226 – Anzeige im Elec-Widget am Display.", link: null },
           { icon: "✈️", title: "Künstlicher Horizont", desc: "Der Sensorboard-Webserver stellt die Anzeige als Webseite bereit – abrufbar von jedem Handy, Tablet oder Autoradio im WLAN.",          link: "/horizont" },
-          { icon: "🌡️", title: "Klima & Luftqualität", desc: "Innen + Außen: Temperatur, Luftfeuchte, Druck. Außen wahlweise per Kabel (BME280) oder kabellos per RuuviTag. Innen zusätzlich Luftqualität (IAQ, eCO₂, bVOC). Einstellbare Alarmschwellen.", link: null },
-          { icon: "📡", title: "LTE & GPS",             desc: "Echtzeit-Signalstärke, Provider, GPS-Position und Restvolumen des Datenpasses – direkt vom RUTX11 Router.", link: null },
+          { icon: "🌡️", title: "Klima & Luftqualität", desc: "Innen + Außen: Temperatur, Luftfeuchte, Druck. Außen wahlweise per Kabel (BME280) oder kabellos per RuuviTag. Innen zusätzlich Luftqualität (IAQ, eCO₂, bVOC) mit einstellbarer IAQ-Alarmschwelle.", link: null },
+          { icon: "⛅", title: "Wetter & Unwetter",    desc: "Aktuelles Wetter, 5-Tage-Vorhersage und Stundenwerte von Open-Meteo am aktuellen GPS-Standort. Eigene Unwetter-Auswertung nach DWD-Kriterien (keine amtliche Warnung) mit Hinweis am Wetter-Symbol.", link: null },
+          { icon: "📡", title: "LTE & GPS",             desc: "Echtzeit-Signalstärke, Provider und GPS-Position direkt vom RUTX11 Router. Datenpass-Restvolumen und Ablaufdatum automatisch über pass.telekom.de oder als manueller Termin – mit Warnung vor Ablauf und bei wenig Restvolumen.", link: null },
           { icon: "🖥️", title: "7\" Touch-Display",    desc: "800×480 px IPS-Panel mit GT911 kapazitivem Touch – vollständig per Finger bedienbar.",                                                                                               link: null },
           { icon: "🌐", title: "WLAN-Management",       desc: "Hotspot, gespeicherte Netzwerke, SSID-Scan über 2,4 und 5 GHz, Passwort-Eingabe per QWERTZ-Tastatur. WLAN und LTE per Touch abschaltbar.", link: null },
-          { icon: "⚙️", title: "Einstellungen",        desc: "Übersichtlich in vier Tabs: AP (WLAN-Zugangspunkt), Sensoren (RuuviTag und GasBee per Scan zuordnen, GasBee-Assistent per USB mit Kalibrierung über Nullpunkt und Referenzgewicht), Grenzwerte (Alarmschwellen) und System (Töne, Sprache DE/EN, Zeit/RTC).", link: null },
-          { icon: "🔌", title: "Bordnetz-Steuerung",    desc: "12V-Bordnetz und Multimedia per Touch oder Automatik ein-/ausschalten.",                                                                                                             link: null },
+          { icon: "⚙️", title: "Einstellungen",        desc: "Übersichtlich in fünf Tabs: AP (WLAN-Zugangspunkt), Sensoren (RuuviTag und GasBee per Scan zuordnen, GasBee-Assistent per USB mit Kalibrierung über Nullpunkt und Referenzgewicht), Grenzwerte (Alarmschwellen), LTE (Mobilfunk-Tarif: Vorlauf, Volumenschwelle, Termin) und System (Töne, Sprache DE/EN, Zeit/RTC).", link: null },
+          { icon: "🔔", title: "Alarme & Quittierung", desc: "Fehler-Stack für Gas, Tanks, Batterie, Funkverbindung, Luftqualität und Mobilfunk-Tarif. Alarme bleiben stehen, bis sie per Touch quittiert sind, und melden sich mit Warn- bzw. Alarmton.", link: null },
+          { icon: "📊", title: "Web-Dashboard",         desc: "Das Sensorboard zeigt alle Messwerte zusätzlich als Webseite unter Womo-Sensor.local – im WLAN auf Handy oder Tablet abrufbar.", link: null },
+          { icon: "🔌", title: "Bordnetz-Steuerung",    desc: "12V-Bordnetz (über das Relais im Schaudt-EBL) und Multimedia per Touch ein-/ausschalten.", link: null },
         ].map(f => (
           <a href={f.link ?? undefined}
              class={`bg-gray-900 border border-gray-800 rounded-xl p-6 flex gap-4 items-start transition ${f.link ? 'hover:border-amber-400 cursor-pointer' : 'hover:border-amber-400/40'}`}
@@ -243,12 +246,12 @@ import Layout from '../layouts/Layout.astro';
               { comp: "├ Tanks",      desc: "2× Votronic kapazitive Sensoren",               indent: true  },
               { comp: "├ Schaltausg.",desc: "2× 12V-Ausgang (Bordnetz, Multimedia), per Display steuerbar", indent: true  },
               { comp: "├ Display-Strom", desc: "MOSFET schaltet Display-Versorgung ein/aus",           indent: true  },
-              { comp: "└ Zeit",       desc: "RTC (Echtzeituhr, I²C)",                         indent: true  },
+              { comp: "└ Zeit",       desc: "RTC PCF8523 (Echtzeituhr, I²C, NTP-Abgleich)",   indent: true  },
               { comp: "GasBee",       desc: "Seeed XIAO nRF52840 (kabellose Gaswaage, bis zu 2×)", indent: false },
               { comp: "├ Waage",      desc: "Wägezelle + HX711 ADC",                         indent: true  },
               { comp: "└ Akku",       desc: "LiPo 1S 3,7 V / 1000 mAh, Laden per USB-C",     indent: true  },
               { comp: "Router",       desc: "Teltonika RUTX11 (LTE / WLAN / GNSS)",          indent: false },
-              { comp: "└ Relais",     desc: "2× Kfz-Relais mit Freilaufdiode",               indent: true  },
+              { comp: "└ Relais",     desc: "2× Kfz-Relais mit Freilaufdiode (Versorgung über Zündungsplus)", indent: true  },
             ].map(({ comp, desc, indent }) => (
               <li class={`flex gap-3 ${indent ? 'pl-6 opacity-85' : ''}`}>
                 <span class={`font-semibold w-36 shrink-0 text-amber-400 ${indent ? 'font-mono text-xs pt-1' : ''}`}>{comp}</span>
@@ -270,12 +273,12 @@ import Layout from '../layouts/Layout.astro';
             <a href="/schaltplan" class="text-amber-400 text-sm hover:underline">→ Schaltplan ansehen →</a>
           </div>
           <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-amber-400/60 transition">
-            <h3 class="font-bold mb-2">⚡ Firmware flashen (ohne IDE)</h3>
+            <h3 class="font-bold mb-2">⚡ Firmware aus den Quellen bauen</h3>
             <p class="text-gray-400 text-sm mb-4">
-              Fertige BIN-Dateien lassen sich direkt im Browser flashen – kein ESP-IDF, kein Python, keine Installation nötig.
-              Nur USB-Kabel und Chrome oder Edge erforderlich.
+              Sensorboard und Display werden mit ESP-IDF 5.5 gebaut und per USB geflasht, die GasBee mit dem nRF Connect SDK.
+              Die Schritte stehen in den READMEs der jeweiligen Firmware-Verzeichnisse.
             </p>
-            <a href="https://espressif.github.io/esptool-js/" target="_blank" rel="noopener" class="text-amber-400 text-sm hover:underline">→ ESP Web Flasher öffnen</a>
+            <a href="https://github.com/Sharki-66/womo-home-esp32/tree/main/firmware" target="_blank" rel="noopener" class="text-amber-400 text-sm hover:underline">→ Firmware-Verzeichnisse auf GitHub</a>
           </div>
         </div>
       </div>
@@ -384,16 +387,16 @@ import Layout from '../layouts/Layout.astro';
           },
           {
             q: "Funktioniert das System ohne Internetverbindung?",
-            a: "Ja. Sensorboard und Display funken direkt per ESP-NOW miteinander – ohne Kabel, ohne Router, ohne Internet. GasBee und RuuviTags senden per Bluetooth an das Sensorboard. LTE und GPS sind optional."
+            a: "Ja. Sensorboard und Display funken direkt per ESP-NOW miteinander – ohne Kabel, ohne Router, ohne Internet. GasBee und RuuviTags senden per Bluetooth an das Sensorboard. LTE und GPS sind optional – nur Online-Wetter und Tarifabfrage brauchen Internet."
           },
           {
             q: "Was kostet das Komplettsystem fertig aufgebaut?",
             a: "Preis auf Anfrage – abhängig von Komponenten und Einbau. Einfach das Kontaktformular nutzen."
           },
           {
-            q: "Kann ich die Firmware ohne Programmierkenntnisse flashen?",
-            a: "Ja. Fertige BIN-Dateien lassen sich per ESP Web Flasher direkt im Browser aufspielen – kein ESP-IDF, kein Python, keine Installation. Nur USB-Kabel sowie Chrome oder Edge erforderlich.",
-            link: { href: "https://espressif.github.io/esptool-js/", label: "→ ESP Web Flasher öffnen" }
+            q: "Wie kommt die Firmware auf die Geräte?",
+            a: "Die Firmware wird aus den Quellen gebaut: Sensorboard und Display mit ESP-IDF 5.5, die GasBee mit dem nRF Connect SDK. Geflasht wird per USB-Kabel. Programmieren muss man dafür nicht, aber die Entwicklungsumgebung einrichten. Beim fertig aufgebauten Sensorboard ist die Firmware schon drauf.",
+            link: { href: "https://github.com/Sharki-66/womo-home-esp32/tree/main/firmware", label: "→ Firmware-Verzeichnisse auf GitHub" }
           },
           {
             q: "Wer haftet, wenn beim Einbau etwas kaputtgeht?",
@@ -447,7 +450,7 @@ import Layout from '../layouts/Layout.astro';
           <select name="interest" class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-gray-100 focus:outline-none focus:border-amber-400 transition">
             <option value="sensorboard">Sensorboard (150 €)</option>
             <option value="gasbee">GasBee (Selbstbau / Platine)</option>
-            <option value="waage">Waageplattform (demnächst)</option>
+            <option value="waage">Waageplattform (70 €)</option>
             <option value="komplett">Komplettsystem</option>
             <option value="frage" selected>Allgemeine Frage</option>
           </select>
@@ -471,7 +474,7 @@ import Layout from '../layouts/Layout.astro';
       <span class="text-amber-400 font-bold">WoMoHome</span> – Open Hardware Projekt · 
       Entwickelt mit ❤️ und ESP-IDF
     </p>
-    <p class="mb-2">© {new Date().getFullYear()} Hajo Harms · Alle Rechte vorbehalten</p>
+    <p class="mb-2">© {new Date().getFullYear()} Hajo Harms · Software: MIT · Hardware: CERN-OHL-P v2</p>
     <p>
       <a href="/impressum" class="hover:text-amber-400 transition">Impressum</a> ·
       <a href="/datenschutz" class="hover:text-amber-400 transition">Datenschutz</a> ·
