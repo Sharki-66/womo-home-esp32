@@ -1,5 +1,11 @@
 # Active Context — WoMoHome Display
 
+## GasBee-Akku-Warnung (2026-10-24)
+
+Neue Fehlerquelle `SENSOR_ERR_SRC_GASBEE` (WARNING): Akku < 10 % ohne Laden bzw. Laden bei Außentemperatur < 0 °C (`bme_out`), Konstanten `THRESH_GASBEE_*` in `womo_thresholds.h`. Rot im Tab Sensoren jetzt < 10 % statt 20 %. Hinweis im Einrichten-Assistenten (Schritt USB). Quellennamen des Fehler-Stapels und GasBee-Akkutexte im Tab Sensoren über `womo_locale` (`STR_ERR_SRC_*`, `STR_SENS_BATT_*`). Danach der ganze Tab Sensoren auf `womo_locale` umgestellt (Ruuvi-Status/-Popup, GasBee-Zeilen, Einrichten-Assistent `gbw_*`, `STR_SENS_*`/`STR_GASBEE_*`/`STR_GBW_*`) und dessen Textfelder auf die `*_german`-Fonts (vorher fehlten Umlaute, z. B. „Scan läuft bereits“ in der Statuszeile). Noch fest im Code: Zeitquellen-Namen im Tab System (`NTP (Internet)` …) und weitere Einzeltexte außerhalb des Tabs Sensoren.
+
+Option B (Chiptemperatur nRF52840 als Umgebungstemperatur) geprüft: TEMP-Peripheral laut Product Specification Bereich −40…85 °C, Genauigkeit ±5 °C (Offset bei 25 °C ±2,5 °C), Auflösung 0,25 °C, nur mit HFXO als HFCLK. Misst die Die-Temperatur; beim Laden erwärmen BQ25101/Board den Chip → Wert zu hoch, genau wenn die Warnung greifen soll. Nicht umgesetzt; brauchbar höchstens mit Einmal-Offset-Abgleich gegen den Außensensor und Sicherheitsabstand (z. B. Warnung schon unter +5 °C). Quelle: docs.nordicsemi.com/r/bundle/ps_nrf52840/page/temp.html.
+
 ## Doku-Abgleich Display/Sensorboard/GasBee nRF (2026-10-23)
 
 Doku gegen Code/sdkconfig/Lockfile geprüft und korrigiert: GPIO7 (Display-5V) seit Q5-Treiber HIGH = EIN (alte Doku: „HIGH verboten“), LVGL-Task-Stack intern statt PSRAM, LVGL 9.5.0, Fontliste, `womo_buzzer_http`, 8 Fehlerquellen, Icons von SD statt SPIFFS, GasBee passiv + GATT nur zur Kalibrierung, Web-Dashboard gemergt, INA226 Shunt 10 mΩ (Messung offen). ToolBox-Bericht gelöscht, LVGL-Migrationsabschnitt aus `copilot-instructions.md` entfernt. Offen: `main/ui/` (EEZ-Prototyp) wird nicht kompiliert – toter Code.

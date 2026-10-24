@@ -26,6 +26,13 @@
 #define THRESH_IAQ_WARN_DEFAULT   150  /* IAQ-Wert – high is bad (BSEC: 0=gut, 500=schlecht) */
 #define THRESH_IAQ_CRIT_DEFAULT   250
 
+/* ── Feste Grenzen GasBee-Akku (nicht einstellbar) ──────── */
+#define THRESH_GASBEE_BATT_LOW_PCT  10    /* % – unter diesem Wert Warnung (wenn nicht am Laden) */
+/* LiPo nicht unter 0 °C laden: GasBee-Lader BQ25101 hat keine Temperaturüberwachung
+ * (TS fest an 10 kΩ, siehe firmware/gasbee_nrf/README.md), Akku laut README 0–45 °C.
+ * Temperaturquelle ist der Außensensor (bme_out) – misst nicht direkt am Akku. */
+#define THRESH_GASBEE_CHARGE_MIN_C  0.0f
+
 /* ── Struct ─────────────────────────────────────────────── */
 typedef struct {
     uint8_t gas_warn;    /**< Gasflaschen Warnung (low is bad) */

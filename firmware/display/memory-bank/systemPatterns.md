@@ -44,7 +44,7 @@ router_poll_task (15 s)  ──►  s_router_ap / s_router_wifi / s_router_lte
 
 ## Error-Stack (8 Quellen)
 
-Quellen: Gas, Frischwasser, Grauwasser, Batterie, Sensorboard-Timeout, IAQ (Luftqualität), Tarif (Ablauf), Daten (Restvolumen). Tarif/Daten nur WARNING, Text dynamisch über `sensor_err_src_label()`. Die Auswertung läuft nur bei gültigen Sensordaten und geschlossenem Konnektivitäts-Modal (frühes `return` in `ui_update_timer_cb`).
+Quellen: Gas, Frischwasser, Grauwasser, Batterie, Sensorboard-Timeout, IAQ (Luftqualität), Tarif (Ablauf), Daten (Restvolumen), GasBee (Akku < 10 % / Laden < 0 °C). Tarif/Daten/GasBee nur WARNING, Quellennamen über `STR_ERR_SRC_*`, Text dynamisch über `sensor_err_src_label()`. Die Auswertung läuft nur bei gültigen Sensordaten und geschlossenem Konnektivitäts-Modal (frühes `return` in `ui_update_timer_cb`).
 
 ```c
 sensor_err_state_t:

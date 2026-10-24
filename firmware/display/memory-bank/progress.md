@@ -20,7 +20,7 @@
 - **Systemstatus-Label**: 2-Stufen (MANUAL, SENSOR), Acknowledge per Touch
 
 ### Error-Stack
-- 8 Fehlerquellen (Gas, Frisch, Grau, Batterie, Sensorboard-Link, IAQ, Tarif, Daten) mit Latching, Debounce (ok_streak 6 = 3 s) und Acknowledge
+- 9 Fehlerquellen (Gas, Frisch, Grau, Batterie, Sensorboard-Link, IAQ, Tarif, Daten, GasBee-Akku) mit Latching, Debounce (ok_streak 6 = 3 s) und Acknowledge
 - Buzzer-Triggerung bei neuen unacknowledged Alarmen
 - Widget-Farben folgen `.current` (Echtzeit, unabhängig von Latch/Ack)
 

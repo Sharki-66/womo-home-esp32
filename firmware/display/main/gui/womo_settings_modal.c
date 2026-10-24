@@ -1155,15 +1155,15 @@ static void ruuvi_refresh_labels(void)
     if (s_ruuvi_indoor_lbl) {
         char buf[64];
         if (wired_in) {
-            snprintf(buf, sizeof(buf), "Bus-Sensor aktiv (Vorrang)");
+            snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_SENS_WIRED_PRIORITY));
             lv_obj_set_style_text_color(s_ruuvi_indoor_lbl, lv_color_hex(0x888888), 0);
         } else if (s_ruuvi_indoor_mac[0] == '\0') {
-            snprintf(buf, sizeof(buf), "nicht konfiguriert");
+            snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_SENS_NOT_CONFIGURED));
             lv_obj_set_style_text_color(s_ruuvi_indoor_lbl, lv_color_hex(0x888888), 0);
         } else if (have_sd && sd.bme680_indoor.is_ruuvi && sd.bme680_indoor.batt_valid) {
             float v   = sd.bme680_indoor.batt_mv / 1000.0f;
             float v_min = ruuvi_batt_min_v(sd.bme680_indoor.temperature_c);
-            snprintf(buf, sizeof(buf), "%s  Batt %.2fV (min %.1fV)%s",
+            snprintf(buf, sizeof(buf), womo_locale_get_string(STR_SENS_RUUVI_BATT_FMT),
                      s_ruuvi_indoor_mac, v, v_min, v < v_min ? " !" : "");
             lv_obj_set_style_text_color(s_ruuvi_indoor_lbl,
                 v < v_min ? lv_color_hex(0xC62828) : lv_color_hex(0x2E7D32), 0);
@@ -1177,15 +1177,15 @@ static void ruuvi_refresh_labels(void)
     if (s_ruuvi_outdoor_lbl) {
         char buf[64];
         if (wired_out) {
-            snprintf(buf, sizeof(buf), "Bus-Sensor aktiv (Vorrang)");
+            snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_SENS_WIRED_PRIORITY));
             lv_obj_set_style_text_color(s_ruuvi_outdoor_lbl, lv_color_hex(0x888888), 0);
         } else if (s_ruuvi_outdoor_mac[0] == '\0') {
-            snprintf(buf, sizeof(buf), "nicht konfiguriert");
+            snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_SENS_NOT_CONFIGURED));
             lv_obj_set_style_text_color(s_ruuvi_outdoor_lbl, lv_color_hex(0x888888), 0);
         } else if (have_sd && sd.bme680.is_ruuvi && sd.bme680.batt_valid) {
             float v   = sd.bme680.batt_mv / 1000.0f;
             float v_min = ruuvi_batt_min_v(sd.bme680.temperature_c);
-            snprintf(buf, sizeof(buf), "%s  Batt %.2fV (min %.1fV)%s",
+            snprintf(buf, sizeof(buf), womo_locale_get_string(STR_SENS_RUUVI_BATT_FMT),
                      s_ruuvi_outdoor_mac, v, v_min, v < v_min ? " !" : "");
             lv_obj_set_style_text_color(s_ruuvi_outdoor_lbl,
                 v < v_min ? lv_color_hex(0xC62828) : lv_color_hex(0x2E7D32), 0);
@@ -1211,7 +1211,7 @@ static void ruuvi_apply_config(void)
     ruuvi_cfg_save(s_ruuvi_indoor_mac, s_ruuvi_outdoor_mac);
     womo_sensorboard_send_ruuvi_config(s_ruuvi_indoor_mac, s_ruuvi_outdoor_mac);
     ruuvi_refresh_labels();
-    rtc_tab_set_status("Ruuvi-Konfiguration gespeichert");
+    rtc_tab_set_status(womo_locale_get_string(STR_SENS_RUUVI_SAVED));
 }
 
 static void ruuvi_clear_indoor_cb(lv_event_t *e)
@@ -1293,8 +1293,9 @@ static void show_ruuvi_scan_popup(void)
 
     lv_obj_t *popup_title = lv_label_create(popup_hdr);
     lv_label_set_text(popup_title,
-        s_ruuvi_scan_target == 0 ? "Ruuvi-Tag waehlen (Innen)" : "Ruuvi-Tag waehlen (Aussen)");
-    lv_obj_set_style_text_font(popup_title, &lv_font_montserrat_16, 0);
+        s_ruuvi_scan_target == 0 ? womo_locale_get_string(STR_SENS_RUUVI_PICK_IN)
+                                 : womo_locale_get_string(STR_SENS_RUUVI_PICK_OUT));
+    lv_obj_set_style_text_font(popup_title, &lv_font_montserrat_16_german, 0);
     lv_obj_set_flex_grow(popup_title, 1);
 
     lv_obj_t *popup_close = lv_btn_create(popup_hdr);
@@ -1312,7 +1313,7 @@ static void show_ruuvi_scan_popup(void)
         snprintf(text, sizeof(text), "%.17s  %.1f\xC2\xB0" "C  %d dBm%s",
                  s_ruuvi_scan_results[i].mac, (double)s_ruuvi_scan_results[i].temp_c,
                  (int)s_ruuvi_scan_results[i].rssi,
-                 s_ruuvi_scan_results[i].has_pressure ? "" : "  (kein Druck)");
+                 s_ruuvi_scan_results[i].has_pressure ? "" : womo_locale_get_string(STR_SENS_RUUVI_NO_PRESSURE));
         lv_obj_t *btn = lv_list_add_btn(s_ruuvi_scan_list, LV_SYMBOL_BLUETOOTH, text);
         lv_obj_add_event_cb(btn, ruuvi_scan_list_btn_cb, LV_EVENT_CLICKED, NULL);
     }
@@ -1327,13 +1328,13 @@ static void ruuvi_scan_timeout_cb(lv_timer_t *t)
     if (s_ruuvi_scan_retry < RUUVI_SCAN_MAX_RETRY) {
         s_ruuvi_scan_retry++;
         char buf[48];
-        snprintf(buf, sizeof(buf), "Keine Antwort - Versuch %d/%d", s_ruuvi_scan_retry + 1, RUUVI_SCAN_MAX_RETRY + 1);
+        snprintf(buf, sizeof(buf), womo_locale_get_string(STR_SENS_RETRY_FMT), s_ruuvi_scan_retry + 1, RUUVI_SCAN_MAX_RETRY + 1);
         rtc_tab_set_status(buf);
 
         s_ruuvi_scan_timeout_timer = lv_timer_create(ruuvi_scan_timeout_cb, 4000, NULL);
         if (!s_ruuvi_scan_timeout_timer) {
             s_ruuvi_scan_in_progress = false;
-            rtc_tab_set_status("Scan-Timer konnte nicht angelegt werden");
+            rtc_tab_set_status(womo_locale_get_string(STR_SENS_TIMER_FAIL));
             return;
         }
         lv_timer_set_repeat_count(s_ruuvi_scan_timeout_timer, 1);
@@ -1345,13 +1346,13 @@ static void ruuvi_scan_timeout_cb(lv_timer_t *t)
                 lv_timer_del(s_ruuvi_scan_timeout_timer);
                 s_ruuvi_scan_timeout_timer = NULL;
             }
-            rtc_tab_set_status("Sensorboard nicht erreichbar");
+            rtc_tab_set_status(womo_locale_get_string(STR_SENS_SB_UNREACHABLE));
         }
         return;
     }
 
     s_ruuvi_scan_in_progress = false;
-    rtc_tab_set_status("Keine Antwort vom Sensorboard");
+    rtc_tab_set_status(womo_locale_get_string(STR_SENS_SB_NO_ANSWER));
 }
 
 /* Läuft im ESP-NOW-RX- bzw. esp_timer-Task: nur ins Abholfach legen,
@@ -1385,10 +1386,11 @@ static void ruuvi_scan_process(const womo_ruuvi_scan_entry_t *entries, size_t co
     if (!s_overlay) return;
 
     if (stored == 0) {
-        rtc_tab_set_status("Keine Ruuvi-Tags gefunden");
+        rtc_tab_set_status(womo_locale_get_string(STR_SENS_RUUVI_NONE));
     } else {
         char buf[48];
-        snprintf(buf, sizeof(buf), "%zu Tag%s gefunden", stored, stored == 1 ? "" : "s");
+        if (stored == 1) snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_SENS_RUUVI_FOUND_ONE));
+        else             snprintf(buf, sizeof(buf), womo_locale_get_string(STR_SENS_RUUVI_FOUND_FMT), (unsigned)stored);
         rtc_tab_set_status(buf);
         show_ruuvi_scan_popup();
     }
@@ -1397,7 +1399,7 @@ static void ruuvi_scan_process(const womo_ruuvi_scan_entry_t *entries, size_t co
 static void ruuvi_scan_btn_cb(lv_event_t *e)
 {
     if (s_ruuvi_scan_in_progress) {
-        rtc_tab_set_status("Scan läuft bereits - bitte warten");
+        rtc_tab_set_status(womo_locale_get_string(STR_SENS_SCAN_BUSY));
         return;
     }
 
@@ -1406,7 +1408,7 @@ static void ruuvi_scan_btn_cb(lv_event_t *e)
     womo_sensor_data_t sd = {0};
     bool have_sd = womo_sensorboard_get_latest_data(&sd);
     if (ruuvi_wired_active(target == 0, &sd, have_sd)) {
-        rtc_tab_set_status("Bus-Sensor hat Vorrang - kein Scan noetig");
+        rtc_tab_set_status(womo_locale_get_string(STR_SENS_WIRED_NO_SCAN));
         return;
     }
 
@@ -1414,7 +1416,7 @@ static void ruuvi_scan_btn_cb(lv_event_t *e)
     s_ruuvi_scan_in_progress = true;
     s_ruuvi_scan_result_count = 0;
     s_ruuvi_scan_retry = 0;
-    rtc_tab_set_status("Suche Ruuvi-Tags...");
+    rtc_tab_set_status(womo_locale_get_string(STR_SENS_RUUVI_SEARCHING));
 
     if (s_ruuvi_scan_timeout_timer) {
         lv_timer_del(s_ruuvi_scan_timeout_timer);
@@ -1426,7 +1428,7 @@ static void ruuvi_scan_btn_cb(lv_event_t *e)
         // haengen (Button reagiert dann dauerhaft nicht mehr, bis das Modal
         // neu geoeffnet wird). Lieber sofort mit Fehler abbrechen.
         s_ruuvi_scan_in_progress = false;
-        rtc_tab_set_status("Scan-Timer konnte nicht angelegt werden");
+        rtc_tab_set_status(womo_locale_get_string(STR_SENS_TIMER_FAIL));
         return;
     }
     lv_timer_set_repeat_count(s_ruuvi_scan_timeout_timer, 1);
@@ -1438,7 +1440,7 @@ static void ruuvi_scan_btn_cb(lv_event_t *e)
             lv_timer_del(s_ruuvi_scan_timeout_timer);
             s_ruuvi_scan_timeout_timer = NULL;
         }
-        rtc_tab_set_status("Sensorboard nicht erreichbar");
+        rtc_tab_set_status(womo_locale_get_string(STR_SENS_SB_UNREACHABLE));
     }
 }
 
@@ -1462,24 +1464,28 @@ static void gasbee_refresh_labels(void)
             char buf[80];
             lv_color_t col = lv_color_hex(0x333333);
             if (wired) {
-                snprintf(buf, sizeof(buf), "Kabelwaage aktiv (Vorrang)");
+                snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_GASBEE_WIRED));
                 col = lv_color_hex(0x888888);
             } else if (s_gasbee_mac[i][0] == '\0') {
-                snprintf(buf, sizeof(buf), "nicht eingerichtet");
+                snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_GASBEE_NOT_SET));
                 col = lv_color_hex(0x888888);
             } else if (have_sd && sd.hx711.is_gasbee && sd.hx711.bee[i].present) {
                 const __typeof__(sd.hx711.bee[0]) *b = &sd.hx711.bee[i];
-                char batt[32] = "Akku ?";
+                char batt[32];
+                snprintf(batt, sizeof(batt), "%s", womo_locale_get_string(STR_SENS_BATT_UNKNOWN));
                 if (b->batt_valid) {
-                    snprintf(batt, sizeof(batt), "Akku %u%%%s", b->batt_pct, b->charging ? " (laedt)" : "");
+                    char pct[16];
+                    snprintf(pct, sizeof(pct), womo_locale_get_string(STR_SENS_BATT_FMT), b->batt_pct);
+                    snprintf(batt, sizeof(batt), "%s%s", pct,
+                             b->charging ? womo_locale_get_string(STR_SENS_BATT_CHARGING) : "");
                 }
-                snprintf(buf, sizeof(buf), "Gaswaage  %s%s%s", batt,
-                         b->calibrated ? "" : "  nicht kalibriert",
-                         b->config_mode ? "  (USB)" : "");
-                col = (!b->calibrated || (b->batt_valid && b->batt_pct < 20 && !b->charging))
+                snprintf(buf, sizeof(buf), womo_locale_get_string(STR_GASBEE_STATUS_FMT), batt,
+                         b->calibrated ? "" : womo_locale_get_string(STR_GASBEE_NOT_CAL),
+                         b->config_mode ? womo_locale_get_string(STR_GASBEE_USB) : "");
+                col = (!b->calibrated || (b->batt_valid && b->batt_pct < THRESH_GASBEE_BATT_LOW_PCT && !b->charging))
                       ? lv_color_hex(0xC62828) : lv_color_hex(0x2E7D32);
             } else {
-                snprintf(buf, sizeof(buf), "Gaswaage  (keine Daten)");
+                snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_GASBEE_NO_DATA));
             }
             lv_obj_set_style_text_color(s_gasbee_lbl[i], col, 0);
             lv_label_set_text(s_gasbee_lbl[i], buf);
@@ -1503,7 +1509,7 @@ static void gasbee_clear_cb(lv_event_t *e)
     int slot = (int)(intptr_t)lv_event_get_user_data(e);
     s_gasbee_mac[slot][0] = '\0';
     gasbee_apply_config();
-    rtc_tab_set_status("Gaswaage entfernt");
+    rtc_tab_set_status(womo_locale_get_string(STR_GASBEE_REMOVED));
 }
 
 /* ── GasBee: Einrichten-Assistent ───────────────────────────────
@@ -1567,17 +1573,15 @@ static const char *gbw_err_text(int err)
 {
     switch (err) {
         case 0x03: case -2:
-            return "Die Gaswaage ist nicht mehr im Einrichtungsmodus.\n"
-                   "Bitte das USB-Kabel angesteckt lassen.";
+            return womo_locale_get_string(STR_GBW_ERR_NOT_CFG);
         case 0x13:
-            return "Die Gaswaage hat den Wert abgelehnt.";
+            return womo_locale_get_string(STR_GBW_ERR_REJECTED);
         case -1:
-            return "Ein anderer Schritt laeuft noch. Bitte kurz warten.";
+            return womo_locale_get_string(STR_GBW_ERR_BUSY);
         case -3: case -5: case -6:
-            return "Keine Verbindung zur Gaswaage.\n"
-                   "Bitte naeher an das Sensorboard bringen und wiederholen.";
+            return womo_locale_get_string(STR_GBW_ERR_NO_CONN);
         default:
-            return "Der Schritt ist fehlgeschlagen.";
+            return womo_locale_get_string(STR_GBW_ERR_FAILED);
     }
 }
 
@@ -1594,7 +1598,7 @@ static void gbw_send_zero(void)
 {
     s_gbw_retry_state = GBW_ZERO;
     if (womo_sensorboard_send_gasbee_cal(s_gbw_cand.mac, true, 0) != ESP_OK) {
-        snprintf(s_gbw_msg, sizeof(s_gbw_msg), "Sensorboard nicht erreichbar.");
+        snprintf(s_gbw_msg, sizeof(s_gbw_msg), "%s", womo_locale_get_string(STR_SENS_SB_UNREACHABLE));
         gbw_set_state(GBW_ERROR);
         return;
     }
@@ -1607,9 +1611,8 @@ static void gbw_send_ref(void)
     long g = strtol(txt ? txt : "", NULL, 10);
     if (g < GBW_REF_MIN_G || g > GBW_REF_MAX_G) {
         if (s_gbw_text) {
-            lv_label_set_text_fmt(s_gbw_text,
-                "Schritt 2 von 2\nBitte ein Gewicht von %d bis %d Gramm eingeben.",
-                GBW_REF_MIN_G, GBW_REF_MAX_G);
+            lv_label_set_text_fmt(s_gbw_text, womo_locale_get_string(STR_GBW_REF_RANGE_FMT),
+                                  GBW_REF_MIN_G, GBW_REF_MAX_G);
         }
         return;
     }
@@ -1617,7 +1620,7 @@ static void gbw_send_ref(void)
     s_gbw_seq_ref = s_gbw_cand.seq;
     s_gbw_retry_state = GBW_REF;
     if (womo_sensorboard_send_gasbee_cal(s_gbw_cand.mac, false, s_gbw_ref_g) != ESP_OK) {
-        snprintf(s_gbw_msg, sizeof(s_gbw_msg), "Sensorboard nicht erreichbar.");
+        snprintf(s_gbw_msg, sizeof(s_gbw_msg), "%s", womo_locale_get_string(STR_SENS_SB_UNREACHABLE));
         gbw_set_state(GBW_ERROR);
         return;
     }
@@ -1697,7 +1700,7 @@ static lv_obj_t *gbw_add_btn(lv_obj_t *row, const char *text, int id, bool prima
     lv_obj_add_event_cb(b, gbw_btn_cb, LV_EVENT_CLICKED, (void *)(intptr_t)id);
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, text);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_14_german, 0);
     lv_obj_center(l);
     return b;
 }
@@ -1716,86 +1719,71 @@ static void gbw_render(void)
 
     switch (s_gbw_state) {
         case GBW_SEARCH:
-            snprintf(text, sizeof(text),
-                     "Gaswaage per USB-Kabel mit Strom verbinden\n"
-                     "(ein USB-Ladegeraet genuegt).\n\nSuche laeuft ...");
-            b2 = "Abbrechen";
+            snprintf(text, sizeof(text), womo_locale_get_string(STR_GBW_SEARCH_FMT),
+                     womo_locale_get_string(STR_GBW_COLD_HINT));
+            b2 = womo_locale_get_string(STR_GBW_BTN_CANCEL);
             break;
         case GBW_NOT_FOUND:
-            snprintf(text, sizeof(text),
-                     "Keine Gaswaage gefunden.\n\n"
-                     "Bitte pruefen, ob das USB-Kabel steckt und das\n"
-                     "Ladegeraet Strom hat.");
-            b1 = "Nochmal"; b2 = "Schliessen";
+            snprintf(text, sizeof(text), "%s", womo_locale_get_string(STR_GBW_NOT_FOUND));
+            b1 = womo_locale_get_string(STR_GBW_BTN_AGAIN); b2 = womo_locale_get_string(STR_GBW_BTN_CLOSE);
             break;
         case GBW_FOUND: {
             char batt[24] = "";
             char weight[24] = "";
-            if (s_gbw_cand.batt_valid) snprintf(batt, sizeof(batt), "Akku %u %%", s_gbw_cand.batt_pct);
+            if (s_gbw_cand.batt_valid) snprintf(batt, sizeof(batt), womo_locale_get_string(STR_SENS_BATT_FMT), s_gbw_cand.batt_pct);
             if (s_gbw_cand.weight_valid) snprintf(weight, sizeof(weight), "   %.1f kg", (double)s_gbw_cand.weight_kg);
             int other = 1 - s_gbw_slot;
             if (strcmp(s_gasbee_mac[s_gbw_slot], s_gbw_cand.mac) == 0) {
-                snprintf(text, sizeof(text), "Gaswaage gefunden: %s%s\n\n"
-                         "Diese Gaswaage ist bereits Flasche %c.", batt, weight, bottle);
-                b1 = "Kalibrieren"; b2 = "Fertig";
+                snprintf(text, sizeof(text), womo_locale_get_string(STR_GBW_FOUND_SAME_FMT), batt, weight, bottle);
+                b1 = womo_locale_get_string(STR_GBW_BTN_CALIBRATE); b2 = womo_locale_get_string(STR_GBW_BTN_DONE);
             } else if (strcmp(s_gasbee_mac[other], s_gbw_cand.mac) == 0) {
-                snprintf(text, sizeof(text), "Gaswaage gefunden: %s%s\n\n"
-                         "Sie ist bisher Flasche %c und wird jetzt Flasche %c.",
+                snprintf(text, sizeof(text), womo_locale_get_string(STR_GBW_FOUND_MOVE_FMT),
                          batt, weight, (char)('A' + other), bottle);
-                b1 = "Uebernehmen"; b2 = "Abbrechen";
+                b1 = womo_locale_get_string(STR_GBW_BTN_APPLY); b2 = womo_locale_get_string(STR_GBW_BTN_CANCEL);
             } else {
-                snprintf(text, sizeof(text), "Gaswaage gefunden: %s%s\n\n"
-                         "Als Flasche %c uebernehmen?", batt, weight, bottle);
-                b1 = "Uebernehmen"; b2 = "Abbrechen";
+                snprintf(text, sizeof(text), womo_locale_get_string(STR_GBW_FOUND_NEW_FMT), batt, weight, bottle);
+                b1 = womo_locale_get_string(STR_GBW_BTN_APPLY); b2 = womo_locale_get_string(STR_GBW_BTN_CANCEL);
             }
             break;
         }
         case GBW_CAL_ASK:
             if (s_gbw_cand.calibrated) {
-                snprintf(text, sizeof(text), "Die Gaswaage ist jetzt Flasche %c.\n\n"
-                         "Sie ist bereits kalibriert. Neu kalibrieren?", bottle);
-                b1 = "Kalibrieren"; b2 = "Fertig";
+                snprintf(text, sizeof(text), womo_locale_get_string(STR_GBW_CAL_ASK_DONE_FMT), bottle);
+                b1 = womo_locale_get_string(STR_GBW_BTN_CALIBRATE); b2 = womo_locale_get_string(STR_GBW_BTN_DONE);
             } else {
-                snprintf(text, sizeof(text), "Die Gaswaage ist jetzt Flasche %c.\n\n"
-                         "Sie ist noch nicht kalibriert und zeigt bis dahin\n"
-                         "keinen Gasstand. Dafuer wird ein Gegenstand mit\n"
-                         "bekanntem Gewicht benoetigt.", bottle);
-                b1 = "Kalibrieren"; b2 = "Spaeter";
+                snprintf(text, sizeof(text), womo_locale_get_string(STR_GBW_CAL_ASK_NEW_FMT), bottle);
+                b1 = womo_locale_get_string(STR_GBW_BTN_CALIBRATE); b2 = womo_locale_get_string(STR_GBW_BTN_LATER);
             }
             break;
         case GBW_ZERO:
-            snprintf(text, sizeof(text), "Schritt 1 von 2\n\n"
-                     "Waage leeren: keine Flasche, nichts auflegen.\n"
-                     "Dann auf Weiter tippen.");
-            b1 = "Weiter"; b2 = "Abbrechen";
+            snprintf(text, sizeof(text), "%s", womo_locale_get_string(STR_GBW_ZERO));
+            b1 = womo_locale_get_string(STR_GBW_BTN_NEXT); b2 = womo_locale_get_string(STR_GBW_BTN_CANCEL);
             break;
         case GBW_ZERO_BUSY:
-            snprintf(text, sizeof(text), "Schritt 1 von 2\n\nNullpunkt wird gemessen ...");
-            b2 = "Abbrechen";
+            snprintf(text, sizeof(text), "%s", womo_locale_get_string(STR_GBW_ZERO_BUSY));
+            b2 = womo_locale_get_string(STR_GBW_BTN_CANCEL);
             break;
         case GBW_REF:
-            snprintf(text, sizeof(text), "Schritt 2 von 2\n"
-                     "Gegenstand mit bekanntem Gewicht auflegen\n"
-                     "(z. B. Wasserkanister) und Gewicht in Gramm eingeben:");
-            b1 = "Weiter"; b2 = "Abbrechen";
+            snprintf(text, sizeof(text), "%s", womo_locale_get_string(STR_GBW_REF));
+            b1 = womo_locale_get_string(STR_GBW_BTN_NEXT); b2 = womo_locale_get_string(STR_GBW_BTN_CANCEL);
             input = true;
             break;
         case GBW_REF_BUSY:
-            snprintf(text, sizeof(text), "Schritt 2 von 2\n\nGewicht wird gemessen ...");
-            b2 = "Abbrechen";
+            snprintf(text, sizeof(text), "%s", womo_locale_get_string(STR_GBW_REF_BUSY));
+            b2 = womo_locale_get_string(STR_GBW_BTN_CANCEL);
             break;
         case GBW_VERIFY:
-            snprintf(text, sizeof(text), "Kalibrierung wird geprueft ...");
-            b2 = "Abbrechen";
+            snprintf(text, sizeof(text), "%s", womo_locale_get_string(STR_GBW_VERIFY));
+            b2 = womo_locale_get_string(STR_GBW_BTN_CANCEL);
             break;
         case GBW_ERROR:
             snprintf(text, sizeof(text), "%s", s_gbw_msg);
-            b1 = "Wiederholen"; b2 = "Abbrechen";
+            b1 = womo_locale_get_string(STR_GBW_BTN_REPEAT); b2 = womo_locale_get_string(STR_GBW_BTN_CANCEL);
             break;
         case GBW_DONE:
-            snprintf(text, sizeof(text), "%s%sFertig.\nDas USB-Kabel kann jetzt abgezogen werden.",
+            snprintf(text, sizeof(text), womo_locale_get_string(STR_GBW_DONE_FMT),
                      s_gbw_msg, s_gbw_msg[0] ? "\n\n" : "");
-            b1 = "OK";
+            b1 = womo_locale_get_string(STR_GBW_BTN_OK);
             break;
         default:
             break;
@@ -1815,13 +1803,13 @@ static void gbw_render(void)
     lv_obj_move_foreground(s_gbw_popup);
 
     lv_obj_t *title = lv_label_create(s_gbw_popup);
-    lv_label_set_text_fmt(title, "Gaswaage einrichten (Flasche %c)", bottle);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+    lv_label_set_text_fmt(title, womo_locale_get_string(STR_GBW_TITLE_FMT), bottle);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_16_german, 0);
 
     s_gbw_text = lv_label_create(s_gbw_popup);
     lv_label_set_text(s_gbw_text, text);
     lv_obj_set_width(s_gbw_text, LV_PCT(100));
-    lv_obj_set_style_text_font(s_gbw_text, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(s_gbw_text, &lv_font_montserrat_14_german, 0);
     lv_obj_set_flex_grow(s_gbw_text, 1);
 
     if (input) {
@@ -1829,7 +1817,7 @@ static void gbw_render(void)
         lv_textarea_set_one_line(s_gbw_ta, true);
         lv_textarea_set_accepted_chars(s_gbw_ta, "0123456789");
         lv_textarea_set_max_length(s_gbw_ta, 6);
-        lv_textarea_set_placeholder_text(s_gbw_ta, "Gramm, z. B. 10000");
+        lv_textarea_set_placeholder_text(s_gbw_ta, womo_locale_get_string(STR_GBW_REF_PLACEHOLDER));
         lv_obj_set_width(s_gbw_ta, 220);
         if (s_gbw_ref_g) {
             char g[12];
@@ -1868,10 +1856,7 @@ static void gbw_on_scan(const womo_gasbee_scan_entry_t *entries, size_t count)
             s_gbw_cand = *hit;
             gbw_set_state(GBW_FOUND);
         } else if (usb > 1 && s_gbw_text) {
-            lv_label_set_text(s_gbw_text,
-                "Mehrere Gaswaagen sind gerade an USB angesteckt.\n\n"
-                "Bitte nur die Gaswaage fuer diese Flasche anstecken.\n"
-                "Suche laeuft ...");
+            lv_label_set_text(s_gbw_text, womo_locale_get_string(STR_GBW_MULTI_USB));
         }
     } else if (s_gbw_state == GBW_ZERO || s_gbw_state == GBW_REF) {
         /* Werte der Gaswaage aktuell halten (bee_seq als Bezug für die Prüfung) */
@@ -1891,8 +1876,7 @@ static void gbw_on_scan(const womo_gasbee_scan_entry_t *entries, size_t count)
             float tol  = want * GBW_TOL_REL;
             if (tol < GBW_TOL_ABS_KG) tol = GBW_TOL_ABS_KG;
             if (fabsf(got - want) <= tol) {
-                snprintf(s_gbw_msg, sizeof(s_gbw_msg),
-                         "Kalibrierung erfolgreich.\nGemessen: %.2f kg (eingegeben %.2f kg).",
+                snprintf(s_gbw_msg, sizeof(s_gbw_msg), womo_locale_get_string(STR_GBW_CAL_OK_FMT),
                          (double)got, (double)want);
                 if (s_gbw_session) {
                     womo_sensorboard_send_gasbee_cal_session(s_gbw_slot, false);
@@ -1900,9 +1884,7 @@ static void gbw_on_scan(const womo_gasbee_scan_entry_t *entries, size_t count)
                 }
                 gbw_set_state(GBW_DONE);
             } else {
-                snprintf(s_gbw_msg, sizeof(s_gbw_msg),
-                         "Die Waage misst %.2f kg statt %.2f kg.\n"
-                         "Bitte Gewicht pruefen und die Kalibrierung wiederholen.",
+                snprintf(s_gbw_msg, sizeof(s_gbw_msg), womo_locale_get_string(STR_GBW_CAL_MISMATCH_FMT),
                          (double)got, (double)want);
                 s_gbw_retry_state = GBW_ZERO;
                 gbw_set_state(GBW_ERROR);
@@ -1919,14 +1901,14 @@ static void gbw_on_cal_result(bool zero_step, bool ok, int err)
         if (ok) {
             gbw_set_state(GBW_REF);
         } else {
-            snprintf(s_gbw_msg, sizeof(s_gbw_msg), "Nullpunkt nicht gespeichert.\n%s", gbw_err_text(err));
+            snprintf(s_gbw_msg, sizeof(s_gbw_msg), womo_locale_get_string(STR_GBW_ZERO_FAIL_FMT), gbw_err_text(err));
             gbw_set_state(GBW_ERROR);
         }
     } else if (!zero_step && s_gbw_state == GBW_REF_BUSY) {
         if (ok) {
             gbw_set_state(GBW_VERIFY);
         } else {
-            snprintf(s_gbw_msg, sizeof(s_gbw_msg), "Gewicht nicht gespeichert.\n%s", gbw_err_text(err));
+            snprintf(s_gbw_msg, sizeof(s_gbw_msg), womo_locale_get_string(STR_GBW_REF_FAIL_FMT), gbw_err_text(err));
             gbw_set_state(GBW_ERROR);
         }
     }
@@ -1952,15 +1934,13 @@ static void gbw_tick(void)
         case GBW_ZERO_BUSY:
         case GBW_REF_BUSY:
             if (in_state > GBW_STEP_TIMEOUT_MS) {
-                snprintf(s_gbw_msg, sizeof(s_gbw_msg), "Keine Antwort vom Sensorboard.");
+                snprintf(s_gbw_msg, sizeof(s_gbw_msg), "%s", womo_locale_get_string(STR_SENS_SB_NO_ANSWER));
                 gbw_set_state(GBW_ERROR);
             }
             break;
         case GBW_VERIFY:
             if (in_state > GBW_VERIFY_TIMEOUT_MS) {
-                snprintf(s_gbw_msg, sizeof(s_gbw_msg),
-                         "Die Gaswaage hat die Kalibrierung nicht bestaetigt.\n"
-                         "Bitte USB angesteckt lassen und wiederholen.");
+                snprintf(s_gbw_msg, sizeof(s_gbw_msg), "%s", womo_locale_get_string(STR_GBW_NOT_CONFIRMED));
                 s_gbw_retry_state = GBW_ZERO;
                 gbw_set_state(GBW_ERROR);
             }
@@ -2042,7 +2022,7 @@ static void gasbee_scan_btn_cb(lv_event_t *e)
     womo_sensor_data_t sd = {0};
     bool have_sd = womo_sensorboard_get_latest_data(&sd);
     if (gasbee_wired_active(&sd, have_sd)) {
-        rtc_tab_set_status("Kabelwaage hat Vorrang - Einrichten nicht noetig");
+        rtc_tab_set_status(womo_locale_get_string(STR_GASBEE_WIRED_NO_SETUP));
         return;
     }
     if (s_gbw_state != GBW_OFF) return;
@@ -2068,7 +2048,7 @@ static lv_obj_t *make_cfg_row(lv_obj_t *tab, int y, womo_string_id_t name, lv_ob
     lv_obj_set_pos(name_lbl, 0, y);
 
     *val_lbl = lv_label_create(tab);
-    lv_obj_set_style_text_font(*val_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(*val_lbl, &lv_font_montserrat_12_german, 0);
     lv_obj_set_pos(*val_lbl, 64, y);
     lv_obj_set_width(*val_lbl, 330);
 
@@ -2184,7 +2164,7 @@ static void build_tab_sensoren(lv_obj_t *tab)
     /* Status-/Scan-Feedback (gemeinsam für Ruuvi und GasBee) */
     s_ruuvi_status_lbl = lv_label_create(tab);
     lv_label_set_text(s_ruuvi_status_lbl, "");
-    lv_obj_set_style_text_font(s_ruuvi_status_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(s_ruuvi_status_lbl, &lv_font_montserrat_12_german, 0);
     lv_obj_set_style_text_color(s_ruuvi_status_lbl, lv_color_hex(0x1565C0), 0);
     lv_obj_set_pos(s_ruuvi_status_lbl, 0, 212);
     lv_obj_set_width(s_ruuvi_status_lbl, MODAL_W - 2 * PAD);

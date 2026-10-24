@@ -263,22 +263,26 @@ typedef enum {
     SENSOR_ERR_SRC_IAQ,    // Luftqualität (BME680 indoor IAQ)
     SENSOR_ERR_SRC_TARIFF, // Mobilfunk-Tarif läuft ab / abgelaufen (womo_tariff)
     SENSOR_ERR_SRC_DATA,   // Mobilfunk-Restvolumen unter Schwelle (womo_tariff)
+    SENSOR_ERR_SRC_GASBEE, // GasBee-Akku unter 10 % bzw. Laden unter 0 °C
     SENSOR_ERR_SRC_MAX
 } sensor_err_src_t;
 
-static const char * const sensor_err_src_name[SENSOR_ERR_SRC_MAX] = {
-    "Gas", "Wasser", "Abw.", "Bat", "Sensor", "IAQ", "Tarif", "Daten"
+static const womo_string_id_t sensor_err_src_str[SENSOR_ERR_SRC_MAX] = {
+    STR_ERR_SRC_GAS, STR_ERR_SRC_FRESH, STR_ERR_SRC_GREY, STR_ERR_SRC_BAT, STR_ERR_SRC_LINK,
+    STR_ERR_SRC_IAQ, STR_ERR_SRC_TARIFF, STR_ERR_SRC_DATA, STR_ERR_SRC_GASBEE
 };
 
-// Tarif-Quellen zeigen Termin bzw. Prozent statt eines festen Namens (Text aus womo_locale)
+// Tarif- und GasBee-Quellen zeigen Termin, Prozent bzw. Grund statt eines festen Namens (Text aus womo_locale)
 static char sensor_err_tariff_text[24] = "";
 static char sensor_err_data_text[24] = "";
+static char sensor_err_gasbee_text[24] = "";
 
 static const char *sensor_err_src_label(int idx)
 {
     if (idx == SENSOR_ERR_SRC_TARIFF && sensor_err_tariff_text[0]) return sensor_err_tariff_text;
     if (idx == SENSOR_ERR_SRC_DATA && sensor_err_data_text[0]) return sensor_err_data_text;
-    return sensor_err_src_name[idx];
+    if (idx == SENSOR_ERR_SRC_GASBEE && sensor_err_gasbee_text[0]) return sensor_err_gasbee_text;
+    return womo_locale_get_string(sensor_err_src_str[idx]);
 }
 
 typedef struct {
@@ -2273,6 +2277,45 @@ gas_done:
                      womo_locale_get_string(STR_TARIFF_SRC_DATA), (unsigned)ts.volume_pct);
             sensor_err_states[SENSOR_ERR_SRC_DATA].current = WOMO_STATUS_WARNING;
         }
+    }
+
+    // GasBee-Akku: Warnung unter THRESH_GASBEE_BATT_LOW_PCT (nicht am Laden) und beim
+    // Laden unter THRESH_GASBEE_CHARGE_MIN_C. Temperatur vom Außensensor (bme_out), da die
+    // GasBee selbst keine Temperatur sendet; ohne Außensensor kein Kälte-Hinweis.
+    {
+        static uint8_t s_prev_gasbee_mask = 0;   // Bit 0/1 Akku leer A/B, Bit 2 Laden bei Kälte
+        uint8_t mask = 0;
+        int low_slot = -1;
+        const bool cold = snapshot.bme680.valid &&
+                          snapshot.bme680.temperature_c < THRESH_GASBEE_CHARGE_MIN_C;
+        if (snapshot.hx711.valid && snapshot.hx711.is_gasbee) {
+            for (int i = 0; i < 2; i++) {
+                const __typeof__(snapshot.hx711.bee[0]) *b = &snapshot.hx711.bee[i];
+                if (!b->present) continue;
+                if (b->charging && cold) {
+                    mask |= 0x04;
+                } else if (!b->charging && b->batt_valid && b->batt_pct < THRESH_GASBEE_BATT_LOW_PCT) {
+                    mask |= (uint8_t)(1u << i);
+                    if (low_slot < 0) low_slot = i;
+                }
+            }
+        }
+        if (mask & 0x04) {
+            snprintf(sensor_err_gasbee_text, sizeof(sensor_err_gasbee_text), "%s",
+                     womo_locale_get_string(STR_GASBEE_SRC_COLD_CHARGE));
+        } else if (low_slot >= 0) {
+            snprintf(sensor_err_gasbee_text, sizeof(sensor_err_gasbee_text),
+                     womo_locale_get_string(STR_GASBEE_SRC_BATT_LOW),
+                     (char)('A' + low_slot), (unsigned)snapshot.hx711.bee[low_slot].batt_pct);
+        }
+        if (mask) {
+            sensor_err_states[SENSOR_ERR_SRC_GASBEE].current = WOMO_STATUS_WARNING;
+        }
+        // Neuer Grund (andere Flasche oder Laden bei Kälte) meldet trotz Quittierung erneut
+        if (mask & ~s_prev_gasbee_mask) {
+            sensor_err_states[SENSOR_ERR_SRC_GASBEE].acked = WOMO_STATUS_OK;
+        }
+        s_prev_gasbee_mask = mask;
     }
 
     // Sensor-Fehler-Stapel: Latching + Debounce
