@@ -43,6 +43,7 @@ GATT (Kalibrierung durch das Sensorboard per `gasbee_gatt_cal.c`, nur an USB; so
   - P1.08 (IMU) und P1.10 (Mikrofon) sind per `gpio-hog` Low, weil wir für `xiao_ble` statt für die Sense-Variante bauen.
   - **USB-Stack, USB-Konsole und Log sind im Normalbetrieb aus** (`prj.conf`: `CONFIG_BOARD_SERIAL_BACKEND_CDC_ACM=n` u. a.). Gemessen am 2026-10-19: Ruhestrom 6,7 µA statt ca. 1,9 mA mit USB-CDC und Log. Der Testmodus (`debug.conf`) schaltet sie wieder ein. Eine Alternative wäre, den USB-Stack nur bei VBUS selbst zu starten. Das ist nicht umgesetzt.
 - **Ladestrom 100 mA:** P0.13 per `gpio-hog` `output-low` (Schaltplan: R12 2,7 kΩ von ISET nach P0.13 parallel zu R18 2,7 kΩ nach GND). P0.13 nie High setzen. Für Akkus unter 100 mAh den Hog entfernen, dann sind es 50 mA.
+- **Akku und Laderegler:** LiPo 1000 mAh, Ladeschluss 4,2 V, Entladeschluss 2,75 V, Betrieb 0–45 °C (Händlerangaben). BQ25101: Ladeende bei 10 % des Ladestroms, Sicherheits-Timer 10 h. TS liegt fest an 10 kΩ nach GND, es gibt also keine Temperaturüberwachung beim Laden. Details in der README.
 - **Ladestatus:** P0.17 (`~CHG`) über `zephyr,user chg-gpios` mit Pull-Up. `&pwm0` ist im Overlay deaktiviert, weil das Boardfile dort PWM auflegt.
 - **Persistenz:** Zephyr Settings auf NVS, `storage_partition` @ 0xEC000. Schlüssel: `gasbee/offset`, `gasbee/scale`, `gasbee/tare`.
 
