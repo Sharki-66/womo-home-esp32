@@ -5,10 +5,6 @@
       "path": "firmware/sensorboard"
     },
     {
-      "name": "📺 Display (firmware/display) - REF",
-      "path": "firmware/display"
-    },
-    {
       "name": "🔵 GasBee (firmware/gasbee) - ESP32-C3",
       "path": "firmware/gasbee"
     }
@@ -36,8 +32,7 @@
       {
         "label": "Build Sensor Firmware",
         "type": "shell",
-        "command": "idf.py",
-        "args": ["build"],
+        "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py build",
         "options": { "cwd": "${workspaceFolder:🔧 Sensor (firmware/sensorboard) - MAIN}" },
         "group": { "kind": "build", "isDefault": true },
         "problemMatcher": ["$gcc"],
@@ -46,8 +41,7 @@
       {
         "label": "Flash Sensor Firmware",
         "type": "shell",
-        "command": "idf.py",
-        "args": ["-p", "/dev/ttyESP_SENSOR", "flash"],
+        "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py -p /dev/ttyESP_SENSOR flash",
         "options": { "cwd": "${workspaceFolder:🔧 Sensor (firmware/sensorboard) - MAIN}" },
         "group": "build",
         "problemMatcher": [],
@@ -56,8 +50,7 @@
       {
         "label": "Monitor Sensor",
         "type": "shell",
-        "command": "idf.py",
-        "args": ["-p", "/dev/ttyESP_SENSOR", "monitor"],
+        "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py -p /dev/ttyESP_SENSOR monitor",
         "options": { "cwd": "${workspaceFolder:🔧 Sensor (firmware/sensorboard) - MAIN}" },
         "group": "build",
         "isBackground": true,
@@ -67,8 +60,7 @@
       {
         "label": "Build + Flash + Monitor Sensor",
         "type": "shell",
-        "command": "idf.py",
-        "args": ["-p", "/dev/ttyESP_SENSOR", "build", "flash", "monitor"],
+        "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py -p /dev/ttyESP_SENSOR build flash monitor",
         "options": { "cwd": "${workspaceFolder:🔧 Sensor (firmware/sensorboard) - MAIN}" },
         "group": "build",
         "isBackground": true,
@@ -78,8 +70,7 @@
       {
         "label": "Clean Sensor Build",
         "type": "shell",
-        "command": "idf.py",
-        "args": ["fullclean"],
+        "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py fullclean",
         "options": { "cwd": "${workspaceFolder:🔧 Sensor (firmware/sensorboard) - MAIN}" },
         "group": "build",
         "problemMatcher": [],
@@ -88,8 +79,7 @@
       {
         "label": "Build GasBee Firmware",
         "type": "shell",
-        "command": "idf.py",
-        "args": ["build"],
+        "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py build",
         "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
         "group": "build",
         "problemMatcher": ["$gcc"],
@@ -98,8 +88,7 @@
       {
         "label": "Flash GasBee (/dev/ttyUSB0)",
         "type": "shell",
-        "command": "idf.py",
-        "args": ["-p", "/dev/ttyUSB0", "flash"],
+        "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py -p /dev/ttyUSB0 flash",
         "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
         "group": "build",
         "problemMatcher": [],
@@ -108,8 +97,7 @@
       {
         "label": "Monitor GasBee (/dev/ttyUSB0)",
         "type": "shell",
-        "command": "idf.py",
-        "args": ["-p", "/dev/ttyUSB0", "monitor"],
+        "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py -p /dev/ttyUSB0 monitor",
         "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
         "group": "build",
         "isBackground": true,
@@ -119,8 +107,7 @@
       {
         "label": "Build + Flash + Monitor GasBee",
         "type": "shell",
-        "command": "idf.py",
-        "args": ["-p", "/dev/ttyUSB0", "build", "flash", "monitor"],
+        "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py -p /dev/ttyUSB0 build flash monitor",
         "options": { "cwd": "${workspaceFolder:🔵 GasBee (firmware/gasbee) - ESP32-C3}" },
         "group": "build",
         "isBackground": true,
@@ -133,7 +120,12 @@
     "recommendations": [
       "espressif.esp-idf-extension",
       "ms-vscode.cpptools",
-      "ms-vscode.cmake-tools"
+      "ms-vscode.cmake-tools",
+      {"label": "Build Display Firmware", "type": "shell", "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py build", "options": {"cwd": "/home/hajo/womo-home-esp32/firmware/display"}, "group": "build", "problemMatcher": ["$gcc"], "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": false}},
+      {"label": "Flash Display Firmware", "type": "shell", "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py -p /dev/ttyESP_DISPLAY flash", "options": {"cwd": "/home/hajo/womo-home-esp32/firmware/display"}, "group": "build", "problemMatcher": [], "presentation": {"echo": true, "reveal": "always", "focus": false, "panel": "shared", "showReuseMessage": false, "clear": false}},
+      {"label": "Monitor Display", "type": "shell", "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py -p /dev/ttyESP_DISPLAY monitor", "options": {"cwd": "/home/hajo/womo-home-esp32/firmware/display"}, "group": "build", "problemMatcher": [], "isBackground": true, "presentation": {"echo": true, "reveal": "always", "focus": true, "panel": "dedicated", "showReuseMessage": false, "clear": false}},
+      {"label": "Build + Flash + Monitor Display", "type": "shell", "command": "unset IDF_PYTHON_ENV_PATH; . /home/hajo/esp/v5.5.2/esp-idf/export.sh >/dev/null && idf.py -p /dev/ttyESP_DISPLAY build flash monitor", "options": {"cwd": "/home/hajo/womo-home-esp32/firmware/display"}, "group": "build", "problemMatcher": ["$gcc"], "isBackground": true, "presentation": {"echo": true, "reveal": "always", "focus": true, "panel": "dedicated", "showReuseMessage": false, "clear": false}},
+      {"label": "Build + Flash beide Boards", "dependsOrder": "sequence", "dependsOn": ["Build Sensor Firmware", "Flash Sensor Firmware", "Build Display Firmware", "Flash Display Firmware"], "group": "build", "problemMatcher": []}
     ]
   }
 }
