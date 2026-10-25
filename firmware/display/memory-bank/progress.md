@@ -50,7 +50,22 @@
 - **Radio/Multimedia**: Click auf Noten-Button (oben links), ESP-NOW-Kommando `radio_on/off`
 - **Einstellungen**: Click auf Zahnrad-Button
 
+## Offene Hardware-Tests
+
+**WLAN-Wechsel Einstellungen > AP (2026-10-25, gebaut, nicht getestet).** Display und Sensorboard gemeinsam flashen (`womo_config.h` geändert).
+- [ ] AP-Tab rechts oben: „Sensorboard: <SSID> (… dBm)“ grün; Sensorboard aus → nach 10 s „keine Daten“
+- [ ] Richtiges Passwort, neues Netz: Sensorboard-Log `Neue Zugangsdaten bestätigt`, Label zeigt das neue Netz; wenn möglich Netz auf **anderem Kanal**
+- [ ] Falsches Passwort: Sensorboard-Log `… nicht erreichbar – zurück auf …`, wieder im alten Netz; Display fällt per Autoretry zurück
+- [ ] Sensorboard aus beim Speichern: Statuszeile „– Sensorboard nicht erreicht“ nach ca. 9 s, Display wechselt trotzdem
+- [ ] Display-Log `ap_cfg_conn: Stack-Reserve … Byte` – unter ca. 1 KB `AP_TASK_STACK` (4096) erhöhen
+- [ ] Offenes Netz in der Scan-Liste grau mit „(offen – nicht zulässig)“, nicht wählbar; Speichern ohne Passwort bzw. mit < 8 Zeichen abgelehnt
+- [ ] Sicherheitsabfrage: anderes Netz speichern → Popup „Passwort von <alt> eingeben“; 3× falsch → „gesperrt, noch N s“; nach 60 s richtiges Passwort → Wechsel läuft
+- [ ] Gleiches Netz mit gleichem Passwort erneut speichern → keine Abfrage
+- [ ] Tastatur verdeckt das Popup nicht; Texte DE/EN mit Umlauten korrekt
+
 ## Backlog / noch nicht implementiert
+
+- **Sicherheit (nächstes Thema, 2026-10-25):** `POST /api/cmd` des Sensorboards führt jedes Kommando ohne Anmeldung aus (`sensor_http.c`); ESP-NOW unverschlüsselt (PMK/LMK). Erst Optionen vorlegen.
 
 - **Kalibrierungs-UI**: NVS-Layer + Web-UI für HX711/Batterie/Tank-Kalibrierung (heute alles hardcodiert in `sensor_config.h`)
 - **GasBee-Status im Hauptbildschirm**: Akku/Quelle bisher nur im Einstellungs-Tab „Sensoren“ sichtbar (2026-10-17), nicht am Gas-Widget

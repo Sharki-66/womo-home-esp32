@@ -63,6 +63,10 @@ static uint32_t s_last_ack_seq = 0;
 static int64_t s_last_ack_time_us = 0;
 static int64_t s_last_heartbeat_tx_us = 0;
 
+// Warten auf das ACK von wifi_config (womo_sensorboard_send_wifi_credentials_wait)
+static bool s_wifi_cfg_waiting = false;
+static int  s_wifi_cfg_ack     = 0;   // 0 = keins, 1 = ok, -1 = Fehler
+
 static void sb_emit_event(womo_sensorboard_event_t event)
 {
     if (s_event_callback) {
@@ -194,6 +198,14 @@ static void sb_resolve_pending(uint32_t seq,
     }
     if (!label || label[0] == '\0') {
         label = "unknown";
+    }
+
+    if (strcmp(label, "wifi_config") == 0) {
+        taskENTER_CRITICAL(&s_pending_cmd_lock);
+        if (s_wifi_cfg_waiting) {
+            s_wifi_cfg_ack = success ? 1 : -1;
+        }
+        taskEXIT_CRITICAL(&s_pending_cmd_lock);
     }
 
     if (found) {
@@ -685,6 +697,39 @@ esp_err_t womo_sensorboard_send_wifi_credentials(const char *ssid, const char *p
     return err;
 }
 
+esp_err_t womo_sensorboard_send_wifi_credentials_wait(const char *ssid, const char *pass, int attempts)
+{
+    if (!ssid || ssid[0] == '\0') return ESP_ERR_INVALID_ARG;
+
+    taskENTER_CRITICAL(&s_pending_cmd_lock);
+    s_wifi_cfg_ack     = 0;
+    s_wifi_cfg_waiting = true;
+    taskEXIT_CRITICAL(&s_pending_cmd_lock);
+
+    int ack = 0;
+    for (int i = 0; i < attempts && ack == 0; i++) {
+        if (i > 0) {
+            ESP_LOGW(TAG, "wifi_config ohne ACK, Versuch %d/%d", i + 1, attempts);
+        }
+        womo_sensorboard_send_wifi_credentials(ssid, pass);
+        for (int t = 0; t < SB_COMMAND_TIMEOUT_MS / 50 && ack == 0; t++) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            taskENTER_CRITICAL(&s_pending_cmd_lock);
+            ack = s_wifi_cfg_ack;
+            taskEXIT_CRITICAL(&s_pending_cmd_lock);
+        }
+    }
+
+    taskENTER_CRITICAL(&s_pending_cmd_lock);
+    s_wifi_cfg_waiting = false;
+    taskEXIT_CRITICAL(&s_pending_cmd_lock);
+
+    if (ack == 1) return ESP_OK;
+    if (ack < 0)  return ESP_FAIL;
+    ESP_LOGW(TAG, "wifi_config: kein ACK nach %d Versuchen", attempts);
+    return ESP_ERR_TIMEOUT;
+}
+
 
 esp_err_t womo_sensorboard_send_ruuvi_config(const char *indoor_mac, const char *outdoor_mac)
 {
@@ -1073,6 +1118,17 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             if (cJSON_IsBool(ac))       s_latest_data.power.ac_present        = cJSON_IsTrue(ac);
             if (cJSON_IsBool(rtc_bat))  s_latest_data.power.rtc_bat_low       = cJSON_IsTrue(rtc_bat);
             if (cJSON_IsBool(rtc_bsf))  s_latest_data.power.rtc_bat_switched  = cJSON_IsTrue(rtc_bsf);
+            cJSON *sb_ssid = cJSON_GetObjectItem(root, "ssid");
+            if (cJSON_IsString(sb_ssid) && sb_ssid->valuestring) {
+                cJSON *sb_rssi = cJSON_GetObjectItem(root, "rssi");
+                s_latest_data.sb_wifi.valid     = true;
+                s_latest_data.sb_wifi.connected = (sb_ssid->valuestring[0] != '\0');
+                s_latest_data.sb_wifi.trial     = cJSON_IsTrue(cJSON_GetObjectItem(root, "wifi_trial"));
+                s_latest_data.sb_wifi.rssi      = cJSON_IsNumber(sb_rssi) ? (int8_t)sb_rssi->valueint : 0;
+                s_latest_data.sb_wifi.rx_us     = esp_timer_get_time();
+                snprintf(s_latest_data.sb_wifi.ssid, sizeof(s_latest_data.sb_wifi.ssid),
+                         "%s", sb_ssid->valuestring);
+            }
             if (cJSON_IsBool(buzzer)) {
                 s_latest_data.power.buzzer_on = cJSON_IsTrue(buzzer);
                 display_buzzer_set_enabled(s_latest_data.power.buzzer_on);

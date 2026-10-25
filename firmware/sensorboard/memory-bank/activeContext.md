@@ -7,6 +7,13 @@
 
 ## Laufende Arbeiten
 
+### wifi_config ohne Passwort abgelehnt (2026-10-25, nicht gebaut)
+Passwort < `WOMO_WIFI_PASS_MIN_LEN` (8) → `ESP_ERR_INVALID_ARG`, offene Netze nicht zulässig. Als Nächstes: `/api/cmd` absichern (führt bisher jedes Kommando ohne Anmeldung aus), ESP-NOW verschlüsseln.
+
+### WLAN-Wechsel als Probeverbindung (2026-10-25)
+`sensor_wifi_set_credentials()` speichert neue Daten erst nach GOT_IP. Nach `SENSOR_WIFI_RETRY_MAX` Fehlversuchen geht es zurück auf die NVS-Daten. Doppelte Kommandos (das Display wiederholt bis zum ACK) werden ignoriert. `ctrl` meldet zusätzlich `ssid`, `rssi`, `wifi_trial`. Gegenstück im Display: Einstellungen > AP. **Mit Display zusammen flashen.**
+**Test:** falsches Passwort im AP-Tab → Log `nicht erreichbar – zurück auf`; richtiges → `Neue Zugangsdaten bestätigt`.
+
 ### Gasverbrauch über Ausschalt-Lücke (2026-10-18, gebaut, nicht auf Hardware getestet)
 `espnow_modem.c`: `gas_state_t` um `last_epoch_s`/`last_src` erweitert (Migration altes Layout), `gas_bridge_gap()` beim ersten Messwert nach Boot. Behebt nebenbei: `last_ts_us` (Laufzeit) aus NVS war nach Neustart unbrauchbar → Rate fror ein. Entscheidungen: Lücken-Rate direkt übernehmen, >1 Tag/ungültige Uhrzeit → Raten 0, gilt für HX711 + GasBee.
 **Test:** Board über Nacht aus → Log `Gas-Lücke … überbrückt` bzw. `nicht überbrückt (Grund)`.

@@ -53,7 +53,7 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 
 | Topic | Intervall | Felder (Kernfelder) |
 |---|---|---|
-| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. Abschnitt „12V Bordnetz"), `radio_on`, `ac_present`, `uptime`, `heap` (ehemals `hb`), optional `rtc_bat_low`, `rtc_bat_switched` |
+| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. Abschnitt „12V Bordnetz"), `radio_on`, `ac_present`, `uptime`, `heap` (ehemals `hb`), `ssid`, optional `rtc_bat_low`, `rtc_bat_switched`, `rssi`, `wifi_trial` |
 | `imu` | 2 s | `yaw_deg`, `pitch_deg`, `roll_deg`, `hdg`, `cal`, `calibrated` |
 | `bat` | 5 s | `b1`, `b2` (V), `nc1`, `nc2` |
 | `tank` | 10 s | `t1`, `t2` (%), `t1_l`, `t2_l` (L), Rate-Felder |
@@ -126,7 +126,9 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 - Kalibrierung in NVS (`bno055` Namespace)
 
 ## WiFi-Credential-Flow
-Wenn kein SSID in NVS: Sensorboard sendet `type:"wifi_pass_request"` per ESP-NOW → Display zeigt Passwort-Dialog → sendet Credentials per `cmd` zurück → Sensorboard speichert in NVS und verbindet.
+Wenn kein SSID in NVS: Sensorboard sendet `type:"wifi_pass_request"` per ESP-NOW → Display zeigt Passwort-Dialog → sendet Credentials per `cmd` zurück → Sensorboard verbindet.
+
+`wifi_config` (auch vom AP-Tab des Displays) ist eine Probeverbindung: NVS erst nach GOT_IP, nach `SENSOR_WIFI_RETRY_MAX` Fehlversuchen zurück auf die gespeicherten Daten (`sensor_wifi.c`, `s_trial_*`).
 
 ## Pin-Übersicht (Kurzfassung)
 ```

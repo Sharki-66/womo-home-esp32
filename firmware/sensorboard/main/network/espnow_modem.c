@@ -677,6 +677,17 @@ static void modem_publish_ctrl(void)
         cJSON_AddBoolToObject(root, "rtc_bat_switched", ts_status.rtc_bat_switched);
     }
 
+    // WLAN-Verbindung des Sensorboards (Anzeige im Display, Einstellungen > AP)
+    char ssid[33] = "";
+    int8_t rssi = 0;
+    if (sensor_wifi_get_ap_info(ssid, sizeof(ssid), &rssi)) {
+        cJSON_AddNumberToObject(root, "rssi", rssi);
+    }
+    cJSON_AddStringToObject(root, "ssid", ssid);
+    if (sensor_wifi_is_trial_active()) {
+        cJSON_AddBoolToObject(root, "wifi_trial", true);
+    }
+
     // Diagnose-Felder (ehemals hb-Topic)
     int64_t now_us = esp_timer_get_time();
     cJSON_AddNumberToObject(root, "uptime", round2((double)now_us / 1000000.0));
@@ -1414,8 +1425,12 @@ static bool modem_execute_command(const cJSON *root, const char *cmd_str, esp_er
         const cJSON *j_pass = cJSON_GetObjectItem(root, "pass");
         const char *new_ssid = cJSON_IsString(j_ssid) ? j_ssid->valuestring : NULL;
         const char *new_pass = cJSON_IsString(j_pass) ? j_pass->valuestring : NULL;
-        if (new_ssid) {
-            cmd_err = sensor_wifi_set_credentials(new_ssid, new_pass ? new_pass : "");
+        if (new_ssid && (!new_pass || strlen(new_pass) < WOMO_WIFI_PASS_MIN_LEN)) {
+            // Offene Netze / zu kurze Passwörter nicht zulässig
+            ESP_LOGW(TAG, "wifi_config abgelehnt: SSID=%s ohne gültiges Passwort", new_ssid);
+            cmd_err = ESP_ERR_INVALID_ARG;
+        } else if (new_ssid) {
+            cmd_err = sensor_wifi_set_credentials(new_ssid, new_pass);
             ESP_LOGI(TAG, "WiFi-Credentials aktualisiert: SSID=%s", new_ssid);
         } else {
             ESP_LOGW(TAG, "wifi_config: kein 'ssid' Feld");

@@ -26,7 +26,7 @@ Topics (Round-Robin, max. 1 pro 100 ms, Intervalle aus `firmware/shared/womo_con
 
 | Topic | Intervall | Kernfelder |
 |---|---|---|
-| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. u.), `radio_on`, `ac_present`, `rtc_bat_low`, `rtc_bat_switched`, `uptime`, `heap` (ehemals `hb`) |
+| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. u.), `radio_on`, `ac_present`, `rtc_bat_low`, `rtc_bat_switched`, `ssid` (verbundenes WLAN, leer = keins), `rssi` (nur wenn verbunden), `wifi_trial` (nur `true` beim Testen neuer Zugangsdaten), `uptime`, `heap` (ehemals `hb`) |
 | `imu` | 2 s | `yaw_deg`, `pitch_deg`, `roll_deg`, `hdg`, `cal`, `calibrated` |
 | `elec` | 1 s | `v_bus`, `i_a`, `p_w`, `v_shunt_mv` |
 | `bat` | 5 s | `b1`, `b2` (V), `nc1`, `nc2` |
@@ -39,7 +39,7 @@ Topics (Round-Robin, max. 1 pro 100 ms, Intervalle aus `firmware/shared/womo_con
 | `gasbee_scan` | nur auf Anfrage | ein Frame pro GasBee: `sid`, `idx`, `cnt` (0 = keine) + `mac`, `rssi`, `weight_kg`, `batt_mv`, `batt_pct`, `chg`, `cal`, `cfg`, `bee_seq`, `age_s` – alle gesehenen GasBees, Antwort auf `gasbee_scan_request` |
 | `gasbee_cal_result` | nach `gasbee_cal` | `step` (`zero`/`ref`), `ok`, `err` (0 ok, > 0 ATT-Fehler der GasBee, < 0 Sensorboard-Fehler, s. `gasbee_gatt_cal.h`), `msg` |
 
-Display → Sensorboard (Kommandos per `cmd`): `pwr_12v_on/off`, `radio_on/off`, `tare_a/b`, `imu_zero`, `gas_bottle_replace`, `wifi_config` (`ssid`, `pass`), `ruuvi_config` (`indoor_mac`, `outdoor_mac` – MAC-Filter für Ruuvi-BLE-Scanner, NVS `ruuvi_cfg`, leer = Slot deaktiviert), `ruuvi_scan_request` (fordert `ruuvi_scan`-Antwort an), `gasbee_config` (`bottle_a_mac`, `bottle_b_mac` – Zuordnung GasBee → Flasche, NVS `gasbee_cfg`), `gasbee_scan_request` (optional `cfg_only:true` = nur GasBees an USB, zuletzt ≤ `SENSOR_GASBEE_CFG_MAX_AGE_S` gesehen), `gasbee_cal_start`/`gasbee_cal_end` (`slot` 0/1 – Kalibrier-Sitzung: Flasche solange `nc`, Rate ruht, max. `SENSOR_GASBEE_CAL_SESSION_MAX_S`), `gasbee_cal` (`mac`, `step` `zero`/`ref`, `g` – GATT-Write an die GasBee, Ergebnis als `gasbee_cal_result`).
+Display → Sensorboard (Kommandos per `cmd`): `pwr_12v_on/off`, `radio_on/off`, `tare_a/b`, `imu_zero`, `gas_bottle_replace`, `wifi_config` (`ssid`, `pass` mit ≥ `WOMO_WIFI_PASS_MIN_LEN` Zeichen, sonst Fehler-ACK – Sensorboard testet die Daten: erst nach erfolgreicher Verbindung ins NVS, nach `SENSOR_WIFI_RETRY_MAX` Fehlversuchen zurück auf die alten; `cmd_ack` heißt nur „empfangen“, Ergebnis über `ssid`/`wifi_trial` im `ctrl`), `ruuvi_config` (`indoor_mac`, `outdoor_mac` – MAC-Filter für Ruuvi-BLE-Scanner, NVS `ruuvi_cfg`, leer = Slot deaktiviert), `ruuvi_scan_request` (fordert `ruuvi_scan`-Antwort an), `gasbee_config` (`bottle_a_mac`, `bottle_b_mac` – Zuordnung GasBee → Flasche, NVS `gasbee_cfg`), `gasbee_scan_request` (optional `cfg_only:true` = nur GasBees an USB, zuletzt ≤ `SENSOR_GASBEE_CFG_MAX_AGE_S` gesehen), `gasbee_cal_start`/`gasbee_cal_end` (`slot` 0/1 – Kalibrier-Sitzung: Flasche solange `nc`, Rate ruht, max. `SENSOR_GASBEE_CAL_SESSION_MAX_S`), `gasbee_cal` (`mac`, `step` `zero`/`ref`, `g` – GATT-Write an die GasBee, Ergebnis als `gasbee_cal_result`).
 
 **Gas-Quelle:** HX711-Modul am Kabel hat Vorrang; ohne Modul kommen die Gewichte von den GasBees (BLE-Advertising v1, kein Connect, Format in `README.md`). GasBee unter 1 kg = leer (0 %), `nc` nur ohne Werte bzw. unkalibriert; HX711 unter 1 kg = `nc`. Details: `memory-bank/systemPatterns.md`.
 

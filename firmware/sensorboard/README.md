@@ -45,7 +45,7 @@ Ein JSON-Frame pro ESP-NOW-Paket, max. 250 Byte (`WOMO_ESPNOW_MAX_PAYLOAD`). Kan
 
 | Topic | Intervall | Felder |
 |---|---|---|
-| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. u.), `radio_on`, `ac_present`, `uptime`, `heap`; optional: `rtc_bat_low`, `rtc_bat_switched` |
+| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. u.), `radio_on`, `ac_present`, `uptime`, `heap`, `ssid` (verbundenes WLAN, leer = keins); optional: `rtc_bat_low`, `rtc_bat_switched`, `rssi`, `wifi_trial` |
 | `imu` | 2 s | `yaw_deg`, `pitch_deg`, `roll_deg`, `hdg`, `cal:{sys,gyro,acc,mag}`, `calibrated`, `ts` |
 | `bat` | 5 s | `b1`, `b2` (Volt), `nc1`, `nc2` |
 | `tank` | 10 s | `t1`, `t2` (%), `nc1`, `nc2`, `t1_l`, `t2_l` (Liter), `t1_rate1h`, `t1_rate2h`, `t1_rest_h`, `t2_rate1h`, `t2_rate2h`, `t2_rest_h` |
@@ -112,6 +112,8 @@ Pull-to-GND (Low-Side). Das Relais schaltet dadurch nicht – unabhängig von Pu
 Fix: Q1/Q2 → IRLML6244 (N-Kanal, gleiches SOT-23-Pinout), sofern Source bereits an GND liegt.
 
 **WiFi-Passwort-Anfrage:** Bei fehlenden WLAN-Zugangsdaten sendet das Sensorboard `type:"wifi_pass_request"` per ESP-NOW.
+
+**WLAN-Wechsel (`wifi_config`):** `sensor_wifi_set_credentials()` verbindet sofort mit den neuen Daten, speichert sie aber erst nach `IP_EVENT_STA_GOT_IP` im NVS. Nach `SENSOR_WIFI_RETRY_MAX` Fehlversuchen geht es zurück auf die gespeicherten Daten (kein `wifi_pass_request`, keine Pause). Gleiche Daten wie im laufenden Test oder wie bereits verbunden lösen nichts aus (Display wiederholt das Kommando bis zum ACK).
 
 ## Web-Dashboard (HTTP, Port 80)
 

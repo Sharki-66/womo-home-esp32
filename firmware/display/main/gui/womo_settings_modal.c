@@ -21,7 +21,9 @@
 #include "../hardware/buzzer.h"
 #include "../hardware/lvgl_port.h"
 #include "../network/womo_wifi.h"
+#include "womo_config.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "freertos/FreeRTOS.h"
@@ -45,6 +47,8 @@ static const char *TAG = "settings_modal";
 #define MAX_AP_SCAN   16
 #define AP_TASK_STACK 4096
 #define AP_TASK_PRIO  5
+#define AP_PWCHK_MAX_FAILS  3       /* Fehlversuche bis zur Sperre */
+#define AP_PWCHK_LOCK_MS    60000   /* Sperrdauer nach AP_PWCHK_MAX_FAILS */
 
 /* ── Statische Objekte ──────────────────────────────────────── */
 static lv_obj_t *s_overlay  = NULL;
@@ -93,6 +97,7 @@ static struct {
 /* AP-Tab */
 static lv_obj_t *s_ap_keyboard        = NULL;
 static lv_obj_t *s_ap_saved_lbl       = NULL;  /* Gespeicherte SSID anzeigen */
+static lv_obj_t *s_ap_sb_lbl          = NULL;  /* WLAN-Verbindung des Sensorboards */
 static lv_obj_t *s_ap_scan_btn        = NULL;
 static lv_obj_t *s_ap_scan_spinner    = NULL;
 static lv_obj_t *s_ap_scan_status_lbl = NULL;
@@ -106,6 +111,16 @@ static char      s_ap_selected_ssid[33];
 static womo_wifi_scan_result_t s_ap_scan_results[MAX_AP_SCAN];
 static size_t    s_ap_scan_result_count = 0;
 static TaskHandle_t s_ap_connect_task  = NULL;
+/* Sicherheitsabfrage: bisheriges Passwort vor dem Netzwechsel */
+static lv_obj_t *s_ap_pwchk_popup     = NULL;
+static lv_obj_t *s_ap_pwchk_area      = NULL;
+static lv_obj_t *s_ap_pwchk_msg       = NULL;
+static char      s_ap_pending_ssid[33] = "";  /* neues Netz bis zur Bestätigung */
+static char      s_ap_pending_pwd[65] = "";   /* neues Passwort bis zur Bestätigung */
+/* Fehlversuche/Sperre bleiben über Schließen des Modals hinweg erhalten */
+static uint8_t   s_ap_pwchk_fails     = 0;
+static bool      s_ap_pwchk_locked    = false;
+static uint32_t  s_ap_pwchk_lock_tick = 0;
 
 /* ── Ruuvi-Tag: MAC-Konfiguration ───────────────────────────── */
 static lv_obj_t   *s_ruuvi_indoor_lbl    = NULL;
@@ -622,6 +637,7 @@ static void close_modal(void)
     memset(&s_lte, 0, sizeof(s_lte));
     s_ap_keyboard      = NULL;
     s_ap_saved_lbl     = NULL;
+    s_ap_sb_lbl        = NULL;
     s_ap_scan_btn      = NULL;
     s_ap_scan_spinner  = NULL;
     s_ap_scan_status_lbl = NULL;
@@ -630,6 +646,10 @@ static void close_modal(void)
     s_ap_save_btn      = NULL;
     s_ap_scan_popup    = NULL;
     s_ap_scan_list     = NULL;
+    s_ap_pwchk_popup   = NULL;
+    s_ap_pwchk_area    = NULL;
+    s_ap_pwchk_msg     = NULL;
+    memset(s_ap_pending_pwd, 0, sizeof(s_ap_pending_pwd));
     s_ap_scan_in_progress = false;
 
     if (s_ruuvi_scan_timeout_timer) {
@@ -722,6 +742,39 @@ static void ap_update_saved_label(void)
         lv_label_set_text(s_ap_saved_lbl, "Kein AP konfiguriert");
         lv_obj_set_style_text_color(s_ap_saved_lbl, lv_color_hex(0x888888), 0);
     }
+}
+
+/* ctrl kommt alle 2 s; älter als das → Verbindung zum Sensorboard weg */
+#define AP_SB_STALE_US  (10LL * 1000 * 1000)
+
+static void ap_update_sb_label(void)
+{
+    if (!s_ap_sb_lbl) return;
+    womo_sensor_data_t sd = {0};
+    bool fresh = womo_sensorboard_get_latest_data(&sd) && sd.sb_wifi.valid &&
+                 (esp_timer_get_time() - sd.sb_wifi.rx_us) < AP_SB_STALE_US;
+
+    char buf[80];
+    uint32_t col = 0x888888;
+    if (!fresh) {
+        snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_AP_SB_NO_DATA));
+    } else if (sd.sb_wifi.trial) {
+        snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_AP_SB_TRIAL));
+        col = 0x1565C0;
+    } else if (!sd.sb_wifi.connected) {
+        snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_AP_SB_OFFLINE));
+        col = 0xC62828;
+    } else {
+        snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_SB_CONNECTED_FMT),
+                 sd.sb_wifi.ssid, sd.sb_wifi.rssi);
+        /* Orange, wenn das Sensorboard in einem anderen Netz hängt als das Display */
+        char own[33] = "";
+        bool same = (womo_wifi_get_ssid(own, sizeof(own)) == ESP_OK) &&
+                    strcmp(own, sd.sb_wifi.ssid) == 0;
+        col = same ? 0x2E7D32 : 0xE65100;
+    }
+    lv_label_set_text(s_ap_sb_lbl, buf);
+    lv_obj_set_style_text_color(s_ap_sb_lbl, lv_color_hex(col), 0);
 }
 
 /* ── AP-Tab: Scan-Popup ─────────────────────────────────────── */
@@ -835,8 +888,16 @@ static void show_ap_scan_popup(void)
         uint8_t pct = ap_rssi_to_pct(rssi);
         char text[80];
         snprintf(text, sizeof(text), "%s  (%d/%u%%)", ssid_buf, (int)rssi, (unsigned)pct);
+        wifi_auth_mode_t auth = s_ap_scan_results[i].auth_mode;
+        bool open_net = (auth == WIFI_AUTH_OPEN || auth == WIFI_AUTH_OWE);
+        if (open_net) strlcat(text, womo_locale_get_string(STR_AP_SCAN_OPEN_SUFFIX), sizeof(text));
         lv_obj_t *btn = lv_list_add_btn(s_ap_scan_list, LV_SYMBOL_WIFI, text);
         lv_obj_add_event_cb(btn, ap_scan_list_btn_cb, LV_EVENT_CLICKED, NULL);
+        if (open_net) {
+            /* Offene Netze sind nicht zulässig: anzeigen, aber nicht wählbar */
+            lv_obj_set_style_text_font(lv_obj_get_child(btn, -1), &lv_font_montserrat_14_german, 0);
+            lv_obj_add_state(btn, LV_STATE_DISABLED);
+        }
     }
 }
 
@@ -907,29 +968,53 @@ static void ap_connect_task_fn(void *arg)
 
     ESP_LOGI(TAG, "AP-Connect: '%s'", params.ssid);
 
-    /* Laufenden Verbindungsversuch sauber abbrechen */
+    /* 1. Erst das Sensorboard umstellen, solange beide noch auf demselben
+     *    Kanal sind – nach dem eigenen Wechsel ist es per ESP-NOW evtl. nicht
+     *    mehr erreichbar. Das Sensorboard testet die Daten selbst und fällt
+     *    bei Fehlschlag auf seine alten zurück. */
+    if (lvgl_port_lock(-1)) {
+        if (s_overlay) ap_set_status(womo_locale_get_string(STR_AP_SB_SENDING));
+        lvgl_port_unlock();
+    }
+    esp_err_t sb_err = womo_sensorboard_send_wifi_credentials_wait(params.ssid, params.password, 3);
+
+    if (lvgl_port_lock(-1)) {
+        if (s_overlay) {
+            char buf[80];
+            snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_CONNECTING_FMT), params.ssid);
+            ap_set_status(buf);
+        }
+        lvgl_port_unlock();
+    }
+
+    /* 2. Laufenden Verbindungsversuch sauber abbrechen */
     if (womo_wifi_get_status() == WOMO_WIFI_CONNECTING) {
         womo_wifi_disconnect();
         vTaskDelay(pdMS_TO_TICKS(800));
     }
 
+    /* 3. Display selbst verbinden */
     esp_err_t err = womo_wifi_connect(params.ssid,
                                        params.password[0] ? params.password : NULL,
                                        3);
 
     if (lvgl_port_lock(-1)) {
         if (s_overlay) {
+            char buf[128];
             if (err == ESP_OK) {
-                char buf[64];
-                snprintf(buf, sizeof(buf), "Verbunden: %s", params.ssid);
-                ap_set_status(buf);
+                snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_CONNECTED_FMT), params.ssid);
                 ap_update_saved_label();
             } else {
-                char err_buf[80];
-                snprintf(err_buf, sizeof(err_buf), "Fehler: %s", esp_err_to_name(err));
-                ap_set_status(err_buf);
+                snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_CONNECT_FAIL_FMT),
+                         esp_err_to_name(err));
                 if (s_ap_save_btn) lv_obj_clear_flag(s_ap_save_btn, LV_OBJ_FLAG_HIDDEN);
             }
+            if (sb_err != ESP_OK) {
+                strlcat(buf, womo_locale_get_string(sb_err == ESP_ERR_TIMEOUT
+                                                        ? STR_AP_SB_NO_ACK : STR_AP_SB_REJECTED),
+                        sizeof(buf));
+            }
+            ap_set_status(buf);
         }
         lvgl_port_unlock();
     }
@@ -938,6 +1023,8 @@ static void ap_connect_task_fn(void *arg)
         ESP_LOGW(TAG, "AP-Verbindung zu '%s' fehlgeschlagen: %s",
                  params.ssid, esp_err_to_name(err));
     }
+    ESP_LOGI(TAG, "ap_cfg_conn: Stack-Reserve %u Byte",
+             (unsigned)uxTaskGetStackHighWaterMark(NULL));
 
     s_ap_connect_task = NULL;
     vTaskDelete(NULL);
@@ -988,23 +1075,9 @@ static void ap_scan_btn_cb(lv_event_t *e)
     }
 }
 
-static void ap_save_btn_cb(lv_event_t *e)
+/* Speichern + Verbinden nach bestandener Prüfung */
+static void ap_start_save(const char *pwd)
 {
-    (void)e;
-    if (s_ap_connect_task) return;
-    if (s_ap_selected_ssid[0] == '\0') {
-        ap_set_status("Kein Netzwerk ausgewaehlt");
-        return;
-    }
-
-    /* Keyboard schließen falls offen */
-    ap_hide_keyboard();
-
-    const char *pwd = "";
-    if (s_ap_password_area) {
-        pwd = lv_textarea_get_text(s_ap_password_area);
-    }
-
     /* 1. Sofort in NVS speichern (auch wenn Verbindung scheitert) */
     esp_err_t nvs_err = ap_cfg_save(s_ap_selected_ssid, pwd);
     if (nvs_err == ESP_OK) {
@@ -1014,10 +1087,7 @@ static void ap_save_btn_cb(lv_event_t *e)
         ESP_LOGW(TAG, "NVS-Speichern fehlgeschlagen: %s", esp_err_to_name(nvs_err));
     }
 
-    /* 2. Credentials ans Sensorboard senden */
-    womo_sensorboard_send_wifi_credentials(s_ap_selected_ssid, pwd);
-
-    /* 3. Verbindungsversuch starten */
+    /* 2. Sensorboard umstellen + verbinden (im Task, wartet auf ACK) */
     ap_connect_params_t *params = calloc(1, sizeof(ap_connect_params_t));
     if (!params) {
         ap_set_status("Kein Speicher");
@@ -1039,8 +1109,249 @@ static void ap_save_btn_cb(lv_event_t *e)
         return;
     }
 
-    ap_set_status("Verbinde ...");
+    ap_set_status(womo_locale_get_string(STR_AP_SB_SENDING));
     if (s_ap_save_btn) lv_obj_add_flag(s_ap_save_btn, LV_OBJ_FLAG_HIDDEN);
+}
+
+/* ── AP-Tab: Sicherheitsabfrage (bisheriges Passwort) ───────── */
+
+/* Restliche Sperrzeit in Sekunden, 0 = nicht gesperrt */
+static uint32_t ap_pwchk_lock_remaining_s(void)
+{
+    if (!s_ap_pwchk_locked) return 0;
+    uint32_t elapsed = lv_tick_elaps(s_ap_pwchk_lock_tick);
+    if (elapsed >= AP_PWCHK_LOCK_MS) {
+        s_ap_pwchk_locked = false;
+        return 0;
+    }
+    return (AP_PWCHK_LOCK_MS - elapsed + 999) / 1000;
+}
+
+static void ap_pwchk_set_msg(const char *text)
+{
+    if (s_ap_pwchk_msg) lv_label_set_text(s_ap_pwchk_msg, text ? text : "");
+}
+
+static void ap_pwchk_show_locked(void)
+{
+    char buf[80];
+    snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_PWCHK_LOCKED_FMT),
+             (int)ap_pwchk_lock_remaining_s());
+    ap_pwchk_set_msg(buf);
+}
+
+static void ap_pwchk_close(void)
+{
+    ap_hide_keyboard();
+    if (s_ap_pwchk_popup) {
+        /* async: Aufruf kommt aus Events von Kindobjekten des Popups */
+        lv_obj_delete_async(s_ap_pwchk_popup);
+        s_ap_pwchk_popup = NULL;
+        s_ap_pwchk_area  = NULL;
+        s_ap_pwchk_msg   = NULL;
+    }
+}
+
+static void ap_pwchk_cancel_cb(lv_event_t *e)
+{
+    (void)e;
+    ap_pwchk_close();
+    memset(s_ap_pending_pwd, 0, sizeof(s_ap_pending_pwd));
+}
+
+static void ap_pwchk_confirm(void)
+{
+    if (!s_ap_pwchk_area) return;
+    if (ap_pwchk_lock_remaining_s() > 0) {
+        ap_pwchk_show_locked();
+        return;
+    }
+
+    char saved_ssid[33] = {0}, saved_pass[65] = {0};
+    womo_ap_cfg_load(saved_ssid, sizeof(saved_ssid), saved_pass, sizeof(saved_pass));
+    bool ok = (strcmp(lv_textarea_get_text(s_ap_pwchk_area), saved_pass) == 0);
+    memset(saved_pass, 0, sizeof(saved_pass));
+    lv_textarea_set_text(s_ap_pwchk_area, "");
+
+    if (!ok) {
+        s_ap_pwchk_fails++;
+        ESP_LOGW(TAG, "AP-Wechsel: bisheriges Passwort falsch (%u/%u)",
+                 (unsigned)s_ap_pwchk_fails, (unsigned)AP_PWCHK_MAX_FAILS);
+        if (s_ap_pwchk_fails >= AP_PWCHK_MAX_FAILS) {
+            s_ap_pwchk_fails     = 0;
+            s_ap_pwchk_locked    = true;
+            s_ap_pwchk_lock_tick = lv_tick_get();
+            ap_pwchk_show_locked();
+        } else {
+            char buf[64];
+            snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_PWCHK_WRONG_FMT),
+                     (int)s_ap_pwchk_fails, AP_PWCHK_MAX_FAILS);
+            ap_pwchk_set_msg(buf);
+        }
+        return;
+    }
+
+    s_ap_pwchk_fails = 0;
+    /* Netz aus dem Zeitpunkt der Abfrage, nicht eine inzwischen geänderte Auswahl */
+    strlcpy(s_ap_selected_ssid, s_ap_pending_ssid, sizeof(s_ap_selected_ssid));
+    char pwd[65];
+    strlcpy(pwd, s_ap_pending_pwd, sizeof(pwd));
+    memset(s_ap_pending_pwd, 0, sizeof(s_ap_pending_pwd));
+    ap_pwchk_close();
+    ap_start_save(pwd);
+    memset(pwd, 0, sizeof(pwd));
+}
+
+static void ap_pwchk_confirm_cb(lv_event_t *e)
+{
+    (void)e;
+    ap_pwchk_confirm();
+}
+
+static void ap_pwchk_area_event_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_FOCUSED) {
+        if (s_ap_keyboard) {
+            lv_keyboard_set_textarea(s_ap_keyboard, s_ap_pwchk_area);
+            lv_obj_clear_flag(s_ap_keyboard, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(s_ap_keyboard);
+            lvgl_touch_set_fast_mode(true);
+        }
+    } else if (code == LV_EVENT_READY) {
+        ap_pwchk_confirm();
+    } else if (code == LV_EVENT_CANCEL) {
+        ap_hide_keyboard();
+    }
+}
+
+static lv_obj_t *ap_pwchk_make_btn(lv_obj_t *parent, womo_string_id_t str, uint32_t color,
+                                   lv_event_cb_t cb)
+{
+    lv_obj_t *btn = lv_btn_create(parent);
+    lv_obj_set_size(btn, 140, 38);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(color), 0);
+    lv_obj_set_style_radius(btn, 6, 0);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl = lv_label_create(btn);
+    lv_label_set_text(lbl, womo_locale_get_string(str));
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14_german, 0);
+    lv_obj_center(lbl);
+    return btn;
+}
+
+static void ap_pwchk_show(const char *old_ssid)
+{
+    ap_pwchk_close();
+    if (!s_overlay) return;
+
+    /* Oben platziert, damit die Tastatur (unten) das Feld nicht verdeckt */
+    s_ap_pwchk_popup = lv_obj_create(s_overlay);
+    lv_obj_set_size(s_ap_pwchk_popup, 460, 230);
+    lv_obj_align(s_ap_pwchk_popup, LV_ALIGN_TOP_MID, 0, 20);
+    lv_obj_set_style_bg_color(s_ap_pwchk_popup, lv_color_white(), 0);
+    lv_obj_set_style_radius(s_ap_pwchk_popup, 8, 0);
+    lv_obj_set_style_pad_all(s_ap_pwchk_popup, 14, 0);
+    lv_obj_set_style_shadow_width(s_ap_pwchk_popup, 20, 0);
+    lv_obj_set_style_shadow_opa(s_ap_pwchk_popup, LV_OPA_30, 0);
+    lv_obj_clear_flag(s_ap_pwchk_popup, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(s_ap_pwchk_popup, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(s_ap_pwchk_popup, 8, 0);
+    lv_obj_move_foreground(s_ap_pwchk_popup);
+
+    char buf[80];
+    snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_PWCHK_TITLE_FMT), old_ssid);
+    lv_obj_t *title = lv_label_create(s_ap_pwchk_popup);
+    lv_label_set_text(title, buf);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_16_german, 0);
+    lv_obj_set_width(title, LV_PCT(100));
+    lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
+
+    lv_obj_t *hint = lv_label_create(s_ap_pwchk_popup);
+    lv_label_set_text(hint, womo_locale_get_string(STR_AP_PWCHK_HINT));
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_12_german, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(0x444444), 0);
+
+    s_ap_pwchk_area = lv_textarea_create(s_ap_pwchk_popup);
+    lv_textarea_set_one_line(s_ap_pwchk_area, true);
+    lv_textarea_set_password_mode(s_ap_pwchk_area, true);
+    lv_textarea_set_password_show_time(s_ap_pwchk_area, 800);
+    lv_textarea_set_placeholder_text(s_ap_pwchk_area, womo_locale_get_string(STR_AP_PWCHK_PLACEHOLDER));
+    lv_textarea_set_max_length(s_ap_pwchk_area, 64);
+    lv_obj_set_width(s_ap_pwchk_area, LV_PCT(100));
+    lv_obj_set_style_text_font(s_ap_pwchk_area, &lv_font_montserrat_14_german, 0);
+    lv_obj_add_event_cb(s_ap_pwchk_area, ap_pwchk_area_event_cb, LV_EVENT_ALL, NULL);
+
+    s_ap_pwchk_msg = lv_label_create(s_ap_pwchk_popup);
+    lv_label_set_text(s_ap_pwchk_msg, "");
+    lv_obj_set_style_text_font(s_ap_pwchk_msg, &lv_font_montserrat_12_german, 0);
+    lv_obj_set_style_text_color(s_ap_pwchk_msg, lv_color_hex(0xC62828), 0);
+
+    lv_obj_t *row = lv_obj_create(s_ap_pwchk_popup);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, 10, 0);
+    ap_pwchk_make_btn(row, STR_AP_PWCHK_CANCEL,  0x757575, ap_pwchk_cancel_cb);
+    ap_pwchk_make_btn(row, STR_AP_PWCHK_CONFIRM, 0x2E7D32, ap_pwchk_confirm_cb);
+
+    if (ap_pwchk_lock_remaining_s() > 0) {
+        ap_pwchk_show_locked();
+    } else {
+        lv_obj_add_state(s_ap_pwchk_area, LV_STATE_FOCUSED);
+        lv_obj_send_event(s_ap_pwchk_area, LV_EVENT_FOCUSED, NULL);
+    }
+}
+
+static void ap_save_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    if (s_ap_connect_task || s_ap_pwchk_popup) return;
+    if (s_ap_selected_ssid[0] == '\0') {
+        ap_set_status("Kein Netzwerk ausgewaehlt");
+        return;
+    }
+
+    /* Keyboard schließen falls offen */
+    ap_hide_keyboard();
+
+    const char *pwd = "";
+    if (s_ap_password_area) {
+        pwd = lv_textarea_get_text(s_ap_password_area);
+    }
+
+    /* Offene Netze sind nicht zulässig */
+    if (pwd[0] == '\0') {
+        ap_set_status(womo_locale_get_string(STR_AP_OPEN_NOT_ALLOWED));
+        return;
+    }
+    if (strlen(pwd) < WOMO_WIFI_PASS_MIN_LEN) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_PASS_TOO_SHORT_FMT),
+                 WOMO_WIFI_PASS_MIN_LEN);
+        ap_set_status(buf);
+        return;
+    }
+
+    /* Sicherheitsabfrage: gespeichertes Netz mit Passwort und echter Änderung
+     * → bisheriges Passwort bestätigen lassen */
+    char saved_ssid[33] = {0}, saved_pass[65] = {0};
+    bool need_check = false;
+    if (womo_ap_cfg_load(saved_ssid, sizeof(saved_ssid), saved_pass, sizeof(saved_pass)) == ESP_OK &&
+        saved_ssid[0] != '\0' && saved_pass[0] != '\0') {
+        need_check = (strcmp(saved_ssid, s_ap_selected_ssid) != 0) ||
+                     (strcmp(saved_pass, pwd) != 0);
+    }
+    memset(saved_pass, 0, sizeof(saved_pass));
+
+    if (need_check) {
+        strlcpy(s_ap_pending_ssid, s_ap_selected_ssid, sizeof(s_ap_pending_ssid));
+        strlcpy(s_ap_pending_pwd, pwd, sizeof(s_ap_pending_pwd));
+        ap_pwchk_show(saved_ssid);
+        return;
+    }
+    ap_start_save(pwd);
 }
 
 /* ── Tab-Aufbau ─────────────────────────────────────────────── */
@@ -2014,6 +2325,7 @@ static void rtc_poll_timer_cb(lv_timer_t *t)
     if (lv_tick_elaps(last_label_refresh) >= 2000) {
         last_label_refresh = lv_tick_get();
         gasbee_refresh_labels();
+        ap_update_sb_label();
     }
 }
 
@@ -2527,6 +2839,14 @@ static void build_tab_ap(lv_obj_t *tab)
     lv_obj_set_pos(s_ap_saved_lbl, 0, 36);
     ap_update_saved_label();
 
+    /* WLAN des Sensorboards (aus ctrl), rechte Hälfte */
+    s_ap_sb_lbl = lv_label_create(tab);
+    lv_obj_set_style_text_font(s_ap_sb_lbl, &lv_font_montserrat_14_german, 0);
+    lv_obj_set_pos(s_ap_sb_lbl, (MODAL_W - 2 * PAD) / 2, 36);
+    lv_obj_set_width(s_ap_sb_lbl, (MODAL_W - 2 * PAD) / 2);
+    lv_label_set_long_mode(s_ap_sb_lbl, LV_LABEL_LONG_DOT);
+    ap_update_sb_label();
+
     /* Scan-Zeile: Button + Spinner */
     lv_obj_t *scan_row = lv_obj_create(tab);
     lv_obj_remove_style_all(scan_row);
@@ -2555,7 +2875,7 @@ static void build_tab_ap(lv_obj_t *tab)
     /* Status-Label */
     s_ap_scan_status_lbl = lv_label_create(tab);
     lv_label_set_text(s_ap_scan_status_lbl, "");
-    lv_obj_set_style_text_font(s_ap_scan_status_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(s_ap_scan_status_lbl, &lv_font_montserrat_12_german, 0);
     lv_obj_set_style_text_color(s_ap_scan_status_lbl, lv_color_hex(0x444444), 0);
     lv_obj_set_pos(s_ap_scan_status_lbl, 0, 110);
     lv_obj_set_width(s_ap_scan_status_lbl, MODAL_W - 2 * PAD);

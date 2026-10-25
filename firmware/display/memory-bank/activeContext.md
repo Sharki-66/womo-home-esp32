@@ -1,5 +1,13 @@
 # Active Context — WoMoHome Display
 
+## AP-Wechsel: Sicherheitsabfrage + keine offenen Netze (2026-10-25, Hardware-Test offen, Liste in progress.md)
+
+Vor dem Wechsel weg von einem gespeicherten Netz mit Passwort fragt `ap_pwchk_*` (`womo_settings_modal.c`) das bisherige Passwort ab: Vergleich mit `womo_ap_cfg`, 3 Fehlversuche → 60 s Sperre (nur im RAM). Offene Netze sind in der Scan-Liste gesperrt, Speichern verlangt ≥ `WOMO_WIFI_PASS_MIN_LEN` (8, `womo_config.h`). Das Sensorboard lehnt `wifi_config` mit kürzerem Passwort ab. Offen und als Nächstes geplant: `/api/cmd` des Sensorboards ohne Anmeldung, ESP-NOW unverschlüsselt.
+
+## WLAN-Wechsel für beide Boards (2026-10-25, gebaut)
+
+Einstellungen > AP: `ap_connect_task_fn` sendet `wifi_config` jetzt vor dem eigenen Wechsel und wartet auf das `cmd_ack` (`womo_sensorboard_send_wifi_credentials_wait`, 3 × 3 s), erst dann `womo_wifi_connect`. Vorher wurde einmal gesendet, ohne Wiederholung. Ging der Frame verloren und lag das neue Netz auf einem anderen Kanal, war die ESP-NOW-Verbindung dauerhaft weg. Das Sensorboard testet die Daten selbst (NVS erst nach GOT_IP, sonst zurück auf die alten). Ein falsches Passwort bleibt so nicht hängen. Rückmeldung: `ctrl` liefert `ssid`/`rssi`/`wifi_trial` → `sb_wifi`, Label rechts oben im AP-Tab (`ap_update_sb_label`, alle 2 s). Neue Texte `STR_AP_*`. Verworfene Variante: Display verbindet sich zuerst und gibt die Daten erst danach weiter – scheitert bei Kanalwechsel. **Beide Firmwares zusammen flashen.** Test offen: Wechsel auf ein Netz mit anderem Kanal, falsches Passwort, Stack-Reserve `ap_cfg_conn` im Log.
+
 ## GasBee-Akku-Warnung (2026-10-24)
 
 Neue Fehlerquelle `SENSOR_ERR_SRC_GASBEE` (WARNING): Akku < 10 % ohne Laden bzw. Laden bei Außentemperatur < 0 °C (`bme_out`), Konstanten `THRESH_GASBEE_*` in `womo_thresholds.h`. Rot im Tab Sensoren jetzt < 10 % statt 20 %. Hinweis im Einrichten-Assistenten (Schritt USB). Quellennamen des Fehler-Stapels und GasBee-Akkutexte im Tab Sensoren über `womo_locale` (`STR_ERR_SRC_*`, `STR_SENS_BATT_*`). Danach der ganze Tab Sensoren auf `womo_locale` umgestellt (Ruuvi-Status/-Popup, GasBee-Zeilen, Einrichten-Assistent `gbw_*`, `STR_SENS_*`/`STR_GASBEE_*`/`STR_GBW_*`) und dessen Textfelder auf die `*_german`-Fonts (vorher fehlten Umlaute, z. B. „Scan läuft bereits“ in der Statuszeile). Noch fest im Code: Zeitquellen-Namen im Tab System (`NTP (Internet)` …) und weitere Einzeltexte außerhalb des Tabs Sensoren.

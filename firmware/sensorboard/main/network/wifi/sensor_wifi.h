@@ -32,9 +32,15 @@ esp_err_t sensor_wifi_deinit(void);
 /// Gibt true zurück wenn WiFi verbunden und IP vorhanden.
 bool sensor_wifi_is_connected(void);
 
-/// WiFi-Credentials im NVS aktualisieren und neu verbinden.
+/// Neue WiFi-Credentials testen: verbindet sofort mit den neuen Daten, ins NVS
+/// gehen sie erst nach erfolgreicher Verbindung (GOT_IP). Nach
+/// SENSOR_WIFI_RETRY_MAX Fehlversuchen zurück auf die gespeicherten Daten.
+/// Gleiche Daten wie im laufenden Test bzw. wie verbunden → keine Aktion.
 /// ssid/pass dürfen NULL sein (dann wird der jeweilige Wert nicht geändert).
 esp_err_t sensor_wifi_set_credentials(const char *ssid, const char *pass);
+
+/// true, solange neue Credentials getestet werden (noch nicht im NVS).
+bool sensor_wifi_is_trial_active(void);
 
 /// Callback-Typ: wird aufgerufen wenn WiFi nach max. Retries nicht verbinden kann.
 /// Nutzbar z.B. um per ESP-NOW das Passwort beim Display anzufragen.

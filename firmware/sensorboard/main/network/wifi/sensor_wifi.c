@@ -42,6 +42,14 @@ static int                s_retry_count       = 0;
 static char               s_ip_str[16]        = "";
 static sensor_wifi_auth_fail_cb_t s_auth_fail_cb = NULL;
 
+// Probeverbindung mit neuen Zugangsdaten (sensor_wifi_set_credentials):
+// erst nach GOT_IP ins NVS, nach SENSOR_WIFI_RETRY_MAX Fehlversuchen zurück
+// auf die gespeicherten Daten.
+static portMUX_TYPE       s_trial_lock        = portMUX_INITIALIZER_UNLOCKED;
+static volatile bool      s_trial_active      = false;
+static char               s_trial_ssid[33]    = "";
+static char               s_trial_pass[65]    = "";
+
 // ── NVS Credentials ─────────────────────────────────────────────────────
 
 static esp_err_t wifi_load_credentials(char *ssid, size_t ssid_sz,
@@ -90,6 +98,17 @@ static esp_err_t wifi_save_credentials(const char *ssid, const char *pass)
     return err;
 }
 
+static void wifi_apply_config(const char *ssid, const char *pass)
+{
+    wifi_config_t wifi_config = {0};
+    strlcpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
+    strlcpy((char *)wifi_config.sta.password, pass, sizeof(wifi_config.sta.password));
+    wifi_config.sta.threshold.authmode = (strlen(pass) > 0)
+                                             ? WIFI_AUTH_WPA2_PSK
+                                             : WIFI_AUTH_OPEN;
+    esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+}
+
 // ── Event Handler ───────────────────────────────────────────────────────
 
 static void wifi_event_handler(void *arg, esp_event_base_t base,
@@ -100,7 +119,18 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         esp_wifi_connect();
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         s_ip_str[0] = '\0';
-        if (s_retry_count < SENSOR_WIFI_RETRY_MAX) {
+        if (s_trial_active && s_retry_count >= SENSOR_WIFI_RETRY_MAX) {
+            // Neue Zugangsdaten funktionieren nicht → gespeicherte wieder aktivieren
+            char ssid[33] = {0};
+            char pass[65] = {0};
+            wifi_load_credentials(ssid, sizeof(ssid), pass, sizeof(pass));
+            ESP_LOGW(TAG, "Neue SSID \"%s\" nicht erreichbar – zurück auf \"%s\"",
+                     s_trial_ssid, ssid);
+            s_trial_active = false;
+            wifi_apply_config(ssid, pass);
+            s_retry_count = 0;
+            esp_wifi_connect();
+        } else if (s_retry_count < SENSOR_WIFI_RETRY_MAX) {
             s_retry_count++;
             ESP_LOGW(TAG, "Verbindung verloren, Retry %d/%d",
                      s_retry_count, SENSOR_WIFI_RETRY_MAX);
@@ -124,6 +154,16 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         snprintf(s_ip_str, sizeof(s_ip_str), IPSTR, IP2STR(&event->ip_info.ip));
         ESP_LOGI(TAG, "✓ Verbunden! IP: %s", s_ip_str);
         s_retry_count = 0;
+        if (s_trial_active) {
+            char ssid[33], pass[65];
+            taskENTER_CRITICAL(&s_trial_lock);
+            strlcpy(ssid, s_trial_ssid, sizeof(ssid));
+            strlcpy(pass, s_trial_pass, sizeof(pass));
+            s_trial_active = false;
+            taskEXIT_CRITICAL(&s_trial_lock);
+            ESP_LOGI(TAG, "Neue Zugangsdaten bestätigt: SSID=\"%s\"", ssid);
+            wifi_save_credentials(ssid, pass);
+        }
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
@@ -196,15 +236,8 @@ esp_err_t sensor_wifi_init(void)
     char pass[65] = {0};
     wifi_load_credentials(ssid, sizeof(ssid), pass, sizeof(pass));
 
-    wifi_config_t wifi_config = {0};
-    strlcpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
-    strlcpy((char *)wifi_config.sta.password, pass, sizeof(wifi_config.sta.password));
-    wifi_config.sta.threshold.authmode = (strlen(pass) > 0)
-                                             ? WIFI_AUTH_WPA2_PSK
-                                             : WIFI_AUTH_OPEN;
-
     esp_wifi_set_mode(WIFI_MODE_STA);
-    esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+    wifi_apply_config(ssid, pass);
     esp_wifi_start();
 
     ESP_LOGI(TAG, "WiFi STA gestartet: SSID=\"%s\"", ssid);
@@ -245,31 +278,48 @@ bool sensor_wifi_is_connected(void)
 
 esp_err_t sensor_wifi_set_credentials(const char *ssid, const char *pass)
 {
-    esp_err_t err = wifi_save_credentials(ssid, pass);
-    if (err != ESP_OK) {
-        return err;
+    if (!s_initialized) {
+        // Ohne laufendes WLAN nichts zu testen → direkt speichern
+        return wifi_save_credentials(ssid, pass);
     }
 
-    if (s_initialized) {
-        ESP_LOGI(TAG, "Credentials geändert, reconnect...");
-        esp_wifi_disconnect();
+    char new_ssid[33] = {0};
+    char new_pass[65] = {0};
+    wifi_load_credentials(new_ssid, sizeof(new_ssid), new_pass, sizeof(new_pass));
+    bool same_as_saved = (!ssid || strcmp(ssid, new_ssid) == 0) &&
+                         (!pass || strcmp(pass, new_pass) == 0);
+    if (ssid) strlcpy(new_ssid, ssid, sizeof(new_ssid));
+    if (pass) strlcpy(new_pass, pass, sizeof(new_pass));
 
-        char new_ssid[33] = {0};
-        char new_pass[65] = {0};
-        wifi_load_credentials(new_ssid, sizeof(new_ssid),
-                               new_pass, sizeof(new_pass));
+    taskENTER_CRITICAL(&s_trial_lock);
+    bool same_as_trial = s_trial_active &&
+                         strcmp(new_ssid, s_trial_ssid) == 0 &&
+                         strcmp(new_pass, s_trial_pass) == 0;
+    taskEXIT_CRITICAL(&s_trial_lock);
 
-        wifi_config_t wifi_config = {0};
-        strlcpy((char *)wifi_config.sta.ssid, new_ssid, sizeof(wifi_config.sta.ssid));
-        strlcpy((char *)wifi_config.sta.password, new_pass, sizeof(wifi_config.sta.password));
-        wifi_config.sta.threshold.authmode = (strlen(new_pass) > 0)
-                                                 ? WIFI_AUTH_WPA2_PSK
-                                                 : WIFI_AUTH_OPEN;
-        esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
-        s_retry_count = 0;
-        esp_wifi_connect();
+    // Wiederholtes Kommando (Display sendet bis zum ACK erneut): nicht neu starten
+    if (same_as_trial || (!s_trial_active && same_as_saved && sensor_wifi_is_connected())) {
+        ESP_LOGI(TAG, "Credentials unverändert (SSID=\"%s\")", new_ssid);
+        return ESP_OK;
     }
+
+    ESP_LOGI(TAG, "Teste neue Credentials: SSID=\"%s\"", new_ssid);
+    taskENTER_CRITICAL(&s_trial_lock);
+    strlcpy(s_trial_ssid, new_ssid, sizeof(s_trial_ssid));
+    strlcpy(s_trial_pass, new_pass, sizeof(s_trial_pass));
+    s_trial_active = true;
+    taskEXIT_CRITICAL(&s_trial_lock);
+
+    esp_wifi_disconnect();
+    wifi_apply_config(new_ssid, new_pass);
+    s_retry_count = 0;
+    esp_wifi_connect();
     return ESP_OK;
+}
+
+bool sensor_wifi_is_trial_active(void)
+{
+    return s_trial_active;
 }
 
 const char *sensor_wifi_get_ip_str(void)

@@ -174,6 +174,16 @@ typedef struct {
         bool touch_click_on;   // Touch-Klick-Ton aktiv
     } power;
 
+    // WLAN-Verbindung des Sensorboards (aus ctrl: ssid, rssi, wifi_trial)
+    struct {
+        bool valid;            // ctrl mit Feld "ssid" empfangen
+        bool connected;        // Sensorboard hat eine WLAN-Verbindung
+        bool trial;            // Sensorboard testet gerade neue Zugangsdaten
+        char ssid[33];
+        int8_t rssi;
+        int64_t rx_us;         // esp_timer-Zeit des letzten ctrl mit diesen Feldern
+    } sb_wifi;
+
     // INA226 Strom-/Leistungsmessung Hauptleitung
     struct {
         bool valid;
@@ -261,6 +271,10 @@ esp_err_t womo_sensorboard_send_tare_b(void);
 esp_err_t womo_sensorboard_send_wifi_control(bool enable, const char *ssid, const char *password);
 esp_err_t womo_sensorboard_send_lte_control(bool enable);
 esp_err_t womo_sensorboard_send_wifi_credentials(const char *ssid, const char *pass);
+// Blockierend: sendet wifi_config bis zu attempts Mal, bis ein cmd_ack kommt
+// (je WOMO_SENSOR_COMMAND_TIMEOUT_MS). ESP_OK = ok-ACK, ESP_FAIL = Fehler-ACK,
+// ESP_ERR_TIMEOUT = kein ACK. Nicht aus dem LVGL-Task aufrufen.
+esp_err_t womo_sensorboard_send_wifi_credentials_wait(const char *ssid, const char *pass, int attempts);
 esp_err_t womo_sensorboard_send_ruuvi_config(const char *indoor_mac, const char *outdoor_mac);
 esp_err_t womo_sensorboard_send_ruuvi_scan_request(void);
 esp_err_t womo_sensorboard_send_gasbee_config(const char *bottle_a_mac, const char *bottle_b_mac);

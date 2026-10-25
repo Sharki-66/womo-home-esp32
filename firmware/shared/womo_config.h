@@ -56,6 +56,10 @@
 // WOMO_WIFI_DEFAULT_SSID und WOMO_WIFI_DEFAULT_PASS werden aus
 // womo_credentials.h eingebunden (siehe oben).
 
+/** Mindestlänge WLAN-Passwort (WPA2-PSK-Passphrase: 8–63 Zeichen, IEEE 802.11i).
+ *  Offene Netze sind als ESP32-WLAN nicht zulässig (Display AP-Tab + wifi_config). */
+#define WOMO_WIFI_PASS_MIN_LEN              8
+
 /** IP-Adresse des RUTX11 Routers im internen Netz. */
 #define WOMO_ROUTER_IP                      "192.168.55.1"
 
