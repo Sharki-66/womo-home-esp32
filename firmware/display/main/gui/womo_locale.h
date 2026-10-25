@@ -313,6 +313,13 @@ typedef enum {
     STR_PAIR_PAIRED_FMT,
     STR_PAIR_ACTIVE_FMT,
     STR_PAIR_NONE,
+    STR_PAIR_HINT,
+    // Einstellungen: Servicebereich (Titel 5 s drücken + Service-PIN)
+    STR_SVC_TAB,
+    STR_SVC_PIN_TITLE,
+    STR_SVC_PIN_HINT,
+    STR_SVC_PIN_PLACEHOLDER,
+    STR_SVC_PIN_WRONG_FMT,
     // Max value
     STR_MAX
 } womo_string_id_t;

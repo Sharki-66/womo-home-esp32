@@ -50,6 +50,12 @@ static const char *TAG = "settings_modal";
 #define AP_TASK_PRIO  5
 #define AP_PWCHK_MAX_FAILS  3       /* Fehlversuche bis zur Sperre */
 #define AP_PWCHK_LOCK_MS    60000   /* Sperrdauer nach AP_PWCHK_MAX_FAILS */
+#define SVC_LONGPRESS_MS    5000    /* Titel so lange drücken → Service-PIN */
+
+#ifndef WOMO_SERVICE_PIN
+#error "WOMO_SERVICE_PIN fehlt in womo_credentials.h (siehe womo_credentials.h.example)"
+#endif
+_Static_assert(sizeof(WOMO_SERVICE_PIN) == 5, "WOMO_SERVICE_PIN muss genau 4 Zeichen haben");
 
 /* ── Statische Objekte ──────────────────────────────────────── */
 static lv_obj_t *s_overlay  = NULL;
@@ -64,7 +70,8 @@ static lv_obj_t *s_row_lbl[3]    = {NULL, NULL, NULL};
 static bool      s_locale_cb_reg  = false;
 
 /* Tab-Reihenfolge = Reihenfolge in der Tab-Leiste, erster Tab = Starttab */
-enum { TAB_AP = 0, TAB_SENSORS, TAB_THRESH, TAB_LTE, TAB_SYSTEM, TAB_COUNT };
+/* Normale Tabs; der Service-Tab wird erst nach der Service-PIN als Index TAB_COUNT angehängt */
+enum { TAB_THRESH = 0, TAB_SENSORS, TAB_LTE, TAB_AP, TAB_SYSTEM, TAB_COUNT };
 static lv_obj_t *s_tabview = NULL;
 
 /* Ton-Buttons */
@@ -122,9 +129,22 @@ static lv_obj_t *s_ap_pwchk_msg       = NULL;
 static char      s_ap_pending_ssid[33] = "";  /* neues Netz bis zur Bestätigung */
 static char      s_ap_pending_pwd[65] = "";   /* neues Passwort bis zur Bestätigung */
 /* Fehlversuche/Sperre bleiben über Schließen des Modals hinweg erhalten */
-static uint8_t   s_ap_pwchk_fails     = 0;
-static bool      s_ap_pwchk_locked    = false;
-static uint32_t  s_ap_pwchk_lock_tick = 0;
+typedef struct {
+    uint8_t  fails;
+    bool     locked;
+    uint32_t lock_tick;
+} pwchk_lock_t;
+typedef enum {
+    PWCHK_AP,    /* bisheriges AP-Passwort (alternativ Service-PIN) */
+    PWCHK_SVC,   /* Service-PIN für den Servicebereich */
+} pwchk_mode_t;
+static pwchk_lock_t s_pwchk_lock[2]   = {0};   /* je Modus eigene Sperre */
+static pwchk_mode_t s_pwchk_mode      = PWCHK_AP;
+/* Servicebereich: Tab erst nach PIN angelegt, mit dem Modal wieder weg */
+static lv_obj_t *s_svc_tab            = NULL;
+static uint32_t  s_svc_press_tick     = 0;
+static bool      s_svc_press_fired    = false;
+static void svc_open(void);
 
 /* ── Ruuvi-Tag: MAC-Konfiguration ───────────────────────────── */
 static lv_obj_t   *s_ruuvi_indoor_lbl    = NULL;
@@ -410,12 +430,13 @@ static void settings_locale_cb(void)
 {
     if (!s_panel) return;
     static const womo_string_id_t tab_str[TAB_COUNT] = {
-        STR_SET_TAB_AP, STR_SET_TAB_SENSORS, STR_SET_TAB_THRESH, STR_SET_TAB_LTE, STR_SET_TAB_SYSTEM,
+        STR_SET_TAB_THRESH, STR_SET_TAB_SENSORS, STR_SET_TAB_LTE, STR_SET_TAB_AP, STR_SET_TAB_SYSTEM,
     };
     if (s_tabview) {
         for (int i = 0; i < TAB_COUNT; i++) {
             lv_tabview_set_tab_text(s_tabview, i, womo_locale_get_string(tab_str[i]));
         }
+        if (s_svc_tab) lv_tabview_set_tab_text(s_tabview, TAB_COUNT, womo_locale_get_string(STR_SVC_TAB));
     }
 
     /* System-Tab */
@@ -657,6 +678,7 @@ static void close_modal(void)
     s_overlay          = NULL;
     s_panel            = NULL;
     s_title_lbl        = NULL;
+    s_svc_tab          = NULL;
     s_thr_title_lbl    = NULL;
     s_warn_hdr_lbl     = NULL;
     s_row_lbl[0]       = NULL;
@@ -1161,10 +1183,11 @@ static void ap_start_save(const char *pwd)
 /* Restliche Sperrzeit in Sekunden, 0 = nicht gesperrt */
 static uint32_t ap_pwchk_lock_remaining_s(void)
 {
-    if (!s_ap_pwchk_locked) return 0;
-    uint32_t elapsed = lv_tick_elaps(s_ap_pwchk_lock_tick);
+    pwchk_lock_t *lk = &s_pwchk_lock[s_pwchk_mode];
+    if (!lk->locked) return 0;
+    uint32_t elapsed = lv_tick_elaps(lk->lock_tick);
     if (elapsed >= AP_PWCHK_LOCK_MS) {
-        s_ap_pwchk_locked = false;
+        lk->locked = false;
         return 0;
     }
     return (AP_PWCHK_LOCK_MS - elapsed + 999) / 1000;
@@ -1186,6 +1209,7 @@ static void ap_pwchk_show_locked(void)
 static void ap_pwchk_close(void)
 {
     ap_hide_keyboard();
+    if (s_ap_keyboard) lv_keyboard_set_mode(s_ap_keyboard, LV_KEYBOARD_MODE_TEXT_LOWER);
     if (s_ap_pwchk_popup) {
         /* async: Aufruf kommt aus Events von Kindobjekten des Popups */
         lv_obj_delete_async(s_ap_pwchk_popup);
@@ -1210,31 +1234,46 @@ static void ap_pwchk_confirm(void)
         return;
     }
 
-    char saved_ssid[33] = {0}, saved_pass[65] = {0};
-    womo_ap_cfg_load(saved_ssid, sizeof(saved_ssid), saved_pass, sizeof(saved_pass));
-    bool ok = (strcmp(lv_textarea_get_text(s_ap_pwchk_area), saved_pass) == 0);
-    memset(saved_pass, 0, sizeof(saved_pass));
+    const char *input = lv_textarea_get_text(s_ap_pwchk_area);
+    bool pin_ok = (strcmp(input, WOMO_SERVICE_PIN) == 0);
+    bool ok = pin_ok;
+    if (s_pwchk_mode == PWCHK_AP && !ok) {
+        /* bisheriges WLAN-Passwort; die Service-PIN gilt als Ausweg, falls es vergessen ist */
+        char saved_ssid[33] = {0}, saved_pass[65] = {0};
+        womo_ap_cfg_load(saved_ssid, sizeof(saved_ssid), saved_pass, sizeof(saved_pass));
+        ok = (strcmp(input, saved_pass) == 0);
+        memset(saved_pass, 0, sizeof(saved_pass));
+    }
     lv_textarea_set_text(s_ap_pwchk_area, "");
 
+    pwchk_lock_t *lk = &s_pwchk_lock[s_pwchk_mode];
     if (!ok) {
-        s_ap_pwchk_fails++;
-        ESP_LOGW(TAG, "AP-Wechsel: bisheriges Passwort falsch (%u/%u)",
-                 (unsigned)s_ap_pwchk_fails, (unsigned)AP_PWCHK_MAX_FAILS);
-        if (s_ap_pwchk_fails >= AP_PWCHK_MAX_FAILS) {
-            s_ap_pwchk_fails     = 0;
-            s_ap_pwchk_locked    = true;
-            s_ap_pwchk_lock_tick = lv_tick_get();
+        lk->fails++;
+        ESP_LOGW(TAG, "%s falsch (%u/%u)", s_pwchk_mode == PWCHK_SVC ? "Service-PIN" : "AP-Passwort",
+                 (unsigned)lk->fails, (unsigned)AP_PWCHK_MAX_FAILS);
+        if (lk->fails >= AP_PWCHK_MAX_FAILS) {
+            lk->fails     = 0;
+            lk->locked    = true;
+            lk->lock_tick = lv_tick_get();
             ap_pwchk_show_locked();
         } else {
             char buf[64];
-            snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_PWCHK_WRONG_FMT),
-                     (int)s_ap_pwchk_fails, AP_PWCHK_MAX_FAILS);
+            snprintf(buf, sizeof(buf),
+                     womo_locale_get_string(s_pwchk_mode == PWCHK_SVC ? STR_SVC_PIN_WRONG_FMT
+                                                                      : STR_AP_PWCHK_WRONG_FMT),
+                     (int)lk->fails, AP_PWCHK_MAX_FAILS);
             ap_pwchk_set_msg(buf);
         }
         return;
     }
 
-    s_ap_pwchk_fails = 0;
+    lk->fails = 0;
+    if (s_pwchk_mode == PWCHK_SVC) {
+        ap_pwchk_close();
+        svc_open();
+        return;
+    }
+    if (pin_ok) ESP_LOGI(TAG, "AP-Wechsel mit Service-PIN freigegeben");
     /* Netz aus dem Zeitpunkt der Abfrage, nicht eine inzwischen geänderte Auswahl */
     strlcpy(s_ap_selected_ssid, s_ap_pending_ssid, sizeof(s_ap_selected_ssid));
     char pwd[65];
@@ -1283,10 +1322,13 @@ static lv_obj_t *ap_pwchk_make_btn(lv_obj_t *parent, womo_string_id_t str, uint3
     return btn;
 }
 
-static void ap_pwchk_show(const char *old_ssid)
+/* mode PWCHK_AP: name = SSID des bisherigen Netzes; PWCHK_SVC: name ungenutzt */
+static void ap_pwchk_show(pwchk_mode_t mode, const char *name)
 {
     ap_pwchk_close();
     if (!s_overlay) return;
+    s_pwchk_mode = mode;
+    bool svc = (mode == PWCHK_SVC);
 
     /* Oben platziert, damit die Tastatur (unten) das Feld nicht verdeckt */
     s_ap_pwchk_popup = lv_obj_create(s_overlay);
@@ -1303,7 +1345,11 @@ static void ap_pwchk_show(const char *old_ssid)
     lv_obj_move_foreground(s_ap_pwchk_popup);
 
     char buf[80];
-    snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_PWCHK_TITLE_FMT), old_ssid);
+    if (svc) {
+        snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_SVC_PIN_TITLE));
+    } else {
+        snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_PWCHK_TITLE_FMT), name);
+    }
     lv_obj_t *title = lv_label_create(s_ap_pwchk_popup);
     lv_label_set_text(title, buf);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_16_german, 0);
@@ -1311,7 +1357,7 @@ static void ap_pwchk_show(const char *old_ssid)
     lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
 
     lv_obj_t *hint = lv_label_create(s_ap_pwchk_popup);
-    lv_label_set_text(hint, womo_locale_get_string(STR_AP_PWCHK_HINT));
+    lv_label_set_text(hint, womo_locale_get_string(svc ? STR_SVC_PIN_HINT : STR_AP_PWCHK_HINT));
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_12_german, 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(0x444444), 0);
 
@@ -1319,8 +1365,13 @@ static void ap_pwchk_show(const char *old_ssid)
     lv_textarea_set_one_line(s_ap_pwchk_area, true);
     lv_textarea_set_password_mode(s_ap_pwchk_area, true);
     lv_textarea_set_password_show_time(s_ap_pwchk_area, 800);
-    lv_textarea_set_placeholder_text(s_ap_pwchk_area, womo_locale_get_string(STR_AP_PWCHK_PLACEHOLDER));
-    lv_textarea_set_max_length(s_ap_pwchk_area, 64);
+    lv_textarea_set_placeholder_text(s_ap_pwchk_area,
+        womo_locale_get_string(svc ? STR_SVC_PIN_PLACEHOLDER : STR_AP_PWCHK_PLACEHOLDER));
+    lv_textarea_set_max_length(s_ap_pwchk_area, svc ? 8 : 64);
+    if (svc) lv_textarea_set_accepted_chars(s_ap_pwchk_area, "0123456789");
+    if (s_ap_keyboard) {
+        lv_keyboard_set_mode(s_ap_keyboard, svc ? LV_KEYBOARD_MODE_NUMBER : LV_KEYBOARD_MODE_TEXT_LOWER);
+    }
     lv_obj_set_width(s_ap_pwchk_area, LV_PCT(100));
     lv_obj_set_style_text_font(s_ap_pwchk_area, &lv_font_montserrat_14_german, 0);
     lv_obj_add_event_cb(s_ap_pwchk_area, ap_pwchk_area_event_cb, LV_EVENT_ALL, NULL);
@@ -1391,7 +1442,7 @@ static void ap_save_btn_cb(lv_event_t *e)
     if (need_check) {
         strlcpy(s_ap_pending_ssid, s_ap_selected_ssid, sizeof(s_ap_pending_ssid));
         strlcpy(s_ap_pending_pwd, pwd, sizeof(s_ap_pending_pwd));
-        ap_pwchk_show(saved_ssid);
+        ap_pwchk_show(PWCHK_AP, saved_ssid);
         return;
     }
     ap_start_save(pwd);
@@ -2863,18 +2914,31 @@ static void build_tab_system(lv_obj_t *tab)
     lv_obj_set_pos(s_time_info_lbl, SYS_COL2_X, 40);
     lv_obj_set_width(s_time_info_lbl, SYS_COL_W);
     system_time_info_refresh();
+}
 
-    /* Rechte Spalte unten: ESP-NOW-Kopplung (Tausch eines Boards) */
-    s_pair_title_lbl = make_section_title(tab, SYS_COL2_X, 172, SYS_COL_W, STR_PAIR_SECTION);
+/* Servicebereich (nur nach Service-PIN): ESP-NOW-Kopplung beim Tausch eines Boards */
+static void build_tab_service(lv_obj_t *tab)
+{
+    make_tab_base(tab);
+
+    s_pair_title_lbl = make_section_title(tab, 0, 0, MODAL_W - 2 * PAD, STR_PAIR_SECTION);
     s_pair_status_lbl = lv_label_create(tab);
     lv_obj_set_style_text_font(s_pair_status_lbl, &lv_font_montserrat_14_german, 0);
-    lv_obj_set_pos(s_pair_status_lbl, SYS_COL2_X, 208);
-    lv_obj_set_width(s_pair_status_lbl, SYS_COL_W);
+    lv_obj_set_pos(s_pair_status_lbl, 0, 40);
+    lv_obj_set_width(s_pair_status_lbl, MODAL_W - 2 * PAD);
     lv_label_set_long_mode(s_pair_status_lbl, LV_LABEL_LONG_DOT);
+
+    lv_obj_t *hint = lv_label_create(tab);
+    lv_label_set_text(hint, womo_locale_get_string(STR_PAIR_HINT));
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_12_german, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(0x444444), 0);
+    lv_obj_set_pos(hint, 0, 66);
+    lv_obj_set_width(hint, MODAL_W - 2 * PAD);
+    lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
 
     lv_obj_t *pair_btn = lv_btn_create(tab);
     lv_obj_set_size(pair_btn, 140, 34);
-    lv_obj_set_pos(pair_btn, SYS_COL2_X, 236);
+    lv_obj_set_pos(pair_btn, 0, 120);
     lv_obj_set_style_bg_color(pair_btn, lv_color_hex(0x1565C0), 0);
     lv_obj_set_style_radius(pair_btn, 6, 0);
     lv_obj_add_event_cb(pair_btn, pair_btn_cb, LV_EVENT_CLICKED, NULL);
@@ -2883,6 +2947,36 @@ static void build_tab_system(lv_obj_t *tab)
     lv_obj_set_style_text_font(s_pair_btn_lbl, &lv_font_montserrat_14_german, 0);
     lv_obj_center(s_pair_btn_lbl);
     pair_status_refresh();
+}
+
+/* Nach richtiger Service-PIN: Service-Tab anhängen (einmal pro Öffnen des Modals) und zeigen */
+static void svc_open(void)
+{
+    if (!s_tabview) return;
+    if (!s_svc_tab) {
+        s_svc_tab = lv_tabview_add_tab(s_tabview, womo_locale_get_string(STR_SVC_TAB));
+        build_tab_service(s_svc_tab);
+        ESP_LOGI(TAG, "Servicebereich geöffnet");
+    }
+    lv_tabview_set_active(s_tabview, TAB_COUNT, LV_ANIM_OFF);
+}
+
+/* Titel „Einstellungen“ SVC_LONGPRESS_MS gedrückt halten → Service-PIN abfragen */
+static void svc_title_event_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_PRESSED) {
+        s_svc_press_tick  = lv_tick_get();
+        s_svc_press_fired = false;
+    } else if (code == LV_EVENT_PRESSING && !s_svc_press_fired &&
+               lv_tick_elaps(s_svc_press_tick) >= SVC_LONGPRESS_MS) {
+        s_svc_press_fired = true;
+        if (s_svc_tab) {
+            svc_open();
+        } else if (!s_ap_pwchk_popup) {
+            ap_pwchk_show(PWCHK_SVC, NULL);
+        }
+    }
 }
 
 static void build_tab_ap(lv_obj_t *tab)
@@ -3043,6 +3137,9 @@ void womo_settings_modal_show(lv_obj_t *parent)
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
     lv_obj_align(title, LV_ALIGN_LEFT_MID, PAD, 0);
     s_title_lbl = title;
+    lv_obj_add_flag(title, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(title, 10);
+    lv_obj_add_event_cb(title, svc_title_event_cb, LV_EVENT_ALL, NULL);
 
     lv_obj_t *close_btn = lv_btn_create(header);
     lv_obj_set_size(close_btn, 36, 32);
@@ -3072,11 +3169,11 @@ void womo_settings_modal_show(lv_obj_t *parent)
     lv_obj_set_style_bg_opa(tab_bar, LV_OPA_COVER, 0);
     lv_obj_set_style_text_font(tab_bar, &lv_font_montserrat_14_german, 0);
 
-    /* Reihenfolge = enum TAB_*, erster Tab (AP) ist beim Öffnen aktiv */
-    lv_obj_t *tab_ap     = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_AP));
-    lv_obj_t *tab_sens   = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_SENSORS));
+    /* Reihenfolge = enum TAB_*, erster Tab (Grenzwerte) ist beim Öffnen aktiv */
     lv_obj_t *tab_thresh = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_THRESH));
+    lv_obj_t *tab_sens   = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_SENSORS));
     lv_obj_t *tab_lte    = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_LTE));
+    lv_obj_t *tab_ap     = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_AP));
     lv_obj_t *tab_sys    = lv_tabview_add_tab(tabview, womo_locale_get_string(STR_SET_TAB_SYSTEM));
 
     s_tabview = tabview;  /* für Tab-Texte bei Sprachwechsel */

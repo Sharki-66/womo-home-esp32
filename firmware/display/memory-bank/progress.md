@@ -64,8 +64,18 @@
 - [ ] Tastatur verdeckt das Popup nicht; Texte DE/EN mit Umlauten korrekt
 
 **ESP-NOW Kopplung + Verschlüsselung, `/api/cmd`-Freigabeliste (2026-10-25, nicht gebaut).** Beide Boards gemeinsam flashen. In `womo_credentials.h` müssen `WOMO_ESPNOW_PMK`/`LMK` stehen (auf diesem Rechner erzeugt, siehe `.example`).
-- [ ] Erststart (NVS ohne `espnow_peer`): beide Logs `… gekoppelt: <MAC>`, danach Daten wie gewohnt; System-Tab zeigt „Gekoppelt: <MAC>“
-- [ ] Neustart je Board: Log `… Peer aus NVS`, Verbindung ohne neue Kopplung
+- [ ] Erststart (NVS ohne `espnow_peer`): beide Logs `… gekoppelt: <MAC>`, danach Daten wie gewohnt; Service-Tab zeigt „Gekoppelt: <MAC>“ (2026-10-25: Boards laufen nach Flash → Kopplung und Verschlüsselung funktionieren grundsätzlich)
+
+**Servicebereich (2026-10-25, auf Hardware teilweise getestet).**
+- [x] Tabs in der Reihenfolge Grenzwerte | Sensoren | LTE | AP | System, Grenzwerte beim Öffnen aktiv (2026-10-25)
+- [x] Titel „Einstellungen“ 5 s drücken → Dialog „Service-PIN“ mit Ziffernfeld (2026-10-25; Geste gilt für den Schriftzug im Modal-Kopf, nicht das Zahnrad)
+- [x] Richtige Service-PIN → Tab „Service“ erscheint und ist aktiv; Modal schließen und wieder öffnen → Tab weg (2026-10-25)
+- [ ] 3× falsche PIN → „gesperrt, noch N s“; die AP-Abfrage ist davon nicht gesperrt
+- [ ] AP-Wechsel: im Dialog „Passwort von <alt>“ wird statt des alten Passworts auch die Service-PIN akzeptiert (Log `mit Service-PIN freigegeben`)
+- [ ] Nach der PIN-Abfrage hat die AP-Passworteingabe wieder die normale Buchstaben-Tastatur
+- [ ] Sprachwechsel bei geöffnetem Service-Tab: Tab-Titel und Texte wechseln
+- [x] Neustart Display: Kopplung aus NVS, Verbindung ohne neue Kopplung (2026-10-25, nach Bugfix Boot-Schleife)
+- [ ] Neustart Sensorboard: Log `Display-Peer aus NVS`, Verbindung ohne neue Kopplung
 - [ ] Display aus: Sensorboard beginnt nach 10 s mit Beacons (Log ggf. auf DEBUG), Display wieder an → Verbindung kommt zurück
 - [ ] „Neu koppeln“ bei laufender Verbindung: Restzeit erscheint und verschwindet nach ≤ 2 s (erster verschlüsselter Frame)
 - [ ] Tausch simulieren: Sensorboard-NVS-Eintrag `espnow_peer` löschen oder zweites Board → am Display „Neu koppeln“ → neue MAC

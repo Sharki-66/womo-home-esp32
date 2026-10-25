@@ -79,18 +79,17 @@ static esp_err_t peer_add_encrypted(const uint8_t mac[6])
     return esp_now_add_peer(&peer);
 }
 
-static void peer_load(void)
+/* NVS nur aus Tasks mit internem Stack (espnow_rx_task): NVS schaltet den
+ * Flash-Cache ab, ein PSRAM-Stack (z. B. sensorboard_init_task) führt dann zum
+ * Assert esp_task_stack_is_sane_cache_disabled. */
+static bool peer_load(uint8_t mac[6])
 {
     nvs_handle_t h;
-    if (nvs_open(WOMO_ESPNOW_PEER_NVS_NS, NVS_READONLY, &h) != ESP_OK) return;
-    uint8_t mac[6];
-    size_t len = sizeof(mac);
-    if (nvs_get_blob(h, WOMO_ESPNOW_PEER_NVS_KEY, mac, &len) == ESP_OK && len == sizeof(mac)) {
-        memcpy(s_peer_mac, mac, 6);
-        s_peer_known = true;
-        ESP_LOGI(TAG, "Sensorboard-Peer aus NVS: " MACSTR, MAC2STR(mac));
-    }
+    if (nvs_open(WOMO_ESPNOW_PEER_NVS_NS, NVS_READONLY, &h) != ESP_OK) return false;
+    size_t len = 6;
+    bool ok = nvs_get_blob(h, WOMO_ESPNOW_PEER_NVS_KEY, mac, &len) == ESP_OK && len == 6;
     nvs_close(h);
+    return ok;
 }
 
 static void peer_save(const uint8_t mac[6])
@@ -198,6 +197,24 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info,
 
 static void espnow_rx_task(void *arg)
 {
+    // Gekoppeltes Sensorboard hier laden, nicht in womo_espnow_init():
+    // Aufrufer dort ist sensorboard_init_task mit Stack im PSRAM (siehe peer_load)
+    uint8_t mac[6];
+    if (peer_load(mac)) {
+        // Erst als verschlüsselten Peer eintragen, dann freigeben (Senden läuft parallel)
+        esp_err_t err = peer_add_encrypted(mac);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_now_add_peer: %s", esp_err_to_name(err));
+        }
+        taskENTER_CRITICAL(&s_peer_lock);
+        memcpy(s_peer_mac, mac, 6);
+        s_peer_known = true;
+        taskEXIT_CRITICAL(&s_peer_lock);
+        ESP_LOGI(TAG, "Sensorboard-Peer aus NVS: " MACSTR, MAC2STR(mac));
+    } else {
+        ESP_LOGW(TAG, "Kein Sensorboard gekoppelt – Kopplungsfenster offen");
+    }
+
     espnow_rx_item_t item;
     while (true) {
         if (xQueueReceive(s_recv_queue, &item, portMAX_DELAY) == pdTRUE) {
@@ -246,16 +263,6 @@ esp_err_t womo_espnow_init(void)
     bc.channel = 0;
     bc.encrypt = false;
     esp_now_add_peer(&bc);
-
-    peer_load();
-    if (s_peer_known) {
-        err = peer_add_encrypted(s_peer_mac);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "esp_now_add_peer: %s", esp_err_to_name(err));
-        }
-    } else {
-        ESP_LOGW(TAG, "Kein Sensorboard gekoppelt – Kopplungsfenster offen");
-    }
 
     s_recv_queue = xQueueCreate(WOMO_ESPNOW_RECV_QUEUE_LEN, sizeof(espnow_rx_item_t));
     if (!s_recv_queue) return ESP_ERR_NO_MEM;

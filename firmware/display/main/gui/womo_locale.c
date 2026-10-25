@@ -289,6 +289,12 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_PAIR_PAIRED_FMT]         = "Gekoppelt: %s",
         [STR_PAIR_ACTIVE_FMT]         = "Kopplung aktiv, noch %d s",
         [STR_PAIR_NONE]               = "Nicht gekoppelt – suche Sensorboard …",
+        [STR_PAIR_HINT]               = "Nur beim Tausch des Sensorboards: altes Board ausschalten, neues einschalten, dann „Neu koppeln“ (Fenster 60 s). Ein neues Display koppelt sich selbst.",
+        [STR_SVC_TAB]                 = "Service",
+        [STR_SVC_PIN_TITLE]           = "Service-PIN eingeben",
+        [STR_SVC_PIN_HINT]            = "Zugang zum Servicebereich.",
+        [STR_SVC_PIN_PLACEHOLDER]     = "PIN",
+        [STR_SVC_PIN_WRONG_FMT]       = "PIN falsch (%d von %d)",
     },
     // English strings
     {
@@ -562,6 +568,12 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_PAIR_PAIRED_FMT]         = "Paired: %s",
         [STR_PAIR_ACTIVE_FMT]         = "Pairing active, %d s left",
         [STR_PAIR_NONE]               = "Not paired – searching sensor board …",
+        [STR_PAIR_HINT]               = "Only when replacing the sensor board: switch off the old board, switch on the new one, then \"Pair again\" (60 s window). A new display pairs by itself.",
+        [STR_SVC_TAB]                 = "Service",
+        [STR_SVC_PIN_TITLE]           = "Enter service PIN",
+        [STR_SVC_PIN_HINT]            = "Access to the service area.",
+        [STR_SVC_PIN_PLACEHOLDER]     = "PIN",
+        [STR_SVC_PIN_WRONG_FMT]       = "Wrong PIN (%d of %d)",
     }
 };
 

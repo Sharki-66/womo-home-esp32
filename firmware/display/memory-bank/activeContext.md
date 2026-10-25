@@ -1,5 +1,13 @@
 # Active Context — WoMoHome Display
 
+## Bugfix: Boot-Schleife durch NVS im PSRAM-Task (2026-10-25, auf Hardware getestet)
+
+Nach dem ESP-NOW-Umbau startete das Display ab dem zweiten Boot immer wieder neu (Assert `esp_task_stack_is_sane_cache_disabled` in `peer_load` → `womo_espnow_init` → `sensorboard_init_task`, dessen Stack im PSRAM liegt). Erster Boot lief, weil der NVS-Namespace noch fehlte. Fix: Kopplung wird am Anfang von `espnow_rx_task` (interner Stack) geladen, erst als Peer eingetragen und dann freigegeben. Sensorboard nicht betroffen (`app_main`, keine PSRAM-Stacks).
+
+## Servicebereich in den Einstellungen (2026-10-25, auf Hardware getestet: Geste, PIN, Tab-Reihenfolge)
+
+Entscheidung: Die Kopplung ist eine Servicefunktion und braucht Geste + PIN (S1/P1, `WOMO_SERVICE_PIN` nur in der lokalen `womo_credentials.h`). Der AP-Tab bleibt eine Kundenfunktion (V1): Der Kunde muss das WLAN bei eigenem Router oder geändertem Router-Passwort selbst setzen, Schutz ist die Abfrage des alten Passworts, die Service-PIN gilt als Ausweg. Neue Tab-Reihenfolge Grenzwerte | Sensoren | LTE | AP | System. Service-Tab nur nach PIN (`svc_open`). Tests: `progress.md`.
+
 ## Sicherheit: ESP-NOW koppeln + verschlüsseln, `/api/cmd` beschränkt (2026-10-25, nicht gebaut)
 
 Entscheidungen: H1 (HTTP nur `radio_*`, `gas_bottle_replace`, `imu_zero`; auch kein `pwr_12v_*`), E0 (Gegenstelle fest im NVS `espnow_peer`, fremde MACs verworfen), E1 (CCMP mit PMK/LMK aus `womo_credentials.h`), K1 (Kopplung beim ersten Kontakt, am Display „Neu koppeln“ 60 s, Sensorboard koppelt neu, wenn das Display 10 s schweigt). Broadcast trägt nur den Beacon `{"type":"pair"}`. Verworfen: HMAC (keine Vertraulichkeit, Frame-Größe), HTTPS (Aufwand/RAM), PIN (vorerst). Bekannte Lücke: Koppelt sich während eines offenen Sensorboard-Fensters ein Fremdgerät, bleibt das Sensorboard bei ihm, bis am Display „Neu koppeln“ gedrückt wird (Fremdgerät kann ohne Schlüssel nichts lesen/senden). Tests: `progress.md`.
