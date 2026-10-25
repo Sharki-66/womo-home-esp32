@@ -19,6 +19,7 @@
 #include "../time/womo_time.h"
 #include "../sensorboard/womo_sensorboard.h"
 #include "../espnow/womo_espnow.h"
+#include "womo_display_cfg.h"
 #include "../hardware/buzzer.h"
 #include "../hardware/lvgl_port.h"
 #include "../network/womo_wifi.h"
@@ -106,7 +107,13 @@ static struct {
 static lv_obj_t *s_ap_keyboard        = NULL;
 static lv_obj_t *s_ap_saved_lbl       = NULL;  /* Gespeicherte SSID anzeigen */
 static lv_obj_t *s_ap_sb_lbl          = NULL;  /* WLAN-Verbindung des Sensorboards */
-static lv_obj_t *s_pair_title_lbl     = NULL;  /* System-Tab: ESP-NOW-Kopplung */
+static lv_obj_t *s_disp_title_lbl     = NULL;  /* System-Tab: Abschnitt Display */
+static lv_obj_t *s_disp_auto_lbl      = NULL;
+static lv_obj_t *s_disp_auto_val_lbl  = NULL;
+static lv_obj_t *s_disp_wake_lbl      = NULL;
+static lv_obj_t *s_disp_wake_btn[WOMO_DISP_WAKE_COUNT];
+static lv_obj_t *s_disp_wake_btn_lbl[WOMO_DISP_WAKE_COUNT];
+static lv_obj_t *s_pair_title_lbl     = NULL;  /* Service-Tab: ESP-NOW-Kopplung */
 static lv_obj_t *s_pair_status_lbl    = NULL;
 static lv_obj_t *s_pair_btn_lbl       = NULL;
 static lv_obj_t *s_ap_scan_btn        = NULL;
@@ -140,6 +147,8 @@ typedef enum {
 } pwchk_mode_t;
 static pwchk_lock_t s_pwchk_lock[2]   = {0};   /* je Modus eigene Sperre */
 static pwchk_mode_t s_pwchk_mode      = PWCHK_AP;
+static lv_obj_t    *s_ap_pwchk_ok_btn = NULL;  /* „Bestätigen“, während der Sperre deaktiviert */
+static uint32_t     s_pwchk_shown_s   = 0;     /* zuletzt angezeigte Restsperre (Countdown) */
 /* Servicebereich: Tab erst nach PIN angelegt, mit dem Modal wieder weg */
 static lv_obj_t *s_svc_tab            = NULL;
 static uint32_t  s_svc_press_tick     = 0;
@@ -393,7 +402,57 @@ static void set_btn_str(lv_obj_t *btn, womo_string_id_t id)
     if (btn) set_label_str(lv_obj_get_child(btn, 0), id);
 }
 
-/* System-Tab: Status der ESP-NOW-Kopplung */
+/* System-Tab: Abschnitt Display (Werte + Auswahl-Hervorhebung) */
+static const womo_string_id_t s_disp_wake_str[WOMO_DISP_WAKE_COUNT] = {
+    STR_DISP_WAKE_NEVER, STR_DISP_WAKE_ALARM, STR_DISP_WAKE_ALL,
+};
+
+static void disp_refresh(void)
+{
+    womo_disp_cfg_t cfg;
+    womo_disp_cfg_get(&cfg);
+    if (s_disp_auto_val_lbl) {
+        char buf[32];
+        if (cfg.auto_off_min == 0) {
+            snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_DISP_AUTO_OFF_DISABLED));
+        } else {
+            snprintf(buf, sizeof(buf), womo_locale_get_string(STR_DISP_AUTO_OFF_FMT), (int)cfg.auto_off_min);
+        }
+        lv_label_set_text(s_disp_auto_val_lbl, buf);
+    }
+    for (int i = 0; i < WOMO_DISP_WAKE_COUNT; i++) {
+        if (!s_disp_wake_btn[i]) continue;
+        bool sel = (cfg.wake == i);
+        lv_obj_set_style_bg_color(s_disp_wake_btn[i], lv_color_hex(sel ? 0x1565C0 : 0xC0C0C0), 0);
+        if (s_disp_wake_btn_lbl[i]) {
+            lv_label_set_text(s_disp_wake_btn_lbl[i], womo_locale_get_string(s_disp_wake_str[i]));
+            lv_obj_set_style_text_color(s_disp_wake_btn_lbl[i], sel ? lv_color_white() : lv_color_black(), 0);
+        }
+    }
+}
+
+static void disp_auto_step_cb(lv_event_t *e)
+{
+    int dir = (int)(intptr_t)lv_event_get_user_data(e);
+    womo_disp_cfg_t cfg;
+    womo_disp_cfg_get(&cfg);
+    int v = (int)cfg.auto_off_min + dir;
+    if (v < 0 || v > WOMO_DISP_AUTO_OFF_MAX_MIN) return;
+    cfg.auto_off_min = (uint8_t)v;
+    womo_disp_cfg_set(&cfg);
+    disp_refresh();
+}
+
+static void disp_wake_cb(lv_event_t *e)
+{
+    womo_disp_cfg_t cfg;
+    womo_disp_cfg_get(&cfg);
+    cfg.wake = (uint8_t)(intptr_t)lv_event_get_user_data(e);
+    womo_disp_cfg_set(&cfg);
+    disp_refresh();
+}
+
+/* Service-Tab: Status der ESP-NOW-Kopplung */
 static void pair_status_refresh(void)
 {
     if (!s_pair_status_lbl) return;
@@ -446,6 +505,10 @@ static void settings_locale_cb(void)
     set_label_str(s_lang_title_lbl,  STR_LANG_SECTION);
     set_label_str(s_time_title_lbl,  STR_TIME_SECTION);
     set_label_str(s_pair_title_lbl,  STR_PAIR_SECTION);
+    set_label_str(s_disp_title_lbl,  STR_DISP_SECTION);
+    set_label_str(s_disp_auto_lbl,   STR_DISP_AUTO_OFF);
+    set_label_str(s_disp_wake_lbl,   STR_DISP_WAKE);
+    disp_refresh();
     set_label_str(s_pair_btn_lbl,    STR_PAIR_BTN);
     pair_status_refresh();
     if (s_btn_tones) sound_btn_update(s_btn_tones, display_buzzer_is_enabled());
@@ -679,6 +742,8 @@ static void close_modal(void)
     s_panel            = NULL;
     s_title_lbl        = NULL;
     s_svc_tab          = NULL;
+    s_ap_pwchk_ok_btn  = NULL;
+    s_pwchk_shown_s    = 0;
     s_thr_title_lbl    = NULL;
     s_warn_hdr_lbl     = NULL;
     s_row_lbl[0]       = NULL;
@@ -694,6 +759,12 @@ static void close_modal(void)
     s_time_title_lbl   = NULL;
     s_time_info_lbl    = NULL;
     s_pair_title_lbl   = NULL;
+    s_disp_title_lbl   = NULL;
+    s_disp_auto_lbl    = NULL;
+    s_disp_auto_val_lbl = NULL;
+    s_disp_wake_lbl    = NULL;
+    memset(s_disp_wake_btn, 0, sizeof(s_disp_wake_btn));
+    memset(s_disp_wake_btn_lbl, 0, sizeof(s_disp_wake_btn_lbl));
     s_pair_status_lbl  = NULL;
     s_pair_btn_lbl     = NULL;
     s_ruuvi_title_lbl  = NULL;
@@ -1193,17 +1264,43 @@ static uint32_t ap_pwchk_lock_remaining_s(void)
     return (AP_PWCHK_LOCK_MS - elapsed + 999) / 1000;
 }
 
+/* Meldung im Popup: Fehler/Sperre rot, „wieder möglich“ grün */
+static void ap_pwchk_set_msg_col(const char *text, uint32_t col)
+{
+    if (!s_ap_pwchk_msg) return;
+    lv_label_set_text(s_ap_pwchk_msg, text ? text : "");
+    lv_obj_set_style_text_color(s_ap_pwchk_msg, lv_color_hex(col), 0);
+}
+
 static void ap_pwchk_set_msg(const char *text)
 {
-    if (s_ap_pwchk_msg) lv_label_set_text(s_ap_pwchk_msg, text ? text : "");
+    ap_pwchk_set_msg_col(text, 0xC62828);
 }
 
 static void ap_pwchk_show_locked(void)
 {
+    s_pwchk_shown_s = ap_pwchk_lock_remaining_s();
     char buf[80];
-    snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_PWCHK_LOCKED_FMT),
-             (int)ap_pwchk_lock_remaining_s());
+    snprintf(buf, sizeof(buf), womo_locale_get_string(STR_AP_PWCHK_LOCKED_FMT), (int)s_pwchk_shown_s);
     ap_pwchk_set_msg(buf);
+    if (s_ap_pwchk_ok_btn) lv_obj_add_state(s_ap_pwchk_ok_btn, LV_STATE_DISABLED);
+}
+
+/* Aus rtc_poll_timer_cb (100 ms): Sperre im offenen Popup sekundengenau herunterzählen */
+static void ap_pwchk_tick(void)
+{
+    if (!s_ap_pwchk_popup || !s_ap_pwchk_area) return;
+    bool was_locked = s_pwchk_lock[s_pwchk_mode].locked;
+    uint32_t left = ap_pwchk_lock_remaining_s();     /* hebt die Sperre bei Ablauf auf */
+    if (left > 0) {
+        if (left != s_pwchk_shown_s) ap_pwchk_show_locked();
+    } else if (was_locked || s_pwchk_shown_s > 0) {
+        s_pwchk_shown_s = 0;
+        ap_pwchk_set_msg_col(womo_locale_get_string(STR_AP_PWCHK_UNLOCKED), 0x2E7D32);
+        if (s_ap_pwchk_ok_btn) lv_obj_clear_state(s_ap_pwchk_ok_btn, LV_STATE_DISABLED);
+        lv_obj_add_state(s_ap_pwchk_area, LV_STATE_FOCUSED);
+        lv_obj_send_event(s_ap_pwchk_area, LV_EVENT_FOCUSED, NULL);
+    }
 }
 
 static void ap_pwchk_close(void)
@@ -1213,9 +1310,11 @@ static void ap_pwchk_close(void)
     if (s_ap_pwchk_popup) {
         /* async: Aufruf kommt aus Events von Kindobjekten des Popups */
         lv_obj_delete_async(s_ap_pwchk_popup);
-        s_ap_pwchk_popup = NULL;
-        s_ap_pwchk_area  = NULL;
-        s_ap_pwchk_msg   = NULL;
+        s_ap_pwchk_popup  = NULL;
+        s_ap_pwchk_area   = NULL;
+        s_ap_pwchk_msg    = NULL;
+        s_ap_pwchk_ok_btn = NULL;
+        s_pwchk_shown_s   = 0;
     }
 }
 
@@ -1388,7 +1487,7 @@ static void ap_pwchk_show(pwchk_mode_t mode, const char *name)
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(row, 10, 0);
     ap_pwchk_make_btn(row, STR_AP_PWCHK_CANCEL,  0x757575, ap_pwchk_cancel_cb);
-    ap_pwchk_make_btn(row, STR_AP_PWCHK_CONFIRM, 0x2E7D32, ap_pwchk_confirm_cb);
+    s_ap_pwchk_ok_btn = ap_pwchk_make_btn(row, STR_AP_PWCHK_CONFIRM, 0x2E7D32, ap_pwchk_confirm_cb);
 
     if (ap_pwchk_lock_remaining_s() > 0) {
         ap_pwchk_show_locked();
@@ -1488,7 +1587,7 @@ static lv_obj_t *make_section_title(lv_obj_t *parent, int x, int y, int w, womo_
     return title;
 }
 
-/* Sprachwahl als Abschnitt im System-Tab (Buttons 48 px hoch, ab y + 38) */
+/* Sprachwahl als Abschnitt im System-Tab (Buttons untereinander, 36 px hoch, ab y + 38) */
 static void build_lang_section(lv_obj_t *tab, int x, int y, int w)
 {
     s_lang_title_lbl = make_section_title(tab, x, y, w, STR_LANG_SECTION);
@@ -1496,7 +1595,7 @@ static void build_lang_section(lv_obj_t *tab, int x, int y, int w)
     bool is_de = (womo_locale_get() == WOMO_LOCALE_DE);
 
     lv_obj_t *btn_de = lv_btn_create(tab);
-    lv_obj_set_size(btn_de, 120, 48);
+    lv_obj_set_size(btn_de, 150, 36);
     lv_obj_set_pos(btn_de, x, y + 38);
     lv_obj_set_style_bg_color(btn_de, is_de ? lv_color_hex(0x1565C0) : lv_color_hex(0xC0C0C0), 0);
     lv_obj_set_style_radius(btn_de, 8, 0);
@@ -1508,8 +1607,8 @@ static void build_lang_section(lv_obj_t *tab, int x, int y, int w)
     lv_obj_center(lbl_de);
 
     lv_obj_t *btn_en = lv_btn_create(tab);
-    lv_obj_set_size(btn_en, 120, 48);
-    lv_obj_set_pos(btn_en, x + 136, y + 38);
+    lv_obj_set_size(btn_en, 150, 36);
+    lv_obj_set_pos(btn_en, x, y + 82);   /* unter Deutsch */
     lv_obj_set_style_bg_color(btn_en, !is_de ? lv_color_hex(0x1565C0) : lv_color_hex(0xC0C0C0), 0);
     lv_obj_set_style_radius(btn_en, 8, 0);
     lv_obj_set_style_border_width(btn_en, 0, 0);
@@ -2416,6 +2515,8 @@ static void rtc_poll_timer_cb(lv_timer_t *t)
     if (have_cal)   gbw_on_cal_result(cal_zero, cal_ok, cal_err);
     if (s_gbw_state != GBW_OFF) gbw_tick();
 
+    ap_pwchk_tick();
+
     if (lv_tick_elaps(last_label_refresh) >= 2000) {
         last_label_refresh = lv_tick_get();
         gasbee_refresh_labels();
@@ -2866,8 +2967,12 @@ static void build_tab_lte(lv_obj_t *tab)
 }
 
 /* System-Tab, zwei Spalten: links Töne + Sprache, rechts Zeit / RTC */
-#define SYS_COL_W   290
-#define SYS_COL2_X  (MODAL_W - 2 * PAD - SYS_COL_W)
+/* Drei Spalten Töne | Sprache | Zeit / RTC, darunter Display über die ganze Breite */
+#define SYS_COL_W    190
+#define SYS_COL_GAP  ((MODAL_W - 2 * PAD - 3 * SYS_COL_W) / 2)
+#define SYS_COL2_X   (SYS_COL_W + SYS_COL_GAP)
+#define SYS_COL3_X   (2 * (SYS_COL_W + SYS_COL_GAP))
+#define SYS_DISP_Y   172
 
 static lv_obj_t *make_sound_row(lv_obj_t *tab, int y, womo_string_id_t name,
                                 lv_obj_t **name_out, bool on, lv_event_cb_t cb)
@@ -2881,7 +2986,7 @@ static lv_obj_t *make_sound_row(lv_obj_t *tab, int y, womo_string_id_t name,
 
     lv_obj_t *btn = lv_btn_create(tab);
     lv_obj_set_size(btn, 64, 30);
-    lv_obj_set_pos(btn, 164, y);
+    lv_obj_set_pos(btn, SYS_COL_W - 64, y);   /* rechtsbündig in der Spalte */
     lv_obj_set_style_radius(btn, 6, 0);
     lv_obj_set_style_border_width(btn, 0, 0);
     lv_obj_set_style_pad_all(btn, 0, 0);
@@ -2897,23 +3002,57 @@ static void build_tab_system(lv_obj_t *tab)
 {
     make_tab_base(tab);
 
-    /* Linke Spalte: Töne (y 0) + Sprache (y 134) */
+    /* Spalte 1: Töne */
     s_sound_title_lbl = make_section_title(tab, 0, 0, SYS_COL_W, STR_SOUND_SECTION);
     s_btn_tones = make_sound_row(tab, 40, STR_SOUND_TONES, &s_tones_lbl,
                                  display_buzzer_is_enabled(), sound_tones_cb);
     s_btn_touch = make_sound_row(tab, 86, STR_SOUND_TOUCH_CLICK, &s_touch_lbl,
                                  display_buzzer_is_click_enabled(), sound_touch_cb);
 
-    build_lang_section(tab, 0, 134, SYS_COL_W);
+    /* Spalte 2: Sprache */
+    build_lang_section(tab, SYS_COL2_X, 0, SYS_COL_W);
 
-    /* Rechte Spalte: Zeit / RTC */
-    s_time_title_lbl = make_section_title(tab, SYS_COL2_X, 0, SYS_COL_W, STR_TIME_SECTION);
+    /* Spalte 3: Zeit / RTC (lange Zeilen brechen um) */
+    s_time_title_lbl = make_section_title(tab, SYS_COL3_X, 0, SYS_COL_W, STR_TIME_SECTION);
     s_time_info_lbl = lv_label_create(tab);
     lv_obj_set_style_text_font(s_time_info_lbl, &lv_font_montserrat_14_german, 0);
     lv_obj_set_style_text_color(s_time_info_lbl, lv_color_hex(0x444444), 0);
-    lv_obj_set_pos(s_time_info_lbl, SYS_COL2_X, 40);
+    lv_obj_set_pos(s_time_info_lbl, SYS_COL3_X, 40);
     lv_obj_set_width(s_time_info_lbl, SYS_COL_W);
+    lv_label_set_long_mode(s_time_info_lbl, LV_LABEL_LONG_WRAP);
     system_time_info_refresh();
+
+    /* Darunter über die ganze Breite: Display */
+    const int w   = MODAL_W - 2 * PAD;
+    const int y0  = SYS_DISP_Y;
+    const int xc  = 250;   /* Spalte der Bedienelemente */
+    s_disp_title_lbl = make_section_title(tab, 0, y0, w, STR_DISP_SECTION);
+
+    s_disp_auto_lbl = lte_make_label(tab, 0, y0 + 40, xc - 10, 0x333333);
+    lv_label_set_text(s_disp_auto_lbl, womo_locale_get_string(STR_DISP_AUTO_OFF));
+    lte_make_sym_btn(tab, xc, y0 + 36, 0x1565C0, LV_SYMBOL_MINUS, disp_auto_step_cb, (void *)(intptr_t)-1);
+    s_disp_auto_val_lbl = lte_make_label(tab, xc + 34, y0 + 40, 110, 0x333333);
+    lv_obj_set_style_text_align(s_disp_auto_val_lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lte_make_sym_btn(tab, xc + 152, y0 + 36, 0x1565C0, LV_SYMBOL_PLUS, disp_auto_step_cb, (void *)(intptr_t)1);
+
+    s_disp_wake_lbl = lte_make_label(tab, 0, y0 + 82, xc - 10, 0x333333);
+    lv_label_set_text(s_disp_wake_lbl, womo_locale_get_string(STR_DISP_WAKE));
+    static const int wake_w[WOMO_DISP_WAKE_COUNT] = { 80, 110, 150 };
+    int x = xc;
+    for (int i = 0; i < WOMO_DISP_WAKE_COUNT; i++) {
+        lv_obj_t *btn = lv_btn_create(tab);
+        lv_obj_set_size(btn, wake_w[i], 32);
+        lv_obj_set_pos(btn, x, y0 + 74);
+        lv_obj_set_style_radius(btn, 8, 0);
+        lv_obj_set_style_border_width(btn, 0, 0);
+        lv_obj_add_event_cb(btn, disp_wake_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        s_disp_wake_btn_lbl[i] = lv_label_create(btn);
+        lv_obj_set_style_text_font(s_disp_wake_btn_lbl[i], &lv_font_montserrat_14_german, 0);
+        lv_obj_center(s_disp_wake_btn_lbl[i]);
+        s_disp_wake_btn[i] = btn;
+        x += wake_w[i] + 8;
+    }
+    disp_refresh();
 }
 
 /* Servicebereich (nur nach Service-PIN): ESP-NOW-Kopplung beim Tausch eines Boards */

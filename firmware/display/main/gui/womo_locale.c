@@ -281,6 +281,7 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_AP_PWCHK_HINT]           = "Zum Wechseln des Netzes das bisherige Passwort bestätigen.",
         [STR_AP_PWCHK_WRONG_FMT]      = "Passwort falsch (%d von %d)",
         [STR_AP_PWCHK_LOCKED_FMT]     = "Zu viele Fehlversuche – gesperrt, noch %d s",
+        [STR_AP_PWCHK_UNLOCKED]       = "Wieder möglich – bitte erneut eingeben",
         [STR_AP_PWCHK_CONFIRM]        = "Bestätigen",
         [STR_AP_PWCHK_CANCEL]         = "Abbrechen",
         [STR_AP_PWCHK_PLACEHOLDER]    = "Bisheriges Passwort",
@@ -295,6 +296,14 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_SVC_PIN_HINT]            = "Zugang zum Servicebereich.",
         [STR_SVC_PIN_PLACEHOLDER]     = "PIN",
         [STR_SVC_PIN_WRONG_FMT]       = "PIN falsch (%d von %d)",
+        [STR_DISP_SECTION]            = "Display",
+        [STR_DISP_AUTO_OFF]           = "Display-Aus-Automatik",
+        [STR_DISP_AUTO_OFF_DISABLED]  = "deaktiviert",
+        [STR_DISP_AUTO_OFF_FMT]       = "nach %d min",
+        [STR_DISP_WAKE]               = "Bei Meldung einschalten",
+        [STR_DISP_WAKE_NEVER]         = "Nie",
+        [STR_DISP_WAKE_ALARM]         = "Nur Alarm",
+        [STR_DISP_WAKE_ALL]           = "Warnung + Alarm",
     },
     // English strings
     {
@@ -560,6 +569,7 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_AP_PWCHK_HINT]           = "Confirm the current password to change the network.",
         [STR_AP_PWCHK_WRONG_FMT]      = "Wrong password (%d of %d)",
         [STR_AP_PWCHK_LOCKED_FMT]     = "Too many attempts – locked, %d s left",
+        [STR_AP_PWCHK_UNLOCKED]       = "Possible again – please try again",
         [STR_AP_PWCHK_CONFIRM]        = "Confirm",
         [STR_AP_PWCHK_CANCEL]         = "Cancel",
         [STR_AP_PWCHK_PLACEHOLDER]    = "Current password",
@@ -574,6 +584,14 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_SVC_PIN_HINT]            = "Access to the service area.",
         [STR_SVC_PIN_PLACEHOLDER]     = "PIN",
         [STR_SVC_PIN_WRONG_FMT]       = "Wrong PIN (%d of %d)",
+        [STR_DISP_SECTION]            = "Display",
+        [STR_DISP_AUTO_OFF]           = "Display auto-off",
+        [STR_DISP_AUTO_OFF_DISABLED]  = "disabled",
+        [STR_DISP_AUTO_OFF_FMT]       = "after %d min",
+        [STR_DISP_WAKE]               = "Turn on for message",
+        [STR_DISP_WAKE_NEVER]         = "Never",
+        [STR_DISP_WAKE_ALARM]         = "Alarm only",
+        [STR_DISP_WAKE_ALL]           = "Warning + alarm",
     }
 };
 

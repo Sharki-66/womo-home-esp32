@@ -66,6 +66,7 @@ static const char *PLACEHOLDER_GPS = "GPS : ---";
 
 #include "gui/womo_thresholds.h"
 #include "gui/womo_tariff.h"
+#include "gui/womo_display_cfg.h"
 /* lodepng nicht mehr benötigt – Screenshot schreibt BMP ohne Zwischenpuffer */
 
 // Default thresholds werden jetzt über womo_thresholds.h verwaltet (veränderbar via Einstellungen)
@@ -136,7 +137,7 @@ static bool gps_details_visible = false;
 static lv_timer_t *gps_hide_timer = NULL;
 static lv_obj_t *gps_popup_panel = NULL;      // Separates Detail-Panel neben GPS-Button
 static lv_obj_t *gps_popup_text_label = NULL; // Text-Label im GPS-Popup-Panel
-static lv_timer_t *backlight_quiet_timer = NULL;
+static lv_timer_t *backlight_idle_timer = NULL;   // Display-Aus nach Inaktivität (Ruhezeit + Display-Aus-Automatik)
 static bool quiet_hours_active = false;
 static lv_obj_t *bg_img = NULL;       // Background image widget
 static int bg_last_day_state = -1;   // -1 unknown, 0 night, 1 day (aktuell angezeigt)
@@ -335,8 +336,8 @@ static void update_radio_icon(lv_color_t color, bool active);
 static void update_shore_icon(lv_color_t color, bool active);
 static void shore_power_update_label(void);
 static void log_runtime_heap_stats(void);
-static void backlight_start_quiet_timer(void);
-static void backlight_stop_quiet_timer(void);
+static void backlight_start_idle_timer(void);
+static void backlight_stop_idle_timer(void);
 static void wifi_autoretry_task(void *arg);
 static void router_poll_task(void *arg);
 #if WOMO_ENABLE_SCREENSHOT
@@ -725,31 +726,71 @@ static void geocode_trigger_if_needed(const womo_sensor_data_t *snapshot)
     }
 }
 
-static void backlight_quiet_timer_cb(lv_timer_t *timer)
+/* Zeit bis Display-Aus, 0 = kein Auto-Aus. Ruhezeit: QUIET_TOUCH_TIMEOUT_MS,
+ * oder die Display-Aus-Automatik, wenn sie kürzer ist. */
+static uint32_t backlight_idle_timeout_ms(void)
+{
+    womo_disp_cfg_t cfg;
+    womo_disp_cfg_get(&cfg);
+    uint32_t cfg_ms = (uint32_t)cfg.auto_off_min * 60U * 1000U;
+    if (quiet_hours_active) {
+        return (cfg_ms != 0 && cfg_ms < QUIET_TOUCH_TIMEOUT_MS) ? cfg_ms : QUIET_TOUCH_TIMEOUT_MS;
+    }
+    return cfg_ms;
+}
+
+static void backlight_idle_timer_cb(lv_timer_t *timer)
 {
     (void)timer;
-    ESP_LOGI(TAG, "Backlight quiet timer fired (quiet_hours=%d, backlight_on=%d)", quiet_hours_active, backlight_on);
+    ESP_LOGI(TAG, "Backlight idle timer fired (quiet_hours=%d, backlight_on=%d)", quiet_hours_active, backlight_on);
     backlight_set(false);
+    backlight_stop_idle_timer();
 }
 
-static void backlight_start_quiet_timer(void)
+/* (Neu-)Start bei jeder Berührung bzw. nach Einschalten; ohne Auto-Aus wird gestoppt */
+static void backlight_start_idle_timer(void)
 {
-    if (backlight_quiet_timer == NULL) {
-        backlight_quiet_timer = lv_timer_create(backlight_quiet_timer_cb, QUIET_TOUCH_TIMEOUT_MS, NULL);
-        ESP_LOGI(TAG, "Backlight quiet timer started (%u ms)", (unsigned)QUIET_TOUCH_TIMEOUT_MS);
+    uint32_t ms = backlight_idle_timeout_ms();
+    if (ms == 0) {
+        backlight_stop_idle_timer();
+        return;
+    }
+    if (backlight_idle_timer == NULL) {
+        backlight_idle_timer = lv_timer_create(backlight_idle_timer_cb, ms, NULL);
+        ESP_LOGI(TAG, "Backlight idle timer started (%u ms)", (unsigned)ms);
     } else {
-        lv_timer_set_period(backlight_quiet_timer, QUIET_TOUCH_TIMEOUT_MS);
-        lv_timer_reset(backlight_quiet_timer);
-        ESP_LOGI(TAG, "Backlight quiet timer reset (%u ms)", (unsigned)QUIET_TOUCH_TIMEOUT_MS);
+        lv_timer_set_period(backlight_idle_timer, ms);
+        lv_timer_reset(backlight_idle_timer);   /* läuft pro Touch-Abtastung, daher ohne Log */
     }
 }
 
-static void backlight_stop_quiet_timer(void)
+static void backlight_stop_idle_timer(void)
 {
-    if (backlight_quiet_timer) {
-        lv_timer_del(backlight_quiet_timer);
-        backlight_quiet_timer = NULL;
+    if (backlight_idle_timer) {
+        lv_timer_del(backlight_idle_timer);
+        backlight_idle_timer = NULL;
     }
+}
+
+/* Neue Meldung im Fehler-Stapel (steigende Flanke wie beim Buzzer):
+ * je nach Einstellung einschalten; in der Ruhezeit weckt nur ein Alarm. */
+static void backlight_wake_for_message(bool alarm)
+{
+    womo_disp_cfg_t cfg;
+    womo_disp_cfg_get(&cfg);
+    bool wake = (cfg.wake == WOMO_DISP_WAKE_ALARM && alarm) ||
+                (cfg.wake == WOMO_DISP_WAKE_ALL && (alarm || !quiet_hours_active));
+    if (!wake) return;
+    if (!backlight_on) {
+        ESP_LOGI(TAG, "Backlight an wegen neuer %s", alarm ? "Alarm-Meldung" : "Warnung");
+        backlight_set(true);
+    }
+    backlight_start_idle_timer();
+}
+
+static void on_disp_cfg_changed(void)
+{
+    if (backlight_on) backlight_start_idle_timer();
 }
 
 static bool is_quiet_hours(const struct tm *timeinfo)
@@ -1306,16 +1347,12 @@ static bool touch_wake_cb(void)
     if (!backlight_on) {
         ESP_LOGI(TAG, "Touch-Wake (raw callback, quiet=%d)", quiet_hours_active);
         backlight_set(true);
-        if (quiet_hours_active) {
-            backlight_start_quiet_timer();
-        }
+        backlight_start_idle_timer();
         return true;   /* Touch unterdrücken – nur aufwecken */
     }
 
-    /* Display ist an, aber Quiet-Hours aktiv → Timer zurücksetzen */
-    if (quiet_hours_active) {
-        backlight_start_quiet_timer();
-    }
+    /* Display ist an: jede Berührung (auch in Modals) startet den Inaktivitäts-Timer neu */
+    backlight_start_idle_timer();
     return false;  /* Touch normal weiterleiten */
 }
 
@@ -1332,18 +1369,11 @@ static void screen_event_handler(lv_event_t * e)
         if (!backlight_on) {
             ESP_LOGI(TAG, "Touch wake backlight (quiet=%d)", quiet_hours_active);
             backlight_set(true);
-            if (quiet_hours_active) {
-                backlight_start_quiet_timer();
-            } else {
-                backlight_stop_quiet_timer();
-            }
+            backlight_start_idle_timer();
             return;
         }
 
-        if (quiet_hours_active) {
-            ESP_LOGI(TAG, "Touch during quiet hours -> timer reset/start");
-            backlight_start_quiet_timer();
-        }
+        backlight_start_idle_timer();
         
         ESP_LOGI(TAG, "Touch at: x=%d, y=%d", point.x, point.y);
     }
@@ -2388,6 +2418,7 @@ gas_done:
             } else {
                 display_buzzer_warn();
             }
+            backlight_wake_for_message(stack_max >= WOMO_STATUS_ERROR);
         }
         s_prev_stack_max = stack_max;
     }
@@ -2592,7 +2623,17 @@ static void time_update_timer_cb(lv_timer_t *timer)
         }
     }
 
+    // Display-Aus-Automatik ab Boot scharf schalten (sonst erst nach der ersten Berührung)
+    {
+        static bool s_idle_armed = false;
+        if (!s_idle_armed) {
+            s_idle_armed = true;
+            if (backlight_on) backlight_start_idle_timer();
+        }
+    }
+
     // Quiet hours: 22:00-08:00 Backlight aus, außerhalb einschalten; Touch in Ruhezeit bekommt 5min Timeout
+    // (oder die kürzere Display-Aus-Automatik, siehe backlight_idle_timeout_ms)
     if (time_valid_now) {
         static bool last_quiet_state = false;
         bool quiet_now = is_quiet_hours(&timeinfo);
@@ -2605,14 +2646,14 @@ static void time_update_timer_cb(lv_timer_t *timer)
                 // Gilt sowohl beim Übergang 21:59→22:00 als auch beim
                 // Boot während der Quiet Hours (last_quiet_state startet
                 // als false, daher greift dieser Zweig beim ersten Mal).
-                backlight_start_quiet_timer();
+                backlight_start_idle_timer();
             }
         } else if (!quiet_now && last_quiet_state) {
             ESP_LOGI(TAG, "Quiet hours end %02d:%02d (backlight_on=%d)", timeinfo.tm_hour, timeinfo.tm_min, backlight_on);
-            backlight_stop_quiet_timer();
             if (!backlight_on) {
                 backlight_set(true);
             }
+            backlight_start_idle_timer();   /* tagsüber: Display-Aus-Automatik oder kein Timer */
         }
 
         last_quiet_state = quiet_now;
@@ -3673,23 +3714,16 @@ static void backlight_button_event_cb(lv_event_t *event)
 
     ESP_LOGI(TAG, "Backlight button clicked (before: on=%d, quiet=%d)", backlight_on, quiet_hours_active);
 
-    if (quiet_hours_active) {
-        if (backlight_on) {
-            /* In Ruhezeit per Button ausschalten + Timer stoppen */
-            backlight_set(false);
-            backlight_stop_quiet_timer();
-        } else {
-            /* Display war aus → aufwecken + Timer starten */
-            backlight_set(true);
-            backlight_start_quiet_timer();
-        }
-        ESP_LOGI(TAG, "Backlight button in quiet hours (after: on=%d)", backlight_on);
-        return;
+    if (backlight_on) {
+        /* Von Hand aus: bleibt aus, kein Timer */
+        backlight_set(false);
+        backlight_stop_idle_timer();
+    } else {
+        /* Von Hand an: Ruhezeit bzw. Display-Aus-Automatik zählt ab jetzt */
+        backlight_set(true);
+        backlight_start_idle_timer();
     }
-
-    backlight_set(!backlight_on);
     ESP_LOGI(TAG, "Backlight button handled (after: on=%d)", backlight_on);
-    backlight_stop_quiet_timer();
 }
 
 static void status_label_event_cb(lv_event_t *event)
@@ -4313,6 +4347,8 @@ void app_main()
         womo_locale_register_change_cb(on_locale_changed);
         womo_thresholds_init();
         womo_tariff_init();
+        womo_disp_cfg_init();
+        womo_disp_cfg_register_change_cb(on_disp_cfg_changed);
         womo_thresholds_register_change_cb(on_thresholds_changed);
 
     // Create title - höher positioniert

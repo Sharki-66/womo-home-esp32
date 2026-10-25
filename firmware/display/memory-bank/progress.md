@@ -70,10 +70,12 @@
 - [x] Tabs in der Reihenfolge Grenzwerte | Sensoren | LTE | AP | System, Grenzwerte beim Öffnen aktiv (2026-10-25)
 - [x] Titel „Einstellungen“ 5 s drücken → Dialog „Service-PIN“ mit Ziffernfeld (2026-10-25; Geste gilt für den Schriftzug im Modal-Kopf, nicht das Zahnrad)
 - [x] Richtige Service-PIN → Tab „Service“ erscheint und ist aktiv; Modal schließen und wieder öffnen → Tab weg (2026-10-25)
-- [ ] 3× falsche PIN → „gesperrt, noch N s“; die AP-Abfrage ist davon nicht gesperrt
+- [x] 3× falsche PIN → „gesperrt, noch N s“ (2026-10-25)
+- [ ] Countdown: Restzeit zählt im Popup sekündlich herunter, „Bestätigen“ grau; danach grün „Wieder möglich …“, Tastatur erscheint
+- [ ] AP-Abfrage ist von der PIN-Sperre nicht betroffen (eigene Sperre)
 - [ ] AP-Wechsel: im Dialog „Passwort von <alt>“ wird statt des alten Passworts auch die Service-PIN akzeptiert (Log `mit Service-PIN freigegeben`)
-- [ ] Nach der PIN-Abfrage hat die AP-Passworteingabe wieder die normale Buchstaben-Tastatur
-- [ ] Sprachwechsel bei geöffnetem Service-Tab: Tab-Titel und Texte wechseln
+- [x] Nach der PIN-Abfrage hat die AP-Passworteingabe wieder die normale Buchstaben-Tastatur (2026-10-25)
+- [x] Sprachwechsel Deutsch/Englisch (2026-10-25)
 - [x] Neustart Display: Kopplung aus NVS, Verbindung ohne neue Kopplung (2026-10-25, nach Bugfix Boot-Schleife)
 - [ ] Neustart Sensorboard: Log `Display-Peer aus NVS`, Verbindung ohne neue Kopplung
 - [ ] Display aus: Sensorboard beginnt nach 10 s mit Beacons (Log ggf. auf DEBUG), Display wieder an → Verbindung kommt zurück
@@ -82,6 +84,16 @@
 - [ ] **Offene Frage klären:** Wird ein *unverschlüsselter* Unicast mit gefälschter Absender-MAC der Gegenstelle zugestellt? Test mit drittem ESP32 (MAC per `esp_wifi_set_mac` setzen, Frame `{"cmd":"radio_on","seq":1}` ohne LMK senden) – wenn Sensorboard schaltet: zusätzliche Prüfung nötig
 - [ ] Web-Dashboard: 12V-Button nur Anzeige, kein WLAN-Formular in den Einstellungen; Radio/Gas/IMU funktionieren weiter
 - [ ] `curl -X POST http://womo-sensor.local/api/cmd -d '{"cmd":"pwr_12v_off"}'` → HTTP 403, Log `über HTTP gesperrt`
+
+**Display-Aus-Automatik + Einschalten bei Meldung (2026-10-25, Layout auf Hardware geprüft).**
+- [x] System-Tab: Töne | Sprache | Zeit / RTC nebeneinander, „Display“ darunter auf einer Seite (2026-10-25)
+- [ ] Werte der Display-Einstellungen bleiben nach Neustart; Zeit-/RTC-Text auch auf Englisch ohne Überlappung
+- [ ] „nach 1 min“: ohne Berührung nach 1 min dunkel; erste Berührung weckt nur, löst nichts aus
+- [ ] Berührungen in einem offenen Modal halten das Display an
+- [ ] „deaktiviert“: tagsüber bleibt es an (bisheriges Verhalten)
+- [ ] Backlight-Taste aus → bleibt aus; an → Timer läuft
+- [ ] Neue Warnung bei „Warnung + Alarm“ tagsüber → Display geht an; bei „Nur Alarm“ nicht; „Nie“ → bleibt dunkel
+- [ ] Ruhezeit: Warnung weckt nicht, Alarm schon; Timeout 5 min bzw. kürzere Einstellung
 
 ## Backlog / noch nicht implementiert
 

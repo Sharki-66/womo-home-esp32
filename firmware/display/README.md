@@ -58,6 +58,7 @@ main/
 │   ├── womo_router_leds_modal  Router-LED-Statusanzeige
 │   ├── womo_settings_modal     Einstellungs-Modal: Tabs AP | Sensoren | Grenzwerte | LTE | System
 │   ├── womo_tariff             Mobilfunk-Tarif: Ablauf-/Volumenwarnung (NVS-Persistenz)
+│   ├── womo_display_cfg        Display-Aus-Automatik, Einschalten bei Meldung (NVS womo_disp)
 │   └── womo_thresholds         Schwellwert-Verwaltung (NVS-Persistenz)
 ├── hardware/
 │   ├── waveshare_rgb_lcd_port  LCD + Touch + CH422G Init

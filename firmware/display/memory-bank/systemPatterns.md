@@ -23,7 +23,7 @@ router_poll_task (15 s)  ──►  s_router_ap / s_router_wifi / s_router_lte
 | Verzeichnis | Inhalt |
 |---|---|
 | `main/main.c` | Zentrales Orchestrierung (~3500 Zeilen): Tasks, Timer, UI-Build, Callbacks |
-| `main/gui/` | LVGL-Modale und Widgets: `womo_connectivity_modal`, `womo_settings_modal`, `womo_weather`, `womo_thresholds`, `womo_tariff` (Mobilfunk-Tarif), `womo_theme` |
+| `main/gui/` | LVGL-Modale und Widgets: `womo_connectivity_modal`, `womo_settings_modal`, `womo_weather`, `womo_thresholds`, `womo_tariff` (Mobilfunk-Tarif), `womo_display_cfg` (Hintergrundbeleuchtung), `womo_theme` |
 | `main/network/` | HTTP-Clients: `womo_wifi` (ESP32-STA), `womo_router_uci` (RUTX11), `womo_buzzer_http` |
 | `main/espnow/` | ESP-NOW-Transport (`womo_espnow`: Init, Kopplung + Verschlüsselung, Senden/Empfangen) |
 | `main/sensorboard/` | Sensorboard-Protokoll (`womo_sensorboard`: JSON-Parsing, Kommandos/ACK, Heartbeat, Merge-Snapshot) |
@@ -61,8 +61,8 @@ sensor_err_state_t:
 
 - **Snapshot-Prinzip**: UI-Callbacks lesen immer einen vollständigen Snapshot, nie Teilfelder direkt aus geteiltem State
 - **Modale**: `womo_*_modal_show()` erzeugt Modal neu, `_refresh()` aktualisiert es, `_is_open()` für Guard
-- **NVS-Namespaces**: `womo_ap_cfg` (AP-Credentials), `rtr_wifi` (Router-WiFi-Pool, max. 20 MRU), `womo_thr` (Schwellwerte), `womo_tariff` (Tarif-Einstellungen + letzter Auto-Termin)
-- **NVS nur aus Tasks mit internem Stack**: Flash-Schreiben schaltet den Cache ab → Task-Stack im PSRAM löst Assert `s_task_stack_is_sane_when_cache_frozen` aus. LVGL-Task (intern) darf, `router_poll_task` (PSRAM) nicht → dort nur RAM setzen + Dirty-Flag, Flush im LVGL-Tick (`womo_tariff_flush()`)
+- **NVS-Namespaces**: `womo_ap_cfg` (AP-Credentials), `rtr_wifi` (Router-WiFi-Pool, max. 20 MRU), `womo_thr` (Schwellwerte), `womo_tariff` (Tarif-Einstellungen + letzter Auto-Termin), `womo_disp` (Display-Aus-Automatik, Einschalten bei Meldung), `espnow_peer` (gekoppeltes Sensorboard)
+- **NVS nur aus Tasks mit internem Stack**: Flash-Schreiben schaltet den Cache ab → Task-Stack im PSRAM löst Assert `s_task_stack_is_sane_when_cache_frozen` aus. LVGL-Task (intern) darf, `router_poll_task` und `sensorboard_init_task` (PSRAM) nicht → dort nur RAM setzen + Dirty-Flag, Flush im LVGL-Tick (`womo_tariff_flush()`)
 - **LVGL-Thread-Safety**: Alle LVGL-Aufrufe nur im LVGL-Task (Core 1) oder unter `lv_lock()`
 
 ## Patterns vermeiden

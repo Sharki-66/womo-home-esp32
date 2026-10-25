@@ -15,6 +15,7 @@ idf_component_register(
         "gui/womo_forecast_modal.c"
         "gui/womo_thresholds.c"
         "gui/womo_tariff.c"
+        "gui/womo_display_cfg.c"
         "gui/womo_fonts_german.c"
         "assets/ducato_asset.c"
         "gui/fonts/lv_font_material_16.c"

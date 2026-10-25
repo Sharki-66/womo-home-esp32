@@ -1,5 +1,9 @@
 # Active Context — WoMoHome Display
 
+## Display-Aus-Automatik (2026-10-25, gebaut, Layout geprüft, Funktionstest offen)
+
+Einstellungen > System > Display: Display-Aus-Automatik (deaktiviert, 1–5 min) und „Bei Meldung einschalten“ (Nie | Nur Alarm | Warnung + Alarm). Bezeichnungen bewusst ohne „Aus: Aus“ gewählt. Entscheidungen: Ruhezeit 5 min oder die kürzere Einstellung; nachts weckt nur ein Alarm; Standard deaktiviert bzw. Warnung + Alarm. Der bisherige Ruhezeit-Timer ist jetzt der allgemeine `backlight_idle_timer`. „Abdunkeln“ heißt Ausschalten, Dimmen kann der Code nicht (CH422G nur Ein/Aus, Hardware nicht geprüft). Tests: `progress.md`.
+
 ## Bugfix: Boot-Schleife durch NVS im PSRAM-Task (2026-10-25, auf Hardware getestet)
 
 Nach dem ESP-NOW-Umbau startete das Display ab dem zweiten Boot immer wieder neu (Assert `esp_task_stack_is_sane_cache_disabled` in `peer_load` → `womo_espnow_init` → `sensorboard_init_task`, dessen Stack im PSRAM liegt). Erster Boot lief, weil der NVS-Namespace noch fehlte. Fix: Kopplung wird am Anfang von `espnow_rx_task` (interner Stack) geladen, erst als Peer eingetragen und dann freigegeben. Sensorboard nicht betroffen (`app_main`, keine PSRAM-Stacks).
