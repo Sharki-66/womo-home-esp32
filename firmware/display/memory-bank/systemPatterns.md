@@ -25,7 +25,7 @@ router_poll_task (15 s)  ──►  s_router_ap / s_router_wifi / s_router_lte
 | `main/main.c` | Zentrales Orchestrierung (~3500 Zeilen): Tasks, Timer, UI-Build, Callbacks |
 | `main/gui/` | LVGL-Modale und Widgets: `womo_connectivity_modal`, `womo_settings_modal`, `womo_weather`, `womo_thresholds`, `womo_tariff` (Mobilfunk-Tarif), `womo_theme` |
 | `main/network/` | HTTP-Clients: `womo_wifi` (ESP32-STA), `womo_router_uci` (RUTX11), `womo_buzzer_http` |
-| `main/espnow/` | ESP-NOW-Transport (`womo_espnow`: Init, Peer-Discovery, Senden/Empfangen) |
+| `main/espnow/` | ESP-NOW-Transport (`womo_espnow`: Init, Kopplung + Verschlüsselung, Senden/Empfangen) |
 | `main/sensorboard/` | Sensorboard-Protokoll (`womo_sensorboard`: JSON-Parsing, Kommandos/ACK, Heartbeat, Merge-Snapshot) |
 
 ## Datenpfad ESP-NOW → GUI

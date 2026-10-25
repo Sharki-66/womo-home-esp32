@@ -41,7 +41,7 @@ Alle Batterie-/Sense-Kanäle: **100 kΩ / 22 kΩ** Teiler → Faktor 122/22.
 - Nicht angeschlossen: < 1V → `nc=true`
 
 ## ESP-NOW-Protokoll (Topic-basiert)
-Ein JSON-Frame pro ESP-NOW-Paket, max. 250 Byte (`WOMO_ESPNOW_MAX_PAYLOAD`). Kanal = WLAN-Kanal, sonst `WOMO_ESPNOW_CHANNEL_FALLBACK` (`firmware/shared/womo_config.h`). Peer-Discovery per Broadcast: Das Sensorboard lernt die Display-MAC beim ersten empfangenen Paket (Display sendet alle 2 s `hb`), schaltet dann die Topics frei und sendet einen Initial-Burst aller Topics. Round-Robin, max. 1 Topic pro 100 ms. Jedes Frame enthält `seq`, optional `need_ack`; Kommandos werden mit `{ type:"cmd_ack", ack_seq, status, cmd, err? }` quittiert. `hello`/`hb` sendet das Sensorboard nicht mehr (Diagnose steckt in `ctrl`).
+Ein JSON-Frame pro ESP-NOW-Paket, max. 250 Byte (`WOMO_ESPNOW_MAX_PAYLOAD`). Kanal = WLAN-Kanal, sonst `WOMO_ESPNOW_CHANNEL_FALLBACK` (`firmware/shared/womo_config.h`). Kopplung + Verschlüsselung (seit 2026-10-25): Jedes Board speichert die MAC der Gegenstelle im NVS (`espnow_peer`/`mac`) und nimmt Nutzdaten **nur per verschlüsseltem Unicast** (CCMP, `WOMO_ESPNOW_PMK`/`LMK` aus `womo_credentials.h`) von ihr an. Broadcast ist nicht verschlüsselbar und trägt nur den Kopplungs-Beacon `{"type":"pair"}` (alle 1 s), Nutzdaten ohne Kopplung werden nicht gesendet (`ESP_ERR_INVALID_STATE`). Kopplungsfenster: beide, solange keine Gegenstelle gespeichert ist; Display 60 s nach „Neu koppeln“ (Einstellungen > System), schließt beim ersten verschlüsselten Frame; Sensorboard, solange seit `WOMO_ESPNOW_LINK_DEAD_MS` (10 s) nichts vom Display kam. Im Fenster wird ein fremder Beacon als neue Gegenstelle übernommen. Konstanten in `firmware/shared/womo_config.h`. Sobald seit Boot ein Frame vom gekoppelten Display kam (Display sendet alle 2 s `hb`), schaltet das Sensorboard die Topics frei und sendet einen Initial-Burst aller Topics. Round-Robin, max. 1 Topic pro 100 ms. Jedes Frame enthält `seq`, optional `need_ack`; Kommandos werden mit `{ type:"cmd_ack", ack_seq, status, cmd, err? }` quittiert. `hello`/`hb` sendet das Sensorboard nicht mehr (Diagnose steckt in `ctrl`).
 
 | Topic | Intervall | Felder |
 |---|---|---|
@@ -127,7 +127,7 @@ Erreichbar unter `http://Womo-Sensor.local/` nach WiFi-Verbindung mit RUTX11.
 | `/api/status` | GET | Systemstatus (JSON) |
 | `/api/data` | GET | Aktueller Sensor-Snapshot (JSON) |
 | `/api/imu` | GET | IMU-Snapshot (JSON) |
-| `/api/cmd` | POST | Steuerkommandos (JSON, gleiche `cmd`-Syntax wie über ESP-NOW) |
+| `/api/cmd` | POST | Steuerkommandos (JSON, gleiche `cmd`-Syntax wie über ESP-NOW). **Ohne Anmeldung, daher nur Freigabeliste:** `radio_on/off`, `gas_bottle_replace`, `imu_zero`, alles andere (u. a. `pwr_12v_*`, `wifi_config`, Sensor-Konfiguration) → HTTP 403. Das Dashboard zeigt 12V nur noch an und hat kein WLAN-Formular mehr. |
 
 Statische Dateien (HTML, PNG, favicon) werden aus der SPIFFS-Partition `storage` → `/spiffs` geladen.
 
@@ -166,7 +166,7 @@ main/
 │   └── ina226_sensor       INA226 Strom-/Leistungsmessung Eigenverbrauch
 ├── network/
 │   ├── espnow_modem        JSON-Serialisierung aller Topics, Kommandos, ACK, Steuerlogik
-│   ├── espnow_transport    ESP-NOW-Transport, Peer-Discovery
+│   ├── espnow_transport    ESP-NOW-Transport, Kopplung + Verschlüsselung
 │   ├── ble_manager         NimBLE-Stack, passiver Scan, Advertising-Dispatch
 │   ├── ruuvi_ble_scanner   Ruuvi DF5 (Innen/Außen)
 │   ├── gasbee_ble_scanner  GasBee Advertising v1 (Flasche A/B)

@@ -73,7 +73,7 @@ main/
 │   ├── womo_http_mutex         TLS-Session-Serialisierung
 │   └── isrg_root_x1_pem.h     Let's Encrypt Root-Zertifikat
 ├── espnow/
-│   └── womo_espnow             ESP-NOW-Transport (Init, Peer-Discovery, Senden/Empfangen)
+│   └── womo_espnow             ESP-NOW-Transport (Init, Kopplung + Verschlüsselung, Senden/Empfangen)
 ├── sensorboard/
 │   └── womo_sensorboard        Sensorboard-Protokoll: JSON-Parsing, Kommandos/ACK, Heartbeat, Merge-Snapshot
 ├── storage/

@@ -94,6 +94,27 @@ static esp_err_t cmd_post_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
+    // Freigabeliste: über HTTP (ohne Anmeldung, jeder im WLAN) nur ungefährliche
+    // Kommandos. 12V schalten, WLAN- und Sensor-Konfiguration nur am Display.
+    static const char *const allowed[] = {
+        "radio_on", "radio_off", "gas_bottle_replace", "imu_zero",
+    };
+    const cJSON *j_cmd = cJSON_GetObjectItem(root, "cmd");
+    const char *cmd = cJSON_IsString(j_cmd) ? j_cmd->valuestring : NULL;
+    bool permitted = false;
+    for (size_t i = 0; cmd && i < sizeof(allowed) / sizeof(allowed[0]); i++) {
+        if (strcmp(cmd, allowed[i]) == 0) {
+            permitted = true;
+            break;
+        }
+    }
+    if (!permitted) {
+        ESP_LOGW(TAG, "/api/cmd: Kommando '%s' über HTTP gesperrt", cmd ? cmd : "?");
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Command not allowed via HTTP");
+        return ESP_FAIL;
+    }
+
     esp_err_t err = espnow_modem_execute_cmd_json(root);
     const char *resp = (err == ESP_OK) ? "{\"ok\":true}" : "{\"ok\":false}";
     httpd_resp_set_type(req, "application/json");

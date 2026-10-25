@@ -307,6 +307,12 @@ typedef enum {
     STR_AP_PWCHK_CONFIRM,
     STR_AP_PWCHK_CANCEL,
     STR_AP_PWCHK_PLACEHOLDER,
+    // Einstellungen > System: ESP-NOW-Kopplung
+    STR_PAIR_SECTION,
+    STR_PAIR_BTN,
+    STR_PAIR_PAIRED_FMT,
+    STR_PAIR_ACTIVE_FMT,
+    STR_PAIR_NONE,
     // Max value
     STR_MAX
 } womo_string_id_t;

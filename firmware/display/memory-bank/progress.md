@@ -63,9 +63,19 @@
 - [ ] Gleiches Netz mit gleichem Passwort erneut speichern → keine Abfrage
 - [ ] Tastatur verdeckt das Popup nicht; Texte DE/EN mit Umlauten korrekt
 
+**ESP-NOW Kopplung + Verschlüsselung, `/api/cmd`-Freigabeliste (2026-10-25, nicht gebaut).** Beide Boards gemeinsam flashen. In `womo_credentials.h` müssen `WOMO_ESPNOW_PMK`/`LMK` stehen (auf diesem Rechner erzeugt, siehe `.example`).
+- [ ] Erststart (NVS ohne `espnow_peer`): beide Logs `… gekoppelt: <MAC>`, danach Daten wie gewohnt; System-Tab zeigt „Gekoppelt: <MAC>“
+- [ ] Neustart je Board: Log `… Peer aus NVS`, Verbindung ohne neue Kopplung
+- [ ] Display aus: Sensorboard beginnt nach 10 s mit Beacons (Log ggf. auf DEBUG), Display wieder an → Verbindung kommt zurück
+- [ ] „Neu koppeln“ bei laufender Verbindung: Restzeit erscheint und verschwindet nach ≤ 2 s (erster verschlüsselter Frame)
+- [ ] Tausch simulieren: Sensorboard-NVS-Eintrag `espnow_peer` löschen oder zweites Board → am Display „Neu koppeln“ → neue MAC
+- [ ] **Offene Frage klären:** Wird ein *unverschlüsselter* Unicast mit gefälschter Absender-MAC der Gegenstelle zugestellt? Test mit drittem ESP32 (MAC per `esp_wifi_set_mac` setzen, Frame `{"cmd":"radio_on","seq":1}` ohne LMK senden) – wenn Sensorboard schaltet: zusätzliche Prüfung nötig
+- [ ] Web-Dashboard: 12V-Button nur Anzeige, kein WLAN-Formular in den Einstellungen; Radio/Gas/IMU funktionieren weiter
+- [ ] `curl -X POST http://womo-sensor.local/api/cmd -d '{"cmd":"pwr_12v_off"}'` → HTTP 403, Log `über HTTP gesperrt`
+
 ## Backlog / noch nicht implementiert
 
-- **Sicherheit (nächstes Thema, 2026-10-25):** `POST /api/cmd` des Sensorboards führt jedes Kommando ohne Anmeldung aus (`sensor_http.c`); ESP-NOW unverschlüsselt (PMK/LMK). Erst Optionen vorlegen.
+- **ESP-NOW Wiederholungsschutz:** Ob CCMP bei ESP-NOW aufgezeichnete Frames abweist, ist nicht dokumentiert. Option: Sensorboard nimmt Kommandos nur mit steigender `seq` an (Display-`seq` müsste dafür einen Neustart überdauern). Noch nicht entschieden.
 
 - **Kalibrierungs-UI**: NVS-Layer + Web-UI für HX711/Batterie/Tank-Kalibrierung (heute alles hardcodiert in `sensor_config.h`)
 - **GasBee-Status im Hauptbildschirm**: Akku/Quelle bisher nur im Einstellungs-Tab „Sensoren“ sichtbar (2026-10-17), nicht am Gas-Widget

@@ -1,5 +1,9 @@
 # Active Context — WoMoHome Display
 
+## Sicherheit: ESP-NOW koppeln + verschlüsseln, `/api/cmd` beschränkt (2026-10-25, nicht gebaut)
+
+Entscheidungen: H1 (HTTP nur `radio_*`, `gas_bottle_replace`, `imu_zero`; auch kein `pwr_12v_*`), E0 (Gegenstelle fest im NVS `espnow_peer`, fremde MACs verworfen), E1 (CCMP mit PMK/LMK aus `womo_credentials.h`), K1 (Kopplung beim ersten Kontakt, am Display „Neu koppeln“ 60 s, Sensorboard koppelt neu, wenn das Display 10 s schweigt). Broadcast trägt nur den Beacon `{"type":"pair"}`. Verworfen: HMAC (keine Vertraulichkeit, Frame-Größe), HTTPS (Aufwand/RAM), PIN (vorerst). Bekannte Lücke: Koppelt sich während eines offenen Sensorboard-Fensters ein Fremdgerät, bleibt das Sensorboard bei ihm, bis am Display „Neu koppeln“ gedrückt wird (Fremdgerät kann ohne Schlüssel nichts lesen/senden). Tests: `progress.md`.
+
 ## AP-Wechsel: Sicherheitsabfrage + keine offenen Netze (2026-10-25, Hardware-Test offen, Liste in progress.md)
 
 Vor dem Wechsel weg von einem gespeicherten Netz mit Passwort fragt `ap_pwchk_*` (`womo_settings_modal.c`) das bisherige Passwort ab: Vergleich mit `womo_ap_cfg`, 3 Fehlversuche → 60 s Sperre (nur im RAM). Offene Netze sind in der Scan-Liste gesperrt, Speichern verlangt ≥ `WOMO_WIFI_PASS_MIN_LEN` (8, `womo_config.h`). Das Sensorboard lehnt `wifi_config` mit kürzerem Passwort ab. Offen und als Nächstes geplant: `/api/cmd` des Sensorboards ohne Anmeldung, ESP-NOW unverschlüsselt.

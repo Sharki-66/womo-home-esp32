@@ -75,3 +75,40 @@
 
 /** Empfangs-Queue-Tiefe (Anzahl Frames). */
 #define WOMO_ESPNOW_RECV_QUEUE_LEN          16
+
+/* ── Kopplung + Verschlüsselung (E0/E1) ──────────────────────────────────
+ * Jedes Board speichert die MAC der Gegenstelle im NVS (Namespace
+ * WOMO_ESPNOW_PEER_NVS_NS) und nimmt Nutzdaten nur per verschlüsseltem
+ * Unicast von ihr an. Gekoppelt wird über unverschlüsselte Broadcast-Beacons
+ * (WOMO_ESPNOW_PAIR_BEACON, Broadcast kann ESP-NOW nicht verschlüsseln),
+ * die ein Board nur sendet und annimmt, solange sein Kopplungsfenster offen ist:
+ *   - beide: solange keine Gegenstelle gespeichert ist (Erstinbetriebnahme)
+ *   - Display: WOMO_ESPNOW_PAIR_WINDOW_MS nach „Sensorboard neu koppeln“
+ *   - Sensorboard: solange seit WOMO_ESPNOW_LINK_DEAD_MS nichts von der
+ *     Gegenstelle kam (z. B. Display getauscht)
+ * Schlüssel WOMO_ESPNOW_PMK/LMK in womo_credentials.h. */
+
+/** Kopplungsfenster am Display nach Tastendruck (ms). */
+#define WOMO_ESPNOW_PAIR_WINDOW_MS          60000
+
+/** Ohne Frame der Gegenstelle so lange (ms) → Sensorboard öffnet Kopplung. */
+#define WOMO_ESPNOW_LINK_DEAD_MS            10000
+
+/** Sendeintervall der Kopplungs-Beacons (ms). */
+#define WOMO_ESPNOW_PAIR_BEACON_MS          1000
+
+/** Inhalt des Kopplungs-Beacons (Broadcast, unverschlüsselt). */
+#define WOMO_ESPNOW_PAIR_BEACON             "{\"type\":\"pair\"}"
+
+/** NVS-Namespace/-Key für die MAC der Gegenstelle. */
+#define WOMO_ESPNOW_PEER_NVS_NS             "espnow_peer"
+#define WOMO_ESPNOW_PEER_NVS_KEY            "mac"
+
+#ifndef WOMO_ESPNOW_PMK
+#error "WOMO_ESPNOW_PMK fehlt in womo_credentials.h (siehe womo_credentials.h.example)"
+#endif
+#ifndef WOMO_ESPNOW_LMK
+#error "WOMO_ESPNOW_LMK fehlt in womo_credentials.h (siehe womo_credentials.h.example)"
+#endif
+_Static_assert(sizeof(WOMO_ESPNOW_PMK) == 17, "WOMO_ESPNOW_PMK muss genau 16 Zeichen haben");
+_Static_assert(sizeof(WOMO_ESPNOW_LMK) == 17, "WOMO_ESPNOW_LMK muss genau 16 Zeichen haben");

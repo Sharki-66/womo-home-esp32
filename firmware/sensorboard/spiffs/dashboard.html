@@ -346,11 +346,7 @@ svg text{font-family:'Segoe UI',Helvetica,Arial,sans-serif}
     <div class="settings-row"><label>Kritisch</label>
       <input type="range" id="s-iaq-crit" min="100" max="300" step="5" value="150">
       <span id="sv-iaq-crit">150</span></div>
-    <div class="settings-section">WLAN</div>
-    <div class="wifi-set-row"><label>SSID</label>
-      <input type="text" id="s-wifi-ssid" placeholder="Router-SSID" maxlength="32"></div>
-    <div class="wifi-set-row"><label>Passwort</label>
-      <input type="password" id="s-wifi-pass" placeholder="Passwort" maxlength="64"></div>
+    <!-- WLAN-Wechsel nur am Display (Einstellungen > AP, mit Sicherheitsabfrage) -->
     <div class="modal-btn-row">
       <button class="mbtn mbtn-cancel" id="settings-cancel">Verwerfen</button>
       <button class="mbtn mbtn-ok" id="settings-save">Speichern</button>
@@ -675,13 +671,7 @@ function makeLongPress(el,ms,onLong,onShort){
 function openModal(id){$(id).classList.add('open');}
 function closeModal(id){$(id).classList.remove('open');}
 
-/* Power: long-press 800ms */
-makeLongPress($('btn-pwr'),800,
-  async()=>{
-    const cmd=s_pwr_on?'pwr_12v_off':'pwr_12v_on';
-    if(cmd==='pwr_12v_off'&&!confirm('12V Bordnetz ausschalten?'))return;
-    await sendCmd(cmd);setTimeout(poll,400);
-  },()=>{});
+/* Power: nur Anzeige – 12V schalten ist über HTTP gesperrt (nur am Display) */
 
 /* Radio */
 $('btn-radio').addEventListener('click',async()=>{await sendCmd(s_radio_on?'radio_off':'radio_on');setTimeout(poll,400);});
@@ -723,7 +713,6 @@ function openSettings(){
   set('s-grey-warn',THR.grey_warn);set('s-grey-crit',THR.grey_crit);
   set('s-bat-warn',THR.bat_warn);set('s-bat-crit',THR.bat_crit);
   set('s-iaq-warn',THR.iaq_warn);set('s-iaq-crit',THR.iaq_crit);
-  $('s-wifi-ssid').value='';$('s-wifi-pass').value='';
   openModal('modal-settings');
 }
 $('btn-settings').addEventListener('click',openSettings);
@@ -738,8 +727,6 @@ $('settings-save').addEventListener('click',async()=>{
   THR.bat_warn=rv('s-bat-warn');THR.bat_crit=rv('s-bat-crit');
   THR.iaq_warn=rv('s-iaq-warn');THR.iaq_crit=rv('s-iaq-crit');
   saveThr();
-  const ssid=$('s-wifi-ssid').value.trim(),pass=$('s-wifi-pass').value;
-  if(ssid.length>0)await sendCmd({cmd:'wifi_config',ssid,pass});
   closeModal('modal-settings');
 });
 

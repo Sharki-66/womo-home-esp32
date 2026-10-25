@@ -32,7 +32,7 @@
 
 Seit 2026-06 (Commit `e1eae83`) ESP-NOW statt RS485. Interne Funktionen in `espnow_modem.c` mit Präfix `modem_*` (bis 2026-10 `rs485_*`).
 
-**Transport (`espnow_transport.c`):** Ein JSON-Frame pro ESP-NOW-Paket, max. `WOMO_ESPNOW_MAX_PAYLOAD` (250 Byte), Voll-Duplex (keine TX-Sperren mehr). Senden zunächst per Broadcast; Display-MAC wird beim ersten empfangenen Paket gelernt und als Unicast-Peer eingetragen. Empfang über Queue + RX-Task (Stack 8192 Byte).
+**Transport (`espnow_transport.c`):** Ein JSON-Frame pro ESP-NOW-Paket, max. `WOMO_ESPNOW_MAX_PAYLOAD` (250 Byte), Voll-Duplex (keine TX-Sperren mehr). Display-MAC im NVS, nur verschlüsselter Unicast von/zu ihr; Kopplung per Beacon (Details `firmware/sensorboard/CLAUDE.md`). Empfang über Queue + RX-Task (Stack 8192 Byte).
 
 **Scheduler-Task:** Round-Robin über alle Topics (100 ms-Zyklus, max. 1 Topic pro Zyklus). Sobald `espnow_transport_peer_known()` → `s_display_ready = true` + Initial-Burst. Scan-Listen und `gasbee_cal_result` haben Vorrang vor dem Round-Robin.
 

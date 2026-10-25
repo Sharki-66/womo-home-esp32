@@ -18,6 +18,7 @@
 #include "womo_fonts_german.h"
 #include "../time/womo_time.h"
 #include "../sensorboard/womo_sensorboard.h"
+#include "../espnow/womo_espnow.h"
 #include "../hardware/buzzer.h"
 #include "../hardware/lvgl_port.h"
 #include "../network/womo_wifi.h"
@@ -98,6 +99,9 @@ static struct {
 static lv_obj_t *s_ap_keyboard        = NULL;
 static lv_obj_t *s_ap_saved_lbl       = NULL;  /* Gespeicherte SSID anzeigen */
 static lv_obj_t *s_ap_sb_lbl          = NULL;  /* WLAN-Verbindung des Sensorboards */
+static lv_obj_t *s_pair_title_lbl     = NULL;  /* System-Tab: ESP-NOW-Kopplung */
+static lv_obj_t *s_pair_status_lbl    = NULL;
+static lv_obj_t *s_pair_btn_lbl       = NULL;
 static lv_obj_t *s_ap_scan_btn        = NULL;
 static lv_obj_t *s_ap_scan_spinner    = NULL;
 static lv_obj_t *s_ap_scan_status_lbl = NULL;
@@ -369,6 +373,39 @@ static void set_btn_str(lv_obj_t *btn, womo_string_id_t id)
     if (btn) set_label_str(lv_obj_get_child(btn, 0), id);
 }
 
+/* System-Tab: Status der ESP-NOW-Kopplung */
+static void pair_status_refresh(void)
+{
+    if (!s_pair_status_lbl) return;
+    char buf[80];
+    uint32_t col = 0x444444;
+    int left = womo_espnow_pair_remaining_s();
+    uint8_t mac[6];
+    if (left < 0) {
+        snprintf(buf, sizeof(buf), "%s", womo_locale_get_string(STR_PAIR_NONE));
+        col = 0xC62828;
+    } else if (left > 0) {
+        snprintf(buf, sizeof(buf), womo_locale_get_string(STR_PAIR_ACTIVE_FMT), left);
+        col = 0x1565C0;
+    } else if (womo_espnow_get_peer(mac)) {
+        char mac_str[18];
+        snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        snprintf(buf, sizeof(buf), womo_locale_get_string(STR_PAIR_PAIRED_FMT), mac_str);
+    } else {
+        buf[0] = '\0';
+    }
+    lv_label_set_text(s_pair_status_lbl, buf);
+    lv_obj_set_style_text_color(s_pair_status_lbl, lv_color_hex(col), 0);
+}
+
+static void pair_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    womo_espnow_pair_start();
+    pair_status_refresh();
+}
+
 static void settings_locale_cb(void)
 {
     if (!s_panel) return;
@@ -387,6 +424,9 @@ static void settings_locale_cb(void)
     set_label_str(s_touch_lbl,       STR_SOUND_TOUCH_CLICK);
     set_label_str(s_lang_title_lbl,  STR_LANG_SECTION);
     set_label_str(s_time_title_lbl,  STR_TIME_SECTION);
+    set_label_str(s_pair_title_lbl,  STR_PAIR_SECTION);
+    set_label_str(s_pair_btn_lbl,    STR_PAIR_BTN);
+    pair_status_refresh();
     if (s_btn_tones) sound_btn_update(s_btn_tones, display_buzzer_is_enabled());
     if (s_btn_touch) sound_btn_update(s_btn_touch, display_buzzer_is_click_enabled());
     system_time_info_refresh();
@@ -631,6 +671,9 @@ static void close_modal(void)
     s_lang_title_lbl   = NULL;
     s_time_title_lbl   = NULL;
     s_time_info_lbl    = NULL;
+    s_pair_title_lbl   = NULL;
+    s_pair_status_lbl  = NULL;
+    s_pair_btn_lbl     = NULL;
     s_ruuvi_title_lbl  = NULL;
     s_gasbee_title_lbl = NULL;
     for (int i = 0; i < 4; i++) s_sens_row_lbl[i] = NULL;
@@ -2326,6 +2369,7 @@ static void rtc_poll_timer_cb(lv_timer_t *t)
         last_label_refresh = lv_tick_get();
         gasbee_refresh_labels();
         ap_update_sb_label();
+        pair_status_refresh();
     }
 }
 
@@ -2819,6 +2863,26 @@ static void build_tab_system(lv_obj_t *tab)
     lv_obj_set_pos(s_time_info_lbl, SYS_COL2_X, 40);
     lv_obj_set_width(s_time_info_lbl, SYS_COL_W);
     system_time_info_refresh();
+
+    /* Rechte Spalte unten: ESP-NOW-Kopplung (Tausch eines Boards) */
+    s_pair_title_lbl = make_section_title(tab, SYS_COL2_X, 172, SYS_COL_W, STR_PAIR_SECTION);
+    s_pair_status_lbl = lv_label_create(tab);
+    lv_obj_set_style_text_font(s_pair_status_lbl, &lv_font_montserrat_14_german, 0);
+    lv_obj_set_pos(s_pair_status_lbl, SYS_COL2_X, 208);
+    lv_obj_set_width(s_pair_status_lbl, SYS_COL_W);
+    lv_label_set_long_mode(s_pair_status_lbl, LV_LABEL_LONG_DOT);
+
+    lv_obj_t *pair_btn = lv_btn_create(tab);
+    lv_obj_set_size(pair_btn, 140, 34);
+    lv_obj_set_pos(pair_btn, SYS_COL2_X, 236);
+    lv_obj_set_style_bg_color(pair_btn, lv_color_hex(0x1565C0), 0);
+    lv_obj_set_style_radius(pair_btn, 6, 0);
+    lv_obj_add_event_cb(pair_btn, pair_btn_cb, LV_EVENT_CLICKED, NULL);
+    s_pair_btn_lbl = lv_label_create(pair_btn);
+    lv_label_set_text(s_pair_btn_lbl, womo_locale_get_string(STR_PAIR_BTN));
+    lv_obj_set_style_text_font(s_pair_btn_lbl, &lv_font_montserrat_14_german, 0);
+    lv_obj_center(s_pair_btn_lbl);
+    pair_status_refresh();
 }
 
 static void build_tab_ap(lv_obj_t *tab)

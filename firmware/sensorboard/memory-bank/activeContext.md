@@ -7,6 +7,9 @@
 
 ## Laufende Arbeiten
 
+### ESP-NOW Kopplung + Verschlüsselung, `/api/cmd`-Freigabeliste (2026-10-25, nicht gebaut)
+`espnow_transport.c` neu: Display-MAC im NVS, nur verschlüsselter Unicast, Beacon-Kopplung, `peer_known()` = Frame vom Display seit Boot. `sensor_http.c`: Freigabeliste, sonst 403. `dashboard.html`: 12V nur Anzeige, WLAN-Formular entfernt (SPIFFS-Image geht mit dem normalen Flash mit, `FLASH_IN_PROJECT`). Details/Tests: `firmware/display/memory-bank/activeContext.md` + `progress.md`.
+
 ### wifi_config ohne Passwort abgelehnt (2026-10-25, nicht gebaut)
 Passwort < `WOMO_WIFI_PASS_MIN_LEN` (8) → `ESP_ERR_INVALID_ARG`, offene Netze nicht zulässig. Als Nächstes: `/api/cmd` absichern (führt bisher jedes Kommando ohne Anmeldung aus), ESP-NOW verschlüsseln.
 

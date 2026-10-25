@@ -35,15 +35,17 @@ esp_err_t espnow_transport_init(void);
 void espnow_transport_set_recv_cb(espnow_recv_line_cb_t cb);
 
 /**
- * Frame senden. data muss null-terminiert sein, len ohne null-Byte.
+ * Frame verschlüsselt per Unicast an das gekoppelte Display senden.
+ * data muss null-terminiert sein, len ohne null-Byte.
  * Maximal WOMO_ESPNOW_MAX_PAYLOAD Byte.
  * Thread-safe — darf aus beliebigem Task aufgerufen werden.
  */
 esp_err_t espnow_transport_send(const char *data, size_t len);
 
 /**
- * true sobald das Display mindestens einmal einen Frame gesendet hat
- * und seine MAC-Adresse bekannt ist (Unicast statt Broadcast).
+ * true sobald das gekoppelte Display seit dem Boot mindestens einen
+ * (verschlüsselten) Frame gesendet hat. Ohne Kopplung bleibt es false,
+ * espnow_transport_send() liefert dann ESP_ERR_INVALID_STATE.
  */
 bool espnow_transport_peer_known(void);
 

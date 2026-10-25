@@ -284,6 +284,11 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_AP_PWCHK_CONFIRM]        = "Bestätigen",
         [STR_AP_PWCHK_CANCEL]         = "Abbrechen",
         [STR_AP_PWCHK_PLACEHOLDER]    = "Bisheriges Passwort",
+        [STR_PAIR_SECTION]            = "Sensorboard-Kopplung",
+        [STR_PAIR_BTN]                = "Neu koppeln",
+        [STR_PAIR_PAIRED_FMT]         = "Gekoppelt: %s",
+        [STR_PAIR_ACTIVE_FMT]         = "Kopplung aktiv, noch %d s",
+        [STR_PAIR_NONE]               = "Nicht gekoppelt – suche Sensorboard …",
     },
     // English strings
     {
@@ -552,6 +557,11 @@ static const char* s_strings[WOMO_LOCALE_MAX][STR_MAX] = {
         [STR_AP_PWCHK_CONFIRM]        = "Confirm",
         [STR_AP_PWCHK_CANCEL]         = "Cancel",
         [STR_AP_PWCHK_PLACEHOLDER]    = "Current password",
+        [STR_PAIR_SECTION]            = "Sensor board pairing",
+        [STR_PAIR_BTN]                = "Pair again",
+        [STR_PAIR_PAIRED_FMT]         = "Paired: %s",
+        [STR_PAIR_ACTIVE_FMT]         = "Pairing active, %d s left",
+        [STR_PAIR_NONE]               = "Not paired – searching sensor board …",
     }
 };
 
