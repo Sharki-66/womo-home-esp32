@@ -23,6 +23,7 @@
 // ── Hardware / Treiber ───────────────────────────────────────────────────────────────
 #define LOG_LEVEL_LVGL_PORT      ESP_LOG_WARN   // hardware/lvgl_port.c
 #define LOG_LEVEL_DISPLAY_HW     ESP_LOG_WARN   // hardware/waveshare_rgb_lcd_port.c
+#define LOG_LEVEL_POWER          ESP_LOG_INFO   // hardware/womo_power.c (Eco-Wechsel, zum Messen)
 
 // ── Sensorboard-Link (ESP-NOW) ────────────────────────────────────────────────────────────────────────────
 #define LOG_LEVEL_SENSORBOARD          ESP_LOG_WARN   // sensorboard/womo_sensorboard.c
@@ -111,3 +112,19 @@
 #define WOMO_SCREENSHOT_DIR           "/sdcard/screenshots"
 #define WOMO_SCREENSHOT_STACK_SIZE    (32768)
 #define WOMO_SCREENSHOT_TASK_PRIORITY (3)
+
+// ====================================================================================
+// Strom sparen bei dunklem Hintergrundlicht (hardware/womo_power.c)
+// Messung 2026-10-26 (INA226, Einheit Display + Sensorboard): normal 3,3 W,
+// Hintergrundlicht aus 1,8 W, davon Sensorboard 0,7 W → Display dunkel ≈ 1,1 W.
+// Mit Eco (8 MHz Pixeltakt + DFS 80–240 MHz): Hintergrundlicht aus 1,5 W gesamt
+// → Display dunkel ≈ 0,8 W (Messung 2026-10-26).
+// Pixeltakt: ST7262-Datenblatt nennt 23–27 MHz, wir laufen bereits mit 16 MHz.
+// Wie weit es tiefer geht, ist nur am Gerät zu prüfen (Bild nach dem Aufwachen!).
+// 16 MHz ≈ 39 Bilder/s, 8 MHz ≈ 20, 4 MHz ≈ 10 (820 × 500 Takte pro Bild).
+// WOMO_PM_DFS_ENABLE 1 braucht CONFIG_PM_ENABLE=y; 0 = nur Pixeltakt (zum Messen).
+// ====================================================================================
+#define WOMO_ECO_PCLK_HZ              (8 * 1000 * 1000)
+#define WOMO_PM_DFS_ENABLE            1
+#define WOMO_PM_CPU_MAX_MHZ           240
+#define WOMO_PM_CPU_MIN_MHZ           80

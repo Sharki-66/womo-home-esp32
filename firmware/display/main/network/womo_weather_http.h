@@ -96,6 +96,12 @@ bool womo_weather_http_is_running(void);
 void womo_weather_http_set_location(double lat, double lon);
 
 /**
+ * @brief Vorgemerkte Position ins NVS schreiben (nur bei Bewegung > ~550 m).
+ * Nur aus Task mit internem Stack aufrufen (LVGL-Task, ui_update_timer_cb).
+ */
+void womo_weather_http_flush(void);
+
+/**
  * @brief Register a callback for 5-day forecast updates.
  *
  * Must be called before or after womo_weather_http_start(); the callback

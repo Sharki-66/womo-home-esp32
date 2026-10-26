@@ -95,6 +95,21 @@
 - [ ] Neue Warnung bei „Warnung + Alarm“ tagsüber → Display geht an; bei „Nur Alarm“ nicht; „Nie“ → bleibt dunkel
 - [ ] Ruhezeit: Warnung weckt nicht, Alarm schon; Timeout 5 min bzw. kürzere Einstellung
 
+**Eco bei dunklem Hintergrundlicht: Pixeltakt + DFS (2026-10-26, auf Hardware getestet).** Messen mit INA226, je ca. 5 min mitteln, Licht aus. Vorher: 1,8 W gesamt (Sensorboard 0,7 W).
+- [ ] Monitor: `womo_power: DFS 80–240 MHz …` beim Start, `Eco an …` / `Eco aus …` beim Aus-/Einschalten
+- [ ] Messung A: `WOMO_PM_DFS_ENABLE 0` (nur Pixeltakt 8 MHz) → __ W
+- [x] Messung B: `WOMO_PM_DFS_ENABLE 1` (Pixeltakt 8 MHz + DFS) → **1,5 W** gesamt (vorher 1,8 W; Display dunkel ≈ 0,8 W statt 1,1 W) (2026-10-26)
+- [ ] Optional: `WOMO_ECO_PCLK_HZ` 4 MHz → __ W
+- [x] Bild nach dem Aufwachen sofort sauber (2026-10-26)
+- [ ] Bild auch nach langer Dunkelphase (Nacht) sauber
+- [ ] Aufwachen per Berührung reagiert ohne spürbare Verzögerung
+- [x] Im Dunkeln kommen alle Daten weiter an (2026-10-26)
+- [ ] Bei Licht kein Unterschied zu vorher (Animationen, Touch)
+
+**Wetter-Position im NVS wieder aktiv (2026-10-26, nicht gebaut).** Seit Commit `6e45262` (2026-04) wurde sie nicht mehr gespeichert (Compiler-Warnung `weather_nvs_save` unbenutzt).
+- [ ] Build ohne Warnung `weather_nvs_save defined but not used`
+- [ ] Nach GPS-Fix und Neustart: Wetter kommt sofort für den letzten Standort (nicht den Stand von April), kein Absturz
+
 ## Backlog / noch nicht implementiert
 
 - **ESP-NOW Wiederholungsschutz:** Ob CCMP bei ESP-NOW aufgezeichnete Frames abweist, ist nicht dokumentiert. Option: Sensorboard nimmt Kommandos nur mit steigender `seq` an (Display-`seq` müsste dafür einen Neustart überdauern). Noch nicht entschieden.

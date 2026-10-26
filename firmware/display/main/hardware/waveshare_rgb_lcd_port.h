@@ -88,6 +88,8 @@ esp_err_t womo_lcd_get_frame_buffer(void **fb0_out, void **fb1_out);
 
 esp_err_t wavesahre_rgb_lcd_bl_on();
 esp_err_t wavesahre_rgb_lcd_bl_off();
+esp_err_t wavesahre_rgb_lcd_set_pclk(uint32_t freq_hz);
+esp_err_t wavesahre_rgb_lcd_restart(void);
 
 
 #endif

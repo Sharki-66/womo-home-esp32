@@ -5,6 +5,7 @@
  */
 
 #include "hardware/waveshare_rgb_lcd_port.h"
+#include "hardware/womo_power.h"
 #include "lvgl.h"
 #include "time/womo_time.h"
 #include "freertos/FreeRTOS.h"
@@ -1395,6 +1396,7 @@ static void ui_update_timer_cb(lv_timer_t *timer)
     // Tarif-Termin ins NVS: hier (LVGL, interner Stack), nicht im router_poll_task (PSRAM-Stack),
     // und vor dem frühen return weiter unten, damit es auch ohne Sensordaten passiert
     womo_tariff_flush();
+    womo_weather_http_flush();   /* GPS-Position fürs Wetter (NVS nur im LVGL-Task) */
     // Per-Sensor-Quellen-Level für Stapel zurücksetzen (globale States)
     for (int _si = 0; _si < SENSOR_ERR_SRC_MAX; _si++) {
         sensor_err_states[_si].current = WOMO_STATUS_OK;
@@ -4188,9 +4190,11 @@ static void backlight_set(bool on)
 {
     esp_err_t err = ESP_OK;
     if (on) {
+        womo_power_set_eco(false);   /* erst voller Takt, dann Licht */
         err = wavesahre_rgb_lcd_bl_on();
     } else {
         err = wavesahre_rgb_lcd_bl_off();
+        if (err == ESP_OK) womo_power_set_eco(true);
     }
 
     if (err == ESP_OK) {
@@ -4224,6 +4228,7 @@ void app_main()
     esp_log_level_set("WaveShare_7_UI",   LOG_LEVEL_UI);
     esp_log_level_set("lv_port",          LOG_LEVEL_LVGL_PORT);
     esp_log_level_set("womo_display",     LOG_LEVEL_DISPLAY_HW);
+    esp_log_level_set("womo_power",       LOG_LEVEL_POWER);
     esp_log_level_set("sensorboard",    LOG_LEVEL_SENSORBOARD);
     esp_log_level_set("womo_wifi",        LOG_LEVEL_WIFI);
     esp_log_level_set("wifi",             LOG_LEVEL_WIFI);   // WLAN-Treiber (ADDBA/DELBA-Infos)
@@ -4307,6 +4312,7 @@ void app_main()
         ESP_LOGI(TAG, "Display init finished after %d ms",
                  (int)((esp_timer_get_time() - t0) / 1000));
     }
+    womo_power_init();
 
     /* Sichtbarer Sofort-Start: das RGB-Init hat die Framebuffer bereits mit
      * der Theme-Hintergrundfarbe vorgefüllt. Backlight hier schon einschalten,

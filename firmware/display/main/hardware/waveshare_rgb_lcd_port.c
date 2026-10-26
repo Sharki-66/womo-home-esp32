@@ -381,6 +381,21 @@ esp_err_t wavesahre_rgb_lcd_bl_off()
     return ESP_OK;
 }
 
+/* Pixeltakt zur Laufzeit (Strom sparen bei dunklem Hintergrundlicht, womo_power.c).
+ * Greift laut ESP-IDF erst im nächsten VSYNC. */
+esp_err_t wavesahre_rgb_lcd_set_pclk(uint32_t freq_hz)
+{
+    if (!s_rgb_panel_handle) return ESP_ERR_INVALID_STATE;
+    return esp_lcd_rgb_panel_set_pclk(s_rgb_panel_handle, freq_hz);
+}
+
+/* LCD-DMA neu aufsetzen (verschobenes Bild nach Bounce-Buffer-Unterlauf), im nächsten VSYNC */
+esp_err_t wavesahre_rgb_lcd_restart(void)
+{
+    if (!s_rgb_panel_handle) return ESP_ERR_INVALID_STATE;
+    return esp_lcd_rgb_panel_restart(s_rgb_panel_handle);
+}
+
 esp_err_t womo_lcd_get_frame_buffer(void **fb0_out, void **fb1_out)
 {
     if (!s_rgb_panel_handle) return ESP_ERR_INVALID_STATE;

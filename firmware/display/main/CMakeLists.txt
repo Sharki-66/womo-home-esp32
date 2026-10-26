@@ -37,6 +37,7 @@ idf_component_register(
         "espnow/womo_espnow.c"
         "hardware/lvgl_port.c"
         "hardware/waveshare_rgb_lcd_port.c"
+        "hardware/womo_power.c"
         "hardware/buzzer.c"
     INCLUDE_DIRS 
         "."
@@ -58,6 +59,7 @@ idf_component_register(
         json
         driver
         esp_timer
+        esp_pm
     EMBED_TXTFILES
         "../tools/buzzer_studio.html"
 )

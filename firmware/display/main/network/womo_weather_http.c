@@ -40,6 +40,10 @@ static char s_gps_lon[16] = "";
 static double s_nvs_lat = 0.0;
 static double s_nvs_lon = 0.0;
 static bool   s_nvs_loaded = false;
+/* Neue Position fürs NVS, geschrieben erst in womo_weather_http_flush() (LVGL-Task) */
+static double s_pend_lat = 0.0;
+static double s_pend_lon = 0.0;
+static bool   s_nvs_dirty = false;
 
 #define TAG "weather_http"
 
@@ -488,13 +492,25 @@ void womo_weather_http_set_location(double lat, double lon)
     memcpy(s_gps_lon, lon_buf, sizeof(s_gps_lon));
     taskEXIT_CRITICAL(&s_gps_lock);
 
-    /* Kein NVS-Schreiben hier:
-     * Diese Funktion wird aus router_poll_task aufgerufen, dessen Stack in
-     * PSRAM liegt. NVS/Flash-Zugriffe können Cache-Disable auslösen und sind
-     * aus diesem Kontext nicht sicher. */
-    s_nvs_lat = lat;
-    s_nvs_lon = lon;
-    s_nvs_loaded = true;
+    /* Kein NVS-Schreiben hier: Aufruf aus router_poll_task, dessen Stack im
+     * PSRAM liegt (NVS schaltet den Flash-Cache ab → Assert). Nur vormerken,
+     * geschrieben wird in womo_weather_http_flush(). */
+    taskENTER_CRITICAL(&s_gps_lock);
+    s_pend_lat   = lat;
+    s_pend_lon   = lon;
+    s_nvs_dirty  = true;
+    s_nvs_loaded = true;   /* Live-Position hat Vorrang vor dem NVS-Stand */
+    taskEXIT_CRITICAL(&s_gps_lock);
+}
+
+void womo_weather_http_flush(void)
+{
+    taskENTER_CRITICAL(&s_gps_lock);
+    bool dirty = s_nvs_dirty;
+    double lat = s_pend_lat, lon = s_pend_lon;
+    s_nvs_dirty = false;
+    taskEXIT_CRITICAL(&s_gps_lock);
+    if (dirty) weather_nvs_save(lat, lon);   /* schreibt nur bei > NVS_SAVE_DELTA_DEG */
 }
 
 static uint32_t weather_http_get_interval_minutes(void)

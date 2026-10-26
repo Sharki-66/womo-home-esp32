@@ -1,5 +1,9 @@
 # Active Context — WoMoHome Display
 
+## Strom sparen bei dunklem Hintergrundlicht (2026-10-26, auf Hardware getestet: 1,8 W → 1,5 W)
+
+Messung des Nutzers (INA226): normal 3,3 W, Licht aus 1,8 W, davon Sensorboard 0,7 W → Display dunkel ≈ 1,1 W. Geprüfte Optionen: (1) Pixeltakt senken, (2) DFS 80–240 MHz, (3) UI/Abrufe drosseln, (4) WLAN-Stromsparen/ESP-NOW-Fenster. Entscheidung: erst 1 + 2 umsetzen und messen (`hardware/womo_power.c`), dann über 3/4 entscheiden. 4 berührt den Eco-Modus am Sensorboard (dort parallel vom Nutzer begonnen, nicht committet: `sensor_wifi_set_paused`, `WOMO_TOPIC_*_ECO_INTERVAL_MS`) – gemeinsam planen. Hinweis: `LOG_LEVEL_MAIN`/`SETTINGS_MODAL` stehen auf WARN, INFO-Logs aus `main.c` und `womo_settings_modal.c` sind im Monitor unsichtbar.
+
 ## Eco-Wunsch ans Sensorboard (2026-10-25, auf Hardware getestet)
 
 `backlight_set()` ruft `womo_sensorboard_set_eco(!on)`: jedes `hb` trägt `eco`, bei Änderung wird sofort ein `hb` gesendet. Gilt für alle Wege, wie das Licht ausgeht (Ruhezeit, Taste, Display-Aus-Automatik). Das Sensorboard spart nur ohne Landstrom und meldet `ctrl.eco` → `power.sb_eco` (noch ohne Anzeige). Der Display-ESP selbst spart noch nicht (Phase 3). **Mit Sensorboard zusammen flashen.** Details: `firmware/sensorboard/memory-bank/activeContext.md`.

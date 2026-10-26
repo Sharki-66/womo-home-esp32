@@ -94,3 +94,5 @@ CONFIG_COMPILER_OPTIMIZATION_PERF=y
 # Bootloader-Log auf WARN reduziert – spart ~30ms UART-Ausgabe beim 2nd-Stage-Bootloader
 CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
 CONFIG_BOOTLOADER_LOG_LEVEL=2
+# Power-Management für DFS bei dunklem Hintergrundlicht (hardware/womo_power.c)
+CONFIG_PM_ENABLE=y
