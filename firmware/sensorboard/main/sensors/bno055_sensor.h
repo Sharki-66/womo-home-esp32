@@ -37,6 +37,10 @@ esp_err_t bno055_app_start(void);
 /** BNO055 in Suspend-Modus versetzen (vor Deep Sleep aufrufen, ~0,2 µA). */
 void bno055_app_sleep(void);
 
+/** Eco-Modus: BNO055 zur Laufzeit in Suspend (true) bzw. zurück in NDOF (false).
+ *  Umschaltung im BNO055-Task; der letzte Snapshot bleibt solange stehen. */
+void bno055_app_set_suspended(bool suspended);
+
 // Aktuellen Pitch/Roll als Nullpunkt setzen (NVS-persistent).
 esp_err_t bno055_app_zero_pitch_roll(void);
 

@@ -4197,6 +4197,7 @@ static void backlight_set(bool on)
         backlight_on = on;
         ESP_LOGI(TAG, "Backlight set %s", on ? "ON" : "OFF");
         backlight_update_label();
+        womo_sensorboard_set_eco(!on);   /* Licht aus (Ruhezeit, Taste, Automatik) → Sensorboard spart */
     } else {
         ESP_LOGW(TAG, "Backlight %s fehlgeschlagen: %s", on ? "ein" : "aus", esp_err_to_name(err));
     }

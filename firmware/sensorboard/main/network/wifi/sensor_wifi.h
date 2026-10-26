@@ -42,6 +42,11 @@ esp_err_t sensor_wifi_set_credentials(const char *ssid, const char *pass);
 /// true, solange neue Credentials getestet werden (noch nicht im NVS).
 bool sensor_wifi_is_trial_active(void);
 
+/// Eco-Modus: Verbindung zum Router trennen (true) bzw. wieder aufbauen (false).
+/// Während der Pause keine Reconnects; der Kanal bleibt für ESP-NOW stehen.
+void sensor_wifi_set_paused(bool paused);
+bool sensor_wifi_is_paused(void);
+
 /// Callback-Typ: wird aufgerufen wenn WiFi nach max. Retries nicht verbinden kann.
 /// Nutzbar z.B. um per ESP-NOW das Passwort beim Display anzufragen.
 typedef void (*sensor_wifi_auth_fail_cb_t)(void);

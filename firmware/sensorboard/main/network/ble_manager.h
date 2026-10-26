@@ -61,6 +61,13 @@ int ble_manager_connect(const ble_addr_t *addr, int32_t timeout_ms);
  */
 void ble_manager_start_scan(void);
 
+/**
+ * @brief Scan freigeben/sperren (Eco-Modus: Scan nur in Fenstern).
+ *        Gesperrt: laufender Scan wird beendet, Neustarts nach Connect/Disconnect
+ *        und Retry unterbleiben. Standard: freigegeben.
+ */
+void ble_manager_set_scan_enabled(bool enabled);
+
 #ifdef __cplusplus
 }
 #endif

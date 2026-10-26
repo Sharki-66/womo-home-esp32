@@ -59,6 +59,7 @@ static portMUX_TYPE s_pending_cmd_lock = portMUX_INITIALIZER_UNLOCKED;
 static portMUX_TYPE s_seq_lock = portMUX_INITIALIZER_UNLOCKED;
 static uint32_t s_tx_seq_counter = 1;
 static uint32_t s_last_rx_seq = 0;
+static volatile bool s_eco_requested = false;   // hb-Feld "eco": Hintergrundlicht aus → Sensorboard spart
 static uint32_t s_last_ack_seq = 0;
 static int64_t s_last_ack_time_us = 0;
 static int64_t s_last_heartbeat_tx_us = 0;
@@ -334,6 +335,7 @@ static esp_err_t sb_send_heartbeat(void)
 
     cJSON_AddStringToObject(hb, "type", "hb");
     cJSON_AddBoolToObject(hb, "need_ack", false);
+    cJSON_AddBoolToObject(hb, "eco", s_eco_requested);
     cJSON_AddNumberToObject(hb, "uptime", (double)esp_timer_get_time() / 1000000.0);
     if (s_last_rx_seq != 0) {
         cJSON_AddNumberToObject(hb, "rx_seq", (double)s_last_rx_seq);
@@ -884,6 +886,20 @@ esp_err_t womo_sensorboard_send_gas_bottle_replace(uint8_t slot, const char *cha
     return err;
 }
 
+void womo_sensorboard_set_eco(bool eco)
+{
+    if (s_eco_requested == eco) return;
+    s_eco_requested = eco;
+    ESP_LOGI(TAG, "Eco-Wunsch ans Sensorboard: %s", eco ? "ein" : "aus");
+    // Sofort melden statt bis zum nächsten Heartbeat (max. 2 s) zu warten
+    if (s_initialized) {
+        esp_err_t err = sb_send_heartbeat();
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Eco-Heartbeat send failed: %s", esp_err_to_name(err));
+        }
+    }
+}
+
 esp_err_t womo_sensorboard_send_pwr_12v(bool enable)
 {
     const char *cmd = enable ? "pwr_12v_on" : "pwr_12v_off";
@@ -1116,6 +1132,7 @@ static void parse_json_packet(const char *json_str, size_t raw_line_len, bool tr
             if (cJSON_IsBool(pwr_on))   s_latest_data.power.pwr_12v_on       = cJSON_IsTrue(pwr_on);
             if (cJSON_IsBool(radio))    s_latest_data.power.radio_on          = cJSON_IsTrue(radio);
             if (cJSON_IsBool(ac))       s_latest_data.power.ac_present        = cJSON_IsTrue(ac);
+            s_latest_data.power.sb_eco = cJSON_IsTrue(cJSON_GetObjectItem(root, "eco"));
             if (cJSON_IsBool(rtc_bat))  s_latest_data.power.rtc_bat_low       = cJSON_IsTrue(rtc_bat);
             if (cJSON_IsBool(rtc_bsf))  s_latest_data.power.rtc_bat_switched  = cJSON_IsTrue(rtc_bsf);
             cJSON *sb_ssid = cJSON_GetObjectItem(root, "ssid");

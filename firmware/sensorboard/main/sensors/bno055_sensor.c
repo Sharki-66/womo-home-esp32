@@ -247,9 +247,56 @@ void bno055_app_request_fast(uint32_t duration_ms, uint32_t interval_ms)
     portEXIT_CRITICAL(&s_fast_mux);
 }
 
+// ── Eco-Modus: Suspend zur Laufzeit ─────────────────────────────────────
+// Die Bibliothek kennt kein PWR_MODE-Register (0x3E) → direkt schreiben, wie
+// bno055_app_sleep(). Betriebsart über die Bibliothek, damit deren Zustand stimmt.
+static volatile bool s_suspend_req = false;
+static bool s_suspended = false;
+
+static esp_err_t bno055_write_pwr_mode(uint8_t mode)
+{
+    uint8_t buf[2] = {0x3E, mode};   /* 0x00 Normal, 0x02 Suspend */
+    return i2c_master_transmit(s_bno.config.slave_handle, buf, sizeof(buf), 50);
+}
+
+// Aufruf mit gehaltenem I2C-Lock
+static void bno055_apply_suspend(bool suspend)
+{
+    esp_err_t err;
+    if (suspend) {
+        err = bno055_set_operation_mode(&s_bno, CONFIG_MODE);
+        if (err == ESP_OK) err = bno055_write_pwr_mode(0x02);
+    } else {
+        err = bno055_write_pwr_mode(0x00);
+        vTaskDelay(pdMS_TO_TICKS(25));
+        if (err == ESP_OK) err = bno055_set_operation_mode(&s_bno, NDOF_MODE);
+        // Kalibrierung aus NVS nachladen, falls der Suspend sie gekostet hat
+        if (err == ESP_OK && s_offset_cache_valid) (void)bno055_restore_calibration(&s_bno);
+    }
+    ESP_LOGI(TAG, "BNO055 %s (%s)", suspend ? "Suspend (Eco)" : "aufgeweckt", esp_err_to_name(err));
+}
+
+void bno055_app_set_suspended(bool suspended)
+{
+    s_suspend_req = suspended;
+}
+
 static void bno055_task(void *arg)
 {
     while (1) {
+        bool want_suspend = s_suspend_req;
+        if (want_suspend != s_suspended) {
+            i2c_bus_lock();
+            bno055_apply_suspend(want_suspend);
+            i2c_bus_unlock();
+            s_suspended = want_suspend;
+        }
+        if (s_suspended) {
+            // Letzter Snapshot bleibt stehen (Fahrzeug steht)
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
+
         i2c_bus_lock();
         esp_err_t err = bno055_get_readings(&s_bno, EULER_ANGLE);
         esp_err_t err_acc = bno055_get_readings(&s_bno, ACCELEROMETER);

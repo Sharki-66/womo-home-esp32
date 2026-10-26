@@ -60,6 +60,40 @@ static gasbee_snapshot_t s_slot[SLOT_COUNT] = {0};
 static uint8_t           s_slot_pkts[SLOT_COUNT] = {0}; // Pakete zur aktuellen seq (Coex-Diagnose)
 static SemaphoreHandle_t s_mutex = NULL;
 
+// ── Burst-Takt (Eco-Modus: Scan nur, wenn ein Burst erwartet wird) ──────────
+// Die GasBee misst in festem Takt ab Zyklusbeginn (gasbee_nrf main.c), daher
+// lässt sich der nächste Burst aus dem letzten und dem gelernten Intervall
+// vorhersagen. Bezug ist das erste empfangene Paket einer neuen seq.
+
+typedef struct {
+    bool    have_ref;
+    int64_t ref_us;      // Empfang des ersten Pakets der letzten neuen seq
+    uint8_t ref_seq;
+    int64_t cycle_us;    // gelerntes Intervall, 0 = unbekannt → Dauer-Scan
+} burst_phase_t;
+
+static burst_phase_t s_phase[SLOT_COUNT] = {0};
+
+// Aufruf mit gehaltenem Mutex, nur bei neuer seq
+static void phase_update_locked(int slot, uint8_t seq, bool config_mode, int64_t now_us)
+{
+    burst_phase_t *ph = &s_phase[slot];
+    if (config_mode) {
+        // An USB sendet die GasBee im Sekundentakt – kein Burst-Takt
+        ph->cycle_us = 0;
+    } else if (ph->have_ref) {
+        // Verpasste Bursts mitzählen: Intervall = Abstand / seq-Differenz
+        uint8_t k = (uint8_t)(seq - ph->ref_seq);
+        int64_t cycle = (k > 0) ? (now_us - ph->ref_us) / k : 0;
+        bool plausible = cycle >= (int64_t)SENSOR_ECO_GASBEE_CYCLE_MIN_S * 1000000LL &&
+                         cycle <= (int64_t)SENSOR_ECO_GASBEE_CYCLE_MAX_S * 1000000LL;
+        ph->cycle_us = plausible ? cycle : 0;
+    }
+    ph->have_ref = true;
+    ph->ref_us   = now_us;
+    ph->ref_seq  = seq;
+}
+
 // ── MAC-Filter ────────────────────────────────────────────────────────────
 
 typedef struct {
@@ -249,6 +283,7 @@ static void gasbee_on_adv(const struct ble_gap_disc_desc *disc)
         }
         log_new[slot]     = true;
         s_slot_pkts[slot] = 1;
+        phase_update_locked(slot, seq, e.config_mode, e.last_seen_us);
 
         s->weight_kg     = e.weight_kg;
         s->weight_valid  = e.weight_valid;
@@ -317,6 +352,7 @@ esp_err_t gasbee_ble_scanner_set_macs(const char *bottle_a_mac, const char *bott
             // der vorher zugeordneten GasBee weiter gemeldet.
             if (memcmp(&new_filter[i], &s_filter[i], sizeof(mac_filter_t)) != 0) {
                 memset(&s_slot[i], 0, sizeof(s_slot[i]));
+                memset(&s_phase[i], 0, sizeof(s_phase[i]));
                 s_slot_pkts[i] = 0;
             }
             s_filter[i] = new_filter[i];
@@ -328,6 +364,33 @@ esp_err_t gasbee_ble_scanner_set_macs(const char *bottle_a_mac, const char *bott
              new_filter[0].active ? mac_a : "deaktiviert",
              new_filter[1].active ? mac_b : "deaktiviert");
     return ESP_OK;
+}
+
+bool gasbee_ble_scanner_burst_expected(int64_t now_us)
+{
+    if (!s_mutex) return true;
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(10)) != pdTRUE) return true;
+
+    const int64_t pre  = (int64_t)SENSOR_ECO_GASBEE_PRE_S * 1000000LL;
+    const int64_t tail = (int64_t)(SENSOR_GASBEE_BURST_S + SENSOR_ECO_GASBEE_POST_S) * 1000000LL;
+    bool expected = false;
+    for (int slot = 0; slot < SLOT_COUNT && !expected; slot++) {
+        if (!s_filter[slot].active) continue;
+        const burst_phase_t *ph = &s_phase[slot];
+        if (!ph->have_ref || ph->cycle_us == 0) { expected = true; break; }
+
+        int64_t since = now_us - ph->ref_us;
+        // Abgelaufene Fenster ohne neue seq = verpasste Bursts → Dauer-Scan
+        int64_t missed = (since > tail) ? (since - tail) / ph->cycle_us : 0;
+        if (missed >= SENSOR_ECO_GASBEE_MISS_MAX) { expected = true; break; }
+
+        // Fenster um den k-ten Burst (ref + k·cycle, k ≥ 1): [−pre, +tail]
+        int64_t x = since + pre;
+        int64_t k = x / ph->cycle_us;
+        if (k >= 1 && (x - k * ph->cycle_us) <= pre + tail) expected = true;
+    }
+    xSemaphoreGive(s_mutex);
+    return expected;
 }
 
 size_t gasbee_ble_scanner_get_scan_list(gasbee_scan_entry_t *out, size_t max_entries)

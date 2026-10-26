@@ -356,6 +356,37 @@
 #define SENSOR_BLE_SCAN_WINDOW       0x0050  // 80 × 0,625 ms = 50 ms (= Intervall)
 
 // ====================================================================================
+// Energiesparen (power/power_mode.c)
+// Eco-Modus: Display meldet per hb-Feld "eco" (Hintergrundlicht aus), dass niemand
+// hinschaut. Mit Landstrom (SENSOR_AC_SENSE_GPIO) wird nie gespart. Jede Stufe einzeln
+// abschaltbar (0), um ihre Wirkung am INA226 (elec.p_w) zu messen.
+// ====================================================================================
+#define SENSOR_PM_DFS_ENABLE          1      // Takt dynamisch MIN..MAX, immer (ohne Light Sleep)
+#define SENSOR_PM_CPU_MAX_MHZ         240
+#define SENSOR_PM_CPU_MIN_MHZ         80
+#define SENSOR_ECO_BLE_WINDOWS        1      // BLE-Scan nur in Fenstern (GasBee-Takt, Ruuvi)
+#define SENSOR_ECO_WIFI_OFF           1      // WLAN zum Router trennen (kein Web-Dashboard/NTP)
+#define SENSOR_ECO_IMU_SUSPEND        1      // BNO055 in Suspend
+#define SENSOR_ECO_SLOW_TOPICS        1      // Topics mit WOMO_TOPIC_*_ECO_INTERVAL_MS
+// Ohne hb vom Display so lange (ms) → zurück in den Normalmodus
+#define SENSOR_ECO_REQUEST_TIMEOUT_MS 10000
+
+// GasBee-Takt (gasbee_ble_scanner.c): Intervall aus dem Abstand zweier Bursts gelernt.
+// Fenster: erwarteter Burst − PRE bis + SENSOR_GASBEE_BURST_S + POST. Nach MISS_MAX
+// verpassten Fenstern Dauer-Scan, bis wieder ein Burst kommt.
+#define SENSOR_ECO_GASBEE_PRE_S       5
+#define SENSOR_ECO_GASBEE_POST_S      5
+#define SENSOR_ECO_GASBEE_MISS_MAX    2
+#define SENSOR_ECO_GASBEE_CYCLE_MIN_S 15     // Bereich wie CONFIG_GASBEE_MEASURE_INTERVAL_S
+#define SENSOR_ECO_GASBEE_CYCLE_MAX_S 3600
+
+// Ruuvi: alle PERIOD ein Fenster, endet vorzeitig, sobald alle konfigurierten Tags da waren.
+// TODO(messung): WINDOW an den echten Ruuvi-Sendeabstand anpassen – im Normalbetrieb
+// ruuvi_scan anfordern und age_s mehrfach ablesen (Abstand zweier Pakete), WINDOW ≥ 3× davon.
+#define SENSOR_ECO_RUUVI_PERIOD_S     60
+#define SENSOR_ECO_RUUVI_WINDOW_S     5
+
+// ====================================================================================
 // GasBee BLE (Gaswaage, firmware/gasbee_nrf) – Advertising-Format v1
 // Kein Verbindungsaufbau: Daten kommen ausschließlich aus dem Advertising
 // (Name "GasBee" + Manufacturer Data, Company-ID 0xFFFF). Format siehe README.

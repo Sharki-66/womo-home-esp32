@@ -168,6 +168,7 @@ typedef struct {
         bool pwr_12v_on;       // 12V Bordnetz aktiv
         bool radio_on;         // Multimedia/Radio aktiv (nur wenn 12V an)
         bool ac_present;       // 230V Landstrom angeschlossen
+        bool sb_eco;           // Sensorboard im Eco-Modus (ctrl "eco")
         bool rtc_bat_low;      // BLF: RTC-Backup-Batterie schwach (<~1.2V)
         bool rtc_bat_switched; // BSF: Seit letztem Reset mind. 1× auf RTC-Batterie gelaufen
         bool buzzer_on;        // Globale Systemtöne aktiv
@@ -287,6 +288,9 @@ esp_err_t womo_sensorboard_send_gasbee_cal_session(int slot, bool start);
 esp_err_t womo_sensorboard_send_gasbee_cal(const char *mac, bool zero, uint32_t grams);
 esp_err_t womo_sensorboard_send_gas_bottle_replace(uint8_t slot, const char *channel);
 esp_err_t womo_sensorboard_send_pwr_12v(bool enable);
+/* Eco-Wunsch (Hintergrundlicht aus) – geht mit jedem hb ans Sensorboard, bei Änderung sofort.
+ * Das Sensorboard spart nur ohne Landstrom, Ergebnis in power.sb_eco. */
+void womo_sensorboard_set_eco(bool eco);
 esp_err_t womo_sensorboard_send_radio(bool enable);
 esp_err_t womo_sensorboard_send_imu_zero(void);
 esp_err_t womo_sensorboard_send_buzzer(bool enable);

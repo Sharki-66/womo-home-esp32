@@ -28,6 +28,7 @@
 #include "network/gasbee_gatt_cal.h"
 #include "network/ruuvi_ble_scanner.h"
 #include "hal/deep_sleep.h"
+#include "hal/power_mode.h"
 #include "led_strip.h"
 #include "driver/gpio.h"
 #include "driver/rtc_io.h"
@@ -208,7 +209,10 @@ void app_main(void)
         ESP_LOGW(TAG, "Zeit-Synchronisation nicht verfügbar: %s", esp_err_to_name(time_err));
     }
 
-    // WiFi-Verbindung zum RUTX11 herstellen (bleibt dauerhaft aktiv)
+    // Dynamische Taktanpassung (Eco-Modus selbst steuert espnow_modem über power_mode_tick)
+    power_mode_init();
+
+    // WiFi-Verbindung zum RUTX11 herstellen (im Eco-Modus getrennt, s. power_mode.c)
     esp_err_t wifi_err = sensor_wifi_init();
     if (wifi_err != ESP_OK) {
         ESP_LOGW(TAG, "WiFi nicht gestartet: %s", esp_err_to_name(wifi_err));

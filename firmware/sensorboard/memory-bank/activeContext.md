@@ -7,6 +7,13 @@
 
 ## Laufende Arbeiten
 
+### Eco-Modus / Stromsparen (2026-10-25, auf Hardware getestet)
+Messung Nutzer: Gesamtsystem 3,4 W, Display-Licht aus 1,8 W. Ziel: nachts/ohne Hinschauen weniger, mit Landstrom keine Einsparung.
+Neu `hal/power_mode.c`: Display meldet `hb.eco` (Licht aus, egal ob Ruhezeit 22–8 Uhr, Taste oder Automatik), Sensorboard spart nur ohne `ac_present`. Stufen (`SENSOR_ECO_*`, einzeln abschaltbar): BLE-Scan in Fenstern (GasBee-Burst-Takt gelernt in `gasbee_ble_scanner.c`, Ruuvi alle 60 s), WLAN getrennt, BNO055 Suspend, Topics langsamer (`WOMO_TOPIC_*_ECO_INTERVAL_MS`). Immer: Takt 80–240 MHz (`CONFIG_PM_ENABLE`, kein Light Sleep). `ctrl.eco` meldet den Modus. **Mit Display zusammen flashen.**
+Entscheidungen: Auslöser = Hintergrundlicht aus (Option A); WLAN darf nachts aus; `hb`-Feld statt eigenem Kommando (übersteht Neustarts). Zurückgestellt: ESP-NOW-Wake-Window (Phase 2), Display-ESP sparen (Phase 3), BME680 ULP.
+**Ergebnis 2026-10-25:** `hb.eco` kommt an, Topics langsamer, WLAN getrennt (ctrl ohne ssid) – Ersparnis aber nur ~0,1 W: Funk bleibt für ESP-NOW dauernd im Empfang. Aufteilung bei Licht aus: Sensorboard 0,7 W (~50 mA), Display-Board ~1,1 W → nächster Hebel Display (Optionen A stromlos via GPIO7 / B Software: Pixeltakt, DFS, Polls pausieren / C beides, Entscheidung offen). Logs `power_mode`/`sensor_wifi` unsichtbar (Default WARN, Tags fehlen in `sensor_log_init`).
+**Test:** Licht aus → Log `power_mode: Modus: Eco`, `WLAN pausiert`, `BNO055 Suspend`; `elec.p_w` je Stufe vergleichen (Stufe in `sensor_config.h` auf 0). GasBee-Log `[Flasche A] seq N` muss weiter alle 5 min kommen (Takt nach 2 Bursts gelernt). Licht an → `Modus: Normal`, WLAN verbindet, Display sofort aktuell. Landstrom an → nie Eco.
+
 ### ESP-NOW Kopplung + Verschlüsselung, `/api/cmd`-Freigabeliste (2026-10-25, nicht gebaut)
 `espnow_transport.c` neu: Display-MAC im NVS, nur verschlüsselter Unicast, Beacon-Kopplung, `peer_known()` = Frame vom Display seit Boot. `sensor_http.c`: Freigabeliste, sonst 403. `dashboard.html`: 12V nur Anzeige, WLAN-Formular entfernt (SPIFFS-Image geht mit dem normalen Flash mit, `FLASH_IN_PROJECT`). Details/Tests: `firmware/display/memory-bank/activeContext.md` + `progress.md`.
 

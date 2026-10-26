@@ -37,6 +37,7 @@ static ble_conn_event_handler_t s_conn_handler      = NULL;
 static void                    *s_conn_handler_arg  = NULL;
 static TimerHandle_t            s_scan_retry_timer  = NULL;
 static volatile bool            s_ready             = false;
+static volatile bool            s_scan_enabled      = true;   // Eco-Modus: false außerhalb der Scan-Fenster
 
 // ── Vorwärts-Deklaration ──────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ void ble_manager_start_scan(void)
         // startet den Scan selbst sobald der Host bereit ist.
         return;
     }
+    if (!s_scan_enabled) return;
 
     struct ble_gap_disc_params p = {
         // Passiv: Ruuvi + GasBee senden alles im Advertising, keine Scan-Response nötig
@@ -82,6 +84,19 @@ void ble_manager_start_scan(void)
     } else {
         ESP_LOGW(TAG, "Scan-Start fehlgeschlagen (rc=%d) → Retry in 3s", rc);
         xTimerStart(s_scan_retry_timer, 0);
+    }
+}
+
+void ble_manager_set_scan_enabled(bool enabled)
+{
+    if (s_scan_enabled == enabled) return;
+    s_scan_enabled = enabled;
+    if (!s_ready) return;
+    if (enabled) {
+        ble_manager_start_scan();
+    } else {
+        ble_gap_disc_cancel();
+        ESP_LOGD(TAG, "Scan pausiert");
     }
 }
 

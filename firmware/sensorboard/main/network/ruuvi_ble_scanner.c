@@ -298,6 +298,20 @@ void ruuvi_ble_scanner_get_outdoor(ruuvi_snapshot_t *out)
     }
 }
 
+bool ruuvi_ble_scanner_all_seen_since(int64_t since_us)
+{
+    if (!s_mutex) return true;
+    bool all = true;
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        if (s_filter_indoor.active  && (!s_indoor.valid  || s_indoor.timestamp_us  < since_us)) all = false;
+        if (s_filter_outdoor.active && (!s_outdoor.valid || s_outdoor.timestamp_us < since_us)) all = false;
+        xSemaphoreGive(s_mutex);
+    } else {
+        all = false;
+    }
+    return all;
+}
+
 esp_err_t ruuvi_ble_scanner_set_macs(const char *indoor_mac, const char *outdoor_mac)
 {
     const char *indoor  = indoor_mac  ? indoor_mac  : "";

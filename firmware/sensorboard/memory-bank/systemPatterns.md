@@ -13,7 +13,8 @@
 8. rgb_led_off()              – WS2812 GPIO48 ausschalten
 9. nvs_flash_init()
 10. time_sync_init()          – RTC + I2C-Bus
-11. sensor_wifi_init()        – STA zum RUTX11
+11. power_mode_init()        – Takt 80–240 MHz (esp_pm, ohne Light Sleep)
+    sensor_wifi_init()        – STA zum RUTX11
 12. sensor_http_start()       – HTTP-Server (Port 80, SPIFFS)
 13. time_sync_start_ntp()     – NTP → setzt RTC nach Connect
 14. analog_init()             – ADC (Batterien + Tanks)
@@ -36,7 +37,7 @@ Seit 2026-06 (Commit `e1eae83`) ESP-NOW statt RS485. Interne Funktionen in `espn
 
 **Scheduler-Task:** Round-Robin über alle Topics (100 ms-Zyklus, max. 1 Topic pro Zyklus). Sobald `espnow_transport_peer_known()` → `s_display_ready = true` + Initial-Burst. Scan-Listen und `gasbee_cal_result` haben Vorrang vor dem Round-Robin.
 
-**RX:** ACK (`ack`/`cmd_ack`) → `s_pending[]` aufräumen; `hb` vom Display wird ohne ACK verworfen (dient nur der Peer-Erkennung); Commands (`pwr_12v_on/off`, `radio_on/off`, `tare_a/b`, `wifi_config`, ...) direkt ausführen und mit `cmd_ack` quittieren.
+**RX:** ACK (`ack`/`cmd_ack`) → `s_pending[]` aufräumen; `hb` vom Display ohne ACK (Peer-Erkennung, Feld `eco` → `power_mode_set_requested()`); Commands (`pwr_12v_on/off`, `radio_on/off`, `tare_a/b`, `wifi_config`, ...) direkt ausführen und mit `cmd_ack` quittieren.
 
 **State-Flags:**
 ```c
@@ -53,7 +54,7 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 
 | Topic | Intervall | Felder (Kernfelder) |
 |---|---|---|
-| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. Abschnitt „12V Bordnetz"), `radio_on`, `ac_present`, `uptime`, `heap` (ehemals `hb`), `ssid`, optional `rtc_bat_low`, `rtc_bat_switched`, `rssi`, `wifi_trial` |
+| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. Abschnitt „12V Bordnetz"), `radio_on`, `ac_present`, `uptime`, `heap` (ehemals `hb`), `ssid`, optional `eco` (nur `true`), `rtc_bat_low`, `rtc_bat_switched`, `rssi`, `wifi_trial` |
 | `imu` | 2 s | `yaw_deg`, `pitch_deg`, `roll_deg`, `hdg`, `cal`, `calibrated` |
 | `bat` | 5 s | `b1`, `b2` (V), `nc1`, `nc2` |
 | `tank` | 10 s | `t1`, `t2` (%), `t1_l`, `t2_l` (L), Rate-Felder |
@@ -65,6 +66,17 @@ Sofort-Ctrl: Wenn `pwr_12v_on/off` oder `radio_on/off` ausgeführt wird, wird `c
 | `ruuvi_scan` | nur auf Anfrage | ein Frame pro Tag: `sid`, `idx`, `cnt` (0 = keiner) + `mac`, `rssi`, `temp_c`, `has_pressure`, `age_s` – alle gesehenen Ruuvi-Tags (ungefiltert), Antwort auf `cmd:"ruuvi_scan_request"` |
 | `gasbee_scan` | nur auf Anfrage | ein Frame pro GasBee: `sid`, `idx`, `cnt` (0 = keine) + `mac`, `rssi`, `weight_kg`, `batt_mv`, `batt_pct`, `chg`, `cal`, `cfg`, `bee_seq`, `age_s` – alle gesehenen GasBees (ungefiltert), Antwort auf `cmd:"gasbee_scan_request"` |
 | `gasbee_cal_result` | nach `gasbee_cal` | `step` (`zero`/`ref`), `ok`, `err` (0 ok, > 0 ATT-Fehler der GasBee, < 0 Sensorboard-Fehler, s. `gasbee_gatt_cal.h`), `msg` |
+
+## Energiesparen (hal/power_mode.c)
+
+- Immer: dynamische Taktanpassung 80–240 MHz (`esp_pm_configure`, `light_sleep_enable = false` – Light Sleep würde ESP-NOW-Empfang und BLE-Scan lückenhaft machen).
+- Eco = `hb.eco` vom Display (Hintergrundlicht aus) **und** kein Landstrom. `power_mode_tick()` läuft alle 100 ms im TX-Task und gleicht den Soll-Zustand ab (idempotente Setter, keine Flankenlogik):
+  - `ble_manager_set_scan_enabled()`: Scan nur, wenn `gasbee_ble_scanner_burst_expected()` oder Ruuvi-Fenster offen. Innerhalb der Fenster bleibt das Tastverhältnis 100 % (bei 30/50 ms kamen nur 2/10 GasBee-Pakete an).
+  - GasBee-Takt: Bezug = erstes Paket einer neuen seq, Intervall = Abstand / seq-Differenz (zählt verpasste Bursts mit), plausibel 15–3600 s, sonst unbekannt. Konfigurationsmodus (USB) → unbekannt. Fenster −5 s … +15 s um den erwarteten Burst, nach 2 verpassten Fenstern Dauer-Scan bis zur nächsten seq.
+  - Ruuvi: alle 60 s ein Fenster (max. `SENSOR_ECO_RUUVI_WINDOW_S`), endet sobald alle konfigurierten Tags ein Paket geliefert haben.
+  - `sensor_wifi_set_paused()`: trennt, keine Reconnects, setzt den zuletzt verbundenen Kanal fest (ESP-NOW). Nicht während `wifi_trial`.
+  - `bno055_app_set_suspended()`: Umschaltung im BNO055-Task, letzter Snapshot bleibt stehen, beim Aufwecken NDOF + Kalibrierung aus NVS.
+  - Topics mit `eco_interval_ms`. Wechsel zurück auf Normal → `modem_publish_all()`.
 
 ## Sensor-Muster
 

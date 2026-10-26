@@ -32,6 +32,7 @@
 #include "freertos/task.h"
 #include "sensor_config.h"
 #include "hal/deep_sleep.h"
+#include "hal/power_mode.h"
 #include "sensors/bme680_sensor.h"
 #include "sensors/gas_source.h"
 #include "sensors/ina226_sensor.h"
@@ -84,6 +85,7 @@ static void modem_publish_gas(void);
 static void modem_publish_bme_in(void);
 static void modem_publish_bme_out(void);
 static void modem_publish_elec(void);
+static void modem_publish_all(void);
 
 // ── Hilfsfunktionen ─────────────────────────────────────────────────────
 
@@ -320,9 +322,13 @@ static void modem_handle_display_ready(void)
     s_display_ready = true;
     s_display_ready_seen++;
     ESP_LOGI(TAG, "Display bereit (count=%u)", (unsigned)s_display_ready_seen);
-    
-    // Initial-Burst: Alle Topics sofort einmal senden
-    ESP_LOGI(TAG, "Sende initiale Sensor-Daten...");
+    modem_publish_all();
+}
+
+// Alle Topics sofort einmal senden (Display bereit, Ende des Eco-Modus)
+static void modem_publish_all(void)
+{
+    ESP_LOGI(TAG, "Sende alle Sensor-Daten...");
     modem_publish_ctrl();
     vTaskDelay(pdMS_TO_TICKS(20));
     modem_publish_imu();
@@ -340,7 +346,7 @@ static void modem_handle_display_ready(void)
     modem_publish_bme_out();
     vTaskDelay(pdMS_TO_TICKS(20));
     modem_publish_elec();
-    ESP_LOGI(TAG, "Initiale Sensor-Daten gesendet");
+    ESP_LOGI(TAG, "Alle Sensor-Daten gesendet");
 }
 
 // ── Power / GPIO ────────────────────────────────────────────────────────
@@ -669,6 +675,9 @@ static void modem_publish_ctrl(void)
     cJSON_AddBoolToObject(root, "pwr_on", modem_board_power_on());
     cJSON_AddBoolToObject(root, "radio_on", s_radio_on);
     cJSON_AddBoolToObject(root, "ac_present", modem_ac_present());
+    if (power_mode_is_eco()) {
+        cJSON_AddBoolToObject(root, "eco", true);   // nur wenn aktiv (Frame-Größe, s. wifi_trial)
+    }
 
     // RTC-Batteriestatus
     time_sync_status_t ts_status = {0};
@@ -1232,6 +1241,7 @@ static void modem_publish_tank(void)
 typedef struct {
     const char *name;
     uint32_t interval_ms;
+    uint32_t eco_interval_ms;   // Eco-Modus (power_mode), siehe womo_config.h
     TickType_t last_sent;
     void (*publish)(void);
 } modem_topic_t;
@@ -1393,15 +1403,15 @@ static bool modem_scan_tx_step(void)
 }
 
 static modem_topic_t s_topics[] = {
-    { "ctrl",  WOMO_TOPIC_CTRL_INTERVAL_MS, 0, modem_publish_ctrl },
-    { "imu",   WOMO_TOPIC_IMU_INTERVAL_MS,  0, modem_publish_imu  },
-    { "bat",   WOMO_TOPIC_BAT_INTERVAL_MS,  0, modem_publish_bat  },
-    { "tank",  WOMO_TOPIC_TANK_INTERVAL_MS, 0, modem_publish_tank },
-    { "hx",    WOMO_TOPIC_HX_INTERVAL_MS,   0, modem_publish_hx   },
-    { "gas",     WOMO_TOPIC_GAS_INTERVAL_MS,  0, modem_publish_gas     },
-    { "bme_in",  WOMO_TOPIC_BME_INTERVAL_MS,   0, modem_publish_bme_in  },
-    { "bme_out", WOMO_TOPIC_BME_INTERVAL_MS,   0, modem_publish_bme_out },
-    { "elec",    WOMO_TOPIC_ELEC_INTERVAL_MS,  0, modem_publish_elec    },
+    { "ctrl",    WOMO_TOPIC_CTRL_INTERVAL_MS, WOMO_TOPIC_CTRL_ECO_INTERVAL_MS, 0, modem_publish_ctrl    },
+    { "imu",     WOMO_TOPIC_IMU_INTERVAL_MS,  WOMO_TOPIC_IMU_ECO_INTERVAL_MS,  0, modem_publish_imu     },
+    { "bat",     WOMO_TOPIC_BAT_INTERVAL_MS,  WOMO_TOPIC_BAT_ECO_INTERVAL_MS,  0, modem_publish_bat     },
+    { "tank",    WOMO_TOPIC_TANK_INTERVAL_MS, WOMO_TOPIC_TANK_ECO_INTERVAL_MS, 0, modem_publish_tank    },
+    { "hx",      WOMO_TOPIC_HX_INTERVAL_MS,   WOMO_TOPIC_HX_ECO_INTERVAL_MS,   0, modem_publish_hx      },
+    { "gas",     WOMO_TOPIC_GAS_INTERVAL_MS,  WOMO_TOPIC_GAS_ECO_INTERVAL_MS,  0, modem_publish_gas     },
+    { "bme_in",  WOMO_TOPIC_BME_INTERVAL_MS,  WOMO_TOPIC_BME_ECO_INTERVAL_MS,  0, modem_publish_bme_in  },
+    { "bme_out", WOMO_TOPIC_BME_INTERVAL_MS,  WOMO_TOPIC_BME_ECO_INTERVAL_MS,  0, modem_publish_bme_out },
+    { "elec",    WOMO_TOPIC_ELEC_INTERVAL_MS, WOMO_TOPIC_ELEC_ECO_INTERVAL_MS, 0, modem_publish_elec    },
 };
 #define MODEM_TOPIC_COUNT (sizeof(s_topics) / sizeof(s_topics[0]))
 static size_t s_topic_rr = 0;
@@ -1628,7 +1638,9 @@ static void modem_process_rx_line(const char *line)
         need_ack = false;
         ack_success = true;
     } else if (type && strcmp(type, "hb") == 0) {
-        /* Display-Heartbeat: kein ACK nötig, Peer-Erkennung läuft via espnow_transport */
+        /* Display-Heartbeat: kein ACK nötig, Peer-Erkennung läuft via espnow_transport.
+         * Feld "eco" = Hintergrundlicht aus → Energiesparwunsch (fehlt = normal) */
+        power_mode_set_requested(cJSON_IsTrue(cJSON_GetObjectItem(root, "eco")));
         ack_success = true;
         need_ack = false;
     } else if (cmd_str) {
@@ -1684,6 +1696,12 @@ static void modem_tx_task(void *arg)
             modem_handle_display_ready();
         }
 
+        // Energiesparmodus abgleichen; zurück auf Normal → Display sofort aktualisieren
+        if (power_mode_tick(modem_ac_present()) && !power_mode_is_eco() && s_display_ready) {
+            modem_publish_all();
+            for (size_t i = 0; i < MODEM_TOPIC_COUNT; ++i) s_topics[i].last_sent = now;
+        }
+
         // Sofort-Ctrl nach Command-Ausführung (Button-Feedback)
         if (s_display_ready && s_ctrl_immediate) {
             s_ctrl_immediate = false;
@@ -1722,9 +1740,11 @@ static void modem_tx_task(void *arg)
 
         // Round-Robin: pro Loop maximal 1 Topic senden (nicht zusätzlich zu einem Scan-Frame)
         if (s_display_ready && !scan_sent) {
+            bool eco = SENSOR_ECO_SLOW_TOPICS && power_mode_is_eco();
             for (size_t i = 0; i < MODEM_TOPIC_COUNT; ++i) {
                 size_t idx = (s_topic_rr + i) % MODEM_TOPIC_COUNT;
-                if ((now - s_topics[idx].last_sent) >= pdMS_TO_TICKS(s_topics[idx].interval_ms)) {
+                uint32_t interval_ms = eco ? s_topics[idx].eco_interval_ms : s_topics[idx].interval_ms;
+                if ((now - s_topics[idx].last_sent) >= pdMS_TO_TICKS(interval_ms)) {
                     s_topics[idx].publish();
                     s_topics[idx].last_sent = now;
                     s_topic_rr = (idx + 1) % MODEM_TOPIC_COUNT;

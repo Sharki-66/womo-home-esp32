@@ -49,6 +49,17 @@
 #define WOMO_TOPIC_GAS_INTERVAL_MS          10000
 #define WOMO_TOPIC_BME_INTERVAL_MS          10000
 
+// Eco-Modus (Display-Hintergrundlicht aus, kein Landstrom): seltener senden.
+// Alle deutlich unter dem Link-Timeout des Displays (5 min).
+#define WOMO_TOPIC_CTRL_ECO_INTERVAL_MS     10000
+#define WOMO_TOPIC_ELEC_ECO_INTERVAL_MS     10000
+#define WOMO_TOPIC_IMU_ECO_INTERVAL_MS      60000
+#define WOMO_TOPIC_BAT_ECO_INTERVAL_MS      30000
+#define WOMO_TOPIC_TANK_ECO_INTERVAL_MS     60000
+#define WOMO_TOPIC_HX_ECO_INTERVAL_MS       60000
+#define WOMO_TOPIC_GAS_ECO_INTERVAL_MS      60000
+#define WOMO_TOPIC_BME_ECO_INTERVAL_MS      60000
+
 // ═══════════════════════════════════════════════════════════════════════
 //  Kategorie 3: Netzwerk / Infrastruktur
 // ═══════════════════════════════════════════════════════════════════════

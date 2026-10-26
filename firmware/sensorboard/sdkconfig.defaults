@@ -4,6 +4,12 @@
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240
 
+#
+# Power Management: dynamische Taktanpassung 80–240 MHz (hal/power_mode.c),
+# kein Light Sleep (light_sleep_enable = false im Code)
+#
+CONFIG_PM_ENABLE=y
+
 
 #
 # Touch Sensor (Legacy-API, Deprecation-Warnung unterdrücken)

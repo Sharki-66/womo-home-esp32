@@ -1,5 +1,9 @@
 # Active Context — WoMoHome Display
 
+## Eco-Wunsch ans Sensorboard (2026-10-25, auf Hardware getestet)
+
+`backlight_set()` ruft `womo_sensorboard_set_eco(!on)`: jedes `hb` trägt `eco`, bei Änderung wird sofort ein `hb` gesendet. Gilt für alle Wege, wie das Licht ausgeht (Ruhezeit, Taste, Display-Aus-Automatik). Das Sensorboard spart nur ohne Landstrom und meldet `ctrl.eco` → `power.sb_eco` (noch ohne Anzeige). Der Display-ESP selbst spart noch nicht (Phase 3). **Mit Sensorboard zusammen flashen.** Details: `firmware/sensorboard/memory-bank/activeContext.md`.
+
 ## Display-Aus-Automatik (2026-10-25, gebaut, Layout geprüft, Funktionstest offen)
 
 Einstellungen > System > Display: Display-Aus-Automatik (deaktiviert, 1–5 min) und „Bei Meldung einschalten“ (Nie | Nur Alarm | Warnung + Alarm). Bezeichnungen bewusst ohne „Aus: Aus“ gewählt. Entscheidungen: Ruhezeit 5 min oder die kürzere Einstellung; nachts weckt nur ein Alarm; Standard deaktiviert bzw. Warnung + Alarm. Der bisherige Ruhezeit-Timer ist jetzt der allgemeine `backlight_idle_timer`. „Abdunkeln“ heißt Ausschalten, Dimmen kann der Code nicht (CH422G nur Ein/Aus, Hardware nicht geprüft). Tests: `progress.md`.

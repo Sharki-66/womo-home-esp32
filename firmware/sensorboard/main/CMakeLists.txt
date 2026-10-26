@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "app_main.c"
         "hal/deep_sleep.c"
+        "hal/power_mode.c"
         "sensors/analog_sensor.c"
         "network/espnow_modem.c"
         "network/espnow_transport.c"
@@ -46,4 +47,5 @@ idf_component_register(
         json
         bt
         driver
+        esp_pm
 )

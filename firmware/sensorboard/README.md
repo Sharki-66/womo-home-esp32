@@ -43,9 +43,11 @@ Alle Batterie-/Sense-Kanäle: **100 kΩ / 22 kΩ** Teiler → Faktor 122/22.
 ## ESP-NOW-Protokoll (Topic-basiert)
 Ein JSON-Frame pro ESP-NOW-Paket, max. 250 Byte (`WOMO_ESPNOW_MAX_PAYLOAD`). Kanal = WLAN-Kanal, sonst `WOMO_ESPNOW_CHANNEL_FALLBACK` (`firmware/shared/womo_config.h`). Kopplung + Verschlüsselung (seit 2026-10-25): Jedes Board speichert die MAC der Gegenstelle im NVS (`espnow_peer`/`mac`) und nimmt Nutzdaten **nur per verschlüsseltem Unicast** (CCMP, `WOMO_ESPNOW_PMK`/`LMK` aus `womo_credentials.h`) von ihr an. Broadcast ist nicht verschlüsselbar und trägt nur den Kopplungs-Beacon `{"type":"pair"}` (alle 1 s), Nutzdaten ohne Kopplung werden nicht gesendet (`ESP_ERR_INVALID_STATE`). Kopplungsfenster: beide, solange keine Gegenstelle gespeichert ist; Display 60 s nach „Neu koppeln“ (Einstellungen > Service), schließt beim ersten verschlüsselten Frame; Sensorboard, solange seit `WOMO_ESPNOW_LINK_DEAD_MS` (10 s) nichts vom Display kam. Im Fenster wird ein fremder Beacon als neue Gegenstelle übernommen. Konstanten in `firmware/shared/womo_config.h`. Sobald seit Boot ein Frame vom gekoppelten Display kam (Display sendet alle 2 s `hb`), schaltet das Sensorboard die Topics frei und sendet einen Initial-Burst aller Topics. Round-Robin, max. 1 Topic pro 100 ms. Jedes Frame enthält `seq`, optional `need_ack`; Kommandos werden mit `{ type:"cmd_ack", ack_seq, status, cmd, err? }` quittiert. `hello`/`hb` sendet das Sensorboard nicht mehr (Diagnose steckt in `ctrl`).
 
+**Eco-Modus (seit 2026-10-25, `hal/power_mode.c`):** Das Display schickt in jedem `hb` das Feld `eco` (`true` = Hintergrundlicht aus – Ruhezeit, Taste oder Automatik; bei Änderung sofort). Ohne Landstrom (`ac_present`) spart das Sensorboard dann: BLE-Scan nur in Fenstern (GasBee-Burst-Takt gelernt, Ruuvi alle `SENSOR_ECO_RUUVI_PERIOD_S`), WLAN zum Router getrennt (kein Web-Dashboard/NTP, ESP-NOW bleibt auf dem Kanal), BNO055 in Suspend, Topics mit `WOMO_TOPIC_*_ECO_INTERVAL_MS`. `ctrl.eco:true` meldet den aktiven Modus. Ohne `hb` für `SENSOR_ECO_REQUEST_TIMEOUT_MS` → Normal. Zurück auf Normal: alle Topics sofort einmal. Stufen einzeln abschaltbar (`SENSOR_ECO_*` in `sensor_config.h`). Immer aktiv: Takt 80–240 MHz (`CONFIG_PM_ENABLE`, `SENSOR_PM_DFS_ENABLE`), kein Light Sleep. Eco-Intervalle: `ctrl`/`elec` 10 s, `bat` 30 s, übrige 60 s.
+
 | Topic | Intervall | Felder |
 |---|---|---|
-| `ctrl` | 2 s | `pwr_on` (12V-Sense GPIO14, s. u.), `radio_on`, `ac_present`, `uptime`, `heap`, `ssid` (verbundenes WLAN, leer = keins); optional: `rtc_bat_low`, `rtc_bat_switched`, `rssi`, `wifi_trial` |
+| `ctrl` | 2 s (Eco 10 s) | `pwr_on` (12V-Sense GPIO14, s. u.), `radio_on`, `ac_present`, `uptime`, `heap`, `ssid` (verbundenes WLAN, leer = keins); optional: `eco` (nur `true`), `rtc_bat_low`, `rtc_bat_switched`, `rssi`, `wifi_trial` |
 | `imu` | 2 s | `yaw_deg`, `pitch_deg`, `roll_deg`, `hdg`, `cal:{sys,gyro,acc,mag}`, `calibrated`, `ts` |
 | `bat` | 5 s | `b1`, `b2` (Volt), `nc1`, `nc2` |
 | `tank` | 10 s | `t1`, `t2` (%), `nc1`, `nc2`, `t1_l`, `t2_l` (Liter), `t1_rate1h`, `t1_rate2h`, `t1_rest_h`, `t2_rate1h`, `t2_rate2h`, `t2_rest_h` |
@@ -156,7 +158,8 @@ main/
 ├── sensor_config.h         Pin-Belegung, Kalibrierung, Konstanten
 ├── hal/
 │   ├── sensor_i2c_bus      I2C-Bus Init
-│   └── deep_sleep          Touch-Wakeup, Deep-Sleep
+│   ├── deep_sleep          Touch-Wakeup, Deep-Sleep
+│   └── power_mode          Taktanpassung, Eco-Modus (Display-Licht aus, kein Landstrom)
 ├── sensors/
 │   ├── analog_sensor       ADC (Batterien, Tanks), Median-of-3-Mittelung
 │   ├── bme680_sensor       BME680/BME280/BME260 + BSEC + Drucktrend

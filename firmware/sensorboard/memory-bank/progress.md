@@ -28,6 +28,7 @@
 
 | Feature | Status | Nächste Schritte |
 |---|---|---|
+| Eco-Modus / Stromsparen (2026-10-25) | Läuft auf Hardware, Ersparnis nur ~0,1 W (Sensorboard 0,7 W, Display ~1,1 W bei Licht aus) | Display-Seite angehen (A/B/C offen). Je Stufe `elec.p_w` messen (Basis 1,8 W bei Licht aus), Ruuvi-Fensterlänge `SENSOR_ECO_RUUVI_WINDOW_S` aus Messung festlegen (TODO in `sensor_config.h`). Danach entscheiden: Phase 2 ESP-NOW-Wake-Window (`esp_now_set_wake_window`, braucht Wiederholung bis ACK am Display), Phase 3 Display-ESP sparen, BME680 ULP. |
 | GasBee einrichten (USB) + kalibrieren am Display | Auf Hardware getestet 2026-10-18 | Weitere Praxistests (zwei GasBees, Fehlerfälle) |
 | Gasverbrauch über Ausschalt-Lücke (≤ 1 Tag) | Gebaut 2026-10-18 | Über Nacht testen, Log `Gas-Lücke …` prüfen |
 | GasBee BLE (Advertising v1, Flasche A/B) | Läuft auf Hardware (2026-10-17, Flasche A) | Empfangsquote pro seq beobachten, Quellenwechsel HX711 ↔ GasBee testen, Flasche B, LiPo-Kennlinie verifizieren, GasBee kalibrieren. Alter GATT-Client entfernt (lieferte Werte nur ins Log). |

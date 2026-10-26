@@ -40,6 +40,9 @@ static esp_netif_t       *s_sta_netif        = NULL;
 static bool               s_initialized      = false;
 static int                s_retry_count       = 0;
 static char               s_ip_str[16]        = "";
+// Eco-Modus: Verbindung bewusst getrennt, keine Reconnects. Kanal bleibt für ESP-NOW stehen.
+static volatile bool      s_paused            = false;
+static uint8_t            s_pause_channel     = 0;
 static sensor_wifi_auth_fail_cb_t s_auth_fail_cb = NULL;
 
 // Probeverbindung mit neuen Zugangsdaten (sensor_wifi_set_credentials):
@@ -119,7 +122,13 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         esp_wifi_connect();
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         s_ip_str[0] = '\0';
-        if (s_trial_active && s_retry_count >= SENSOR_WIFI_RETRY_MAX) {
+        if (s_paused) {
+            // Kein Reconnect (Kanalsuche würde ESP-NOW unterbrechen), Kanal festhalten
+            if (s_pause_channel != 0) {
+                esp_wifi_set_channel(s_pause_channel, WIFI_SECOND_CHAN_NONE);
+            }
+            ESP_LOGI(TAG, "WLAN pausiert (Eco), ESP-NOW bleibt auf Kanal %u", s_pause_channel);
+        } else if (s_trial_active && s_retry_count >= SENSOR_WIFI_RETRY_MAX) {
             // Neue Zugangsdaten funktionieren nicht → gespeicherte wieder aktivieren
             char ssid[33] = {0};
             char pass[65] = {0};
@@ -147,13 +156,15 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
             ESP_LOGI(TAG, "Pause %d ms, dann neuer Versuch...", SENSOR_WIFI_RETRY_PAUSE_MS);
             vTaskDelay(pdMS_TO_TICKS(SENSOR_WIFI_RETRY_PAUSE_MS));
             s_retry_count = 0;
-            esp_wifi_connect();
+            if (!s_paused) esp_wifi_connect();
         }
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)data;
         snprintf(s_ip_str, sizeof(s_ip_str), IPSTR, IP2STR(&event->ip_info.ip));
         ESP_LOGI(TAG, "✓ Verbunden! IP: %s", s_ip_str);
         s_retry_count = 0;
+        wifi_second_chan_t second;
+        esp_wifi_get_channel(&s_pause_channel, &second);   // Kanal für eine spätere Pause merken
         if (s_trial_active) {
             char ssid[33], pass[65];
             taskENTER_CRITICAL(&s_trial_lock);
@@ -320,6 +331,25 @@ esp_err_t sensor_wifi_set_credentials(const char *ssid, const char *pass)
 bool sensor_wifi_is_trial_active(void)
 {
     return s_trial_active;
+}
+
+void sensor_wifi_set_paused(bool paused)
+{
+    if (!s_initialized || s_paused == paused) return;
+    s_paused = paused;
+    if (paused) {
+        ESP_LOGI(TAG, "Eco: WLAN-Verbindung wird getrennt");
+        esp_wifi_disconnect();
+    } else {
+        ESP_LOGI(TAG, "Eco beendet: verbinde WLAN neu");
+        s_retry_count = 0;
+        esp_wifi_connect();
+    }
+}
+
+bool sensor_wifi_is_paused(void)
+{
+    return s_paused;
 }
 
 const char *sensor_wifi_get_ip_str(void)

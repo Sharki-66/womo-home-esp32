@@ -81,6 +81,13 @@ void gasbee_ble_scanner_get(int slot, gasbee_snapshot_t *out);
 esp_err_t gasbee_ble_scanner_set_macs(const char *bottle_a_mac, const char *bottle_b_mac);
 
 /**
+ * @brief Eco-Modus: true, wenn für eine zugeordnete Flasche gerade ein Burst
+ *        erwartet wird – oder der Takt (noch) unbekannt ist bzw. zu viele Bursts
+ *        verpasst wurden (dann Dauer-Scan). Ohne zugeordnete Flasche false.
+ */
+bool gasbee_ble_scanner_burst_expected(int64_t now_us);
+
+/**
  * @brief Zuletzt gesehene GasBees (unabhängig vom Filter) für die Auswahl im
  *        Display kopieren. Gibt die Anzahl kopierter Einträge zurück.
  */

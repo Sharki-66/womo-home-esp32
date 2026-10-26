@@ -69,6 +69,13 @@ void ruuvi_ble_scanner_get_indoor(ruuvi_snapshot_t *out);
 void ruuvi_ble_scanner_get_outdoor(ruuvi_snapshot_t *out);
 
 /**
+ * @brief true, wenn jeder konfigurierte Slot seit since_us (esp_timer, µs) ein
+ *        Paket empfangen hat (ohne konfigurierten Slot immer true). Eco-Modus:
+ *        Ruuvi-Scanfenster vorzeitig schließen.
+ */
+bool ruuvi_ble_scanner_all_seen_since(int64_t since_us);
+
+/**
  * @brief MAC-Filter zur Laufzeit setzen, in NVS persistieren (vom Display per
  *        ESP-NOW-Kommando "ruuvi_config" gesetzt). Leerer String = Slot deaktiviert.
  */
