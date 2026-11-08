@@ -110,8 +110,20 @@
 - [ ] Build ohne Warnung `weather_nvs_save defined but not used`
 - [ ] Nach GPS-Fix und Neustart: Wetter kommt sofort für den letzten Standort (nicht den Stand von April), kein Absturz
 
+**Screenshot-Hotspot oben rechts (2026-11-07, gebaut mit 0 und 1, nicht getestet).** Ersetzt den globalen Indev-Long-Press, der alle Widget-Long-Presses und den Service-Zugang blockiert hat. Nur Entwicklung: `WOMO_ENABLE_SCREENSHOT 1` in `display_config.h`.
+- [ ] Long-Press oben rechts (60×60 px) → `/sdcard/screenshots/screen_JJJJMMTT_HHMMSS.bmp`, Hotspot nicht im Bild
+- [ ] Auch bei offenem Modal (Einstellungen, Forecast, Konnektivität) und Popups oben im Einstellungen-Modal
+- [ ] Zwei Screenshots in derselben Sekunde → zweite Datei `_1`, nichts überschrieben
+- [ ] Mit eingeschaltetem Screenshot: Service-PIN (5 s auf „Einstellungen“), elec-Panel, IMU-Nullung funktionieren weiter
+
 ## Backlog / noch nicht implementiert
 
+- **Idee: Display nachts (0:00–6:00) ganz stromlos (2026-10-26, zurückgestellt, nicht anfassen)**
+  - Weg: Sensorboard schaltet Display-5V über GPIO7 → Q5 → Q4 (`SENSOR_DISPLAY_PWR_GPIO`, HIGH = ein) um 0:00 aus, um 6:00 ein (Uhrzeit Sensorboard RTC/NTP).
+  - Erwartung (nicht gemessen): nachts nur Sensorboard ≈ 0,7 W statt 1,5 W gesamt. Vorab messen: Display-5V einmal abschalten, INA226 ablesen.
+  - Durchschnitte: nichts zu tun – Gas-Raten, Tank-Raten, Drucktrend rechnet bereits das Sensorboard (Gas mit `gas_bridge_gap`).
+  - Offen/Knackpunkte: (1) Alarme: Grenzwerte, Fehler-Stapel und Buzzer liegen nur im Display, Sensorboard hat keinen Buzzer → nachts stumm. Lösungsidee: Display schickt Alarm-Grenzwerte ans Sensorboard (NVS), Sensorboard schaltet das Display bei Alarm sofort ein (Startzeit bis Buzzer messen, bisher ≈ 3 s bis ESP-NOW). (2) Aufwecken von Hand: stromloses Display reagiert nicht auf Touch → Touch-Pad/Taster am Sensorboard? (3) Sensorboard-Eco läuft ohne `hb` nach `SENSOR_ECO_REQUEST_TIMEOUT_MS` ab → Nachtabschaltung muss als Eco zählen. (4) Zeiten fest oder im System-Tab einstellbar.
+  - Verworfen am 2026-10-26: ESP-NOW-Empfangsfenster bzw. WLAN-Eingriffe am Display (Datenverlust, laut Sensorboard-Messung nur ≈ 0,1 W durch WLAN-Trennung, Funk empfängt für ESP-NOW dauernd). WLAN wird nicht angefasst.
 - **ESP-NOW Wiederholungsschutz:** Ob CCMP bei ESP-NOW aufgezeichnete Frames abweist, ist nicht dokumentiert. Option: Sensorboard nimmt Kommandos nur mit steigender `seq` an (Display-`seq` müsste dafür einen Neustart überdauern). Noch nicht entschieden.
 
 - **Kalibrierungs-UI**: NVS-Layer + Web-UI für HX711/Batterie/Tank-Kalibrierung (heute alles hardcodiert in `sensor_config.h`)

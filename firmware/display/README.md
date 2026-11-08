@@ -27,7 +27,7 @@ ESP-IDF v5.5.2 · LVGL v9.5 · ESP32-S3 (Waveshare ESP32-S3-Touch-LCD-7)
 - **Fehler-Management**: Fehler-Stack mit Latching, Quittierung per Touch, Buzzer-Alarm (Warn/Alarm-Ton bei neuen unquittier­ten Fehlern)
 - **Einstellungs-Modal**: Tabs AP | Sensoren | Grenzwerte | LTE | System – Ruuvi-Tags und GasBee-Waagen einrichten (inkl. Kalibrier-Assistent), Schwellwerte für Gas/Frisch-/Grauwasser (NVS), Töne, Sprache DE/EN, Zeit/RTC
 - **Mobilfunk-Tarif**: Warnung vor Tarifablauf und bei wenig Restvolumen im Fehler-Stack; Termin automatisch aus pass.telekom.de (Router-WebUI-Tool) oder manuell mit Rhythmus (4 Wochen / 30 Tage / 1 Monat), Einstellungen im Tab LTE
-- **Screenshot**: Long-Press unten links → PNG auf SD-Karte
+- **Screenshot** (nur Entwicklung, `WOMO_ENABLE_SCREENSHOT` in `display_config.h`, Standard aus): Long-Press in die Ecke oben rechts (60×60 px, auch bei offenem Modal) → BMP auf SD-Karte (`/sdcard/screenshots/screen_JJJJMMTT_HHMMSS.bmp`, ~1,1 MB, wird nie überschrieben)
 - **Tag/Nacht**: Automatischer Themenwechsel (Sonnenauf-/-untergang), Backlight-Steuerung
 
 ## Externe Anbindungen

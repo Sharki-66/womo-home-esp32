@@ -17,7 +17,7 @@
  */
 
 // ── Kern ────────────────────────────────────────────────────────────────────────────
-#define LOG_LEVEL_MAIN           ESP_LOG_WARN   // main.c (womo_main)
+#define LOG_LEVEL_MAIN           ESP_LOG_INFO   // main.c (womo_main) – vorübergehend INFO für Hardware-Tests (2026-10-26)
 #define LOG_LEVEL_UI             ESP_LOG_WARN   // ui/main.c (WaveShare_7_UI)
 
 // ── Hardware / Treiber ───────────────────────────────────────────────────────────────
@@ -54,7 +54,7 @@
 #define LOG_LEVEL_FONTS          ESP_LOG_WARN   // gui/womo_fonts_german.c
 #define LOG_LEVEL_FORECAST_MODAL ESP_LOG_WARN   // gui/womo_forecast_modal.c
 #define LOG_LEVEL_CONN_MODAL     ESP_LOG_WARN   // gui/womo_connectivity_modal.c
-#define LOG_LEVEL_SETTINGS_MODAL ESP_LOG_WARN   // gui/womo_settings_modal.c
+#define LOG_LEVEL_SETTINGS_MODAL ESP_LOG_INFO   // gui/womo_settings_modal.c – vorübergehend INFO für Hardware-Tests (2026-10-26)
 #define LOG_LEVEL_ROUTER_LEDS    ESP_LOG_WARN   // gui/womo_router_leds_modal.c
 
 // ====================================================================================
@@ -101,17 +101,23 @@
 
 // ====================================================================================
 // Screenshot
-// Long-Press anywhere auf dem Display speichert PNG auf SD-Card
-// Pfad:    /sdcard/screenshots/screen_HHMMSS.png
-// Stack:   PSRAM (MALLOC_CAP_SPIRAM), 32 KiB  – lodepng + FAT-I/O
-// Methode: Liest Frame-Buffer direkt (RGB565, existiert bereits im PSRAM).
-//          Kein lv_snapshot, kein zusätzlicher Pixel-Puffer → ~400 KB Peak (PNG-Output).
+// Long-Press (400 ms) auf einen unsichtbaren Hotspot oben rechts speichert BMP auf SD-Card.
+// Der Hotspot liegt auf lv_layer_top() über allen Modals (screenshot_hotspot_create in main.c).
+// In der Ecke liegen nur Labels ohne Touch-Funktion; bei offenem Modal deckt er dort
+// das Overlay ab (Klick in die Ecke schließt das Modal dann nicht).
+// Pfad:    /sdcard/screenshots/screen_JJJJMMTT_HHMMSS.bmp, existiert er schon → _1, _2 …
+//          (nie überschreiben). ~1,1 MB pro Bild (800×480, 24 Bit).
+// Stack:   PSRAM (MALLOC_CAP_SPIRAM), 32 KiB  – FAT-I/O
+// Methode: Liest Frame-Buffer direkt (RGB565, existiert bereits im PSRAM) und
+//          schreibt ihn ohne Zwischenpuffer als BMP. Kein lv_snapshot, kein lodepng.
 // 1 = aktiv, 0 = vollständig auskompiliert
 // ====================================================================================
 #define WOMO_ENABLE_SCREENSHOT        0
 #define WOMO_SCREENSHOT_DIR           "/sdcard/screenshots"
 #define WOMO_SCREENSHOT_STACK_SIZE    (32768)
 #define WOMO_SCREENSHOT_TASK_PRIORITY (3)
+#define WOMO_SCREENSHOT_HOTSPOT_SIZE  (60)   // Kantenlänge Hotspot oben rechts in px
+#define WOMO_SCREENSHOT_MAX_SUFFIX    (99)   // max. _1 … _99 je Sekunde
 
 // ====================================================================================
 // Strom sparen bei dunklem Hintergrundlicht (hardware/womo_power.c)

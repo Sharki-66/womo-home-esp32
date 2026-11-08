@@ -344,7 +344,7 @@ static void router_poll_task(void *arg);
 #if WOMO_ENABLE_SCREENSHOT
 static void screenshot_task(void *arg);
 static void take_screenshot(void);
-static void screenshot_indev_cb(lv_event_t *e);
+static void screenshot_hotspot_create(void);
 #endif /* WOMO_ENABLE_SCREENSHOT */
 static bool is_quiet_hours(const struct tm *timeinfo);
 static void backlight_set(bool on);
@@ -3576,13 +3576,28 @@ static void screenshot_task(void *arg)
     const uint32_t W = EXAMPLE_LCD_H_RES; /* 800 */
     const uint32_t H = EXAMPLE_LCD_V_RES; /* 480 */
 
-    /* Dateiname (.bmp) */
+    /* Dateiname screen_JJJJMMTT_HHMMSS.bmp; existiert er schon (gleiche Sekunde
+     * oder ungültige Uhrzeit nach dem Boot), wird _1, _2 … angehängt –
+     * vorhandene Screenshots werden nie überschrieben. */
     time_t now = time(NULL);
     struct tm tm_now;
     localtime_r(&now, &tm_now);
-    char path[64];
-    snprintf(path, sizeof(path), WOMO_SCREENSHOT_DIR "/screen_%02d%02d%02d.bmp",
+    char stamp[64];   /* großzügig, damit -Wformat-truncation still ist */
+    snprintf(stamp, sizeof(stamp), "%04d%02d%02d_%02d%02d%02d",
+             tm_now.tm_year + 1900, tm_now.tm_mon + 1, tm_now.tm_mday,
              tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec);
+    char path[128];
+    snprintf(path, sizeof(path), WOMO_SCREENSHOT_DIR "/screen_%s.bmp", stamp);
+    struct stat st;
+    for (unsigned n = 1; stat(path, &st) == 0; n++) {
+        if (n > WOMO_SCREENSHOT_MAX_SUFFIX) {
+            ESP_LOGE(TAG, "Screenshot: kein freier Dateiname für %s", stamp);
+            if (running) *running = false;
+            vTaskDelete(NULL);
+            return;
+        }
+        snprintf(path, sizeof(path), WOMO_SCREENSHOT_DIR "/screen_%s_%u.bmp", stamp, n);
+    }
 
     /* BMP-Header aufbauen (54 Bytes: BITMAPFILEHEADER + BITMAPINFOHEADER).
      * 800×3 = 2400 B pro Zeile, bereits 4-Byte-aligniert – kein Padding nötig. */
@@ -3674,29 +3689,30 @@ static void take_screenshot(void)
 
 #endif /* WOMO_ENABLE_SCREENSHOT */
 
-/* Gesetzt beim Long-Press, konsumiert beim folgenden CLICKED-Event.
- * Verhindert Backlight-Toggle nach einem Long-Press-Screenshot. */
-static volatile bool s_long_press_consumed = false;
-
 #if WOMO_ENABLE_SCREENSHOT
-/* Globaler Indev-Long-Press-Handler: Screenshot, unabhängig von offenem Modal.
- * Läuft auf dem Indev direkt – kein Widget muss den Touch erhalten.
- * Kein Backlight-Toggle hier: nur Screenshot, s_long_press_consumed setzen. */
-static void screenshot_indev_cb(lv_event_t *e)
+/* Long-Press auf den unsichtbaren Hotspot oben rechts (lv_layer_top, liegt über
+ * allen Modals) → Screenshot. Kein Indev-Reset nötig, andere Widgets bleiben unberührt. */
+static void screenshot_hotspot_cb(lv_event_t *e)
 {
     if (lv_event_get_code(e) != LV_EVENT_LONG_PRESSED) return;
     if (!backlight_on) return;   /* Display aus – nichts tun */
 
-    ESP_LOGI(TAG, "Long-Press → Screenshot");
+    ESP_LOGI(TAG, "Long-Press Hotspot → Screenshot");
     take_screenshot();
+}
 
-    /* Nachfolgenden CLICKED-Event auf allen Widgets blockieren */
-    s_long_press_consumed = true;
-    lv_indev_t *indev = lv_event_get_indev(e);
-    if (indev) lv_indev_reset(indev, NULL);
+static void screenshot_hotspot_create(void)
+{
+    lv_obj_t *hs = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(hs);   /* transparent, kein Rahmen → nicht im Screenshot */
+    lv_obj_set_size(hs, WOMO_SCREENSHOT_HOTSPOT_SIZE, WOMO_SCREENSHOT_HOTSPOT_SIZE);
+    lv_obj_align(hs, LV_ALIGN_TOP_RIGHT, 0, 0);
+    lv_obj_clear_flag(hs, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(hs, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(hs, screenshot_hotspot_cb, LV_EVENT_LONG_PRESSED, NULL);
+    ESP_LOGI(TAG, "Screenshot-Hotspot oben rechts (%d px) angelegt", WOMO_SCREENSHOT_HOTSPOT_SIZE);
 }
 #endif /* WOMO_ENABLE_SCREENSHOT */
-
 
 static void backlight_button_event_cb(lv_event_t *event)
 {
@@ -3704,13 +3720,6 @@ static void backlight_button_event_cb(lv_event_t *event)
     if (!event) return;
 
     if (code != LV_EVENT_CLICKED) {
-        return;
-    }
-
-    /* Einen Long-Press-Release absorbieren und ignorieren */
-    if (s_long_press_consumed) {
-        s_long_press_consumed = false;
-        ESP_LOGD(TAG, "Backlight button: Long-Press-Release ignoriert");
         return;
     }
 
@@ -5007,20 +5016,8 @@ void app_main()
         apply_text_theme_colors();
 
 #if WOMO_ENABLE_SCREENSHOT
-        /* Globaler Long-Press-Handler: Screenshot auch bei geöffnetem Modal,
-         * da der Backlight-Button dann vom Overlay verdeckt wäre. */
-        {
-            lv_indev_t *indev = lv_indev_get_next(NULL);
-            while (indev) {
-                if (lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER) {
-                    lv_indev_add_event_cb(indev, screenshot_indev_cb,
-                                         LV_EVENT_LONG_PRESSED, NULL);
-                    ESP_LOGI(TAG, "Screenshot Long-Press-Handler registriert (indev=%p)", (void*)indev);
-                    break;
-                }
-                indev = lv_indev_get_next(indev);
-            }
-        }
+        /* Screenshot-Hotspot oben rechts, über allen Modals */
+        screenshot_hotspot_create();
 #endif /* WOMO_ENABLE_SCREENSHOT */
 
         lvgl_port_unlock();
