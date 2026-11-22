@@ -20,7 +20,7 @@ Das Sensorboard ist das sensorische Herzstück des digitalen Wohnmobil-Cockpits.
 | Deep-Sleep + Touch-Wakeup | ✅ |
 | NTP + RTC-Sync (PCF8523) | ✅ |
 | INA226 Strom-/Leistungsmessung Eigenverbrauch Sensorboard/Display | ✅ |
-| Original WoMo-Tanksensoren (4-Stufen Reed-Schwimmer) | ❌ TODO |
+| Original WoMo-Tanksensoren (4-Stufen Reed-Schwimmer) | ❌ TODO (Hardware ab Platine Rev 0.6, GPIO10/9) |
 | NVS-Layer für Kalibrierung (HX711/Bat/Tank per Web-UI) | ❌ TODO |
 
 ## Hardware-Übersicht
@@ -34,11 +34,15 @@ Das Sensorboard ist das sensorische Herzstück des digitalen Wohnmobil-Cockpits.
 | GasBee | BLE-Gaswaage (`firmware/gasbee_nrf`, XIAO nRF52840), passiver Scan | BLE |
 | Strom/Leistung | INA226 – Vbus 0–36V, ±81,92mV Shunt | I2C 0x40 |
 | Batterien | 2× ADC + Spannungsteiler | Kfz=GPIO4, Board=GPIO5 |
-| Tanks | 2× Votronic kapazitiv (0–1V) | Frisch=GPIO1, Grau=GPIO2 |
+| Tanks | 2× Votronic kapazitiv (0–1V) | Frisch=GPIO1, Grau=GPIO2 (ab Rev 0.6 an J9/J10) |
+| Tanks alt (ab Rev 0.6) | 2× Reed-Schwimmer über Widerstandsnetz | Frisch=GPIO10 (J2), Grau=GPIO9 (J3) |
 | RTC | PCF8523 – Echtzeituhr | I2C 0x68 |
 | ESP-NOW | Funk zum Display, MAX3485 entfernt | GPIO8 (ehem. DE) im Deep-Sleep LOW |
 | I2C-Bus | 100 kHz, interne Pull-ups | SDA=GPIO16, SCL=GPIO15 |
 | RGB-LED | WS2812 onboard | GPIO48 |
+
+## Platinenrevision
+Verbaut: Rev 0.5. Rev 0.6 ist fertig geroutet (2026-11-22, `hardware/schematics/Sensorboard`), noch nicht eingebaut. Die Firmware wählt revisionsabhängige Pins über `SENSOR_BOARD_REV` in `sensor_config.h` (derzeit 12V EIN/AUS).
 
 ## Eingebettetes System
 Kein RTOS-Shell, keine Konsole. Alle Konfiguration über `sensor_config.h` und NVS. Flashing über VS Code Tasks.

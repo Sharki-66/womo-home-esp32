@@ -47,14 +47,16 @@ Das Fahrzeug ist ein **Fiat Ducato** (Reisemobil). Das System ist dauerhaft im F
 ## Steuerlogik
 
 ### 12V Bordnetz (LBE)
-Bistabiles Relais: Ein-Puls (GPIO11) / Aus-Puls (GPIO12), Pulslänge `SENSOR_PWR_12V_PULSE_MS`
+Bistabiles Relais: Ein-Puls / Aus-Puls (Rev 0.5: GPIO11/GPIO12, Rev 0.6: GPIO12/GPIO11,
+gewählt über `SENSOR_BOARD_REV`), Pulslänge `SENSOR_PWR_12V_PULSE_MS`
 (500 ms). Display sendet `pwr_12v_on`/`pwr_12v_off` per ESP-NOW-Kommando. `ctrl.pwr_on` meldet
 den an GPIO14 gemessenen Ist-Zustand (12V-Sense) → Display-Button zeigt Realität.
 
 ⚠️ **Bekannter Hardware-Bug (2026-09):** Treiber Q1/Q2 (J7 „12V EIN"/„AUS") sind mit
 IRLML2244 (P-Kanal, High-Side) bestückt statt IRLML6244 (N-Kanal, Low-Side). Der EBL
 erwartet Pull-to-GND an diesen Pins — das Relais schaltet dadurch bisher nicht. Details:
-`techContext.md` und `progress.md`.
+`techContext.md` und `progress.md`. In Rev 0.6 behoben (Q6/Q7 IRLML6244 gegen GND an J5),
+Hardware-Test steht aus.
 
 ### Multimedia
 N-Kanal MOSFET (GPIO13): HIGH = EIN, nur wenn 12V aktiv. Display sendet `radio_on`/`radio_off`.
@@ -65,4 +67,6 @@ Zeigt an ob 230V Landstrom vorhanden (passiver Eingang).
 ## Tankvolumen (Referenz)
 - Frischwasser: 100 Liter
 - Grauwasser: 92 Liter
-- Tankfüllstand: Votronic kapazitiv (0–1V), direkt am ADC (kein Spannungsteiler)
+- Tankfüllstand: Votronic kapazitiv (0–1V), direkt am ADC (kein Spannungsteiler);
+  ab Rev 0.6 mit 4k7 in Reihe + Z-Diode 3,3V als Schutz (J9/J10)
+- Ab Rev 0.6 zusätzlich Eingänge für die Original-Reed-Tanksensoren (J2/J3 → GPIO10/9), Firmware offen

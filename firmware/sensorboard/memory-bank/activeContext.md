@@ -225,16 +225,7 @@ Befunde beim Testen:
 
 ## Geänderte Dateien (nicht committed)
 
-| Datei | Änderung |
-|---|---|
-| `main/CMakeLists.txt` | INA226-Sensor hinzugefügt |
-| `main/app_main.c` | `ina226_app_start()` integriert |
-| `main/idf_component.yml` | `k0i05/esp_ina226` Dependency |
-| `main/network/espnow_modem.c` (damals `rs485_modem.c`) | `modem_publish_elec()` Topic-Publisher |
-| `main/sensor_config.h` | INA226-Konfiguration |
-| `main/sensors/bme680_sensor.c` | Drucktrend-Verbesserungen |
-| `spiffs/dashboard.html` | Web-Dashboard |
-| `README.md` | INA226, Web-Dashboard, aktualisierte Topic-Tabelle |
+Keine (Stand 2026-11-22). Die frühere INA226-/Dashboard-Liste ist seit `edbbe7a` committet.
 
 ## HX711-Ausfall (2026-08-24) – Ursache: Kontaktproblem 3.3V-Stecker
 HX711 (Gasfüllstand, DOUT=GPIO47/SCK=GPIO45) fiel mit

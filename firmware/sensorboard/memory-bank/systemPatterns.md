@@ -144,12 +144,12 @@ Wenn kein SSID in NVS: Sensorboard sendet `type:"wifi_pass_request"` per ESP-NOW
 
 ## Pin-Übersicht (Kurzfassung)
 ```
-GPIO1  Tank1 Frisch (ADC1_CH0)     GPIO9  frei (ehem. RS485 TX)
-GPIO2  Tank2 Grau  (ADC1_CH1)      GPIO10 frei (ehem. RS485 RX)
+GPIO1  Tank1 Frisch (ADC1_CH0)     GPIO9  Rev 0.5 frei; Rev 0.6 Reed-Tank Grau (J3)
+GPIO2  Tank2 Grau  (ADC1_CH1)      GPIO10 Rev 0.5 frei; Rev 0.6 Reed-Tank Frisch (J2)
 GPIO4  Batt1 Kfz  (ADC1_CH3)       GPIO8  ehem. RS485 DE, im Deep-Sleep LOW
-GPIO5  Batt2 Board (ADC1_CH4)      GPIO11 12V LBE EIN (Relais-Puls)
-GPIO6  Touch-Wakeup (TOUCH_PAD6)   GPIO12 12V LBE AUS (Relais-Puls)
-GPIO7  Display 5V (HIGH=ein, Q5→Q4) GPIO13 Multimedia (N-MOSFET)
+GPIO5  Batt2 Board (ADC1_CH4)      GPIO11 12V LBE EIN (Rev 0.6: AUS), Relais-Puls
+GPIO6  Touch-Wakeup (TOUCH_PAD6)   GPIO12 12V LBE AUS (Rev 0.6: EIN), Relais-Puls
+GPIO7  Display 5V (HIGH=ein, Q5→Q4; Rev 0.6 Q2→Q1) GPIO13 Multimedia
 GPIO14 12V Sense (Eingang)         GPIO15 I2C SCL
 GPIO16 I2C SDA                     GPIO21 AC 230V Sense
 GPIO45 HX711 SCK                   GPIO47 HX711 DOUT
