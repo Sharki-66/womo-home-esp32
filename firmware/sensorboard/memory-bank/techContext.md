@@ -33,11 +33,14 @@ Seit der neuen Platine (Commit `760b25e`) treibt GPIO7 nur noch das Gate von Q5:
 HIGH (OUTPUT) → Q5 leitet → Q4-Gate LOW → Q4 leitet → Display EIN
 LOW / Hi-Z    → Q5 sperrt → R21 (100k) zieht Q4-Gate auf 5V → Display AUS
 ```
+Rev 0.6: gleiches Verhalten, Bauteile GPIO7 → R3 4k7 → Q2 (2N7002, R4 100k) → Q1 (AO3401A, R2 100k an +5V) → J1.
 OUTPUT HIGH ist sicher (kein direkter Vgs-Querstrom mehr). Boot: `rtc_gpio_hold_dis()` + `rtc_gpio_deinit()`, dann OUTPUT LOW; Deep-Sleep: LOW + `rtc_gpio_hold_en()`. Quelle: `sensor_config.h` (`SENSOR_DISPLAY_PWR_GPIO`), `app_main.c`, `deep_sleep.c`.
 
 ### 12V Bordnetz (bistabiles Relais)
-- EIN: Puls `SENSOR_PWR_12V_PULSE_MS` (500 ms) auf GPIO11, dann LOW
-- AUS: Puls `SENSOR_PWR_12V_PULSE_MS` auf GPIO12, dann LOW
+- EIN: Puls `SENSOR_PWR_12V_PULSE_MS` (500 ms) auf `SENSOR_PWR_12V_ON_GPIO`, dann LOW
+- AUS: Puls `SENSOR_PWR_12V_PULSE_MS` auf `SENSOR_PWR_12V_OFF_GPIO`, dann LOW
+- Pins hängen von `SENSOR_BOARD_REV` ab: Rev 5 EIN=GPIO11/AUS=GPIO12,
+  **Rev 6 EIN=GPIO12/AUS=GPIO11** (Schaltplan getauscht, Q6/Q7 → J5.1 „AUS“/J5.2 „EIN“)
 - Beide Pins **immer** LOW im Ruhezustand! Eine Konstante für alle 3 Puls-Stellen
   (app_main.c Boot, espnow_modem.c Laufzeit, deep_sleep.c AUS).
 - **12V-Sense GPIO14** (`SENSOR_PWR_12V_SENSE_*`): `ctrl.pwr_on` meldet den gemessenen
@@ -47,9 +50,11 @@ OUTPUT HIGH ist sicher (kein direkter Vgs-Querstrom mehr). Boot: `rtc_gpio_hold_
   „12V EIN"/„12V AUS" sind IRLML2244 (P-Kanal, High-Side, schaltet +12V), der EBL
   erwartet aber Pull-to-GND (Low-Side). Relais schaltet dadurch nicht — unabhängig
   von Pulslänge/Sense. Fix: Q1/Q2 → IRLML6244 (N-Kanal, gleiches Pinout).
+  Rev 0.6: Q6/Q7 = IRLML6244 gegen GND – im Schaltplan behoben, Hardware-Test offen.
 
 ### Multimedia (GPIO13, N-Kanal MOSFET)
 - HIGH = EIN, LOW = AUS
+- Rev 0.6 (auch Licht GPIO17, Pumpe GPIO18): GPIO → 4k7 → 2N7002 → IRLML2244 High-Side, +12V auf J5.10/J5.8/J5.9
 - Beim Boot auf LOW setzen (kein passiver Pulldown in Hardware)
 
 ### ESP-NOW (ersetzt RS485 seit 2026-06)

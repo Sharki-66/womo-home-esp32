@@ -14,7 +14,8 @@ ESP-IDF v5.5.2 · ESP32-S3-WROOM-1 (N16R8)
 | **GasBee** | BLE-Gaswaage (`firmware/gasbee_nrf`), bis zu 2× (Flasche A/B) – passiver Scan, Advertising-Format v1, nur wenn kein HX711-Modul am Kabel | BLE |
 | **INA226** | Strom-/Leistungsmessung Eigenverbrauch Sensorboard-/Display-Einheit (Vbus 0–36V, ±81,92mV Shunt) | I2C 0x40 |
 | **Batterien** | 2× ADC mit Spannungsteiler | Kfz=GPIO4, Board=GPIO5 |
-| **Tanks** | 2× Votronic kapazitiv (0–1V) | Frisch=GPIO1 (100L), Grau=GPIO2 (92L) |
+| **Tanks** | 2× Votronic kapazitiv (0–1V) | Frisch=GPIO1 (100L), Grau=GPIO2 (92L); ab Rev 0.6 an J9/J10 |
+| **Tanks alt** (ab Rev 0.6) | 2× Original-WoMo-Reed-Schwimmer (4 Stufen) über Widerstandsnetz, Firmware TODO | Frisch J2=GPIO10, Grau J3=GPIO9 |
 | **RTC** | PCF8523 – Echtzeituhr | I2C 0x68 |
 | **ESP-NOW** | Funkverbindung zum Display (ersetzt seit 2026-06 RS485/MAX3485, Transceiver aus Schaltplan entfernt) | GPIO8 (ehem. DE) im Deep-Sleep LOW |
 | **I2C** | 100 kHz, interne Pull-ups | SDA=GPIO16, SCL=GPIO15 |
@@ -25,19 +26,20 @@ ESP-IDF v5.5.2 · ESP32-S3-WROOM-1 (N16R8)
 | GPIO | Funktion | Richtung |
 |---|---|---|
 | 6  | Touch-Wakeup (TOUCH_PAD_NUM6) | Eingang |
-| 7  | Display 5V (Q5 2N7002 → Q4 AO3401A: HIGH=ein, LOW/Hi-Z=aus) | Ausgang |
-| 11 | 12V Bordnetz EIN (bistabiles Relais, Puls) | Ausgang |
-| 12 | 12V Bordnetz AUS (bistabiles Relais, Puls) | Ausgang |
-| 13 | Multimedia Power (N-MOSFET, HIGH=ein) | Ausgang |
+| 7  | Display 5V (Rev 0.5: Q5 2N7002 → Q4 AO3401A; Rev 0.6: Q2 → Q1 → J1) HIGH=ein, LOW/Hi-Z=aus | Ausgang |
+| 11 | 12V Bordnetz EIN (Rev 0.5) / **AUS (Rev 0.6)** (bistabiles Relais, Puls) | Ausgang |
+| 12 | 12V Bordnetz AUS (Rev 0.5) / **EIN (Rev 0.6)** (bistabiles Relais, Puls) | Ausgang |
+| 13 | Multimedia Power (HIGH=ein; Rev 0.6: 2N7002 → IRLML2244 High-Side, J5.10) | Ausgang |
 | 14 | 12V Bordnetz Feedback | Eingang |
-| 17 | Licht (reserviert, Firmware TODO) | Ausgang |
-| 18 | Pumpe (reserviert, Firmware TODO) | Ausgang |
+| 17 | Licht (reserviert, Firmware TODO; Rev 0.6: J5.8) | Ausgang |
+| 18 | Pumpe (reserviert, Firmware TODO; Rev 0.6: J5.9) | Ausgang |
 | 21 | 230V AC Sense | Eingang |
 
 ### Spannungsteiler (ADC)
 Alle Batterie-/Sense-Kanäle: **100 kΩ / 22 kΩ** Teiler → Faktor 122/22.
 - Batterien: 12V → ~2,17V am ADC (BZV55B3V3 Zener-Schutz)
-- Tanks: Votronic 0–1V → direkt am ADC, 0–1000 mV = 0–100%
+- Tanks: Votronic 0–1V → direkt am ADC, 0–1000 mV = 0–100%. Ab Rev 0.6: 4k7 in Reihe, BZV55B3V3 am ADC, 100k nach GND, Sensorversorgung +12V an J9/J10 Pin 1
+- Tanks alt (ab Rev 0.6): Pull-up 10k an 3,3V, Stufenwiderstände 1k/2k2/4k7/10k an Pin 1–4, 10k zum ADC; Zuordnung Pin → Füllstufe noch zu messen (siehe `sensor_config.h`)
 - Nicht angeschlossen: < 1V → `nc=true`
 
 ## ESP-NOW-Protokoll (Topic-basiert)
@@ -108,10 +110,13 @@ Laufzeit-Puls und Deep-Sleep-AUS-Puls. Das ctrl-Feld `pwr_on` meldet bei aktivem
 gemeldet, bis die 12V-Schiene eingeschwungen ist. Polarität: `SENSOR_PWR_12V_SENSE_ACTIVE_HIGH`
 (TODO: per Messung verifizieren).
 
-⚠️ **Bekannter Hardware-Bug (2026-09):** Die Treiber Q1/Q2 für J7 „12V EIN"/„12V AUS" sind mit
+**Platinenrevision:** `SENSOR_BOARD_REV` in `sensor_config.h` (5 = verbaute Platine, 6 = Rev 0.6). Ab Rev 0.6 sind 12V EIN/AUS getauscht (GPIO12 = EIN, GPIO11 = AUS); der Wert steuert das automatisch. Beim Einbau von Rev 0.6 auf 6 stellen, sonst schaltet das Relais verkehrt herum. Beim Start loggt die Firmware `Platine Rev N (12V EIN=GPIOx, AUS=GPIOy)`.
+
+⚠️ **Bekannter Hardware-Bug (2026-09, Rev 0.5):** Die Treiber Q1/Q2 für J7 „12V EIN"/„12V AUS" sind mit
 IRLML2244 (P-Kanal, High-Side, schaltet +12V) bestückt. Der EBL erwartet an diesen Pins aber
 Pull-to-GND (Low-Side). Das Relais schaltet dadurch nicht – unabhängig von Pulslänge oder Sense.
 Fix: Q1/Q2 → IRLML6244 (N-Kanal, gleiches SOT-23-Pinout), sofern Source bereits an GND liegt.
+In Rev 0.6 behoben: Q6/Q7 = IRLML6244 (N-Kanal, Source an GND) an J5.1/J5.2 – auf Hardware noch nicht getestet.
 
 **WiFi-Passwort-Anfrage:** Bei fehlenden WLAN-Zugangsdaten sendet das Sensorboard `type:"wifi_pass_request"` per ESP-NOW.
 

@@ -31,10 +31,10 @@
  *               (ADC1_CH7, RTC) GPIO8 | I/O/T|  ⬜ |    8 | 12         O        12 | 36   | 🟥  | I/O/T | ⚠ PSRAM (GPIO36, nicht nutzbar!)
  *                ADC1_CH2, RTC, GPIO3 | I/O/T|  ⬜ |    3 | 13         O        13 | 35   | 🟥  | I/O/T | ⚠ PSRAM (GPIO35, nicht nutzbar!)
  *                   GPIO46, STRAP/LOG | I/O/T|  🟩 |   46 | 14         M        14 | 0    | 🟩  | I/O/T | BOOT/STRAP, GPIO0
- *               (ADC1_CH8, RTC) GPIO9 | I/O/T|  ⬜ |    9 | 15         -        15 | 45   | 🟨  | I/O/T | HX711 SCK (GPIO45)
- *              (ADC1_CH9, RTC) GPIO10 | I/O/T|  ⬜ |   10 | 16         1        16 | 48   | 🟩  | I/O/T | Onboard WS2812 RGB-LED (GPIO48)
- *     (ADC2_CH0, RTC, GPIO11) 12V EIN | I/O/T|  🟨 |   11 | 17                  17 | 47   | 🟨  | I/O/T | HX711 DOUT (GPIO47)
- *     (ADC2_CH1, RTC, GPIO12) 12V AUS | I/O/T|  🟨 |   12 | 18                  18 | 21   | 🟨  | I/O/T | AC 220V Sence (GPIO21, RTC)
+ *          GPIO9 Tank alt Grau (Rev6) | I/O/T|  🟨 |    9 | 15         -        15 | 45   | 🟨  | I/O/T | HX711 SCK (GPIO45)
+ *       GPIO10 Tank alt Frisch (Rev6) | I/O/T|  🟨 |   10 | 16         1        16 | 48   | 🟩  | I/O/T | Onboard WS2812 RGB-LED (GPIO48)
+ *          GPIO11 12V EIN (Rev6: AUS) | I/O/T|  🟨 |   11 | 17                  17 | 47   | 🟨  | I/O/T | HX711 DOUT (GPIO47)
+ *          GPIO12 12V AUS (Rev6: EIN) | I/O/T|  🟨 |   12 | 18                  18 | 21   | 🟨  | I/O/T | AC 220V Sence (GPIO21, RTC)
  *  (ADC2_CH2, RTC, GPIO13) Multimedia | I/O/T|  🟨 |   13 | 19                  19 | 20   | 🟩  | I/O/T | USB_D+, GPIO20, RTC
  *   (ADC2_CH3, RTC, GPIO14) 12V Sence | I/O/T|  🟨 |   14 | 20                  20 | 19   | 🟩  | I/O/T | USB_D-, GPIO19, RTC
  *                    5 V power supply |    P |  🟩 |   5V | 21                  21 | GND  | 🟩  | G     | Ground
@@ -51,6 +51,18 @@
 // Board Information
 // ====================================================================================
 #define SENSOR_BOARD_NAME "ESP32-S3-WROOM-1"
+
+// Platinenrevision des Sensorboards (Schaltplan hardware/schematics/Sensorboard).
+//   5 = aktuell verbaute Platine (Schaltplanstand 96662a9, 2026-08-20)
+//   6 = Rev 0.6 (Layout 2026-11-22, Commit be2d6e6) – beim Einbau hier auf 6 stellen!
+// Wirkt auf die Pinbelegung, die sich zwischen den Revisionen geändert hat
+// (derzeit: 12V EIN/AUS, siehe "Board Power"). Falscher Wert = Bordnetz-Relais
+// schaltet verkehrt herum (bistabil!).
+#define SENSOR_BOARD_REV 5
+
+#if !defined(SENSOR_BOARD_REV) || (SENSOR_BOARD_REV != 5 && SENSOR_BOARD_REV != 6)
+#error "SENSOR_BOARD_REV muss 5 oder 6 sein"
+#endif
 
 // ====================================================================================
 // I2C-Bus für Sensoren auf Header J1 (SDA=GPIO16, SCL=GPIO15)
@@ -157,7 +169,13 @@
 #define SENSOR_BATT2_CAL_OFFSET_MV 0
 
 // Tank-Kalibrierung (U_kalibriert = U_gemessen * SCALE + OFFSET_mV)
-// Hinweis: 0-1V Sensoren liegen direkt am ADC (kein Spannungsteiler).
+// Hinweis Rev 5: 0-1V Sensoren liegen direkt am ADC (kein Spannungsteiler).
+// Ab Rev 6 (J9 Frischwasser → GPIO1, J10 Grauwasser → GPIO2), je Kanal:
+//   J9/J10 Pin 1 = +12V (Sensorversorgung), Pin 2 = Signal, Pin 3 = GND
+//   Signal ─ R32/R33 100k nach GND, ─ R30/R34 4k7 in Reihe ─ ADC-Pin,
+//   am ADC-Pin D1/D2 BZV55B3V3 (Z-Diode 3,3V) nach GND als Überspannungsschutz.
+//   Kein Teiler → Kalibrierung bleibt gültig; TODO(messung): nach Einbau Rev 6
+//   gegen Multimeter prüfen (Leckstrom der Z-Diode bei 0-1V).
 // Feinabgleich gegen Multimeter moeglich, falls ADC systematisch abweicht.
 #define SENSOR_TANK1_CAL_SCALE 1.00f
 #define SENSOR_TANK1_CAL_OFFSET_MV 0
@@ -178,38 +196,49 @@
 //   Masse, 25%, 50%, 75%, Voll (100%)
 // Die Schalter schließen kumulativ (bei 75% sind 25%+50%+75% alle geschlossen).
 //
-// Geplante Lösung: 1 ADC-Pin pro Tank über ein Widerstandsnetzwerk
-//   KONFLIKT (2026-08-30): GPIO17/18 sind NICHT mehr frei – auf der Hardware
-//   bereits für Licht (17) und Pumpe (18) verdrahtet (SENSOR_LIGHT_GPIO /
-//   SENSOR_PUMP_GPIO oben). Vor Umsetzung dieses TODOs andere freie Pins wählen.
+// Lösung ab Rev 6: 1 ADC-Pin pro Tank über ein Widerstandsnetzwerk
+// (Pin-Konflikt mit GPIO17/18 damit erledigt – neue Pins GPIO9/10).
 //
-// Schaltung (Beispielbelegung, R-Werte noch zu verifizieren):
-//   3.3V ─── R_pull(10kΩ) ─── ADC-Pin
-//   25%-Schalter  ─── R1(4kΩ) ───┐
-//   50%-Schalter  ─── R2(3kΩ) ───┤── ADC-Pin
-//   75%-Schalter  ─── R3(2kΩ) ───┤
-//  100%-Schalter  ─── R4(1kΩ) ───┘
-//   Signalmasse   ─── GND
+// Schaltung Rev 6 (aus Schaltplan, Molex Micro-Fit J2/J3, Pin 5 = GND):
+//   Frischwasser J2 ("Wassertank LT45x")  → GPIO10 (ADC1_CH9)
+//     3.3V ─ R5 10k ─┬─ R6 10k ─ GPIO10
+//                    ├─ R7  1k  ─ J2.1
+//                    ├─ R8  2k2 ─ J2.2
+//                    ├─ R9  4k7 ─ J2.3
+//                    └─ R10 10k ─ J2.4         (J2.6 nicht belegt)
+//   Grauwasser J3 ("Abwassertank LT45x")  → GPIO9 (ADC1_CH8)
+//     3.3V ─ R28 10k ─┬─ R25 10k ─ GPIO9
+//                     ├─ R23 1k  ─ J3.1
+//                     ├─ R22 2k2 ─ J3.2
+//                     ├─ R21 4k7 ─ J3.3
+//                     └─ R20 10k ─ J3.4
 //
-// Erwartete ADC-Spannungen (5 eindeutige Pegel), ca.:
-//   0%   → ~3300 mV   (kein Schalter geschlossen)
-//   25%  → ~2350 mV
-//   50%  → ~1650 mV
-//   75%  → ~1130 mV
-//  100%  →  ~140 mV
+// TODO(messung): Zuordnung J2/J3-Pin → Füllstufe (25/50/75/100 %) am echten
+// Sensor bzw. Kabelbaum ermitteln. Erst danach die Pegel berechnen
+// (Pull-up 10k gegen Parallelschaltung der geschlossenen Stufenwiderstände)
+// und am Board nachmessen. Die früheren Beispielwerte (4k/3k/2k/1k) gelten nicht mehr.
 //
-// Implementierung (noch ausstehend):
+// Implementierung (noch ausstehend, erst ab SENSOR_BOARD_REV 6):
 //   - analog_sensor.c: Pegelerkennung anhand ADC-Spannungsschwellen
-//   - sensor_config.h: GPIO + Schwellwerte hier eintragen
-//   - Bestehende SENSOR_TANK1/2_ADC_CHANNEL bzw. neue Defines anlegen
+//   - sensor_config.h: ADC-Kanäle (ADC1_CH9/CH8) + Schwellwerte hier eintragen
+//   - Offen: Vorrang, wenn neue (GPIO1/2) und alte Tanksensoren angeschlossen sind
 // ====================================================================================
 
 // ====================================================================================
 // Board Power / Multimedia GPIOs (LBE-Steuerung über bistabiles Relais)
 // ====================================================================================
 #define SENSOR_RGB_LED_GPIO 48             // Onboard WS2812 RGB-LED (GPIO48, bestätigt)
+// 12V EIN/AUS wurden im Schaltplan getauscht (Stand 25c2ed2, 2026-10-20 → Rev 0.6):
+//   Rev 5: GPIO11 → Q1 → "12V - EIN",  GPIO12 → Q2 → "12V - AUS"
+//   Rev 6: GPIO11 → R41 → Q6 (IRLML6244) → J5.1 "12V - AUS"
+//          GPIO12 → R42 → Q7 (IRLML6244) → J5.2 "12V - EIN"
+#if SENSOR_BOARD_REV >= 6
+#define SENSOR_PWR_12V_ON_GPIO 12      // Schaltausgang: LBE EIN (Relais-Puls)
+#define SENSOR_PWR_12V_OFF_GPIO 11     // Schaltausgang: LBE AUS (Relais-Puls)
+#else
 #define SENSOR_PWR_12V_ON_GPIO 11      // Schaltausgang: LBE EIN (Relais-Puls)
 #define SENSOR_PWR_12V_OFF_GPIO 12     // Schaltausgang: LBE AUS (Relais-Puls)
+#endif
 #define SENSOR_PWR_12V_SENSE_GPIO 14   // Eingang: LBE Spannungsfeedback
 #define SENSOR_AC_SENSE_GPIO 21        // Eingang: 230V Netzkontrolle
 #define SENSOR_MULTIMEDIA_PWR_GPIO 13  // Schaltausgang: Multimedia Power
@@ -243,14 +272,17 @@
 // Entscheidung: Kein Pin-Remapping auf dieser Platine – neue Platinenrevision
 // wird bestellt (korrekter J7, RS485-Transceiver entfernt, Q5 richtig gepolt).
 // Diese Config gilt für die NEUE Platine mit unbeschädigten GPIOs 13/17/18.
+// Ab Rev 6 heißt der LT452-Stecker J5 (statt J7).
 
 // Licht/Pumpe: auf der Hardware bereits verdrahtet, Firmware-Ansteuerung noch
-// nicht implementiert. Gleiches Schaltprinzip wie Multimedia (N-MOSFET,
-// HIGH=ein/LOW=aus, kein Hold nötig – siehe deep_sleep.c).
-// KONFLIKT: GPIO17/18 waren im Tanksensor-TODO weiter unten (Zeile ~174) als
-// "frei" für die geplanten Original-WoMo-Tanksensoren (Tank1/Tank2) vorgesehen
-// – das stimmt nicht mehr, Pins sind belegt. Tanksensor-Planung muss auf
-// andere Pins ausweichen, bevor sie umgesetzt wird.
+// nicht implementiert. HIGH=ein/LOW=aus, kein Hold nötig – siehe deep_sleep.c.
+// Schaltprinzip Rev 6 (gilt auch für Multimedia):
+//   GPIO → 4k7 → 2N7002 (Gate-Pulldown 100k) → zieht Gate des P-Kanal
+//   IRLML2244 (Pull-up 100k an +12V) → schaltet +12V auf J5
+//   Multimedia: GPIO13 → R37 → Q3 → Q8 → J5.10
+//   Pumpe:      GPIO18 → R35 → Q4 → Q9 → J5.9
+//   Licht:      GPIO17 → R36 → Q5 → Q10 → J5.8
+// (Der frühere Konflikt mit dem Tanksensor-TODO ist erledigt: Tanks ab Rev 6 auf GPIO9/10.)
 #define SENSOR_LIGHT_GPIO 17           // Schaltausgang: Licht (Hardware fertig, Firmware TODO)
 #define SENSOR_PUMP_GPIO 18            // Schaltausgang: Pumpe (Hardware fertig, Firmware TODO)
 
@@ -259,6 +291,9 @@
 // GPIO7 → R22(10k) → Q5-Gate: HIGH = Q5 leitet → Q4-Gate LOW → AO3401A leitet = Display EIN
 //                               LOW/Hi-Z = Q5 sperrt → R21(100k) zieht Q4-Gate auf 5V → Display AUS
 // OUTPUT HIGH ist sicher (treibt nur Q5-Gate, kein direkter Vgs-Querstrom mehr).
+// Rev 6 (gleiches Verhalten, andere Bauteilnamen):
+//   GPIO7 → R3 4k7 → Q2 (2N7002, R4 100k nach GND) → Q1 (AO3401A, R2 100k an +5V)
+//   → J1 "USB Power" (Display-Versorgung)
 // ====================================================================================
 #define SENSOR_DISPLAY_PWR_GPIO 7      // HIGH=ein (Q5→Q4), LOW/Hi-Z=aus
 

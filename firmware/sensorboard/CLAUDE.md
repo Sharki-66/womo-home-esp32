@@ -11,11 +11,12 @@ Build, Flash und Monitor werden vom Nutzer über VS Code Tasks gestartet — nur
 | Constraint | Grund |
 |---|---|
 | GPIO8 (ehemals RS485-DE, `SENSOR_ESPNOW_DE_LEGACY_GPIO`): im Deep-Sleep **LOW** halten | Altlast aus RS485-Zeit, Transceiver ist seit der ESP-NOW-Migration aus dem Schaltplan entfernt |
-| GPIO7 (Display 5V): **HIGH=EIN, LOW/Hi-Z=AUS** | Neue Platine: Q5 (2N7002) als Treiber vor Q4 (AO3401A) — OUTPUT HIGH jetzt sicher |
+| GPIO7 (Display 5V): **HIGH=EIN, LOW/Hi-Z=AUS** | Neue Platine: Q5 (2N7002) als Treiber vor Q4 (AO3401A) — OUTPUT HIGH jetzt sicher. Rev 0.6: gleiches Prinzip mit Q2 → Q1 → J1 |
 | GPIO35, GPIO36, GPIO37: **nicht verwenden** | Intern vom Octal-PSRAM (N16R8) belegt |
 | GPIO11/12 (12V-Relais): im Ruhezustand **LOW** | Bistabiles Relais — versehentlicher Puls schaltet Bordnetz |
+| `SENSOR_BOARD_REV` (5/6) muss zur verbauten Platine passen | Ab Rev 0.6 sind 12V EIN/AUS getauscht (GPIO12 = EIN, GPIO11 = AUS); falscher Wert schaltet das Bordnetz verkehrt herum |
 | Relais-Puls: `SENSOR_PWR_12V_PULSE_MS` (500 ms), eine Konstante für alle 3 Puls-Stellen | 100 ms reichten dem Relais nicht zum Umschalten |
-| GPIO14 (12V-Sense): Eingang, aktiver Pegel per `SENSOR_PWR_12V_SENSE_ACTIVE_HIGH` | **Bekannter Hardware-Bug (2026-09):** J7-Treiber Q1/Q2 für 12V-EIN/AUS sind P-Kanal-FETs (High-Side, +12V) statt N-Kanal (Low-Side, gegen GND) — EBL erwartet Pull-to-GND. Relais schaltet dadurch nicht, unabhängig von Pulslänge/Sense. Fix: IRLML2244→IRLML6244 auf Q1/Q2 (gleiches Footprint). TODO(hardware): Fix verifizieren. |
+| GPIO14 (12V-Sense): Eingang, aktiver Pegel per `SENSOR_PWR_12V_SENSE_ACTIVE_HIGH` | **Bekannter Hardware-Bug (2026-09):** J7-Treiber Q1/Q2 für 12V-EIN/AUS sind P-Kanal-FETs (High-Side, +12V) statt N-Kanal (Low-Side, gegen GND) — EBL erwartet Pull-to-GND. Relais schaltet dadurch nicht, unabhängig von Pulslänge/Sense. Fix: IRLML2244→IRLML6244 auf Q1/Q2 (gleiches Footprint). TODO(hardware): Fix verifizieren. Rev 0.6: Q6/Q7 = IRLML6244 gegen GND (J5.1/J5.2), behoben im Schaltplan, Hardware-Test offen. |
 
 ## ESP-NOW-Protokoll (Kurzfassung)
 Seit 2026-06 ESP-NOW statt RS485 (Commit `e1eae83`). Transport `network/espnow_transport.c`, Topics/Kommandos `network/espnow_modem.c` (internes Präfix `modem_*`).

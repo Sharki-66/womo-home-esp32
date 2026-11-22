@@ -1,11 +1,16 @@
 # Active Context – WoMoHome Sensorboard
 
-*Stand: 2026-10-18*
+*Stand: 2026-11-22*
 
 ## Aktueller Branch
-`feature/espnow-migration`
+`main`
 
 ## Laufende Arbeiten
+
+### Platine Rev 0.6 (2026-11-22, Layout fertig, nicht bestellt/eingebaut)
+Neu platziert, mit Freerouting (DSN-Modus, Verjüngung aus) geroutet, alle Bahnen 0,2 mm, GND-Flächen beidseitig + 155 Stitching-Vias, DRC 0 Fehler (Ausschlüsse: starved_thermal J7.2/J3.5, Bibliothek U4/U6, Bestückungsdruck DevKit). Fertigungsdaten `hardware/schematics/Sensorboard/production/SensorBoard_Rev_0.6.zip`. Commits `3eb646a`, `be2d6e6`.
+Firmware: neues `SENSOR_BOARD_REV` (steht auf 5 = verbaute Platine). Bei 6 werden 12V EIN/AUS getauscht (GPIO12 = EIN, GPIO11 = AUS, Schaltplan seit `25c2ed2` so, vom Nutzer bestätigt). Bootlog `Platine Rev N (…)`.
+**Nach Einbau Rev 0.6:** `SENSOR_BOARD_REV` auf 6, EBL-Relais EIN/AUS testen (Q6/Q7 jetzt N-Kanal), Votronic-Tanks an J9/J10 gegen Multimeter prüfen (4k7 + Z-Diode neu), Reed-Tanks J2/J3 (GPIO10/9): Pin → Füllstufe messen, dann Firmware.
 
 ### Eco-Modus / Stromsparen (2026-10-25, auf Hardware getestet)
 Messung Nutzer: Gesamtsystem 3,4 W, Display-Licht aus 1,8 W. Ziel: nachts/ohne Hinschauen weniger, mit Landstrom keine Einsparung.
@@ -254,7 +259,7 @@ wieder ein Modul vor `ble_manager_init()` auf den Manager zugreift.
 ## Offene Entscheidungen / TODOs
 
 1. **BNO055 (IMU):** Antwortet nicht im I2C-Scan (erwartet 0x28/0x29, gefunden: 0x40/0x68/0x76/0x77) → Hardwarefehler auf neuer Platine klären
-2. **Original WoMo-Tanksensoren:** 4-Stufen Reed-Schwimmer (5 Leitungen) noch nicht implementiert. GPIO17/18 vorgesehen, Widerstandsnetzwerk-Schema in `sensor_config.h` dokumentiert
+2. **Original WoMo-Tanksensoren:** 4-Stufen Reed-Schwimmer (5 Leitungen) noch nicht implementiert. Ab Rev 0.6 an GPIO10 (Frisch, J2) und GPIO9 (Grau, J3), Schaltung in `sensor_config.h`
 3. **Kalibrierungs-Web-UI:** HX711/Batterie/Tank-Kalibrierung aktuell hardcodiert in `sensor_config.h`, NVS-Layer + Web-UI fehlt noch
 4. **Deep Sleep:** Noch nicht getestet auf neuer Platine
 

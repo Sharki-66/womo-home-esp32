@@ -129,6 +129,8 @@ static void pwr_12v_on_early(void)
 void app_main(void)
 {
     sensor_log_init();
+    ESP_LOGI(TAG, "Platine Rev %d (12V EIN=GPIO%d, AUS=GPIO%d)",
+             SENSOR_BOARD_REV, SENSOR_PWR_12V_ON_GPIO, SENSOR_PWR_12V_OFF_GPIO);
 
     /* Display 5V sperren – GPIO7 OUTPUT LOW: Q5 (2N7002) sperrt → Q4 (AO3401A) sperrt.
      * Nach Deep Sleep: RTC-Hold aufheben, dann normalen GPIO-Modus zurücksetzen. */
