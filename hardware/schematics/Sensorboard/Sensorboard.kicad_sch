@@ -7,7 +7,7 @@
 	(title_block
 		(title "WoMoHome Sensorboard")
 		(date "2026-06-14")
-		(rev "0.5")
+		(rev "0.6")
 		(company "Hajo Harms / WoMoHome")
 		(comment 1 "BME680/BME260 (Wetter), BNO055 (IMU), PCF8523 (RTC)")
 		(comment 2 "ESP32-S3-DevKitC")

@@ -76,7 +76,32 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [],
+      "drc_exclusions": [
+        [
+          "lib_footprint_issues|112000000|91987500|8e702fd4-9c8c-40f0-a570-fc1bad9cae18|00000000-0000-0000-0000-000000000000",
+          ""
+        ],
+        [
+          "lib_footprint_issues|161499960|61500000|cecb7652-9e3d-4fce-9719-0a473c9db8f6|00000000-0000-0000-0000-000000000000",
+          ""
+        ],
+        [
+          "silk_edge_clearance|188100000|70800000|2540b840-a9bb-4207-9aea-750571c7f6ee|eed6577b-65fc-4659-933a-7b9ef54c548a",
+          ""
+        ],
+        [
+          "silk_edge_clearance|192463603|64200000|c8bbea9e-0733-47fe-82b3-32c7b43a9c54|b3bd71d6-3ce5-4a37-9df4-3eba02fc04d0",
+          ""
+        ],
+        [
+          "starved_thermal|110700000|114700000|f181356c-e822-40c3-a55a-d611d3066b18|8f340b18-c43e-41d3-836c-5cc49e0d0167|F.Cu",
+          ""
+        ],
+        [
+          "starved_thermal|157238839|101500000|f181356c-e822-40c3-a55a-d611d3066b18|1b9eb57b-960a-4d36-88b6-aac50335df2e|F.Cu",
+          ""
+        ]
+      ],
       "meta": {
         "version": 2
       },
@@ -256,7 +281,7 @@
       "internal_id": "",
       "mfg": "",
       "mpn": "",
-      "sch_revision": "0.5"
+      "sch_revision": "0.6"
     },
     "layer_pairs": [],
     "layer_presets": [],
