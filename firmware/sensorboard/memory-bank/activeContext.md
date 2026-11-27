@@ -10,6 +10,7 @@
 ### Platine Rev 0.6 (2026-11-22, Layout fertig, nicht bestellt/eingebaut)
 Neu platziert, mit Freerouting (DSN-Modus, Verjüngung aus) geroutet, alle Bahnen 0,2 mm, GND-Flächen beidseitig + 155 Stitching-Vias, DRC 0 Fehler (Ausschlüsse: starved_thermal J7.2/J3.5, Bibliothek U4/U6, Bestückungsdruck DevKit). Fertigungsdaten `hardware/schematics/Sensorboard/production/SensorBoard_Rev_0.6.zip`. Commits `3eb646a`, `be2d6e6`.
 Firmware: neues `SENSOR_BOARD_REV` (steht auf 5 = verbaute Platine). Bei 6 werden 12V EIN/AUS getauscht (GPIO12 = EIN, GPIO11 = AUS, Schaltplan seit `25c2ed2` so, vom Nutzer bestätigt). Bootlog `Platine Rev N (…)`.
+J5-Abgleich mit Datenblatt LT 45x (2026-11-27): Pins 1–7/10 stimmen, Licht/Pumpe im Schaltplan vertauscht (Pin 8 = Pumpe, Pin 9 = Licht) → nur Firmware korrigiert: Licht = GPIO18, Pumpe = GPIO17 (beim Nutzer unbenutzt). Offen: J5.5 („− Fühler WB“) liegt auf GND – im Fahrzeug gegen Masse messen.
 **Nach Einbau Rev 0.6:** `SENSOR_BOARD_REV` auf 6, EBL-Relais EIN/AUS testen (Q6/Q7 jetzt N-Kanal), Votronic-Tanks an J9/J10 gegen Multimeter prüfen (4k7 + Z-Diode neu), Reed-Tanks J2/J3 (GPIO10/9): Pin → Füllstufe messen, dann Firmware.
 
 ### Eco-Modus / Stromsparen (2026-10-25, auf Hardware getestet)

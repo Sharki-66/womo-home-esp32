@@ -54,7 +54,7 @@ OUTPUT HIGH ist sicher (kein direkter Vgs-Querstrom mehr). Boot: `rtc_gpio_hold_
 
 ### Multimedia (GPIO13, N-Kanal MOSFET)
 - HIGH = EIN, LOW = AUS
-- Rev 0.6 (auch Licht GPIO17, Pumpe GPIO18): GPIO → 4k7 → 2N7002 → IRLML2244 High-Side, +12V auf J5.10/J5.8/J5.9
+- Rev 0.6 (auch Pumpe GPIO17 → J5.8, Licht GPIO18 → J5.9): GPIO → 4k7 → 2N7002 → IRLML2244 High-Side, +12V auf J5.10/J5.8/J5.9. Schaltplan-Netze Licht/Pumpe an J5 vertauscht (Datenblatt LT 45x: Pin 8 = Pumpe, Pin 9 = Licht), Korrektur nur in Firmware
 - Beim Boot auf LOW setzen (kein passiver Pulldown in Hardware)
 
 ### ESP-NOW (ersetzt RS485 seit 2026-06)

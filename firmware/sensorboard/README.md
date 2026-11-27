@@ -31,8 +31,8 @@ ESP-IDF v5.5.2 · ESP32-S3-WROOM-1 (N16R8)
 | 12 | 12V Bordnetz AUS (Rev 0.5) / **EIN (Rev 0.6)** (bistabiles Relais, Puls) | Ausgang |
 | 13 | Multimedia Power (HIGH=ein; Rev 0.6: 2N7002 → IRLML2244 High-Side, J5.10) | Ausgang |
 | 14 | 12V Bordnetz Feedback | Eingang |
-| 17 | Licht (reserviert, Firmware TODO; Rev 0.6: J5.8) | Ausgang |
-| 18 | Pumpe (reserviert, Firmware TODO; Rev 0.6: J5.9) | Ausgang |
+| 17 | Pumpe (reserviert, Firmware TODO; Rev 0.6: J5.8, im Schaltplan fälschlich „Licht“) | Ausgang |
+| 18 | Licht (reserviert, Firmware TODO; Rev 0.6: J5.9, im Schaltplan fälschlich „Pumpe“) | Ausgang |
 | 21 | 230V AC Sense | Eingang |
 
 ### Spannungsteiler (ADC)

@@ -280,11 +280,15 @@
 //   GPIO → 4k7 → 2N7002 (Gate-Pulldown 100k) → zieht Gate des P-Kanal
 //   IRLML2244 (Pull-up 100k an +12V) → schaltet +12V auf J5
 //   Multimedia: GPIO13 → R37 → Q3 → Q8 → J5.10
-//   Pumpe:      GPIO18 → R35 → Q4 → Q9 → J5.9
-//   Licht:      GPIO17 → R36 → Q5 → Q10 → J5.8
+//   GPIO18 → R35 → Q4 → Q9  → J5.9 = Licht  (Schaltplan-Netz "/Pumpe")
+//   GPIO17 → R36 → Q5 → Q10 → J5.8 = Pumpe  (Schaltplan-Netz "/Licht")
+// Schaltplan Rev 0.6 hat Licht/Pumpe an J5 vertauscht. Laut Datenblatt LT 45x
+// (hardware/datasheets/LT 45x.pdf) ist Pin 8 = Pumpe, Pin 9 = Licht. Korrektur nur
+// hier in der Firmware (2026-11-27); beide Kanäle sind identisch aufgebaut.
+// Rev 5: Licht/Pumpe-Transistoren nicht bestückt, Zuordnung dort ohne Wirkung.
 // (Der frühere Konflikt mit dem Tanksensor-TODO ist erledigt: Tanks ab Rev 6 auf GPIO9/10.)
-#define SENSOR_LIGHT_GPIO 17           // Schaltausgang: Licht (Hardware fertig, Firmware TODO)
-#define SENSOR_PUMP_GPIO 18            // Schaltausgang: Pumpe (Hardware fertig, Firmware TODO)
+#define SENSOR_LIGHT_GPIO 18           // Schaltausgang: Licht, J5.9 (Firmware TODO)
+#define SENSOR_PUMP_GPIO 17            // Schaltausgang: Pumpe, J5.8 (Firmware TODO)
 
 // ====================================================================================
 // Display-Versorgung (neue Platine: N-Kanal Treiber Q5/2N7002 vor P-Kanal Q4/AO3401A)
